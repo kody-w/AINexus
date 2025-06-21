@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Crystal Caves</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #00ff00);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #00ffff;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #ff00ff;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            z-index: 1001;
+            gap: 20px;
+        }
+
+        .mobile-controls.show {
+            display: flex;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            position: relative;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 255, 255, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">CRYSTAL CAVES</h1>
+        <p class="world-description" id="world-description">A mystical underground realm filled with glowing crystals and ancient secrets</p>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter world</p>
+    </div>
+    
+    <div class="loading" id="loading">Initializing crystal caves...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration - Update these with your GitHub details
+        const REPO_OWNER = 'your-github-username'; // Replace with your GitHub username
+        const REPO_NAME = 'your-repo-name'; // Replace with your repository name
+        const BRANCH = 'main';
+        
+        // World metadata for Crystal Caves
+        const CURRENT_WORLD = {
+            name: "Crystal Caves",
+            description: "A mystical underground realm filled with glowing crystals and ancient secrets",
+            ambientColor: 0x001122,
+            fogColor: 0x000033,
+            groundColor: 0x0a0a1a,
+            crystalColors: [0x00ffff, 0xff00ff, 0x00ff00, 0xffff00, 0xff0088]
+        };
+        
+        // Check if device is mobile
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        
+        class CrystalCavesWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.crystals = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                // Movement
+                this.moveSpeed = 0.15;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                
+                // Mobile
+                this.isMobile = isMobile;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.touches = { start: null, current: null };
+                
+                // UI
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+            }
+            
+            async init() {
+                // Hide loading after scene is ready
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+                
+                // Update UI
+                document.getElementById('world-title').textContent = CURRENT_WORLD.name;
+                document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+                
+                // Setup Three.js
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createCaveEnvironment();
+                this.createCrystals();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                // Update controls hint for mobile
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Swipe to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, 5, 50);
+                
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 2, 10);
+                
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Very dim ambient light for cave atmosphere
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.2);
+                this.scene.add(ambientLight);
+                
+                // Crystal lights will be added with crystals
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Find all HTML files in root directory (these are world files)
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') && // Only root directory
+                            !item.path.toLowerCase().includes('index') && // Exclude index files
+                            !item.path.toLowerCase().includes('readme') && // Exclude readme files
+                            !item.path.toLowerCase().includes('crystal-caves') // Exclude self
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    // Continue with demo portals if GitHub fails
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                // Fallback demo worlds if GitHub fetch fails
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Sky Islands", description: "Floating islands connected by bridges of light" },
+                    { name: "Neon City", description: "A cyberpunk metropolis bathed in neon lights" },
+                    { name: "Ancient Ruins", description: "Explore the remnants of a lost civilization" }
+                ];
+            }
+            
+            createCaveEnvironment() {
+                // Cave floor with uneven terrain
+                const floorGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 1,
+                    metalness: 0
+                });
+                
+                // Make floor uneven
+                const vertices = floorGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i + 2] = Math.random() * 2 - 1;
+                }
+                floorGeometry.computeVertexNormals();
+                
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Cave ceiling
+                const ceilingGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+                const ceilingVertices = ceilingGeometry.attributes.position.array;
+                for (let i = 0; i < ceilingVertices.length; i += 3) {
+                    ceilingVertices[i + 2] = Math.random() * 3 + 2;
+                }
+                ceilingGeometry.computeVertexNormals();
+                
+                const ceiling = new THREE.Mesh(ceilingGeometry, floorMaterial);
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = 15;
+                this.scene.add(ceiling);
+                
+                // Cave walls (stalactites and stalagmites)
+                for (let i = 0; i < 50; i++) {
+                    const height = Math.random() * 5 + 2;
+                    const radius = Math.random() * 0.5 + 0.3;
+                    const geometry = new THREE.ConeGeometry(radius, height, 8);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: 0x222244,
+                        roughness: 0.8
+                    });
+                    
+                    const stalactite = new THREE.Mesh(geometry, material);
+                    stalactite.position.x = (Math.random() - 0.5) * 80;
+                    stalactite.position.z = (Math.random() - 0.5) * 80;
+                    
+                    if (Math.random() > 0.5) {
+                        // Stalactite (hanging from ceiling)
+                        stalactite.position.y = 15;
+                        stalactite.rotation.x = Math.PI;
+                    } else {
+                        // Stalagmite (rising from floor)
+                        stalactite.position.y = height / 2;
+                    }
+                    
+                    stalactite.castShadow = true;
+                    stalactite.receiveShadow = true;
+                    this.scene.add(stalactite);
+                }
+            }
+            
+            createCrystals() {
+                // Create glowing crystal clusters
+                for (let i = 0; i < 30; i++) {
+                    const crystalGroup = new THREE.Group();
+                    
+                    // Random crystal color
+                    const color = CURRENT_WORLD.crystalColors[Math.floor(Math.random() * CURRENT_WORLD.crystalColors.length)];
+                    
+                    // Create multiple crystals in a cluster
+                    for (let j = 0; j < 5; j++) {
+                        const height = Math.random() * 3 + 1;
+                        const radius = Math.random() * 0.3 + 0.1;
+                        const geometry = new THREE.OctahedronGeometry(radius, 0);
+                        
+                        // Stretch the crystal
+                        geometry.scale(1, height / radius, 1);
+                        
+                        const material = new THREE.MeshStandardMaterial({
+                            color: color,
+                            emissive: color,
+                            emissiveIntensity: 0.5,
+                            metalness: 0.3,
+                            roughness: 0.1,
+                            transparent: true,
+                            opacity: 0.8
+                        });
+                        
+                        const crystal = new THREE.Mesh(geometry, material);
+                        crystal.position.x = (Math.random() - 0.5) * 2;
+                        crystal.position.y = height / 2;
+                        crystal.position.z = (Math.random() - 0.5) * 2;
+                        crystal.rotation.x = Math.random() * 0.3;
+                        crystal.rotation.z = Math.random() * 0.3;
+                        
+                        crystal.userData = {
+                            rotationSpeed: Math.random() * 0.02 + 0.01,
+                            color: color
+                        };
+                        
+                        crystalGroup.add(crystal);
+                        this.crystals.push(crystal);
+                    }
+                    
+                    // Position cluster
+                    crystalGroup.position.x = (Math.random() - 0.5) * 60;
+                    crystalGroup.position.z = (Math.random() - 0.5) * 60;
+                    
+                    // Add point light for crystal glow
+                    const light = new THREE.PointLight(color, 0.5, 10);
+                    light.position.copy(crystalGroup.position);
+                    light.position.y = 2;
+                    this.scene.add(light);
+                    
+                    this.scene.add(crystalGroup);
+                }
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 4); // Fewer portals in caves
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i] || this.getDemoWorlds()[i];
+                    
+                    // Portal group
+                    const portalGroup = new THREE.Group();
+                    
+                    // Crystal portal frame
+                    const frameGeometry = new THREE.TorusGeometry(2.5, 0.4, 8, 6);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x00ffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.3,
+                        metalness: 0.5,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(2.1, 32);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(0x00ffff) },
+                            color2: { value: new THREE.Color(0x0088ff) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float ripple = sin(dist * 20.0 - time * 3.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, ripple);
+                                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.9);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+                    
+                    // Add to group
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    // Position portal in cave
+                    const positions = [
+                        { x: -15, z: -10 },
+                        { x: 15, z: -10 },
+                        { x: 0, z: -20 },
+                        { x: 0, z: 15 }
+                    ];
+                    
+                    const pos = positions[i % positions.length];
+                    portalGroup.position.x = pos.x;
+                    portalGroup.position.z = pos.z;
+                    portalGroup.position.y = 3;
+                    
+                    // Face center
+                    portalGroup.lookAt(0, 3, 0);
+                    
+                    // Add crystal light
+                    const light = new THREE.PointLight(0x00ffff, 1, 15);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+                    
+                    // Store portal data
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+            
+            setupEventListeners() {
+                // Resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                // Keyboard
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+                
+                // Mouse
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+                
+                // Portal clicks
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) return;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            this.enterWorld(portal.userData.url);
+                        }
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const canvas = this.renderer.domElement;
+                
+                // Touch controls for looking
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    this.touches.start = { x: touch.clientX, y: touch.clientY };
+                    this.touches.current = { ...this.touches.start };
+                });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (!this.touches.start) return;
+                    
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - this.touches.current.x;
+                    const deltaY = touch.clientY - this.touches.current.y;
+                    
+                    this.rotation.y -= deltaX * this.lookSpeed * 2;
+                    this.rotation.x -= deltaY * this.lookSpeed * 2;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    
+                    this.touches.current = { x: touch.clientX, y: touch.clientY };
+                });
+                
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    
+                    // Check for tap
+                    if (this.touches.start && this.touches.current) {
+                        const dx = this.touches.current.x - this.touches.start.x;
+                        const dy = this.touches.current.y - this.touches.start.y;
+                        
+                        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+                            // It's a tap
+                            const rect = canvas.getBoundingClientRect();
+                            const x = ((this.touches.start.x - rect.left) / rect.width) * 2 - 1;
+                            const y = -((this.touches.start.y - rect.top) / rect.height) * 2 + 1;
+                            
+                            this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                            const intersects = this.raycaster.intersectObjects(this.portals);
+                            
+                            if (intersects.length > 0) {
+                                const portal = intersects[0].object;
+                                if (portal.userData.url) {
+                                    this.enterWorld(portal.userData.url);
+                                }
+                            }
+                        }
+                    }
+                    
+                    this.touches.start = null;
+                    this.touches.current = null;
+                });
+                
+                // Joystick
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.joystickActive = true;
+                    this.updateJoystick(e.touches[0], joystick, handle);
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (this.joystickActive) {
+                        this.updateJoystick(e.touches[0], joystick, handle);
+                    }
+                });
+                
+                joystick.addEventListener('touchend', () => {
+                    this.joystickActive = false;
+                    this.joystickVector.set(0, 0);
+                    handle.style.transform = 'translate(-50%, -50%)';
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+                
+                // Keep camera at reasonable height in cave
+                this.camera.position.y = Math.max(1, Math.min(10, this.camera.position.y));
+                
+                // Update camera rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateHover() {
+                // Cast ray from camera center
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        // Show tooltip
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        // Position tooltip
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    // Show loading
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Traveling to new world...';
+                    
+                    // Fetch the HTML content
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    const htmlContent = await response.text();
+                    
+                    // Replace current page with new world
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    // Navigate to the new world
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                // Update movement
+                this.updateMovement();
+                
+                // Update hover detection
+                this.updateHover();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        // Pulsing glow
+                        const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
+                        portal.userData.light.intensity = intensity;
+                    }
+                });
+                
+                // Animate crystals
+                this.crystals.forEach((crystal, index) => {
+                    // Gentle rotation
+                    crystal.rotation.y += crystal.userData.rotationSpeed;
+                    
+                    // Pulsing glow
+                    const intensity = 0.3 + Math.sin(time * 3 + index * 0.5) * 0.2;
+                    crystal.material.emissiveIntensity = intensity;
+                });
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new CrystalCavesWorld();
+            world.init();
+        });
+    </script>
+</body>
+</html>
