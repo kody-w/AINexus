@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quantum Nexus</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00, #00ff00, #ff0080);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: quantum-shimmer 4s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes quantum-shimmer {
+            0%, 100% { 
+                background-position: 0% 50%; 
+                filter: hue-rotate(0deg);
+            }
+            50% { 
+                background-position: 100% 50%;
+                filter: hue-rotate(180deg);
+            }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .quantum-stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-line {
+            margin: 5px 0;
+            color: #00ffff;
+        }
+
+        .stat-value {
+            color: #ff00ff;
+            float: right;
+        }
+
+        .reality-indicator {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            z-index: 1001;
+        }
+
+        .reality-circle {
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            animation: rotate-reality 20s linear infinite;
+        }
+
+        @keyframes rotate-reality {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .reality-node {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #fff, transparent);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 0, 255, 0.3);
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid transparent;
+            border-image: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00) 1;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #00ff00;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            z-index: 1001;
+            gap: 20px;
+        }
+
+        .mobile-controls.show {
+            display: flex;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            position: relative;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #00ffff, #ff00ff);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 100px;
+            margin: 30px auto;
+            border: 2px solid transparent;
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: quantum-spin 1s ease-in-out infinite;
+        }
+
+        @keyframes quantum-spin {
+            0% { 
+                transform: rotate(0deg) scale(1);
+                border-top-color: #00ffff;
+            }
+            50% { 
+                transform: rotate(180deg) scale(1.2);
+                border-top-color: #ff00ff;
+            }
+            100% { 
+                transform: rotate(360deg) scale(1);
+                border-top-color: #00ffff;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+            
+            .quantum-stats {
+                font-size: 0.8em;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">QUANTUM NEXUS</h1>
+        <p class="world-description" id="world-description">Where infinite realities converge in a symphony of quantum possibilities</p>
+    </div>
+    
+    <div class="quantum-stats">
+        <div class="stat-line">Reality Phase: <span class="stat-value" id="reality-phase">0.00</span></div>
+        <div class="stat-line">Quantum Flux: <span class="stat-value" id="quantum-flux">0.00</span></div>
+        <div class="stat-line">Dimensional Drift: <span class="stat-value" id="dimensional-drift">0.00</span></div>
+        <div class="stat-line">Portals Active: <span class="stat-value" id="portals-active">0</span></div>
+    </div>
+    
+    <div class="reality-indicator">
+        <div class="reality-circle">
+            <div class="reality-node" style="transform: translate(-50%, -250%)"></div>
+            <div class="reality-node" style="transform: translate(150%, -50%)"></div>
+            <div class="reality-node" style="transform: translate(-50%, 150%)"></div>
+            <div class="reality-node" style="transform: translate(-250%, -50%)"></div>
+        </div>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">WASD: Move | Mouse: Look | Click: Travel | Q/E: Phase Shift | R: Reality Warp</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to quantum leap</p>
+    </div>
+    
+    <div class="loading" id="loading">Collapsing quantum states...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
+        const BRANCH = 'main';
+        
+        // World metadata
+        const CURRENT_WORLD = {
+            name: "Quantum Nexus",
+            description: "Where infinite realities converge in a symphony of quantum possibilities",
+            realityLayers: 5,
+            quantumParticles: 10000,
+            dimensionalRifts: 8,
+            colors: {
+                primary: 0x00ffff,
+                secondary: 0xff00ff,
+                tertiary: 0xffff00,
+                quantum: 0x00ff00,
+                void: 0x000033
+            }
+        };
+        
+        // Check if device is mobile
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        
+        class QuantumNexusWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.composer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                // Quantum systems
+                this.quantumField = null;
+                this.realityPhase = 0;
+                this.quantumFlux = 0;
+                this.dimensionalDrift = 0;
+                this.realityLayers = [];
+                this.dimensionalRifts = [];
+                this.quantumParticles = null;
+                this.energyBeams = [];
+                this.tesseract = null;
+                this.fractals = [];
+                this.wormholes = [];
+                this.quantumEntanglements = [];
+                
+                // Movement
+                this.moveSpeed = 0.2;
+                this.lookSpeed = 0.002;
+                this.keys = { 
+                    w: false, a: false, s: false, d: false, 
+                    q: false, e: false, r: false, ' ': false, shift: false 
+                };
+                this.rotation = { x: 0, y: 0 };
+                this.velocity = new THREE.Vector3();
+                this.phaseShiftActive = false;
+                
+                // Mobile
+                this.isMobile = isMobile;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.touches = { start: null, current: null };
+                
+                // UI
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+                
+                // Audio context for quantum sounds (optional)
+                this.audioContext = null;
+                this.oscillators = [];
+            }
+            
+            async init() {
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 2000);
+                
+                this.setupScene();
+                this.setupLighting();
+                this.setupPostProcessing();
+                await this.loadWorlds();
+                this.createQuantumEnvironment();
+                this.createTesseract();
+                this.createQuantumField();
+                this.createRealityLayers();
+                this.createDimensionalRifts();
+                this.createEnergyBeams();
+                this.createFractalStructures();
+                this.createWormholes();
+                this.createQuantumEntanglements();
+                this.createPortals();
+                this.setupEventListeners();
+                this.initAudio();
+                
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Swipe: Look | Joystick: Move | Tap portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(CURRENT_WORLD.colors.void, 0.02);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 5, 20);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 1.2;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Minimal ambient for dark quantum space
+                const ambientLight = new THREE.AmbientLight(0x0a0a0a, 0.2);
+                this.scene.add(ambientLight);
+                
+                // Dynamic quantum lights will be added with objects
+            }
+            
+            setupPostProcessing() {
+                // In a real implementation, you'd use THREE.EffectComposer here
+                // For simplicity, we'll simulate effects with fog and materials
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('quantum-nexus')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the origin point" },
+                    { name: "Crystal Caves", description: "Quantum crystal resonance chamber" },
+                    { name: "Sky Islands", description: "Anti-gravity dimension" },
+                    { name: "Neon City", description: "Digital reality matrix" },
+                    { name: "Void Realm", description: "The space between spaces" },
+                    { name: "Time Spiral", description: "Temporal anomaly zone" }
+                ];
+            }
+            
+            createQuantumEnvironment() {
+                // Create a complex multi-layered environment
+                
+                // Quantum grid floor
+                const gridGeometry = new THREE.PlaneGeometry(500, 500, 100, 100);
+                const gridMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 },
+                        phase: { value: 0 }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        varying float vElevation;
+                        uniform float time;
+                        uniform float phase;
+                        
+                        void main() {
+                            vUv = uv;
+                            vec3 pos = position;
+                            float wave1 = sin(pos.x * 0.1 + time) * cos(pos.y * 0.1 + time) * 2.0;
+                            float wave2 = sin(pos.x * 0.05 - time * 0.5) * sin(pos.y * 0.05 + time * 0.5) * 3.0;
+                            pos.z = wave1 + wave2;
+                            vElevation = pos.z;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec2 vUv;
+                        varying float vElevation;
+                        uniform float time;
+                        uniform float phase;
+                        
+                        void main() {
+                            float grid = step(0.98, max(fract(vUv.x * 50.0), fract(vUv.y * 50.0)));
+                            vec3 color1 = vec3(0.0, 1.0, 1.0);
+                            vec3 color2 = vec3(1.0, 0.0, 1.0);
+                            vec3 color = mix(color1, color2, sin(vElevation * 0.5 + phase) * 0.5 + 0.5);
+                            float alpha = grid * (0.5 + vElevation * 0.1);
+                            gl_FragColor = vec4(color, alpha);
+                        }
+                    `,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                
+                this.quantumGrid = new THREE.Mesh(gridGeometry, gridMaterial);
+                this.quantumGrid.rotation.x = -Math.PI / 2;
+                this.quantumGrid.position.y = -10;
+                this.scene.add(this.quantumGrid);
+                
+                // Skybox with quantum field
+                const skyGeometry = new THREE.SphereGeometry(400, 64, 64);
+                const skyMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 },
+                        resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+                    },
+                    vertexShader: `
+                        varying vec3 vPosition;
+                        void main() {
+                            vPosition = position;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec3 vPosition;
+                        uniform float time;
+                        uniform vec2 resolution;
+                        
+                        float noise(vec3 p) {
+                            return sin(p.x) * sin(p.y) * sin(p.z);
+                        }
+                        
+                        void main() {
+                            vec3 dir = normalize(vPosition);
+                            float n = noise(dir * 10.0 + time * 0.1);
+                            
+                            vec3 color1 = vec3(0.0, 0.0, 0.2);
+                            vec3 color2 = vec3(0.5, 0.0, 0.5);
+                            vec3 color3 = vec3(0.0, 0.5, 0.5);
+                            
+                            vec3 finalColor = mix(color1, color2, n);
+                            finalColor = mix(finalColor, color3, sin(time + dir.y * 10.0) * 0.5 + 0.5);
+                            
+                            gl_FragColor = vec4(finalColor, 1.0);
+                        }
+                    `,
+                    side: THREE.BackSide
+                });
+                
+                this.quantumSky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(this.quantumSky);
+            }
+            
+            createTesseract() {
+                // Create a 4D tesseract (hypercube) projection
+                const tesseractGroup = new THREE.Group();
+                
+                // Inner cube
+                const innerGeometry = new THREE.BoxGeometry(5, 5, 5);
+                const innerMaterial = new THREE.MeshBasicMaterial({
+                    color: CURRENT_WORLD.colors.primary,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const innerCube = new THREE.Mesh(innerGeometry, innerMaterial);
+                
+                // Outer cube
+                const outerGeometry = new THREE.BoxGeometry(10, 10, 10);
+                const outerMaterial = new THREE.MeshBasicMaterial({
+                    color: CURRENT_WORLD.colors.secondary,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const outerCube = new THREE.Mesh(outerGeometry, outerMaterial);
+                
+                // Connect vertices with lines
+                const lineMaterial = new THREE.LineBasicMaterial({ 
+                    color: CURRENT_WORLD.colors.quantum,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                
+                // Create connections between inner and outer cube vertices
+                const innerVertices = innerCube.geometry.attributes.position.array;
+                const outerVertices = outerCube.geometry.attributes.position.array;
+                
+                for (let i = 0; i < innerVertices.length; i += 3) {
+                    const lineGeometry = new THREE.BufferGeometry();
+                    const positions = new Float32Array(6);
+                    
+                    positions[0] = innerVertices[i] * 0.5;
+                    positions[1] = innerVertices[i + 1] * 0.5;
+                    positions[2] = innerVertices[i + 2] * 0.5;
+                    positions[3] = outerVertices[i];
+                    positions[4] = outerVertices[i + 1];
+                    positions[5] = outerVertices[i + 2];
+                    
+                    lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    const line = new THREE.Line(lineGeometry, lineMaterial);
+                    tesseractGroup.add(line);
+                }
+                
+                tesseractGroup.add(innerCube);
+                tesseractGroup.add(outerCube);
+                tesseractGroup.position.y = 10;
+                
+                this.tesseract = tesseractGroup;
+                this.scene.add(this.tesseract);
+                
+                // Add point light at center
+                const tesseractLight = new THREE.PointLight(CURRENT_WORLD.colors.primary, 2, 30);
+                tesseractLight.position.copy(tesseractGroup.position);
+                this.scene.add(tesseractLight);
+            }
+            
+            createQuantumField() {
+                // Create a particle system representing quantum field
+                const particleCount = CURRENT_WORLD.quantumParticles;
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                const sizes = new Float32Array(particleCount);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    // Sphere distribution
+                    const radius = Math.random() * 200;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(Math.random() * 2 - 1);
+                    
+                    positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                    positions[i3 + 2] = radius * Math.cos(phi);
+                    
+                    // Random colors
+                    const colorChoice = Math.random();
+                    if (colorChoice < 0.33) {
+                        colors[i3] = 0;
+                        colors[i3 + 1] = 1;
+                        colors[i3 + 2] = 1;
+                    } else if (colorChoice < 0.66) {
+                        colors[i3] = 1;
+                        colors[i3 + 1] = 0;
+                        colors[i3 + 2] = 1;
+                    } else {
+                        colors[i3] = 1;
+                        colors[i3 + 1] = 1;
+                        colors[i3 + 2] = 0;
+                    }
+                    
+                    sizes[i] = Math.random() * 2 + 0.5;
+                }
+                
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+                
+                const material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 },
+                        phase: { value: 0 }
+                    },
+                    vertexShader: `
+                        attribute float size;
+                        attribute vec3 color;
+                        varying vec3 vColor;
+                        uniform float time;
+                        
+                        void main() {
+                            vColor = color;
+                            vec3 pos = position;
+                            pos += sin(time + position * 0.01) * 0.5;
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            gl_PointSize = size * (300.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec3 vColor;
+                        uniform float time;
+                        
+                        void main() {
+                            vec2 center = gl_PointCoord - 0.5;
+                            float dist = length(center);
+                            if (dist > 0.5) discard;
+                            
+                            float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                            alpha *= sin(time * 2.0) * 0.5 + 0.5;
+                            
+                            gl_FragColor = vec4(vColor, alpha);
+                        }
+                    `,
+                    transparent: true,
+                    vertexColors: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                
+                this.quantumParticles = new THREE.Points(geometry, material);
+                this.scene.add(this.quantumParticles);
+            }
+            
+            createRealityLayers() {
+                // Create multiple translucent reality layers
+                for (let i = 0; i < CURRENT_WORLD.realityLayers; i++) {
+                    const layerGroup = new THREE.Group();
+                    
+                    // Create geometric shapes for each layer
+                    const shapes = ['icosahedron', 'octahedron', 'dodecahedron', 'tetrahedron'];
+                    const shapeType = shapes[i % shapes.length];
+                    
+                    let geometry;
+                    switch(shapeType) {
+                        case 'icosahedron':
+                            geometry = new THREE.IcosahedronGeometry(15 + i * 5, 1);
+                            break;
+                        case 'octahedron':
+                            geometry = new THREE.OctahedronGeometry(15 + i * 5, 0);
+                            break;
+                        case 'dodecahedron':
+                            geometry = new THREE.DodecahedronGeometry(15 + i * 5, 0);
+                            break;
+                        case 'tetrahedron':
+                            geometry = new THREE.TetrahedronGeometry(15 + i * 5, 0);
+                            break;
+                    }
+                    
+                    const material = new THREE.MeshPhongMaterial({
+                        color: new THREE.Color().setHSL(i / CURRENT_WORLD.realityLayers, 1, 0.5),
+                        transparent: true,
+                        opacity: 0.2,
+                        wireframe: true,
+                        emissive: new THREE.Color().setHSL(i / CURRENT_WORLD.realityLayers, 1, 0.5),
+                        emissiveIntensity: 0.5
+                    });
+                    
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.userData = {
+                        rotationSpeed: 0.001 * (i + 1),
+                        phaseOffset: i * Math.PI / CURRENT_WORLD.realityLayers
+                    };
+                    
+                    layerGroup.add(mesh);
+                    layerGroup.position.y = 10;
+                    
+                    this.realityLayers.push(layerGroup);
+                    this.scene.add(layerGroup);
+                }
+            }
+            
+            createDimensionalRifts() {
+                // Create tear-like rifts in space
+                for (let i = 0; i < CURRENT_WORLD.dimensionalRifts; i++) {
+                    const riftGroup = new THREE.Group();
+                    
+                    // Create a plane with custom shader for rift effect
+                    const riftGeometry = new THREE.PlaneGeometry(10, 20, 32, 32);
+                    const riftMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            riftColor: { value: new THREE.Color(CURRENT_WORLD.colors.quantum) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            uniform float time;
+                            
+                            void main() {
+                                vUv = uv;
+                                vec3 pos = position;
+                                pos.z += sin(pos.y * 0.5 + time) * sin(pos.x * 0.5 + time) * 2.0;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            varying vec2 vUv;
+                            uniform float time;
+                            uniform vec3 riftColor;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float ripple = sin(dist * 20.0 - time * 5.0);
+                                
+                                vec3 color = riftColor * (1.0 + ripple * 0.5);
+                                float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                                alpha *= sin(vUv.y * 10.0 + time * 2.0) * 0.5 + 0.5;
+                                
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const rift = new THREE.Mesh(riftGeometry, riftMaterial);
+                    
+                    // Position rifts around the space
+                    const angle = (i / CURRENT_WORLD.dimensionalRifts) * Math.PI * 2;
+                    const radius = 50 + Math.random() * 50;
+                    
+                    riftGroup.position.x = Math.cos(angle) * radius;
+                    riftGroup.position.y = Math.random() * 30 - 5;
+                    riftGroup.position.z = Math.sin(angle) * radius;
+                    riftGroup.rotation.y = -angle + Math.PI / 2;
+                    
+                    riftGroup.add(rift);
+                    riftGroup.userData = { material: riftMaterial };
+                    
+                    this.dimensionalRifts.push(riftGroup);
+                    this.scene.add(riftGroup);
+                    
+                    // Add rift light
+                    const riftLight = new THREE.PointLight(CURRENT_WORLD.colors.quantum, 1, 20);
+                    riftLight.position.copy(riftGroup.position);
+                    this.scene.add(riftLight);
+                }
+            }
+            
+            createEnergyBeams() {
+                // Create energy beams connecting various points
+                const beamCount = 12;
+                
+                for (let i = 0; i < beamCount; i++) {
+                    const beamGeometry = new THREE.CylinderGeometry(0.2, 0.2, 100, 8);
+                    const beamMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.colors.primary) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.colors.secondary) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            varying vec3 vPosition;
+                            
+                            void main() {
+                                vUv = uv;
+                                vPosition = position;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            varying vec2 vUv;
+                            varying vec3 vPosition;
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            
+                            void main() {
+                                float pulse = sin(vPosition.y * 0.1 + time * 5.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, pulse);
+                                float alpha = 0.8 * (sin(time * 3.0) * 0.2 + 0.8);
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+                    
+                    // Random positioning
+                    beam.position.x = (Math.random() - 0.5) * 100;
+                    beam.position.z = (Math.random() - 0.5) * 100;
+                    beam.rotation.x = Math.random() * Math.PI;
+                    beam.rotation.z = Math.random() * Math.PI;
+                    
+                    beam.userData = { material: beamMaterial };
+                    this.energyBeams.push(beam);
+                    this.scene.add(beam);
+                }
+            }
+            
+            createFractalStructures() {
+                // Create recursive fractal structures
+                const createFractal = (depth, size, position, parent) => {
+                    if (depth <= 0) return;
+                    
+                    const geometry = new THREE.TetrahedronGeometry(size);
+                    const material = new THREE.MeshPhongMaterial({
+                        color: new THREE.Color().setHSL(depth / 5, 1, 0.5),
+                        emissive: new THREE.Color().setHSL(depth / 5, 1, 0.5),
+                        emissiveIntensity: 0.3,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.copy(position);
+                    parent.add(mesh);
+                    
+                    // Create children
+                    const childSize = size * 0.5;
+                    const positions = [
+                        new THREE.Vector3(size, 0, 0),
+                        new THREE.Vector3(-size, 0, 0),
+                        new THREE.Vector3(0, size, 0),
+                        new THREE.Vector3(0, -size, 0),
+                        new THREE.Vector3(0, 0, size),
+                        new THREE.Vector3(0, 0, -size)
+                    ];
+                    
+                    positions.forEach(pos => {
+                        createFractal(depth - 1, childSize, pos, mesh);
+                    });
+                };
+                
+                // Create multiple fractal structures
+                for (let i = 0; i < 3; i++) {
+                    const fractalGroup = new THREE.Group();
+                    createFractal(4, 5, new THREE.Vector3(), fractalGroup);
+                    
+                    const angle = (i / 3) * Math.PI * 2;
+                    fractalGroup.position.x = Math.cos(angle) * 80;
+                    fractalGroup.position.y = 20;
+                    fractalGroup.position.z = Math.sin(angle) * 80;
+                    
+                    this.fractals.push(fractalGroup);
+                    this.scene.add(fractalGroup);
+                }
+            }
+            
+            createWormholes() {
+                // Create toroidal wormhole structures
+                for (let i = 0; i < 4; i++) {
+                    const wormholeGroup = new THREE.Group();
+                    
+                    // Torus geometry for wormhole
+                    const geometry = new THREE.TorusGeometry(8, 3, 16, 32);
+                    const material = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            wormholeColor: { value: new THREE.Color(CURRENT_WORLD.colors.tertiary) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            varying vec3 vNormal;
+                            uniform float time;
+                            
+                            void main() {
+                                vUv = uv;
+                                vNormal = normal;
+                                vec3 pos = position;
+                                pos += normal * sin(time * 2.0 + uv.x * 10.0) * 0.5;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            varying vec2 vUv;
+                            varying vec3 vNormal;
+                            uniform float time;
+                            uniform vec3 wormholeColor;
+                            
+                            void main() {
+                                float spiral = sin(vUv.x * 20.0 + time * 5.0) * sin(vUv.y * 20.0 - time * 3.0);
+                                vec3 color = wormholeColor * (1.0 + spiral * 0.5);
+                                float alpha = 0.9;
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        side: THREE.DoubleSide,
+                        transparent: true
+                    });
+                    
+                    const wormhole = new THREE.Mesh(geometry, material);
+                    wormhole.userData = { material: material };
+                    
+                    // Create event horizon effect
+                    const eventHorizonGeometry = new THREE.CircleGeometry(5, 32);
+                    const eventHorizonMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x000000,
+                        side: THREE.DoubleSide
+                    });
+                    const eventHorizon = new THREE.Mesh(eventHorizonGeometry, eventHorizonMaterial);
+                    
+                    wormholeGroup.add(wormhole);
+                    wormholeGroup.add(eventHorizon);
+                    
+                    // Position wormholes
+                    const positions = [
+                        { x: 60, y: 20, z: 0 },
+                        { x: -60, y: 20, z: 0 },
+                        { x: 0, y: 20, z: 60 },
+                        { x: 0, y: 20, z: -60 }
+                    ];
+                    
+                    wormholeGroup.position.set(positions[i].x, positions[i].y, positions[i].z);
+                    wormholeGroup.rotation.x = Math.random() * Math.PI;
+                    wormholeGroup.rotation.y = Math.random() * Math.PI;
+                    
+                    this.wormholes.push(wormholeGroup);
+                    this.scene.add(wormholeGroup);
+                }
+            }
+            
+            createQuantumEntanglements() {
+                // Create visual representations of quantum entanglements
+                const entanglementCount = 20;
+                
+                for (let i = 0; i < entanglementCount; i++) {
+                    const points = [];
+                    const startPoint = new THREE.Vector3(
+                        (Math.random() - 0.5) * 100,
+                        Math.random() * 40,
+                        (Math.random() - 0.5) * 100
+                    );
+                    const endPoint = new THREE.Vector3(
+                        (Math.random() - 0.5) * 100,
+                        Math.random() * 40,
+                        (Math.random() - 0.5) * 100
+                    );
+                    
+                    // Create curved path
+                    const curve = new THREE.CatmullRomCurve3([
+                        startPoint,
+                        new THREE.Vector3(
+                            (startPoint.x + endPoint.x) / 2,
+                            (startPoint.y + endPoint.y) / 2 + Math.random() * 20,
+                            (startPoint.z + endPoint.z) / 2
+                        ),
+                        endPoint
+                    ]);
+                    
+                    points.push(...curve.getPoints(50));
+                    
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const material = new THREE.LineBasicMaterial({
+                        color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
+                        transparent: true,
+                        opacity: 0.6,
+                        linewidth: 2
+                    });
+                    
+                    const entanglement = new THREE.Line(geometry, material);
+                    entanglement.userData = { 
+                        startPoint: startPoint,
+                        endPoint: endPoint,
+                        material: material
+                    };
+                    
+                    this.quantumEntanglements.push(entanglement);
+                    this.scene.add(entanglement);
+                }
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 8);
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i] || this.getDemoWorlds()[i];
+                    const angle = (i / numPortals) * Math.PI * 2;
+                    const radius = 30;
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Create quantum portal with complex shader
+                    const portalGeometry = new THREE.TorusGeometry(4, 0.5, 16, 32);
+                    const portalFrameMaterial = new THREE.MeshPhongMaterial({
+                        color: 0xffffff,
+                        emissive: 0xffffff,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.9,
+                        roughness: 0.1
+                    });
+                    const portalFrame = new THREE.Mesh(portalGeometry, portalFrameMaterial);
+                    
+                    // Portal surface with quantum effect
+                    const portalSurfaceGeometry = new THREE.CircleGeometry(3.5, 64);
+                    const portalSurfaceMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                            portalColor1: { value: new THREE.Color(CURRENT_WORLD.colors.primary) },
+                            portalColor2: { value: new THREE.Color(CURRENT_WORLD.colors.secondary) },
+                            portalColor3: { value: new THREE.Color(CURRENT_WORLD.colors.quantum) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            varying vec2 vUv;
+                            uniform float time;
+                            uniform vec2 resolution;
+                            uniform vec3 portalColor1;
+                            uniform vec3 portalColor2;
+                            uniform vec3 portalColor3;
+                            
+                            float noise(vec2 p) {
+                                return sin(p.x * 10.0) * sin(p.y * 10.0);
+                            }
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                
+                                // Swirling effect
+                                float angle = atan(center.y, center.x);
+                                float spiral = sin(dist * 20.0 - time * 3.0 + angle * 5.0);
+                                
+                                // Quantum fluctuation
+                                float n = noise(vUv * 10.0 + time);
+                                
+                                // Color mixing
+                                vec3 color = mix(portalColor1, portalColor2, spiral * 0.5 + 0.5);
+                                color = mix(color, portalColor3, n * 0.5 + 0.5);
+                                
+                                // Vortex alpha
+                                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                                alpha *= 0.8 + sin(time * 2.0 + dist * 10.0) * 0.2;
+                                
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    
+                    const portalSurface = new THREE.Mesh(portalSurfaceGeometry, portalSurfaceMaterial);
+                    portalSurface.position.z = 0.1;
+                    
+                    // Particle ring around portal
+                    const particleCount = 100;
+                    const particleGeometry = new THREE.BufferGeometry();
+                    const particlePositions = new Float32Array(particleCount * 3);
+                    
+                    for (let j = 0; j < particleCount; j++) {
+                        const pAngle = (j / particleCount) * Math.PI * 2;
+                        const pRadius = 4.5 + Math.random() * 0.5;
+                        particlePositions[j * 3] = Math.cos(pAngle) * pRadius;
+                        particlePositions[j * 3 + 1] = Math.sin(pAngle) * pRadius;
+                        particlePositions[j * 3 + 2] = (Math.random() - 0.5) * 0.5;
+                    }
+                    
+                    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+                    
+                    const particleMaterial = new THREE.PointsMaterial({
+                        color: 0xffffff,
+                        size: 0.1,
+                        transparent: true,
+                        opacity: 0.8,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const particles = new THREE.Points(particleGeometry, particleMaterial);
+                    
+                    portalGroup.add(portalFrame);
+                    portalGroup.add(portalSurface);
+                    portalGroup.add(particles);
+                    
+                    // Position portal
+                    portalGroup.position.x = Math.cos(angle) * radius;
+                    portalGroup.position.z = Math.sin(angle) * radius;
+                    portalGroup.position.y = 5 + Math.sin(angle * 2) * 10;
+                    portalGroup.rotation.y = -angle + Math.PI;
+                    
+                    // Portal light
+                    const portalLight = new THREE.PointLight(0xffffff, 2, 20);
+                    portalLight.position.copy(portalGroup.position);
+                    this.scene.add(portalLight);
+                    
+                    // Store portal data
+                    portalSurface.userData = {
+                        world: world,
+                        material: portalSurfaceMaterial,
+                        particles: particles,
+                        light: portalLight,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} dimension`
+                    };
+                    
+                    this.portals.push(portalSurface);
+                    this.scene.add(portalGroup);
+                }
+                
+                // Update portal count in UI
+                document.getElementById('portals-active').textContent = numPortals;
+            }
+            
+            initAudio() {
+                // Optional: Initialize Web Audio API for quantum sounds
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create ambient quantum hum
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(50, this.audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    // Start after user interaction
+                    document.addEventListener('click', () => {
+                        if (this.audioContext.state === 'suspended') {
+                            this.audioContext.resume();
+                        }
+                    }, { once: true });
+                    
+                } catch (e) {
+                    console.log('Web Audio API not supported');
+                }
+            }
+            
+            setupEventListeners() {
+                // Resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                // Keyboard
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = true;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = true;
+                        e.preventDefault();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = false;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = false;
+                    }
+                });
+                
+                // Mouse
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+                
+                // Portal clicks
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) return;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            this.enterWorld(portal.userData.url);
+                        }
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const canvas = this.renderer.domElement;
+                
+                // Touch controls for looking
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    this.touches.start = { x: touch.clientX, y: touch.clientY };
+                    this.touches.current = { ...this.touches.start };
+                });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (!this.touches.start) return;
+                    
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - this.touches.current.x;
+                    const deltaY = touch.clientY - this.touches.current.y;
+                    
+                    this.rotation.y -= deltaX * this.lookSpeed * 2;
+                    this.rotation.x -= deltaY * this.lookSpeed * 2;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    
+                    this.touches.current = { x: touch.clientX, y: touch.clientY };
+                });
+                
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    
+                    // Check for tap
+                    if (this.touches.start && this.touches.current) {
+                        const dx = this.touches.current.x - this.touches.start.x;
+                        const dy = this.touches.current.y - this.touches.start.y;
+                        
+                        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+                            // It's a tap
+                            const rect = canvas.getBoundingClientRect();
+                            const x = ((this.touches.start.x - rect.left) / rect.width) * 2 - 1;
+                            const y = -((this.touches.start.y - rect.top) / rect.height) * 2 + 1;
+                            
+                            this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                            const intersects = this.raycaster.intersectObjects(this.portals);
+                            
+                            if (intersects.length > 0) {
+                                const portal = intersects[0].object;
+                                if (portal.userData.url) {
+                                    this.enterWorld(portal.userData.url);
+                                }
+                            }
+                        }
+                    }
+                    
+                    this.touches.start = null;
+                    this.touches.current = null;
+                });
+                
+                // Joystick
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.joystickActive = true;
+                    this.updateJoystick(e.touches[0], joystick, handle);
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (this.joystickActive) {
+                        this.updateJoystick(e.touches[0], joystick, handle);
+                    }
+                });
+                
+                joystick.addEventListener('touchend', () => {
+                    this.joystickActive = false;
+                    this.joystickVector.set(0, 0);
+                    handle.style.transform = 'translate(-50%, -50%)';
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                // Apply quantum drag
+                this.velocity.multiplyScalar(0.9);
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.velocity.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.velocity.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.velocity.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.velocity.add(right.multiplyScalar(this.moveSpeed));
+                    
+                    // Quantum movement abilities
+                    if (this.keys[' ']) {
+                        this.velocity.y = 0.4; // Jump/fly
+                    }
+                    if (this.keys.shift) {
+                        this.velocity.y = -0.4; // Descend
+                    }
+                    
+                    // Phase shift
+                    if (this.keys.q) {
+                        this.phaseShiftActive = true;
+                        this.camera.position.x += Math.sin(this.clock.getElapsedTime() * 10) * 0.5;
+                    }
+                    if (this.keys.e) {
+                        this.phaseShiftActive = true;
+                        this.camera.position.z += Math.cos(this.clock.getElapsedTime() * 10) * 0.5;
+                    }
+                    
+                    // Reality warp
+                    if (this.keys.r) {
+                        this.realityPhase += 0.1;
+                        if (this.realityPhase > Math.PI * 2) {
+                            this.realityPhase = 0;
+                        }
+                    }
+                }
+                
+                // Apply velocity
+                this.camera.position.add(this.velocity);
+                
+                // Update camera rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateHover() {
+                // Cast ray from camera center
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        // Show tooltip
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        // Position tooltip
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            updateQuantumSystems(time) {
+                // Update quantum field particles
+                if (this.quantumParticles) {
+                    this.quantumParticles.rotation.y = time * 0.05;
+                    this.quantumParticles.material.uniforms.time.value = time;
+                    this.quantumParticles.material.uniforms.phase.value = this.realityPhase;
+                }
+                
+                // Update tesseract
+                if (this.tesseract) {
+                    this.tesseract.rotation.x = time * 0.1;
+                    this.tesseract.rotation.y = time * 0.15;
+                    this.tesseract.rotation.z = time * 0.05;
+                    
+                    // 4D rotation simulation
+                    const scale = 1 + Math.sin(time * 0.5) * 0.1;
+                    this.tesseract.scale.set(scale, scale, scale);
+                }
+                
+                // Update reality layers
+                this.realityLayers.forEach((layer, index) => {
+                    layer.rotation.x += layer.children[0].userData.rotationSpeed;
+                    layer.rotation.y += layer.children[0].userData.rotationSpeed * 1.5;
+                    layer.rotation.z += layer.children[0].userData.rotationSpeed * 0.5;
+                    
+                    // Phase-based visibility
+                    const phase = this.realityPhase + layer.children[0].userData.phaseOffset;
+                    const opacity = 0.2 + Math.sin(phase) * 0.1;
+                    layer.children[0].material.opacity = opacity;
+                });
+                
+                // Update dimensional rifts
+                this.dimensionalRifts.forEach((rift, index) => {
+                    rift.userData.material.uniforms.time.value = time;
+                    rift.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
+                    
+                    // Rift pulsing
+                    const scale = 1 + Math.sin(time * 2 + index * 0.5) * 0.1;
+                    rift.scale.set(scale, scale, 1);
+                });
+                
+                // Update energy beams
+                this.energyBeams.forEach((beam, index) => {
+                    beam.userData.material.uniforms.time.value = time;
+                    beam.rotation.y += 0.01;
+                    
+                    // Beam fluctuation
+                    const intensity = 0.5 + Math.sin(time * 3 + index) * 0.5;
+                    beam.material.opacity = intensity;
+                });
+                
+                // Update fractals
+                this.fractals.forEach((fractal, index) => {
+                    fractal.rotation.x = time * 0.1 + index;
+                    fractal.rotation.y = time * 0.15 + index;
+                    
+                    // Recursive scaling
+                    fractal.traverse((child) => {
+                        if (child.isMesh) {
+                            const scale = 1 + Math.sin(time * 2 + child.position.length() * 0.1) * 0.05;
+                            child.scale.setScalar(scale);
+                        }
+                    });
+                });
+                
+                // Update wormholes
+                this.wormholes.forEach((wormhole, index) => {
+                    wormhole.rotation.x += 0.02;
+                    wormhole.rotation.y += 0.01;
+                    
+                    const wormholeMesh = wormhole.children[0];
+                    if (wormholeMesh.userData.material) {
+                        wormholeMesh.userData.material.uniforms.time.value = time;
+                    }
+                });
+                
+                // Update quantum entanglements
+                this.quantumEntanglements.forEach((entanglement, index) => {
+                    // Pulsing effect
+                    const pulse = Math.sin(time * 4 + index) * 0.5 + 0.5;
+                    entanglement.userData.material.opacity = 0.3 + pulse * 0.3;
+                    
+                    // Slight position variation
+                    const offset = Math.sin(time + index) * 0.5;
+                    entanglement.position.y = offset;
+                });
+                
+                // Update quantum grid
+                if (this.quantumGrid) {
+                    this.quantumGrid.material.uniforms.time.value = time;
+                    this.quantumGrid.material.uniforms.phase.value = this.realityPhase;
+                }
+                
+                // Update quantum sky
+                if (this.quantumSky) {
+                    this.quantumSky.material.uniforms.time.value = time;
+                }
+                
+                // Calculate quantum metrics
+                this.quantumFlux = Math.abs(Math.sin(time * 0.5)) * 100;
+                this.dimensionalDrift = Math.abs(Math.cos(time * 0.3)) * 100;
+                
+                // Update UI stats
+                document.getElementById('reality-phase').textContent = (this.realityPhase / (Math.PI * 2) * 100).toFixed(2);
+                document.getElementById('quantum-flux').textContent = this.quantumFlux.toFixed(2);
+                document.getElementById('dimensional-drift').textContent = this.dimensionalDrift.toFixed(2);
+            }
+            
+            updatePortals(time) {
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        // Portal rotation
+                        portal.rotation.z = time * 0.5 + index;
+                        
+                        // Update particles around portal
+                        if (portal.userData.particles) {
+                            portal.userData.particles.rotation.z = -time * 2;
+                        }
+                        
+                        // Light pulsing
+                        const intensity = 1.5 + Math.sin(time * 3 + index) * 0.5;
+                        portal.userData.light.intensity = intensity;
+                        
+                        // Color shift based on reality phase
+                        const hue = (this.realityPhase / (Math.PI * 2) + index * 0.1) % 1;
+                        portal.userData.light.color.setHSL(hue, 1, 0.5);
+                    }
+                });
+            }
+            
+            createQuantumDistortion() {
+                // Create visual distortion effects when phase shifting
+                if (this.phaseShiftActive) {
+                    const distortionAmount = Math.sin(this.clock.getElapsedTime() * 20) * 0.02;
+                    this.camera.position.x += (Math.random() - 0.5) * distortionAmount;
+                    this.camera.position.y += (Math.random() - 0.5) * distortionAmount;
+                    this.camera.position.z += (Math.random() - 0.5) * distortionAmount;
+                    
+                    // Reset phase shift
+                    this.phaseShiftActive = false;
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    // Show loading with quantum effect
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Quantum tunneling initiated...';
+                    
+                    // Create quantum transition effect
+                    const transitionDuration = 2000;
+                    const startTime = Date.now();
+                    
+                    const transitionEffect = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = elapsed / transitionDuration;
+                        
+                        if (progress >= 1) {
+                            clearInterval(transitionEffect);
+                            // Proceed with world loading
+                            this.loadNewWorld(url);
+                        } else {
+                            // Quantum dissolution effect
+                            this.renderer.domElement.style.filter = `hue-rotate(${progress * 360}deg) blur(${progress * 10}px)`;
+                            this.renderer.domElement.style.opacity = 1 - progress * 0.5;
+                        }
+                    }, 16);
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Quantum entanglement failed. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            async loadNewWorld(url) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    const htmlContent = await response.text();
+                    
+                    // Create blob and navigate
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    // Navigate to the new world
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error loading world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to establish quantum connection.';
+                    this.renderer.domElement.style.filter = 'none';
+                    this.renderer.domElement.style.opacity = '1';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                // Update all systems
+                this.updateMovement();
+                this.updateHover();
+                this.updateQuantumSystems(time);
+                this.updatePortals(time);
+                this.createQuantumDistortion();
+                
+                // Render scene
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new QuantumNexusWorld();
+            world.init();
+        });
+    </script>
+</body>
+</html>
