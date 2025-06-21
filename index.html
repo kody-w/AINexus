@@ -219,8 +219,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Configuration - Update these with your GitHub details
-        const REPO_OWNER = 'your-github-username'; // Replace with your GitHub username
-        const REPO_NAME = 'your-repo-name'; // Replace with your repository name
+        const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
+        const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
         
         // World metadata embedded in this file
@@ -644,7 +644,7 @@
                     this.touches.start = { x: touch.clientX, y: touch.clientY };
                     this.touches.current = { ...this.touches.start };
                 });
-                
+
                 canvas.addEventListener('touchmove', (e) => {
                     e.preventDefault();
                     if (!this.touches.start) return;
