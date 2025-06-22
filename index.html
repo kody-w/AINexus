@@ -329,7 +329,9 @@
         
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
-            const params = new URLSearchParams(window.location.search);
+            // Check for injected params first, then fall back to URL params
+            const paramString = window.INJECTED_PARAMS || window.location.search;
+            const params = new URLSearchParams(paramString);
             const inherited = {};
             
             // Get source world info
@@ -1053,27 +1055,41 @@
                     
                     let htmlContent = await response.text();
                     
-                    // Inject inheritance parameters into the loaded world
+                    // Build inheritance parameters
                     const inheritanceParams = this.buildInheritanceParams();
                     
-                    // Find the script tag and inject our parameters
+                    // Create a script to inject the parameters at the start of the page
+                    const paramScript = `<script>
+                        // Injected inheritance parameters
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        
+                        // Override window.location.search
+                        Object.defineProperty(window.location, 'search', {
+                            get: function() { return window.INJECTED_PARAMS || ''; }
+                        });
+                    <\/script>`;
+                    
+                    // Inject the script right after the opening body tag
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    // Update parseInheritedAttributes function to use injected params
                     htmlContent = htmlContent.replace(
-                        /(window\.location\.search)/g,
-                        `'?${inheritanceParams}'`
+                        'const params = new URLSearchParams(window.location.search);',
+                        'const params = new URLSearchParams(window.INJECTED_PARAMS || window.location.search);'
                     );
                     
-                    // Also update any direct world links to include inheritance
+                    // Update any world navigation to use the same pattern
                     htmlContent = htmlContent.replace(
                         /window\.location\.href = blobUrl;/g,
-                        `window.location.href = blobUrl + '?${inheritanceParams}';`
+                        `window.location.href = blobUrl;`
                     );
                     
                     // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world with inheritance parameters
-                    window.location.href = blobUrl + '?' + inheritanceParams;
+                    // Navigate to the new world (without query params in URL)
+                    window.location.href = blobUrl;
                     
                 } catch (error) {
                     console.error('Error entering world:', error);
