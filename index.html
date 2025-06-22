@@ -330,7 +330,33 @@
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
             // Check for injected params first, then fall back to URL params
-            const paramString = window.INJECTED_PARAMS || window.location.search;
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            // If we're in a blob URL, check sessionStorage for params
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            // Also check localStorage as fallback
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        // Check if data is recent (within 5 seconds)
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
             const params = new URLSearchParams(paramString);
             const inherited = {};
             
@@ -354,6 +380,7 @@
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
             if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
             
+            console.log('Parsed inherited attributes:', inherited);
             return inherited;
         }
         
@@ -424,6 +451,7 @@
                     const originName = document.getElementById('origin-world-name');
                     originName.textContent = this.inheritedAttributes.sourceWorldName;
                     originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
                 
                 // Hide loading after scene is ready
@@ -742,7 +770,7 @@
                 const params = new URLSearchParams();
                 
                 // Source world info
-                params.set('from', window.location.pathname.split('/').pop() || 'nexus-hub.html');
+                params.set('from', window.location.pathname.split('/').pop() || 'index.html');
                 params.set('fromName', CURRENT_WORLD.name);
                 
                 // Movement attributes
@@ -1058,37 +1086,35 @@
                     // Build inheritance parameters
                     const inheritanceParams = this.buildInheritanceParams();
                     
+                    // Store params in multiple places for reliability
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    // Store in localStorage with timestamp
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
                     // Create a script to inject the parameters at the start of the page
                     const paramScript = `<script>
                         // Injected inheritance parameters
                         window.INJECTED_PARAMS = '?${inheritanceParams}';
                         
-                        // Override window.location.search
-                        Object.defineProperty(window.location, 'search', {
-                            get: function() { return window.INJECTED_PARAMS || ''; }
-                        });
+                        // Also store in sessionStorage as backup
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        
+                        console.log('Injected params:', window.INJECTED_PARAMS);
                     <\/script>`;
                     
                     // Inject the script right after the opening body tag
                     htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
                     
-                    // Update parseInheritedAttributes function to use injected params
-                    htmlContent = htmlContent.replace(
-                        'const params = new URLSearchParams(window.location.search);',
-                        'const params = new URLSearchParams(window.INJECTED_PARAMS || window.location.search);'
-                    );
-                    
-                    // Update any world navigation to use the same pattern
-                    htmlContent = htmlContent.replace(
-                        /window\.location\.href = blobUrl;/g,
-                        `window.location.href = blobUrl;`
-                    );
-                    
                     // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world (without query params in URL)
+                    // Navigate to the new world
                     window.location.href = blobUrl;
                     
                 } catch (error) {
