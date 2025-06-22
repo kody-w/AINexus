@@ -61,6 +61,35 @@
             max-width: 400px;
         }
 
+        .world-origin {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #00ff00;
+            font-weight: 500;
+        }
+
         .controls-hint {
             position: absolute;
             bottom: 30px;
@@ -185,6 +214,11 @@
         <p class="world-description" id="world-description">A mystical underground realm filled with glowing crystals and ancient secrets</p>
     </div>
     
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+    
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
@@ -208,15 +242,75 @@
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
         
-        // World metadata for Crystal Caves
-        const CURRENT_WORLD = {
+        // Default world attributes
+        const DEFAULT_WORLD_ATTRIBUTES = {
             name: "Crystal Caves",
             description: "A mystical underground realm filled with glowing crystals and ancient secrets",
             ambientColor: 0x001122,
             fogColor: 0x000033,
             groundColor: 0x0a0a1a,
-            crystalColors: [0x00ffff, 0xff00ff, 0x00ff00, 0xffff00, 0xff0088]
+            crystalColors: [0x00ffff, 0xff00ff, 0x00ff00, 0xffff00, 0xff0088],
+            // Inheritance defaults
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0x00ffff,
+            portalColor2: 0x0088ff,
+            particleCount: 1000,
+            cameraHeight: 2,
+            fogNear: 5,
+            fogFar: 50
         };
+        
+        // Parse inherited attributes from URL
+        function parseInheritedAttributes() {
+            const params = new URLSearchParams(window.location.search);
+            const inherited = {};
+            
+            // Get source world info
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            // Movement attributes
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            
+            // Visual attributes
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            
+            // World properties
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+            
+            return inherited;
+        }
+        
+        // Merge inherited attributes with defaults
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+        
+        // Update crystal colors based on inherited portal colors
+        if (inheritedAttributes.portalColor1 || inheritedAttributes.portalColor2) {
+            // Mix inherited portal colors into crystal colors
+            const color1 = inheritedAttributes.portalColor1 || DEFAULT_WORLD_ATTRIBUTES.portalColor1;
+            const color2 = inheritedAttributes.portalColor2 || DEFAULT_WORLD_ATTRIBUTES.portalColor2;
+            
+            // Blend with existing crystal colors
+            CURRENT_WORLD.crystalColors = [
+                color1,
+                color2,
+                // Mix colors
+                ((color1 & 0xFF0000) + (color2 & 0xFF0000)) / 2 & 0xFF0000 |
+                ((color1 & 0x00FF00) + (color2 & 0x00FF00)) / 2 & 0x00FF00 |
+                ((color1 & 0x0000FF) + (color2 & 0x0000FF)) / 2 & 0x0000FF,
+                0xffff00,
+                0xff0088
+            ];
+        }
         
         // Check if device is mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
@@ -233,9 +327,9 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Movement
-                this.moveSpeed = 0.15;
-                this.lookSpeed = 0.002;
+                // Use inherited movement attributes
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false };
                 this.rotation = { x: 0, y: 0 };
                 
@@ -251,9 +345,20 @@
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
+                
+                // Inherited attributes
+                this.inheritedAttributes = inheritedAttributes;
             }
             
             async init() {
+                // Show origin world if we came from somewhere
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                }
+                
                 // Hide loading after scene is ready
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
@@ -282,13 +387,13 @@
             }
             
             setupScene() {
-                // Scene
+                // Scene with inherited fog
                 this.scene = new THREE.Scene();
-                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, 5, 50);
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
-                // Camera
+                // Camera with inherited height
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.camera.position.set(0, 2, 10);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
                 
                 // Renderer
                 this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -299,7 +404,7 @@
             }
             
             setupLighting() {
-                // Very dim ambient light for cave atmosphere
+                // Very dim ambient light for cave atmosphere with inherited color
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.2);
                 this.scene.add(ambientLight);
                 
@@ -428,7 +533,7 @@
                 for (let i = 0; i < 30; i++) {
                     const crystalGroup = new THREE.Group();
                     
-                    // Random crystal color
+                    // Random crystal color from updated crystal colors
                     const color = CURRENT_WORLD.crystalColors[Math.floor(Math.random() * CURRENT_WORLD.crystalColors.length)];
                     
                     // Create multiple crystals in a cluster
@@ -492,21 +597,21 @@
                     // Crystal portal frame
                     const frameGeometry = new THREE.TorusGeometry(2.5, 0.4, 8, 6);
                     const frameMaterial = new THREE.MeshStandardMaterial({
-                        color: 0x00ffff,
-                        emissive: 0x00ffff,
+                        color: CURRENT_WORLD.portalColor1,
+                        emissive: CURRENT_WORLD.portalColor1,
                         emissiveIntensity: 0.3,
                         metalness: 0.5,
                         roughness: 0.2
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                     
-                    // Portal surface
+                    // Portal surface with inherited colors
                     const portalGeometry = new THREE.CircleGeometry(2.1, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
                             time: { value: 0 },
-                            color1: { value: new THREE.Color(0x00ffff) },
-                            color2: { value: new THREE.Color(0x0088ff) }
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
                         },
                         vertexShader: `
                             varying vec2 vUv;
@@ -557,7 +662,7 @@
                     portalGroup.lookAt(0, 3, 0);
                     
                     // Add crystal light
-                    const light = new THREE.PointLight(0x00ffff, 1, 15);
+                    const light = new THREE.PointLight(CURRENT_WORLD.portalColor1, 1, 15);
                     light.position.copy(portalGroup.position);
                     this.scene.add(light);
                     
@@ -574,6 +679,33 @@
                     this.portals.push(portal);
                     this.scene.add(portalGroup);
                 }
+            }
+            
+            buildInheritanceParams() {
+                // Build URL parameters to pass to the next world
+                const params = new URLSearchParams();
+                
+                // Source world info
+                params.set('from', window.location.pathname.split('/').pop() || 'crystal-caves.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                
+                // Movement attributes
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                
+                // Visual attributes (convert to hex strings)
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                
+                // World properties
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
             }
             
             setupEventListeners() {
@@ -605,10 +737,22 @@
                     }
                 });
                 
-                // Mouse
-                this.renderer.domElement.addEventListener('click', () => {
+                // Mouse click handling
+                this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
+                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
+                    } else {
+                        // Check for portal clicks when pointer is locked
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
                     }
                 });
                 
@@ -621,21 +765,6 @@
                         this.rotation.y -= e.movementX * this.lookSpeed;
                         this.rotation.x -= e.movementY * this.lookSpeed;
                         this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                    }
-                });
-                
-                // Portal clicks
-                this.renderer.domElement.addEventListener('click', (e) => {
-                    if (!this.isPointerLocked) return;
-                    
-                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-                    const intersects = this.raycaster.intersectObjects(this.portals);
-                    
-                    if (intersects.length > 0) {
-                        const portal = intersects[0].object;
-                        if (portal.userData.url) {
-                            this.enterWorld(portal.userData.url);
-                        }
                     }
                 });
             }
@@ -822,14 +951,29 @@
                         throw new Error(`Failed to load world (${response.status})`);
                     }
                     
-                    const htmlContent = await response.text();
+                    let htmlContent = await response.text();
                     
-                    // Replace current page with new world
+                    // Inject inheritance parameters into the loaded world
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    // Find the script tag and inject our parameters
+                    htmlContent = htmlContent.replace(
+                        /(window\.location\.search)/g,
+                        `'?${inheritanceParams}'`
+                    );
+                    
+                    // Also update any direct world links to include inheritance
+                    htmlContent = htmlContent.replace(
+                        /window\.location\.href = blobUrl;/g,
+                        `window.location.href = blobUrl + '?${inheritanceParams}';`
+                    );
+                    
+                    // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world
-                    window.location.href = blobUrl;
+                    // Navigate to the new world with inheritance parameters
+                    window.location.href = blobUrl + '?' + inheritanceParams;
                     
                 } catch (error) {
                     console.error('Error entering world:', error);

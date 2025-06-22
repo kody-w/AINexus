@@ -61,6 +61,35 @@
             max-width: 400px;
         }
 
+        .world-origin {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #FFD700;
+            font-weight: 500;
+        }
+
         .controls-hint {
             position: absolute;
             bottom: 30px;
@@ -186,6 +215,11 @@
         <p class="world-description" id="world-description">Floating islands connected by bridges of light in an endless sky</p>
     </div>
     
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+    
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
@@ -209,15 +243,72 @@
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
         
-        // World metadata for Sky Islands
-        const CURRENT_WORLD = {
+        // Default world attributes
+        const DEFAULT_WORLD_ATTRIBUTES = {
             name: "Sky Islands",
             description: "Floating islands connected by bridges of light in an endless sky",
             skyTopColor: 0x87CEEB,
             skyBottomColor: 0xFFE4B5,
             cloudColor: 0xFFFFFF,
-            islandColors: [0x8FBC8F, 0x90EE90, 0x98FB98]
+            islandColors: [0x8FBC8F, 0x90EE90, 0x98FB98],
+            // Inheritance defaults
+            moveSpeed: 0.2,
+            lookSpeed: 0.002,
+            ambientColor: 0xFFE4B5,
+            fogColor: 0xFFE4B5,
+            portalColor1: 0x87CEEB,
+            portalColor2: 0xFFD700,
+            particleCount: 500,
+            cameraHeight: 25,
+            fogNear: 50,
+            fogFar: 300
         };
+        
+        // Parse inherited attributes from URL
+        function parseInheritedAttributes() {
+            const params = new URLSearchParams(window.location.search);
+            const inherited = {};
+            
+            // Get source world info
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            // Movement attributes
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            
+            // Visual attributes
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            
+            // World properties
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+            
+            return inherited;
+        }
+        
+        // Merge inherited attributes with defaults
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+        
+        // Update sky colors based on inherited fog color if significantly different
+        if (inheritedAttributes.fogColor && Math.abs(inheritedAttributes.fogColor - DEFAULT_WORLD_ATTRIBUTES.fogColor) > 0x111111) {
+            // Create a sky gradient based on inherited fog color
+            const fogHex = inheritedAttributes.fogColor;
+            const r = (fogHex >> 16) & 255;
+            const g = (fogHex >> 8) & 255;
+            const b = fogHex & 255;
+            
+            // Lighten for sky top
+            CURRENT_WORLD.skyTopColor = (Math.min(255, r + 100) << 16) | (Math.min(255, g + 100) << 8) | Math.min(255, b + 100);
+            // Use fog color for sky bottom
+            CURRENT_WORLD.skyBottomColor = inheritedAttributes.fogColor;
+        }
         
         // Check if device is mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
@@ -236,9 +327,9 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Movement
-                this.moveSpeed = 0.2;
-                this.lookSpeed = 0.002;
+                // Use inherited movement attributes
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false, ' ': false, shift: false };
                 this.rotation = { x: 0, y: 0 };
                 this.velocity = new THREE.Vector3();
@@ -256,9 +347,20 @@
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
+                
+                // Inherited attributes
+                this.inheritedAttributes = inheritedAttributes;
             }
             
             async init() {
+                // Show origin world if we came from somewhere
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                }
+                
                 // Hide loading after scene is ready
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
@@ -293,11 +395,11 @@
             setupScene() {
                 // Scene
                 this.scene = new THREE.Scene();
-                this.scene.fog = new THREE.Fog(0xFFE4B5, 50, 300);
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
-                // Camera
+                // Camera with inherited height
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.camera.position.set(0, 25, 30);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 30);
                 
                 // Renderer
                 this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -308,8 +410,8 @@
             }
             
             setupLighting() {
-                // Bright ambient light for daytime
-                const ambientLight = new THREE.AmbientLight(0xFFE4B5, 0.6);
+                // Bright ambient light for daytime with inherited color influence
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.6);
                 this.scene.add(ambientLight);
                 
                 // Sun light
@@ -325,7 +427,7 @@
                 this.scene.add(sunLight);
                 
                 // Hemisphere light for sky ambience
-                const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0xFFE4B5, 0.5);
+                const hemiLight = new THREE.HemisphereLight(CURRENT_WORLD.skyTopColor, CURRENT_WORLD.skyBottomColor, 0.5);
                 this.scene.add(hemiLight);
             }
             
@@ -441,10 +543,14 @@
                     base.receiveShadow = true;
                     islandGroup.add(base);
                     
-                    // Grass top
+                    // Grass top - use island colors or influenced by inherited portal colors
                     const topGeometry = new THREE.CylinderGeometry(pos.size * 0.9, pos.size, 2, 8);
+                    const topColor = inheritedAttributes.portalColor1 ? 
+                        new THREE.Color(inheritedAttributes.portalColor1).lerp(new THREE.Color(CURRENT_WORLD.islandColors[index % CURRENT_WORLD.islandColors.length]), 0.7) :
+                        CURRENT_WORLD.islandColors[index % CURRENT_WORLD.islandColors.length];
+                    
                     const topMaterial = new THREE.MeshStandardMaterial({
-                        color: CURRENT_WORLD.islandColors[index % CURRENT_WORLD.islandColors.length],
+                        color: topColor,
                         roughness: 0.7
                     });
                     const top = new THREE.Mesh(topGeometry, topMaterial);
@@ -499,7 +605,7 @@
             }
             
             createBridges() {
-                // Light bridges connecting islands
+                // Light bridges connecting islands - use inherited portal colors
                 const bridgeConnections = [
                     { from: 0, to: 1 },
                     { from: 0, to: 2 },
@@ -522,8 +628,8 @@
                     // Bridge geometry
                     const bridgeGeometry = new THREE.BoxGeometry(2, 0.2, distance);
                     const bridgeMaterial = new THREE.MeshStandardMaterial({
-                        color: 0xFFD700,
-                        emissive: 0xFFD700,
+                        color: CURRENT_WORLD.portalColor2,
+                        emissive: CURRENT_WORLD.portalColor2,
                         emissiveIntensity: 0.3,
                         transparent: true,
                         opacity: 0.8
@@ -620,13 +726,13 @@
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                     
-                    // Portal surface
+                    // Portal surface with inherited colors
                     const portalGeometry = new THREE.CircleGeometry(2.2, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
                             time: { value: 0 },
-                            color1: { value: new THREE.Color(0x87CEEB) },
-                            color2: { value: new THREE.Color(0xFFD700) }
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
                         },
                         vertexShader: `
                             varying vec2 vUv;
@@ -685,6 +791,33 @@
                 }
             }
             
+            buildInheritanceParams() {
+                // Build URL parameters to pass to the next world
+                const params = new URLSearchParams();
+                
+                // Source world info
+                params.set('from', window.location.pathname.split('/').pop() || 'sky-islands.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                
+                // Movement attributes
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                
+                // Visual attributes (convert to hex strings)
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                
+                // World properties
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
+            }
+            
             setupEventListeners() {
                 // Resize
                 window.addEventListener('resize', () => {
@@ -723,10 +856,22 @@
                     }
                 });
                 
-                // Mouse
-                this.renderer.domElement.addEventListener('click', () => {
+                // Mouse click handling
+                this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
+                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
+                    } else {
+                        // Check for portal clicks when pointer is locked
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
                     }
                 });
                 
@@ -739,21 +884,6 @@
                         this.rotation.y -= e.movementX * this.lookSpeed;
                         this.rotation.x -= e.movementY * this.lookSpeed;
                         this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                    }
-                });
-                
-                // Portal clicks
-                this.renderer.domElement.addEventListener('click', (e) => {
-                    if (!this.isPointerLocked) return;
-                    
-                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-                    const intersects = this.raycaster.intersectObjects(this.portals);
-                    
-                    if (intersects.length > 0) {
-                        const portal = intersects[0].object;
-                        if (portal.userData.url) {
-                            this.enterWorld(portal.userData.url);
-                        }
                     }
                 });
             }
@@ -957,14 +1087,29 @@
                         throw new Error(`Failed to load world (${response.status})`);
                     }
                     
-                    const htmlContent = await response.text();
+                    let htmlContent = await response.text();
                     
-                    // Replace current page with new world
+                    // Inject inheritance parameters into the loaded world
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    // Find the script tag and inject our parameters
+                    htmlContent = htmlContent.replace(
+                        /(window\.location\.search)/g,
+                        `'?${inheritanceParams}'`
+                    );
+                    
+                    // Also update any direct world links to include inheritance
+                    htmlContent = htmlContent.replace(
+                        /window\.location\.href = blobUrl;/g,
+                        `window.location.href = blobUrl + '?${inheritanceParams}';`
+                    );
+                    
+                    // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world
-                    window.location.href = blobUrl;
+                    // Navigate to the new world with inheritance parameters
+                    window.location.href = blobUrl + '?' + inheritanceParams;
                     
                 } catch (error) {
                     console.error('Error entering world:', error);

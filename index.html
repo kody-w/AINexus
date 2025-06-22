@@ -791,10 +791,22 @@
                     }
                 });
                 
-                // Mouse
-                this.renderer.domElement.addEventListener('click', () => {
+                // Mouse click handling
+                this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
+                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
+                    } else {
+                        // Check for portal clicks when pointer is locked
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
                     }
                 });
                 
@@ -807,21 +819,6 @@
                         this.rotation.y -= e.movementX * this.lookSpeed;
                         this.rotation.x -= e.movementY * this.lookSpeed;
                         this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                    }
-                });
-                
-                // Portal clicks
-                this.renderer.domElement.addEventListener('click', (e) => {
-                    if (!this.isPointerLocked) return;
-                    
-                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-                    const intersects = this.raycaster.intersectObjects(this.portals);
-                    
-                    if (intersects.length > 0) {
-                        const portal = intersects[0].object;
-                        if (portal.userData.url) {
-                            this.enterWorld(portal.userData.url);
-                        }
                     }
                 });
             }
