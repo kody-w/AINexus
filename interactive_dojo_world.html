@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Interactive Dojo - AI Sensei</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff6b35, #f7931e, #ffd700);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .world-origin {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #ffd700;
+            font-weight: 500;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 120px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+        }
+
+        /* Chat Interface */
+        .chat-interface {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 1002;
+            display: none;
+            flex-direction: column;
+            max-height: 400px;
+        }
+
+        .chat-interface.visible {
+            display: flex;
+        }
+
+        .chat-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-title {
+            color: #ffd700;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .chat-close {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+            pointer-events: auto;
+        }
+
+        .chat-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 250px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: rgba(255, 215, 0, 0.2);
+            margin-left: auto;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .message.sensei {
+            background: rgba(255, 107, 53, 0.2);
+            margin-right: auto;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+        }
+
+        .message-sender {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .message-text {
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .chat-input-container {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255, 215, 0, 0.3);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px 15px;
+            color: #fff;
+            font-size: 0.9em;
+            outline: none;
+            pointer-events: auto;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-send {
+            background: rgba(255, 215, 0, 0.8);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            pointer-events: auto;
+        }
+
+        .chat-send:hover {
+            background: rgba(255, 215, 0, 1);
+        }
+
+        .chat-send:disabled {
+            background: rgba(255, 215, 0, 0.3);
+            cursor: not-allowed;
+        }
+
+        .npc-interaction-hint {
+            position: absolute;
+            background: rgba(255, 215, 0, 0.9);
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 1003;
+            display: none;
+            transform: translate(-50%, -120%);
+        }
+
+        .npc-interaction-hint.visible {
+            display: block;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 15px;
+            background: rgba(255, 107, 53, 0.2);
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            border-radius: 15px;
+            margin-bottom: 15px;
+            max-width: 80%;
+        }
+
+        .typing-indicator.visible {
+            display: block;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff6b35;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 215, 0, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 60px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+
+            .chat-interface {
+                width: 95%;
+                max-height: 300px;
+            }
+
+            .chat-messages {
+                max-height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">INTERACTIVE DOJO</h1>
+        <p class="world-description" id="world-description">Train with the AI Sensei and explore the sacred training grounds</p>
+    </div>
+    
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look, Click on Sensei to talk</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="npc-interaction-hint" id="npc-hint">Click to talk with Sensei</div>
+    
+    <div class="chat-interface" id="chat-interface">
+        <div class="chat-header">
+            <div class="chat-title">🥋 Master Takeshi</div>
+            <button class="chat-close" id="chat-close">×</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="message sensei">
+                <div class="message-sender">Master Takeshi</div>
+                <div class="message-text">Welcome to my dojo, young student. I am here to guide you on your journey. What wisdom do you seek today?</div>
+            </div>
+        </div>
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Ask the Sensei for wisdom..." maxlength="500">
+            <button class="chat-send" id="chat-send">Send</button>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">Entering the dojo...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
+        const BRANCH = 'main';
+        
+        // Azure Function App endpoint - REPLACE WITH YOUR ACTUAL ENDPOINT
+        const AI_ENDPOINT = 'https://your-function-app.azurewebsites.net/api/businessinsightbot_function';
+        const FUNCTION_KEY = 'your-function-key-here'; // Add your function key
+        
+        // World attributes
+        const DEFAULT_WORLD_ATTRIBUTES = {
+            name: "Interactive Dojo",
+            description: "Train with the AI Sensei and explore the sacred training grounds",
+            ambientColor: 0x2a1810,
+            fogColor: 0x4a3528,
+            groundColor: 0x8b4513,
+            skyColor: 0x654321,
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0xff6b35,
+            portalColor2: 0xffd700,
+            particleCount: 300,
+            cameraHeight: 2,
+            fogNear: 10,
+            fogFar: 100
+        };
+        
+        // Parse inherited attributes from URL
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+            
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+            
+            console.log('Parsed inherited attributes:', inherited);
+            return inherited;
+        }
+        
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        
+        class InteractiveDojoWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.sensei = null;
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                
+                this.isMobile = isMobile;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                this.isPointerLocked = false;
+                this.inheritedAttributes = inheritedAttributes;
+                
+                // Chat system
+                this.chatInterface = document.getElementById('chat-interface');
+                this.chatMessages = document.getElementById('chat-messages');
+                this.chatInput = document.getElementById('chat-input');
+                this.chatSend = document.getElementById('chat-send');
+                this.chatClose = document.getElementById('chat-close');
+                this.typingIndicator = document.getElementById('typing-indicator');
+                this.npcHint = document.getElementById('npc-hint');
+                
+                this.conversationHistory = [];
+                this.isTyping = false;
+                
+                this.setupChatEventListeners();
+            }
+            
+            setupChatEventListeners() {
+                this.chatSend.addEventListener('click', () => this.sendMessage());
+                this.chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                this.chatClose.addEventListener('click', () => this.closeChatInterface());
+            }
+            
+            async sendMessage() {
+                const message = this.chatInput.value.trim();
+                if (!message || this.isTyping) return;
+                
+                // Add user message to chat
+                this.addMessageToChat('user', 'You', message);
+                this.chatInput.value = '';
+                
+                // Show typing indicator
+                this.showTypingIndicator();
+                
+                try {
+                    // Send to AI endpoint
+                    const response = await this.callAIEndpoint(message);
+                    this.hideTypingIndicator();
+                    
+                    if (response && response.assistant_response) {
+                        this.addMessageToChat('sensei', 'Master Takeshi', response.assistant_response);
+                    } else {
+                        this.addMessageToChat('sensei', 'Master Takeshi', 'Forgive me, young student. The wisdom flows slowly today. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error calling AI endpoint:', error);
+                    this.hideTypingIndicator();
+                    this.addMessageToChat('sensei', 'Master Takeshi', 'The spiritual connection is weak. Please try speaking to me again.');
+                }
+            }
+            
+            async callAIEndpoint(userInput) {
+                const payload = {
+                    user_input: userInput,
+                    conversation_history: this.conversationHistory
+                };
+                
+                const response = await fetch(AI_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': FUNCTION_KEY
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            }
+            
+            addMessageToChat(type, sender, message) {
+                const messageElement = document.createElement('div');
+                messageElement.className = `message ${type}`;
+                messageElement.innerHTML = `
+                    <div class="message-sender">${sender}</div>
+                    <div class="message-text">${this.formatMessage(message)}</div>
+                `;
+                
+                this.chatMessages.insertBefore(messageElement, this.typingIndicator);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+                
+                // Add to conversation history
+                this.conversationHistory.push({
+                    role: type === 'user' ? 'user' : 'assistant',
+                    content: message
+                });
+                
+                // Keep conversation history manageable
+                if (this.conversationHistory.length > 20) {
+                    this.conversationHistory = this.conversationHistory.slice(-10);
+                }
+            }
+            
+            formatMessage(message) {
+                // Basic markdown-like formatting for the AI responses
+                return message
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px;">$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+            
+            showTypingIndicator() {
+                this.isTyping = true;
+                this.typingIndicator.classList.add('visible');
+                this.chatSend.disabled = true;
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+            
+            hideTypingIndicator() {
+                this.isTyping = false;
+                this.typingIndicator.classList.remove('visible');
+                this.chatSend.disabled = false;
+            }
+            
+            openChatInterface() {
+                this.chatInterface.classList.add('visible');
+                this.chatInput.focus();
+            }
+            
+            closeChatInterface() {
+                this.chatInterface.classList.remove('visible');
+            }
+            
+            async init() {
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                }
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+                
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createDojoEnvironment();
+                this.createSensei();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look, Use joystick to move, Tap Sensei to talk';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 15);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Main directional light (sunlight through windows)
+                const sunLight = new THREE.DirectionalLight(0xffd700, 0.8);
+                sunLight.position.set(10, 20, 10);
+                sunLight.castShadow = true;
+                sunLight.shadow.camera.near = 0.1;
+                sunLight.shadow.camera.far = 100;
+                sunLight.shadow.camera.left = -50;
+                sunLight.shadow.camera.right = 50;
+                sunLight.shadow.camera.top = 50;
+                sunLight.shadow.camera.bottom = -50;
+                this.scene.add(sunLight);
+                
+                // Warm accent lighting
+                const accentLight = new THREE.PointLight(0xff6b35, 0.5, 30);
+                accentLight.position.set(-10, 5, -10);
+                this.scene.add(accentLight);
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('dojo')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    // Always include a portal back to the hub
+                    this.worlds.unshift({
+                        name: "Nexus Hub",
+                        description: "Return to the central hub",
+                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/index.html`
+                    });
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "Explore glowing crystal caverns" },
+                    { name: "Sky Islands", description: "Float among the clouds" }
+                ];
+            }
+            
+            createDojoEnvironment() {
+                // Dojo floor (tatami mats)
+                const floorGeometry = new THREE.PlaneGeometry(40, 40);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Dojo walls
+                this.createWalls();
+                
+                // Training equipment
+                this.createTrainingEquipment();
+                
+                // Decorative elements
+                this.createDecorations();
+                
+                // Meditation platform for sensei
+                const platformGeometry = new THREE.CylinderGeometry(3, 3, 0.2, 16);
+                const platformMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x654321,
+                    roughness: 0.7
+                });
+                this.senseiPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
+                this.senseiPlatform.position.set(0, 0.1, -8);
+                this.senseiPlatform.receiveShadow = true;
+                this.senseiPlatform.castShadow = true;
+                this.scene.add(this.senseiPlatform);
+                
+                // Floating particles (incense smoke)
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = CURRENT_WORLD.particleCount;
+                const positions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 30;
+                    positions[i + 1] = Math.random() * 20;
+                    positions[i + 2] = (Math.random() - 0.5) * 30;
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0xffd700,
+                    size: 0.2,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                this.particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(this.particles);
+            }
+            
+            createWalls() {
+                const wallHeight = 8;
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8b7355,
+                    roughness: 0.8
+                });
+                
+                // Four walls
+                const walls = [
+                    { pos: [0, wallHeight/2, -20], size: [40, wallHeight, 1] },
+                    { pos: [0, wallHeight/2, 20], size: [40, wallHeight, 1] },
+                    { pos: [-20, wallHeight/2, 0], size: [1, wallHeight, 40] },
+                    { pos: [20, wallHeight/2, 0], size: [1, wallHeight, 40] }
+                ];
+                
+                walls.forEach(wall => {
+                    const geometry = new THREE.BoxGeometry(...wall.size);
+                    const mesh = new THREE.Mesh(geometry, wallMaterial);
+                    mesh.position.set(...wall.pos);
+                    mesh.receiveShadow = true;
+                    mesh.castShadow = true;
+                    this.scene.add(mesh);
+                });
+                
+                // Wooden beams
+                for (let i = 0; i < 4; i++) {
+                    const beamGeometry = new THREE.BoxGeometry(1, wallHeight, 1);
+                    const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3c28 });
+                    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+                    
+                    const angle = (i / 4) * Math.PI * 2;
+                    beam.position.x = Math.cos(angle) * 18;
+                    beam.position.y = wallHeight / 2;
+                    beam.position.z = Math.sin(angle) * 18;
+                    beam.castShadow = true;
+                    this.scene.add(beam);
+                }
+            }
+            
+            createTrainingEquipment() {
+                // Makiwara (striking post)
+                const postGeometry = new THREE.CylinderGeometry(0.3, 0.3, 6);
+                const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+                const post = new THREE.Mesh(postGeometry, postMaterial);
+                post.position.set(-10, 3, 5);
+                post.castShadow = true;
+                this.scene.add(post);
+                
+                // Training dummy
+                const dummyBodyGeometry = new THREE.CylinderGeometry(1, 1.2, 4);
+                const dummyBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+                const dummyBody = new THREE.Mesh(dummyBodyGeometry, dummyBodyMaterial);
+                dummyBody.position.set(10, 2, -5);
+                dummyBody.castShadow = true;
+                this.scene.add(dummyBody);
+                
+                // Training weapons rack
+                const rackGeometry = new THREE.BoxGeometry(0.2, 4, 3);
+                const rackMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3c28 });
+                const rack = new THREE.Mesh(rackGeometry, rackMaterial);
+                rack.position.set(15, 2, 10);
+                rack.castShadow = true;
+                this.scene.add(rack);
+                
+                // Training swords on rack
+                for (let i = 0; i < 3; i++) {
+                    const swordGeometry = new THREE.BoxGeometry(0.1, 3, 0.1);
+                    const swordMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+                    const sword = new THREE.Mesh(swordGeometry, swordMaterial);
+                    sword.position.set(15.2, 2.5, 9 + i);
+                    sword.castShadow = true;
+                    this.scene.add(sword);
+                }
+            }
+            
+            createDecorations() {
+                // Zen garden corner
+                const gardenBaseGeometry = new THREE.BoxGeometry(6, 0.2, 6);
+                const gardenBaseMaterial = new THREE.MeshStandardMaterial({ color: 0xf5deb3 });
+                const gardenBase = new THREE.Mesh(gardenBaseGeometry, gardenBaseMaterial);
+                gardenBase.position.set(-12, 0.1, -12);
+                gardenBase.receiveShadow = true;
+                this.scene.add(gardenBase);
+                
+                // Rocks in zen garden
+                for (let i = 0; i < 5; i++) {
+                    const rockGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 0.3, 8, 6);
+                    const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x696969 });
+                    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                    rock.position.set(
+                        -12 + (Math.random() - 0.5) * 4,
+                        0.3,
+                        -12 + (Math.random() - 0.5) * 4
+                    );
+                    rock.castShadow = true;
+                    this.scene.add(rock);
+                }
+                
+                // Hanging lanterns
+                for (let i = 0; i < 4; i++) {
+                    const lanternGeometry = new THREE.CylinderGeometry(0.8, 0.8, 2);
+                    const lanternMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xff6b35,
+                        emissive: 0xff4500,
+                        emissiveIntensity: 0.3
+                    });
+                    const lantern = new THREE.Mesh(lanternGeometry, lanternMaterial);
+                    
+                    const angle = (i / 4) * Math.PI * 2;
+                    lantern.position.x = Math.cos(angle) * 12;
+                    lantern.position.y = 6;
+                    lantern.position.z = Math.sin(angle) * 12;
+                    lantern.castShadow = true;
+                    this.scene.add(lantern);
+                    
+                    // Lantern light
+                    const lanternLight = new THREE.PointLight(0xff6b35, 0.5, 10);
+                    lanternLight.position.copy(lantern.position);
+                    this.scene.add(lanternLight);
+                }
+                
+                // Bonsai trees
+                for (let i = 0; i < 3; i++) {
+                    const bonsaiGroup = this.createBonsai();
+                    bonsaiGroup.position.set(
+                        12 + i * 3,
+                        0,
+                        12 + (Math.random() - 0.5) * 4
+                    );
+                    this.scene.add(bonsaiGroup);
+                }
+            }
+            
+            createBonsai() {
+                const bonsaiGroup = new THREE.Group();
+                
+                // Pot
+                const potGeometry = new THREE.CylinderGeometry(1, 0.8, 0.5);
+                const potMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+                const pot = new THREE.Mesh(potGeometry, potMaterial);
+                pot.position.y = 0.25;
+                pot.castShadow = true;
+                bonsaiGroup.add(pot);
+                
+                // Trunk
+                const trunkGeometry = new THREE.CylinderGeometry(0.1, 0.2, 1.5);
+                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = 1.25;
+                trunk.rotation.x = 0.2;
+                trunk.castShadow = true;
+                bonsaiGroup.add(trunk);
+                
+                // Leaves
+                const leavesGeometry = new THREE.SphereGeometry(0.8, 8, 6);
+                const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = 2;
+                leaves.scale.set(1.2, 0.8, 1.2);
+                leaves.castShadow = true;
+                bonsaiGroup.add(leaves);
+                
+                return bonsaiGroup;
+            }
+            
+            createSensei() {
+                const senseiGroup = new THREE.Group();
+                
+                // Body (sitting in lotus position)
+                const bodyGeometry = new THREE.CylinderGeometry(0.8, 1.2, 2);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff }); // White gi
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1;
+                body.castShadow = true;
+                senseiGroup.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.4, 16, 12);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: 0xfdbcb4 }); // Skin tone
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 2.4;
+                head.castShadow = true;
+                senseiGroup.add(head);
+                
+                // Hair (traditional topknot)
+                const hairGeometry = new THREE.SphereGeometry(0.3, 8, 6);
+                const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+                const hair = new THREE.Mesh(hairGeometry, hairMaterial);
+                hair.position.y = 2.7;
+                hair.scale.set(0.8, 1.2, 0.8);
+                hair.castShadow = true;
+                senseiGroup.add(hair);
+                
+                // Meditation pose arms
+                const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.2);
+                const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                
+                const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+                leftArm.position.set(-0.7, 1.5, 0.3);
+                leftArm.rotation.z = Math.PI / 3;
+                leftArm.castShadow = true;
+                senseiGroup.add(leftArm);
+                
+                const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+                rightArm.position.set(0.7, 1.5, 0.3);
+                rightArm.rotation.z = -Math.PI / 3;
+                rightArm.castShadow = true;
+                senseiGroup.add(rightArm);
+                
+                // Meditation aura (subtle glow)
+                const auraGeometry = new THREE.SphereGeometry(2, 16, 12);
+                const auraMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffd700,
+                    transparent: true,
+                    opacity: 0.1,
+                    side: THREE.BackSide
+                });
+                const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+                aura.position.y = 1.5;
+                senseiGroup.add(aura);
+                
+                // Position sensei on platform
+                senseiGroup.position.copy(this.senseiPlatform.position);
+                senseiGroup.position.y += 0.2;
+                
+                // Add interaction data
+                senseiGroup.userData = {
+                    isNPC: true,
+                    name: "Master Takeshi",
+                    interactionDistance: 8
+                };
+                
+                this.sensei = senseiGroup;
+                this.scene.add(senseiGroup);
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 4);
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i];
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    const frameGeometry = new THREE.TorusGeometry(2, 0.2, 16, 32);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xff6b35,
+                        emissive: 0xff4500,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    const portalGeometry = new THREE.CircleGeometry(1.8, 32);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float ripple = sin(dist * 15.0 - time * 3.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, ripple);
+                                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.8);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+                    
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    // Position portals around the dojo walls
+                    const positions = [
+                        { x: 0, z: -18, y: 3, rotY: 0 },
+                        { x: 18, z: 0, y: 3, rotY: Math.PI / 2 },
+                        { x: 0, z: 18, y: 3, rotY: Math.PI },
+                        { x: -18, z: 0, y: 3, rotY: -Math.PI / 2 }
+                    ];
+                    
+                    if (positions[i]) {
+                        const pos = positions[i];
+                        portalGroup.position.set(pos.x, pos.y, pos.z);
+                        portalGroup.rotation.y = pos.rotY;
+                    }
+                    
+                    const light = new THREE.PointLight(0xff6b35, 1, 15);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+                    
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+            
+            buildInheritanceParams() {
+                const params = new URLSearchParams();
+                
+                params.set('from', window.location.pathname.split('/').pop() || 'interactive-dojo.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
+            }
+            
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.handleClick();
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    
+                    // Check for interactions
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    
+                    // Check sensei interaction
+                    if (this.sensei) {
+                        const senseiIntersects = this.raycaster.intersectObject(this.sensei, true);
+                        if (senseiIntersects.length > 0) {
+                            e.preventDefault();
+                            this.interactWithSensei();
+                            return;
+                        }
+                    }
+                    
+                    // Check portal interaction
+                    const portalIntersects = this.raycaster.intersectObjects(this.portals);
+                    if (portalIntersects.length > 0) {
+                        const portal = portalIntersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
+                // Joystick setup
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = { id: touch.identifier };
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            handleClick() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                // Check sensei interaction first
+                if (this.sensei) {
+                    const senseiIntersects = this.raycaster.intersectObject(this.sensei, true);
+                    if (senseiIntersects.length > 0) {
+                        this.interactWithSensei();
+                        return;
+                    }
+                }
+                
+                // Check portal interaction
+                const portalIntersects = this.raycaster.intersectObjects(this.portals);
+                if (portalIntersects.length > 0) {
+                    const portal = portalIntersects[0].object;
+                    if (portal.userData.url) {
+                        this.enterWorld(portal.userData.url);
+                    }
+                }
+            }
+            
+            interactWithSensei() {
+                const distance = this.camera.position.distanceTo(this.sensei.position);
+                if (distance <= this.sensei.userData.interactionDistance) {
+                    this.openChatInterface();
+                }
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+                
+                // Keep camera within dojo bounds
+                this.camera.position.x = Math.max(-18, Math.min(18, this.camera.position.x));
+                this.camera.position.z = Math.max(-18, Math.min(18, this.camera.position.z));
+                this.camera.position.y = Math.max(1, Math.min(6, this.camera.position.y));
+                
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateNPCInteraction() {
+                if (!this.sensei) return;
+                
+                const distance = this.camera.position.distanceTo(this.sensei.position);
+                const isInRange = distance <= this.sensei.userData.interactionDistance;
+                
+                if (isInRange && !this.npcHint.classList.contains('visible')) {
+                    // Show interaction hint
+                    this.npcHint.classList.add('visible');
+                    
+                    // Position hint above sensei
+                    const vector = new THREE.Vector3();
+                    this.sensei.getWorldPosition(vector);
+                    vector.project(this.camera);
+                    
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                    
+                    this.npcHint.style.left = `${x}px`;
+                    this.npcHint.style.top = `${y}px`;
+                } else if (!isInRange && this.npcHint.classList.contains('visible')) {
+                    this.npcHint.classList.remove('visible');
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Leaving the dojo...';
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                this.updateMovement();
+                this.updateNPCInteraction();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
+                        portal.userData.light.intensity = intensity;
+                    }
+                    
+                    portal.rotation.z += 0.005;
+                });
+                
+                // Animate sensei (gentle breathing)
+                if (this.sensei) {
+                    this.sensei.position.y = 0.2 + Math.sin(time * 2) * 0.02;
+                }
+                
+                // Animate particles (incense smoke)
+                if (this.particles) {
+                    this.particles.rotation.y = time * 0.02;
+                    
+                    const positions = this.particles.geometry.attributes.position.array;
+                    for (let i = 1; i < positions.length; i += 3) {
+                        positions[i] += 0.01; // Drift upward
+                        if (positions[i] > 20) {
+                            positions[i] = 0; // Reset to ground level
+                        }
+                    }
+                    this.particles.geometry.attributes.position.needsUpdate = true;
+                }
+                
+                // Animate lanterns (gentle flicker)
+                this.scene.traverse((child) => {
+                    if (child.isLight && child.type === 'PointLight' && child.color.getHex() === 0xff6b35) {
+                        const baseIntensity = child.userData.baseIntensity || 0.5;
+                        child.userData.baseIntensity = baseIntensity;
+                        child.intensity = baseIntensity * (0.8 + Math.sin(time * 5 + child.position.x) * 0.2);
+                    }
+                });
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize the world when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new InteractiveDojoWorld();
+            world.init();
+        });
+        
+        // Prevent pull-to-refresh on mobile
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+        
+        // Prevent context menu
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            return false;
+        });
+    </script>
+</body>
+</html>
