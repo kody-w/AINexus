@@ -6,6 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
@@ -1483,11 +1484,17 @@
             emissiveIntensity: 0.4,
           });
 
-          const textBlocks = ["GRAND", "OPENING", "SALE!"];
-          textBlocks.forEach((text, i) => {
-            const blockGeometry = new THREE.BoxGeometry(text.length * 1.5, 2, 0.2);
+          // Create text blocks with proper widths
+          const textBlocks = [
+            { text: "GRAND", width: 8 },
+            { text: "OPENING", width: 10 },
+            { text: "SALE", width: 6 }
+          ];
+
+          textBlocks.forEach((block, i) => {
+            const blockGeometry = new THREE.BoxGeometry(block.width, 1.5, 0.2);
             const textBlock = new THREE.Mesh(blockGeometry, bannerTextMaterial);
-            textBlock.position.set(0, 6 + (i - 1) * 2.2, 45.3);
+            textBlock.position.set(0, 7 + (i - 1) * 2, 45.3);
             textBlock.rotation.x = -0.2;
             this.scene.add(textBlock);
           });
@@ -2205,6 +2212,11 @@
 
         createElectronicsDepartment() {
           // 90s electronics paradise
+          const wooferMaterial = new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a,
+            roughness: 0.9,
+            metalness: 0.1,
+          });
           
           // Black and chrome department styling
           const floorGeometry = new THREE.PlaneGeometry(40, 30);
@@ -2369,11 +2381,6 @@
 
             // Woofers
             const wooferGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
-            const wooferMaterial = new THREE.MeshStandardMaterial({
-              color: 0x2a2a2a,
-              roughness: 0.9,
-              metalness: 0.1,
-            });
             
             const leftWoofer = new THREE.Mesh(wooferGeometry, wooferMaterial);
             leftWoofer.position.set(shelfX - 4, shelfY, -43.9);
@@ -2485,6 +2492,27 @@
 
         createAppliancesDepartment() {
           // Major appliances section
+
+          // Define shared materials at the top of the function
+          const handleMaterial = new THREE.MeshStandardMaterial({
+              color: 0x666666,
+              roughness: 0.4,
+              metalness: 0.9,
+          });
+
+          const windowMaterial = new THREE.MeshStandardMaterial({
+              color: 0x1a1a1a,
+              transparent: true,
+              opacity: 0.7,
+              roughness: 0.1,
+              metalness: 0.9,
+          });
+
+          const panelMaterial = new THREE.MeshStandardMaterial({
+              color: 0x333333,
+              roughness: 0.7,
+              metalness: 0.3,
+          });
           
           // White tile flooring
           const tileGeometry = new THREE.PlaneGeometry(40, 40);
@@ -2528,16 +2556,16 @@
 
             // Handles
             const handleGeometry = new THREE.BoxGeometry(0.2, 2.5, 0.2);
-            const handleMaterial = new THREE.MeshStandardMaterial({
+            const fridgeHandleMaterial = new THREE.MeshStandardMaterial({
               color: i % 4 === 2 ? 0xc0c0c0 : 0x666666,
               roughness: 0.4,
               metalness: 0.9,
             });
-            const topHandle = new THREE.Mesh(handleGeometry, handleMaterial);
+            const topHandle = new THREE.Mesh(handleGeometry, fridgeHandleMaterial);
             topHandle.position.set(-83.2, 6, -15 + i * 4);
             this.scene.add(topHandle);
 
-            const bottomHandle = new THREE.Mesh(handleGeometry, handleMaterial);
+            const bottomHandle = new THREE.Mesh(handleGeometry, fridgeHandleMaterial);
             bottomHandle.position.set(-83.2, 2.5, -15 + i * 4);
             this.scene.add(bottomHandle);
 
@@ -2600,38 +2628,22 @@
             });
 
             // Control panel
-            const panelGeometry = new THREE.BoxGeometry(2.8, 0.5, 0.2);
-            const panelMaterial = new THREE.MeshStandardMaterial({
-              color: 0x333333,
-              roughness: 0.7,
-              metalness: 0.3,
-            });
-            const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.5, 0.2), panelMaterial);
             panel.position.set(-75, 3.2, -8.35 + i * 4);
             this.scene.add(panel);
 
             // Oven door
-            const doorGeometry = new THREE.BoxGeometry(2.5, 2, 0.2);
-            const ovenDoor = new THREE.Mesh(doorGeometry, stoveMaterial);
+            const ovenDoor = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2, 0.2), stoveMaterial);
             ovenDoor.position.set(-75, 1.5, -8.35 + i * 4);
             this.scene.add(ovenDoor);
 
             // Oven window
-            const windowGeometry = new THREE.BoxGeometry(2, 1, 0.05);
-            const windowMaterial = new THREE.MeshStandardMaterial({
-              color: 0x1a1a1a,
-              transparent: true,
-              opacity: 0.7,
-              roughness: 0.1,
-              metalness: 0.9,
-            });
-            const ovenWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+            const ovenWindow = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 0.05), windowMaterial);
             ovenWindow.position.set(-75, 1.5, -8.27 + i * 4);
             this.scene.add(ovenWindow);
 
             // Oven handle
-            const ovenHandleGeometry = new THREE.BoxGeometry(2, 0.2, 0.3);
-            const ovenHandle = new THREE.Mesh(ovenHandleGeometry, handleMaterial);
+            const ovenHandle = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.3), handleMaterial);
             ovenHandle.position.set(-75, 2.6, -8.15 + i * 4);
             this.scene.add(ovenHandle);
           }
@@ -2651,14 +2663,12 @@
             this.scene.add(dishwasher);
 
             // Control panel
-            const dwPanelGeometry = new THREE.BoxGeometry(2.3, 0.4, 0.1);
-            const dwPanel = new THREE.Mesh(dwPanelGeometry, panelMaterial);
+            const dwPanel = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.4, 0.1), panelMaterial);
             dwPanel.position.set(-65, 2.8, -6.7 + i * 4);
             this.scene.add(dwPanel);
 
             // Handle
-            const dwHandleGeometry = new THREE.BoxGeometry(1.5, 0.15, 0.2);
-            const dwHandle = new THREE.Mesh(dwHandleGeometry, handleMaterial);
+            const dwHandle = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 0.2), handleMaterial);
             dwHandle.position.set(-65, 2.3, -6.6 + i * 4);
             this.scene.add(dwHandle);
           }
@@ -2667,8 +2677,6 @@
           const laundryPlatform = new THREE.BoxGeometry(25, 0.5, 15);
           const platformMaterial = new THREE.MeshStandardMaterial({
             color: 0xcccccc,
-            roughness: 0.7,
-            metalness: 0.1,
             roughness: 0.7,
             metalness: 0.2,
           });
@@ -2693,8 +2701,7 @@
             this.scene.add(machine);
 
             // Control panel
-            const controlPanelGeometry = new THREE.BoxGeometry(2.8, 0.6, 0.1);
-            const controlPanel = new THREE.Mesh(controlPanelGeometry, panelMaterial);
+            const controlPanel = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.6, 0.1), panelMaterial);
             controlPanel.position.set(-78 + (i % 4) * 4, 3.5, 11.55 + Math.floor(i / 4) * 5);
             this.scene.add(controlPanel);
 
@@ -2723,15 +2730,7 @@
             this.scene.add(door);
 
             // Window
-            const windowGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 32);
-            const windowMaterial = new THREE.MeshStandardMaterial({
-              color: 0x333333,
-              transparent: true,
-              opacity: 0.5,
-              roughness: 0.1,
-              metalness: 0.9,
-            });
-            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+            const window = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.05, 32), windowMaterial);
             window.position.set(-78 + (i % 4) * 4, 2, 11.53 + Math.floor(i / 4) * 5);
             window.rotation.x = Math.PI / 2;
             this.scene.add(window);
@@ -2770,14 +2769,12 @@
             this.scene.add(mwDoor);
 
             // Window
-            const mwWindowGeometry = new THREE.BoxGeometry(1.2, 0.9, 0.05);
-            const mwWindow = new THREE.Mesh(mwWindowGeometry, windowMaterial);
+            const mwWindow = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 0.05), windowMaterial);
             mwWindow.position.set(-60.3 + (i % 3) * 5, 4, -1.92 + Math.floor(i / 3) * 4);
             this.scene.add(mwWindow);
 
             // Control panel
-            const mwPanelGeometry = new THREE.BoxGeometry(0.4, 1.2, 0.1);
-            const mwPanel = new THREE.Mesh(mwPanelGeometry, panelMaterial);
+            const mwPanel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.1), panelMaterial);
             mwPanel.position.set(-59 + (i % 3) * 5, 4, -2 + Math.floor(i / 3) * 4);
             this.scene.add(mwPanel);
           }
@@ -2801,6 +2798,13 @@
 
           // Executive desk displays
           const deskWoods = [0x654321, 0x8b4513, 0x2f1b14, 0x1a1a1a];
+          
+          // Define handleMaterial once at the beginning of the function
+          const handleMaterial = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            roughness: 0.4,
+            metalness: 0.9,
+          });
           
           for (let i = 0; i < 6; i++) {
             const deskX = 55 + (i % 2) * 20;
@@ -2840,12 +2844,6 @@
             this.scene.add(rightPedestal);
 
             // Drawer handles
-            const handleMaterial = new THREE.MeshStandardMaterial({
-              color: 0x888888,
-              roughness: 0.4,
-              metalness: 0.9,
-            });
-
             for (let j = 0; j < 3; j++) {
               const handleGeometry = new THREE.BoxGeometry(1, 0.1, 0.1);
               const leftHandle = new THREE.Mesh(handleGeometry, handleMaterial);
