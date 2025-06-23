@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Sky Islands</title>
     <style>
         * {
@@ -10,14 +12,20 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #000;
+            background: #87CEEB;
             color: #fff;
             overflow: hidden;
-            position: relative;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
         }
 
         #three-container {
@@ -27,13 +35,17 @@
             width: 100%;
             height: 100%;
             touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .world-ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
             z-index: 1001;
+            pointer-events: none;
         }
 
         .world-title {
@@ -57,22 +69,23 @@
 
         .world-description {
             font-size: 1.2em;
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.8);
             max-width: 400px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         .world-origin {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.1);
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(255, 255, 255, 0.2);
             padding: 10px 20px;
             border-radius: 20px;
             font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.8);
+            color: #fff;
             z-index: 1001;
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             display: none;
         }
 
@@ -81,7 +94,7 @@
         }
 
         .origin-label {
-            color: rgba(255, 255, 255, 0.5);
+            color: rgba(255, 255, 255, 0.7);
             font-size: 0.8em;
         }
 
@@ -92,22 +105,23 @@
 
         .controls-hint {
             position: absolute;
-            bottom: 30px;
+            bottom: env(safe-area-inset-bottom, 30px);
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.2);
             padding: 15px 30px;
             border-radius: 25px;
             font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.8);
+            color: #fff;
             z-index: 1001;
             text-align: center;
             backdrop-filter: blur(10px);
+            pointer-events: none;
         }
 
         .portal-tooltip {
             position: absolute;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             border: 2px solid rgba(255, 215, 0, 0.8);
             border-radius: 15px;
             padding: 20px;
@@ -147,26 +161,37 @@
 
         /* Mobile controls */
         .mobile-controls {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
             display: none;
             z-index: 1001;
-            gap: 20px;
+            padding: 0 20px;
+            pointer-events: none;
         }
 
         .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
             display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
         .joystick-container {
             width: 120px;
             height: 120px;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 215, 0, 0.5);
             border-radius: 50%;
             position: relative;
+            pointer-events: auto;
             touch-action: none;
         }
 
@@ -179,7 +204,17 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            transition: none;
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
         }
 
         .loading {
@@ -189,10 +224,26 @@
             transform: translate(-50%, -50%);
             text-align: center;
             font-size: 1.2em;
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.8);
             font-weight: 200;
             letter-spacing: 0.1em;
             z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 60px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #FFD700;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {
@@ -205,10 +256,26 @@
                 max-width: 300px;
             }
         }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
     
     <div class="world-ui">
         <h1 class="world-title" id="world-title">SKY ISLANDS</h1>
@@ -220,27 +287,29 @@
         <span class="origin-world" id="origin-world-name">Origin</span>
     </div>
     
-    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Space to fly up, Shift to fly down, Mouse to look, Click portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
-        <div class="joystick-container" id="movement-joystick">
-            <div class="joystick-handle" id="movement-handle"></div>
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
         </div>
     </div>
     
     <div class="portal-tooltip" id="portal-tooltip">
         <h3 class="tooltip-title"></h3>
         <p class="tooltip-description"></p>
-        <p class="tooltip-instruction">Click to enter world</p>
+        <p class="tooltip-instruction">Tap to enter world</p>
     </div>
     
     <div class="loading" id="loading">Ascending to the sky...</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Configuration - Update these with your GitHub details
-        const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
-        const REPO_NAME = 'AINexus'; // Replace with your repository name
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
         const BRANCH = 'main';
         
         // Default world attributes
@@ -251,7 +320,6 @@
             skyBottomColor: 0xFFE4B5,
             cloudColor: 0xFFFFFF,
             islandColors: [0x8FBC8F, 0x90EE90, 0x98FB98],
-            // Inheritance defaults
             moveSpeed: 0.2,
             lookSpeed: 0.002,
             ambientColor: 0xFFE4B5,
@@ -266,53 +334,69 @@
         
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
-            const params = new URLSearchParams(window.location.search);
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
             const inherited = {};
             
-            // Get source world info
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
             
-            // Movement attributes
             if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
-            
-            // Visual attributes
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
             if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
             if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
             if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
-            
-            // World properties
             if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
             if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
             if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
             
+            console.log('Parsed inherited attributes:', inherited);
             return inherited;
         }
         
-        // Merge inherited attributes with defaults
         const inheritedAttributes = parseInheritedAttributes();
         const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
         
-        // Update sky colors based on inherited fog color if significantly different
         if (inheritedAttributes.fogColor && Math.abs(inheritedAttributes.fogColor - DEFAULT_WORLD_ATTRIBUTES.fogColor) > 0x111111) {
-            // Create a sky gradient based on inherited fog color
             const fogHex = inheritedAttributes.fogColor;
             const r = (fogHex >> 16) & 255;
             const g = (fogHex >> 8) & 255;
             const b = fogHex & 255;
             
-            // Lighten for sky top
             CURRENT_WORLD.skyTopColor = (Math.min(255, r + 100) << 16) | (Math.min(255, g + 100) << 8) | Math.min(255, b + 100);
-            // Use fog color for sky bottom
             CURRENT_WORLD.skyBottomColor = inheritedAttributes.fogColor;
         }
         
-        // Check if device is mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         
         class SkyIslandsWorld {
             constructor() {
@@ -327,7 +411,6 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Use inherited movement attributes
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
                 this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false, ' ': false, shift: false };
@@ -335,42 +418,49 @@
                 this.velocity = new THREE.Vector3();
                 this.canJump = false;
                 
-                // Mobile
                 this.isMobile = isMobile;
+                this.isIOS = isIOS;
                 this.joystickActive = false;
                 this.joystickVector = new THREE.Vector2();
-                this.touches = { start: null, current: null };
+                this.lookTouch = null;
+                this.joystickTouch = null;
                 
-                // UI
+                this.touches = new Map();
+                this.lastTap = 0;
+                
                 this.hoveredPortal = null;
                 this.tooltip = document.getElementById('portal-tooltip');
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
                 
-                // Inherited attributes
                 this.inheritedAttributes = inheritedAttributes;
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
             }
             
             async init() {
-                // Show origin world if we came from somewhere
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
                     originName.textContent = this.inheritedAttributes.sourceWorldName;
                     originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
                 
-                // Hide loading after scene is ready
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
                 }, 1000);
                 
-                // Update UI
                 document.getElementById('world-title').textContent = CURRENT_WORLD.name;
                 document.getElementById('world-description').textContent = CURRENT_WORLD.description;
                 
-                // Setup Three.js
                 this.setupScene();
                 this.setupLighting();
                 await this.loadWorlds();
@@ -381,10 +471,14 @@
                 this.createPortals();
                 this.setupEventListeners();
                 
-                // Update controls hint for mobile
                 if (this.isMobile) {
-                    document.getElementById('controls-hint').textContent = 'Swipe to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
                     document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter world';
+                    }
                 } else {
                     document.getElementById('controls-hint').textContent = 'Use WASD to move, Space to fly up, Shift to fly down, Mouse to look, Click portals to travel';
                 }
@@ -393,28 +487,29 @@
             }
             
             setupScene() {
-                // Scene
                 this.scene = new THREE.Scene();
                 this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
-                // Camera with inherited height
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 30);
                 
-                // Renderer
-                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: false,
+                    powerPreference: "high-performance"
+                });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.setClearColor(CURRENT_WORLD.skyBottomColor);
                 document.getElementById('three-container').appendChild(this.renderer.domElement);
             }
             
             setupLighting() {
-                // Bright ambient light for daytime with inherited color influence
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.6);
                 this.scene.add(ambientLight);
                 
-                // Sun light
                 const sunLight = new THREE.DirectionalLight(0xFFD700, 0.8);
                 sunLight.position.set(50, 100, 50);
                 sunLight.castShadow = true;
@@ -426,7 +521,6 @@
                 sunLight.shadow.camera.bottom = -100;
                 this.scene.add(sunLight);
                 
-                // Hemisphere light for sky ambience
                 const hemiLight = new THREE.HemisphereLight(CURRENT_WORLD.skyTopColor, CURRENT_WORLD.skyBottomColor, 0.5);
                 this.scene.add(hemiLight);
             }
@@ -442,7 +536,6 @@
                     
                     const data = await response.json();
                     
-                    // Find all HTML files in root directory
                     this.worlds = data.tree
                         .filter(item => 
                             item.type === 'blob' && 
@@ -484,7 +577,6 @@
             }
             
             createSkyEnvironment() {
-                // Sky gradient sphere
                 const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
                 const skyMaterial = new THREE.ShaderMaterial({
                     uniforms: {
@@ -520,18 +612,17 @@
             
             createIslands() {
                 const islandPositions = [
-                    { x: 0, y: 20, z: 0, size: 15 },      // Central island
-                    { x: -40, y: 30, z: -20, size: 10 },  // Left island
-                    { x: 40, y: 15, z: -30, size: 12 },   // Right island
-                    { x: 0, y: 40, z: -60, size: 8 },     // Far island
-                    { x: -30, y: 10, z: 40, size: 10 },   // Near left
-                    { x: 30, y: 25, z: 35, size: 10 }     // Near right
+                    { x: 0, y: 20, z: 0, size: 15 },
+                    { x: -40, y: 30, z: -20, size: 10 },
+                    { x: 40, y: 15, z: -30, size: 12 },
+                    { x: 0, y: 40, z: -60, size: 8 },
+                    { x: -30, y: 10, z: 40, size: 10 },
+                    { x: 30, y: 25, z: 35, size: 10 }
                 ];
                 
                 islandPositions.forEach((pos, index) => {
                     const islandGroup = new THREE.Group();
                     
-                    // Island base (floating rock)
                     const baseGeometry = new THREE.ConeGeometry(pos.size, pos.size * 0.8, 8);
                     const baseMaterial = new THREE.MeshStandardMaterial({
                         color: 0x8B7355,
@@ -543,7 +634,6 @@
                     base.receiveShadow = true;
                     islandGroup.add(base);
                     
-                    // Grass top - use island colors or influenced by inherited portal colors
                     const topGeometry = new THREE.CylinderGeometry(pos.size * 0.9, pos.size, 2, 8);
                     const topColor = inheritedAttributes.portalColor1 ? 
                         new THREE.Color(inheritedAttributes.portalColor1).lerp(new THREE.Color(CURRENT_WORLD.islandColors[index % CURRENT_WORLD.islandColors.length]), 0.7) :
@@ -558,7 +648,6 @@
                     top.receiveShadow = true;
                     islandGroup.add(top);
                     
-                    // Trees
                     const treeCount = Math.floor(pos.size / 3);
                     for (let i = 0; i < treeCount; i++) {
                         const tree = this.createTree();
@@ -582,7 +671,6 @@
             createTree() {
                 const treeGroup = new THREE.Group();
                 
-                // Trunk
                 const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3);
                 const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
                 const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
@@ -590,7 +678,6 @@
                 trunk.castShadow = true;
                 treeGroup.add(trunk);
                 
-                // Leaves
                 const leavesGeometry = new THREE.SphereGeometry(2, 8, 6);
                 const leavesMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0x228B22,
@@ -605,7 +692,6 @@
             }
             
             createBridges() {
-                // Light bridges connecting islands - use inherited portal colors
                 const bridgeConnections = [
                     { from: 0, to: 1 },
                     { from: 0, to: 2 },
@@ -625,7 +711,6 @@
                     const distance = from.distanceTo(to);
                     const midPoint = from.clone().add(to).multiplyScalar(0.5);
                     
-                    // Bridge geometry
                     const bridgeGeometry = new THREE.BoxGeometry(2, 0.2, distance);
                     const bridgeMaterial = new THREE.MeshStandardMaterial({
                         color: CURRENT_WORLD.portalColor2,
@@ -643,7 +728,6 @@
                     this.bridges.push(bridge);
                     this.scene.add(bridge);
                     
-                    // Add light particles along bridge
                     const particleCount = Math.floor(distance / 5);
                     for (let i = 0; i < particleCount; i++) {
                         const t = i / (particleCount - 1);
@@ -664,11 +748,9 @@
             }
             
             createClouds() {
-                // Create fluffy clouds
                 for (let i = 0; i < 20; i++) {
                     const cloudGroup = new THREE.Group();
                     
-                    // Multiple spheres to create cloud shape
                     const sphereCount = 5 + Math.floor(Math.random() * 5);
                     for (let j = 0; j < sphereCount; j++) {
                         const radius = 3 + Math.random() * 2;
@@ -706,16 +788,14 @@
             createPortals() {
                 const numPortals = Math.min(this.worlds.length, 4);
                 
-                // Place portals on different islands
                 for (let i = 0; i < numPortals; i++) {
                     const world = this.worlds[i] || this.getDemoWorlds()[i];
-                    const island = this.islands[i + 1]; // Skip central island
+                    const island = this.islands[i + 1];
                     
                     if (!island) continue;
                     
                     const portalGroup = new THREE.Group();
                     
-                    // Portal frame
                     const frameGeometry = new THREE.TorusGeometry(2.5, 0.3, 16, 32);
                     const frameMaterial = new THREE.MeshStandardMaterial({
                         color: 0xFFD700,
@@ -726,7 +806,6 @@
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                     
-                    // Portal surface with inherited colors
                     const portalGeometry = new THREE.CircleGeometry(2.2, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -765,14 +844,11 @@
                     portalGroup.add(frame);
                     portalGroup.add(portal);
                     
-                    // Position on island
                     portalGroup.position.copy(island.position);
                     portalGroup.position.y += 5;
                     
-                    // Face towards center
                     portalGroup.lookAt(0, portalGroup.position.y, 0);
                     
-                    // Portal light
                     const light = new THREE.PointLight(0xFFD700, 1, 20);
                     light.position.copy(portalGroup.position);
                     this.scene.add(light);
@@ -792,24 +868,16 @@
             }
             
             buildInheritanceParams() {
-                // Build URL parameters to pass to the next world
                 const params = new URLSearchParams();
                 
-                // Source world info
                 params.set('from', window.location.pathname.split('/').pop() || 'sky-islands.html');
                 params.set('fromName', CURRENT_WORLD.name);
-                
-                // Movement attributes
                 params.set('moveSpeed', this.moveSpeed.toString());
                 params.set('lookSpeed', this.lookSpeed.toString());
-                
-                // Visual attributes (convert to hex strings)
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
                 params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
                 params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
                 params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
-                
-                // World properties
                 params.set('particleCount', CURRENT_WORLD.particleCount.toString());
                 params.set('cameraHeight', this.camera.position.y.toString());
                 params.set('fogNear', CURRENT_WORLD.fogNear.toString());
@@ -819,7 +887,6 @@
             }
             
             setupEventListeners() {
-                // Resize
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -834,7 +901,6 @@
             }
             
             setupDesktopControls() {
-                // Keyboard
                 window.addEventListener('keydown', (e) => {
                     const key = e.key.toLowerCase();
                     if (key in this.keys) {
@@ -856,13 +922,10 @@
                     }
                 });
                 
-                // Mouse click handling
                 this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
-                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
                     } else {
-                        // Check for portal clicks when pointer is locked
                         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                         const intersects = this.raycaster.intersectObjects(this.portals);
                         
@@ -889,82 +952,118 @@
             }
             
             setupMobileControls() {
-                const canvas = this.renderer.domElement;
+                const lookArea = document.getElementById('look-area');
                 
-                // Touch controls for looking
-                canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
+                lookArea.addEventListener('touchstart', (e) => {
                     const touch = e.touches[0];
-                    this.touches.start = { x: touch.clientX, y: touch.clientY };
-                    this.touches.current = { ...this.touches.start };
-                });
-                
-                canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (!this.touches.start) return;
                     
-                    const touch = e.touches[0];
-                    const deltaX = touch.clientX - this.touches.current.x;
-                    const deltaY = touch.clientY - this.touches.current.y;
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
                     
-                    this.rotation.y -= deltaX * this.lookSpeed * 2;
-                    this.rotation.x -= deltaY * this.lookSpeed * 2;
-                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
                     
-                    this.touches.current = { x: touch.clientX, y: touch.clientY };
-                });
-                
-                canvas.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    
-                    // Check for tap
-                    if (this.touches.start && this.touches.current) {
-                        const dx = this.touches.current.x - this.touches.start.x;
-                        const dy = this.touches.current.y - this.touches.start.y;
-                        
-                        if (Math.sqrt(dx * dx + dy * dy) < 10) {
-                            // It's a tap
-                            const rect = canvas.getBoundingClientRect();
-                            const x = ((this.touches.start.x - rect.left) / rect.width) * 2 - 1;
-                            const y = -((this.touches.start.y - rect.top) / rect.height) * 2 + 1;
-                            
-                            this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-                            const intersects = this.raycaster.intersectObjects(this.portals);
-                            
-                            if (intersects.length > 0) {
-                                const portal = intersects[0].object;
-                                if (portal.userData.url) {
-                                    this.enterWorld(portal.userData.url);
-                                }
-                            }
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
                         }
                     }
                     
-                    this.touches.start = null;
-                    this.touches.current = null;
-                });
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
                 
-                // Joystick
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
                 const joystick = document.getElementById('movement-joystick');
                 const handle = document.getElementById('movement-handle');
                 
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
                     this.joystickActive = true;
-                    this.updateJoystick(e.touches[0], joystick, handle);
-                });
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
                 
                 joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
                     e.preventDefault();
-                    if (this.joystickActive) {
-                        this.updateJoystick(e.touches[0], joystick, handle);
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
                     }
-                });
+                }, { passive: false });
                 
-                joystick.addEventListener('touchend', () => {
-                    this.joystickActive = false;
-                    this.joystickVector.set(0, 0);
-                    handle.style.transform = 'translate(-50%, -50%)';
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
                 });
             }
             
@@ -1000,7 +1099,6 @@
                 
                 right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
                 
-                // Apply gravity
                 this.velocity.y -= 0.01;
                 
                 if (this.isMobile) {
@@ -1016,32 +1114,27 @@
                     if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
                     if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
                     
-                    // Flying controls
                     if (this.keys[' ']) {
-                        this.velocity.y = 0.3; // Fly up
+                        this.velocity.y = 0.3;
                     }
                     if (this.keys.shift) {
-                        this.velocity.y = -0.3; // Fly down
+                        this.velocity.y = -0.3;
                     }
                 }
                 
-                // Apply velocity
                 this.camera.position.y += this.velocity.y;
                 
-                // Prevent falling too far
                 if (this.camera.position.y < -50) {
                     this.camera.position.y = 50;
                     this.velocity.y = 0;
                 }
                 
-                // Update camera rotation
                 this.camera.rotation.order = 'YXZ';
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
             
             updateHover() {
-                // Cast ray from camera center
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const intersects = this.raycaster.intersectObjects(this.portals);
                 
@@ -1051,12 +1144,10 @@
                     if (portal !== this.hoveredPortal) {
                         this.hoveredPortal = portal;
                         
-                        // Show tooltip
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
                         this.tooltip.classList.add('visible');
                         
-                        // Position tooltip
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
@@ -1077,11 +1168,9 @@
             
             async enterWorld(url) {
                 try {
-                    // Show loading
                     document.getElementById('loading').style.display = 'block';
                     document.getElementById('loading').innerHTML = 'Traveling to new world...';
                     
-                    // Fetch the HTML content
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`Failed to load world (${response.status})`);
@@ -1089,27 +1178,28 @@
                     
                     let htmlContent = await response.text();
                     
-                    // Inject inheritance parameters into the loaded world
                     const inheritanceParams = this.buildInheritanceParams();
                     
-                    // Find the script tag and inject our parameters
-                    htmlContent = htmlContent.replace(
-                        /(window\.location\.search)/g,
-                        `'?${inheritanceParams}'`
-                    );
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
                     
-                    // Also update any direct world links to include inheritance
-                    htmlContent = htmlContent.replace(
-                        /window\.location\.href = blobUrl;/g,
-                        `window.location.href = blobUrl + '?${inheritanceParams}';`
-                    );
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
                     
-                    // Create blob and navigate
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world with inheritance parameters
-                    window.location.href = blobUrl + '?' + inheritanceParams;
+                    window.location.href = blobUrl;
                     
                 } catch (error) {
                     console.error('Error entering world:', error);
@@ -1125,43 +1215,33 @@
                 
                 const time = this.clock.getElapsedTime();
                 
-                // Update movement
                 this.updateMovement();
-                
-                // Update hover detection
                 this.updateHover();
                 
-                // Animate portals
                 this.portals.forEach((portal, index) => {
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
                         
-                        // Pulsing glow
                         const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
                         portal.userData.light.intensity = intensity;
                     }
                     
-                    // Gentle rotation
                     portal.rotation.z += 0.005;
                 });
                 
-                // Animate islands (gentle floating)
                 this.islands.forEach((island, index) => {
                     const floatOffset = island.userData.floatOffset;
                     island.position.y += Math.sin(time * 0.5 + floatOffset) * 0.01;
                 });
                 
-                // Animate clouds
                 this.clouds.forEach(cloud => {
                     cloud.position.x += cloud.userData.speed;
                     
-                    // Wrap around
                     if (cloud.position.x > 100) {
                         cloud.position.x = -100;
                     }
                 });
                 
-                // Animate bridges (subtle glow pulse)
                 this.bridges.forEach((bridge, index) => {
                     const intensity = 0.2 + Math.sin(time * 2 + index) * 0.1;
                     bridge.material.emissiveIntensity = intensity;
@@ -1171,11 +1251,26 @@
             }
         }
         
-        // Initialize when DOM is loaded
         window.addEventListener('DOMContentLoaded', () => {
             const world = new SkyIslandsWorld();
             world.init();
         });
+        
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
     </script>
 </body>
 </html>

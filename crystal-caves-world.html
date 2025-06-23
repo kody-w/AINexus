@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Crystal Caves</title>
     <style>
         * {
@@ -10,6 +12,9 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         body {
@@ -17,7 +22,10 @@
             background: #000;
             color: #fff;
             overflow: hidden;
-            position: relative;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
         }
 
         #three-container {
@@ -27,13 +35,17 @@
             width: 100%;
             height: 100%;
             touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .world-ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
             z-index: 1001;
+            pointer-events: none;
         }
 
         .world-title {
@@ -63,8 +75,8 @@
 
         .world-origin {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.7);
             padding: 10px 20px;
             border-radius: 20px;
@@ -92,7 +104,7 @@
 
         .controls-hint {
             position: absolute;
-            bottom: 30px;
+            bottom: env(safe-area-inset-bottom, 30px);
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
@@ -103,6 +115,7 @@
             z-index: 1001;
             text-align: center;
             backdrop-filter: blur(10px);
+            pointer-events: none;
         }
 
         .portal-tooltip {
@@ -146,17 +159,27 @@
 
         /* Mobile controls */
         .mobile-controls {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
             display: none;
             z-index: 1001;
-            gap: 20px;
+            padding: 0 20px;
+            pointer-events: none;
         }
 
         .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
             display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
         .joystick-container {
@@ -166,6 +189,7 @@
             border: 2px solid rgba(0, 255, 255, 0.5);
             border-radius: 50%;
             position: relative;
+            pointer-events: auto;
             touch-action: none;
         }
 
@@ -178,7 +202,17 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            transition: none;
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
         }
 
         .loading {
@@ -194,6 +228,21 @@
             z-index: 2000;
         }
 
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
         @media (max-width: 768px) {
             .world-title {
                 font-size: 2em;
@@ -204,10 +253,26 @@
                 max-width: 300px;
             }
         }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
     
     <div class="world-ui">
         <h1 class="world-title" id="world-title">CRYSTAL CAVES</h1>
@@ -222,24 +287,26 @@
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
-        <div class="joystick-container" id="movement-joystick">
-            <div class="joystick-handle" id="movement-handle"></div>
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
         </div>
     </div>
     
     <div class="portal-tooltip" id="portal-tooltip">
         <h3 class="tooltip-title"></h3>
         <p class="tooltip-description"></p>
-        <p class="tooltip-instruction">Click to enter world</p>
+        <p class="tooltip-instruction">Tap to enter world</p>
     </div>
     
     <div class="loading" id="loading">Initializing crystal caves...</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Configuration - Update these with your GitHub details
-        const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
-        const REPO_NAME = 'AINexus'; // Replace with your repository name
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
         const BRANCH = 'main';
         
         // Default world attributes
@@ -250,7 +317,6 @@
             fogColor: 0x000033,
             groundColor: 0x0a0a1a,
             crystalColors: [0x00ffff, 0xff00ff, 0x00ff00, 0xffff00, 0xff0088],
-            // Inheritance defaults
             moveSpeed: 0.15,
             lookSpeed: 0.002,
             portalColor1: 0x00ffff,
@@ -263,49 +329,61 @@
         
         // Parse inherited attributes from URL or injected params
         function parseInheritedAttributes() {
-            // Check for injected params first, then fall back to URL params
-            const paramString = window.INJECTED_PARAMS || window.location.search;
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
             const params = new URLSearchParams(paramString);
             const inherited = {};
             
-            // Get source world info
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
             
-            // Movement attributes
             if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
-            
-            // Visual attributes
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
             if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
             if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
             if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
-            
-            // World properties
             if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
             if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
             if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
             
+            console.log('Parsed inherited attributes:', inherited);
             return inherited;
         }
         
-        // Merge inherited attributes with defaults
         const inheritedAttributes = parseInheritedAttributes();
         const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
         
-        // Update crystal colors based on inherited portal colors
         if (inheritedAttributes.portalColor1 || inheritedAttributes.portalColor2) {
-            // Mix inherited portal colors into crystal colors
             const color1 = inheritedAttributes.portalColor1 || DEFAULT_WORLD_ATTRIBUTES.portalColor1;
             const color2 = inheritedAttributes.portalColor2 || DEFAULT_WORLD_ATTRIBUTES.portalColor2;
             
-            // Blend with existing crystal colors
             CURRENT_WORLD.crystalColors = [
                 color1,
                 color2,
-                // Mix colors
                 ((color1 & 0xFF0000) + (color2 & 0xFF0000)) / 2 & 0xFF0000 |
                 ((color1 & 0x00FF00) + (color2 & 0x00FF00)) / 2 & 0x00FF00 |
                 ((color1 & 0x0000FF) + (color2 & 0x0000FF)) / 2 & 0x0000FF,
@@ -314,9 +392,11 @@
             ];
         }
         
-        // Check if device is mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         
         class CrystalCavesWorld {
             constructor() {
@@ -329,48 +409,54 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Use inherited movement attributes
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
                 this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false };
                 this.rotation = { x: 0, y: 0 };
                 
-                // Mobile
                 this.isMobile = isMobile;
+                this.isIOS = isIOS;
                 this.joystickActive = false;
                 this.joystickVector = new THREE.Vector2();
-                this.touches = { start: null, current: null };
+                this.lookTouch = null;
+                this.joystickTouch = null;
                 
-                // UI
+                this.touches = new Map();
+                this.lastTap = 0;
+                
                 this.hoveredPortal = null;
                 this.tooltip = document.getElementById('portal-tooltip');
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
                 
-                // Inherited attributes
                 this.inheritedAttributes = inheritedAttributes;
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
             }
             
             async init() {
-                // Show origin world if we came from somewhere
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
                     originName.textContent = this.inheritedAttributes.sourceWorldName;
                     originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
                 
-                // Hide loading after scene is ready
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
                 }, 1000);
                 
-                // Update UI
                 document.getElementById('world-title').textContent = CURRENT_WORLD.name;
                 document.getElementById('world-description').textContent = CURRENT_WORLD.description;
                 
-                // Setup Three.js
                 this.setupScene();
                 this.setupLighting();
                 await this.loadWorlds();
@@ -379,38 +465,41 @@
                 this.createPortals();
                 this.setupEventListeners();
                 
-                // Update controls hint for mobile
                 if (this.isMobile) {
-                    document.getElementById('controls-hint').textContent = 'Swipe to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
                     document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter world';
+                    }
                 }
                 
                 this.animate();
             }
             
             setupScene() {
-                // Scene with inherited fog
                 this.scene = new THREE.Scene();
                 this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
-                // Camera with inherited height
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
                 
-                // Renderer
-                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 document.getElementById('three-container').appendChild(this.renderer.domElement);
             }
             
             setupLighting() {
-                // Very dim ambient light for cave atmosphere with inherited color
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.2);
                 this.scene.add(ambientLight);
-                
-                // Crystal lights will be added with crystals
             }
             
             async loadWorlds() {
@@ -424,15 +513,14 @@
                     
                     const data = await response.json();
                     
-                    // Find all HTML files in root directory (these are world files)
                     this.worlds = data.tree
                         .filter(item => 
                             item.type === 'blob' && 
                             item.path.endsWith('.html') && 
-                            !item.path.includes('/') && // Only root directory
-                            !item.path.toLowerCase().includes('index') && // Exclude index files
-                            !item.path.toLowerCase().includes('readme') && // Exclude readme files
-                            !item.path.toLowerCase().includes('crystal-caves') // Exclude self
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('crystal-caves')
                         )
                         .map(item => ({
                             path: item.path,
@@ -445,7 +533,6 @@
                     
                 } catch (error) {
                     console.error("Error loading worlds:", error);
-                    // Continue with demo portals if GitHub fails
                     this.worlds = this.getDemoWorlds();
                 }
             }
@@ -458,7 +545,6 @@
             }
             
             getDemoWorlds() {
-                // Fallback demo worlds if GitHub fetch fails
                 return [
                     { name: "Nexus Hub", description: "Return to the central hub" },
                     { name: "Sky Islands", description: "Floating islands connected by bridges of light" },
@@ -468,7 +554,6 @@
             }
             
             createCaveEnvironment() {
-                // Cave floor with uneven terrain
                 const floorGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
                 const floorMaterial = new THREE.MeshStandardMaterial({
                     color: CURRENT_WORLD.groundColor,
@@ -476,7 +561,6 @@
                     metalness: 0
                 });
                 
-                // Make floor uneven
                 const vertices = floorGeometry.attributes.position.array;
                 for (let i = 0; i < vertices.length; i += 3) {
                     vertices[i + 2] = Math.random() * 2 - 1;
@@ -488,7 +572,6 @@
                 floor.receiveShadow = true;
                 this.scene.add(floor);
                 
-                // Cave ceiling
                 const ceilingGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
                 const ceilingVertices = ceilingGeometry.attributes.position.array;
                 for (let i = 0; i < ceilingVertices.length; i += 3) {
@@ -501,7 +584,6 @@
                 ceiling.position.y = 15;
                 this.scene.add(ceiling);
                 
-                // Cave walls (stalactites and stalagmites)
                 for (let i = 0; i < 50; i++) {
                     const height = Math.random() * 5 + 2;
                     const radius = Math.random() * 0.5 + 0.3;
@@ -516,11 +598,9 @@
                     stalactite.position.z = (Math.random() - 0.5) * 80;
                     
                     if (Math.random() > 0.5) {
-                        // Stalactite (hanging from ceiling)
                         stalactite.position.y = 15;
                         stalactite.rotation.x = Math.PI;
                     } else {
-                        // Stalagmite (rising from floor)
                         stalactite.position.y = height / 2;
                     }
                     
@@ -531,20 +611,16 @@
             }
             
             createCrystals() {
-                // Create glowing crystal clusters
                 for (let i = 0; i < 30; i++) {
                     const crystalGroup = new THREE.Group();
                     
-                    // Random crystal color from updated crystal colors
                     const color = CURRENT_WORLD.crystalColors[Math.floor(Math.random() * CURRENT_WORLD.crystalColors.length)];
                     
-                    // Create multiple crystals in a cluster
                     for (let j = 0; j < 5; j++) {
                         const height = Math.random() * 3 + 1;
                         const radius = Math.random() * 0.3 + 0.1;
                         const geometry = new THREE.OctahedronGeometry(radius, 0);
                         
-                        // Stretch the crystal
                         geometry.scale(1, height / radius, 1);
                         
                         const material = new THREE.MeshStandardMaterial({
@@ -573,11 +649,9 @@
                         this.crystals.push(crystal);
                     }
                     
-                    // Position cluster
                     crystalGroup.position.x = (Math.random() - 0.5) * 60;
                     crystalGroup.position.z = (Math.random() - 0.5) * 60;
                     
-                    // Add point light for crystal glow
                     const light = new THREE.PointLight(color, 0.5, 10);
                     light.position.copy(crystalGroup.position);
                     light.position.y = 2;
@@ -588,15 +662,13 @@
             }
             
             createPortals() {
-                const numPortals = Math.min(this.worlds.length, 4); // Fewer portals in caves
+                const numPortals = Math.min(this.worlds.length, 4);
                 
                 for (let i = 0; i < numPortals; i++) {
                     const world = this.worlds[i] || this.getDemoWorlds()[i];
                     
-                    // Portal group
                     const portalGroup = new THREE.Group();
                     
-                    // Crystal portal frame
                     const frameGeometry = new THREE.TorusGeometry(2.5, 0.4, 8, 6);
                     const frameMaterial = new THREE.MeshStandardMaterial({
                         color: CURRENT_WORLD.portalColor1,
@@ -607,7 +679,6 @@
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                     
-                    // Portal surface with inherited colors
                     const portalGeometry = new THREE.CircleGeometry(2.1, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -643,11 +714,9 @@
                     const portal = new THREE.Mesh(portalGeometry, portalMaterial);
                     portal.position.z = 0.1;
                     
-                    // Add to group
                     portalGroup.add(frame);
                     portalGroup.add(portal);
                     
-                    // Position portal in cave
                     const positions = [
                         { x: -15, z: -10 },
                         { x: 15, z: -10 },
@@ -660,15 +729,12 @@
                     portalGroup.position.z = pos.z;
                     portalGroup.position.y = 3;
                     
-                    // Face center
                     portalGroup.lookAt(0, 3, 0);
                     
-                    // Add crystal light
                     const light = new THREE.PointLight(CURRENT_WORLD.portalColor1, 1, 15);
                     light.position.copy(portalGroup.position);
                     this.scene.add(light);
                     
-                    // Store portal data
                     portal.userData = {
                         world: world,
                         material: portalMaterial,
@@ -684,24 +750,16 @@
             }
             
             buildInheritanceParams() {
-                // Build URL parameters to pass to the next world
                 const params = new URLSearchParams();
                 
-                // Source world info
                 params.set('from', window.location.pathname.split('/').pop() || 'crystal-caves.html');
                 params.set('fromName', CURRENT_WORLD.name);
-                
-                // Movement attributes
                 params.set('moveSpeed', this.moveSpeed.toString());
                 params.set('lookSpeed', this.lookSpeed.toString());
-                
-                // Visual attributes (convert to hex strings)
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
                 params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
                 params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
                 params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
-                
-                // World properties
                 params.set('particleCount', CURRENT_WORLD.particleCount.toString());
                 params.set('cameraHeight', this.camera.position.y.toString());
                 params.set('fogNear', CURRENT_WORLD.fogNear.toString());
@@ -711,7 +769,6 @@
             }
             
             setupEventListeners() {
-                // Resize
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -726,7 +783,6 @@
             }
             
             setupDesktopControls() {
-                // Keyboard
                 window.addEventListener('keydown', (e) => {
                     if (e.key.toLowerCase() in this.keys) {
                         this.keys[e.key.toLowerCase()] = true;
@@ -739,13 +795,10 @@
                     }
                 });
                 
-                // Mouse click handling
                 this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
-                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
                     } else {
-                        // Check for portal clicks when pointer is locked
                         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                         const intersects = this.raycaster.intersectObjects(this.portals);
                         
@@ -772,82 +825,118 @@
             }
             
             setupMobileControls() {
-                const canvas = this.renderer.domElement;
+                const lookArea = document.getElementById('look-area');
                 
-                // Touch controls for looking
-                canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
+                lookArea.addEventListener('touchstart', (e) => {
                     const touch = e.touches[0];
-                    this.touches.start = { x: touch.clientX, y: touch.clientY };
-                    this.touches.current = { ...this.touches.start };
-                });
-                
-                canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (!this.touches.start) return;
                     
-                    const touch = e.touches[0];
-                    const deltaX = touch.clientX - this.touches.current.x;
-                    const deltaY = touch.clientY - this.touches.current.y;
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
                     
-                    this.rotation.y -= deltaX * this.lookSpeed * 2;
-                    this.rotation.x -= deltaY * this.lookSpeed * 2;
-                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
                     
-                    this.touches.current = { x: touch.clientX, y: touch.clientY };
-                });
-                
-                canvas.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    
-                    // Check for tap
-                    if (this.touches.start && this.touches.current) {
-                        const dx = this.touches.current.x - this.touches.start.x;
-                        const dy = this.touches.current.y - this.touches.start.y;
-                        
-                        if (Math.sqrt(dx * dx + dy * dy) < 10) {
-                            // It's a tap
-                            const rect = canvas.getBoundingClientRect();
-                            const x = ((this.touches.start.x - rect.left) / rect.width) * 2 - 1;
-                            const y = -((this.touches.start.y - rect.top) / rect.height) * 2 + 1;
-                            
-                            this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-                            const intersects = this.raycaster.intersectObjects(this.portals);
-                            
-                            if (intersects.length > 0) {
-                                const portal = intersects[0].object;
-                                if (portal.userData.url) {
-                                    this.enterWorld(portal.userData.url);
-                                }
-                            }
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
                         }
                     }
                     
-                    this.touches.start = null;
-                    this.touches.current = null;
-                });
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
                 
-                // Joystick
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
                 const joystick = document.getElementById('movement-joystick');
                 const handle = document.getElementById('movement-handle');
                 
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
                     this.joystickActive = true;
-                    this.updateJoystick(e.touches[0], joystick, handle);
-                });
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
                 
                 joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
                     e.preventDefault();
-                    if (this.joystickActive) {
-                        this.updateJoystick(e.touches[0], joystick, handle);
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
                     }
-                });
+                }, { passive: false });
                 
-                joystick.addEventListener('touchend', () => {
-                    this.joystickActive = false;
-                    this.joystickVector.set(0, 0);
-                    handle.style.transform = 'translate(-50%, -50%)';
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
                 });
             }
             
@@ -897,17 +986,14 @@
                     if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
                 }
                 
-                // Keep camera at reasonable height in cave
                 this.camera.position.y = Math.max(1, Math.min(10, this.camera.position.y));
                 
-                // Update camera rotation
                 this.camera.rotation.order = 'YXZ';
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
             
             updateHover() {
-                // Cast ray from camera center
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const intersects = this.raycaster.intersectObjects(this.portals);
                 
@@ -917,12 +1003,10 @@
                     if (portal !== this.hoveredPortal) {
                         this.hoveredPortal = portal;
                         
-                        // Show tooltip
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
                         this.tooltip.classList.add('visible');
                         
-                        // Position tooltip
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
@@ -943,11 +1027,9 @@
             
             async enterWorld(url) {
                 try {
-                    // Show loading
                     document.getElementById('loading').style.display = 'block';
                     document.getElementById('loading').innerHTML = 'Traveling to new world...';
                     
-                    // Fetch the HTML content
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`Failed to load world (${response.status})`);
@@ -955,40 +1037,27 @@
                     
                     let htmlContent = await response.text();
                     
-                    // Build inheritance parameters
                     const inheritanceParams = this.buildInheritanceParams();
                     
-                    // Create a script to inject the parameters at the start of the page
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
                     const paramScript = `<script>
-                        // Injected inheritance parameters
                         window.INJECTED_PARAMS = '?${inheritanceParams}';
-                        
-                        // Override window.location.search
-                        Object.defineProperty(window.location, 'search', {
-                            get: function() { return window.INJECTED_PARAMS || ''; }
-                        });
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
                     <\/script>`;
                     
-                    // Inject the script right after the opening body tag
                     htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
                     
-                    // Update parseInheritedAttributes function to use injected params
-                    htmlContent = htmlContent.replace(
-                        'const params = new URLSearchParams(window.location.search);',
-                        'const params = new URLSearchParams(window.INJECTED_PARAMS || window.location.search);'
-                    );
-                    
-                    // Update any world navigation to use the same pattern
-                    htmlContent = htmlContent.replace(
-                        /window\.location\.href = blobUrl;/g,
-                        `window.location.href = blobUrl;`
-                    );
-                    
-                    // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world (without query params in URL)
                     window.location.href = blobUrl;
                     
                 } catch (error) {
@@ -1005,29 +1074,21 @@
                 
                 const time = this.clock.getElapsedTime();
                 
-                // Update movement
                 this.updateMovement();
-                
-                // Update hover detection
                 this.updateHover();
                 
-                // Animate portals
                 this.portals.forEach((portal, index) => {
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
                         
-                        // Pulsing glow
                         const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
                         portal.userData.light.intensity = intensity;
                     }
                 });
                 
-                // Animate crystals
                 this.crystals.forEach((crystal, index) => {
-                    // Gentle rotation
                     crystal.rotation.y += crystal.userData.rotationSpeed;
                     
-                    // Pulsing glow
                     const intensity = 0.3 + Math.sin(time * 3 + index * 0.5) * 0.2;
                     crystal.material.emissiveIntensity = intensity;
                 });
@@ -1036,11 +1097,26 @@
             }
         }
         
-        // Initialize when DOM is loaded
         window.addEventListener('DOMContentLoaded', () => {
             const world = new CrystalCavesWorld();
             world.init();
         });
+        
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
     </script>
 </body>
 </html>

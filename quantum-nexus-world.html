@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Quantum Nexus</title>
     <style>
         * {
@@ -10,6 +12,9 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         body {
@@ -17,7 +22,10 @@
             background: #000;
             color: #fff;
             overflow: hidden;
-            position: relative;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
         }
 
         #three-container {
@@ -27,13 +35,17 @@
             width: 100%;
             height: 100%;
             touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .world-ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
             z-index: 1001;
+            pointer-events: none;
         }
 
         .world-title {
@@ -70,8 +82,8 @@
 
         .world-origin {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.7);
             padding: 10px 20px;
             border-radius: 20px;
@@ -99,8 +111,8 @@
 
         .quantum-stats {
             position: absolute;
-            top: 60px;
-            right: 20px;
+            top: env(safe-area-inset-top, 20px) + 40px;
+            right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.7);
             padding: 15px;
             border-radius: 10px;
@@ -121,43 +133,9 @@
             float: right;
         }
 
-        .reality-indicator {
-            position: absolute;
-            bottom: 100px;
-            right: 20px;
-            width: 150px;
-            height: 150px;
-            z-index: 1001;
-        }
-
-        .reality-circle {
-            width: 100%;
-            height: 100%;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            position: relative;
-            animation: rotate-reality 20s linear infinite;
-        }
-
-        @keyframes rotate-reality {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .reality-node {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background: radial-gradient(circle, #fff, transparent);
-            border-radius: 50%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
         .controls-hint {
             position: absolute;
-            bottom: 30px;
+            bottom: env(safe-area-inset-bottom, 30px);
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
@@ -169,6 +147,7 @@
             text-align: center;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 0, 255, 0.3);
+            pointer-events: none;
         }
 
         .portal-tooltip {
@@ -215,17 +194,27 @@
         }
 
         .mobile-controls {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
             display: none;
             z-index: 1001;
-            gap: 20px;
+            padding: 0 20px;
+            pointer-events: none;
         }
 
         .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
             display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
         .joystick-container {
@@ -235,6 +224,7 @@
             border: 2px solid rgba(0, 255, 255, 0.5);
             border-radius: 50%;
             position: relative;
+            pointer-events: auto;
             touch-action: none;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
         }
@@ -248,8 +238,18 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            transition: none;
+            pointer-events: none;
             box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
         }
 
         .loading {
@@ -305,12 +305,29 @@
             .quantum-stats {
                 font-size: 0.8em;
                 padding: 10px;
+                top: 60px;
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
             }
         }
     </style>
 </head>
 <body>
     <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
     
     <div class="world-ui">
         <h1 class="world-title" id="world-title">QUANTUM NEXUS</h1>
@@ -329,27 +346,20 @@
         <div class="stat-line">Portals Active: <span class="stat-value" id="portals-active">0</span></div>
     </div>
     
-    <div class="reality-indicator">
-        <div class="reality-circle">
-            <div class="reality-node" style="transform: translate(-50%, -250%)"></div>
-            <div class="reality-node" style="transform: translate(150%, -50%)"></div>
-            <div class="reality-node" style="transform: translate(-50%, 150%)"></div>
-            <div class="reality-node" style="transform: translate(-250%, -50%)"></div>
-        </div>
-    </div>
-    
     <div class="controls-hint" id="controls-hint">WASD: Move | Mouse: Look | Click: Travel | Q/E: Phase Shift | R: Reality Warp</div>
     
     <div class="mobile-controls" id="mobile-controls">
-        <div class="joystick-container" id="movement-joystick">
-            <div class="joystick-handle" id="movement-handle"></div>
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
         </div>
     </div>
     
     <div class="portal-tooltip" id="portal-tooltip">
         <h3 class="tooltip-title"></h3>
         <p class="tooltip-description"></p>
-        <p class="tooltip-instruction">Click to quantum leap</p>
+        <p class="tooltip-instruction">Tap to quantum leap</p>
     </div>
     
     <div class="loading" id="loading">Collapsing quantum states...</div>
@@ -375,7 +385,6 @@
                 quantum: 0x00ff00,
                 void: 0x000033
             },
-            // Inheritance defaults
             moveSpeed: 0.2,
             lookSpeed: 0.002,
             ambientColor: 0x0a0a0a,
@@ -387,40 +396,56 @@
             fogNear: 10,
             fogFar: 100
         };
-        
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
-            const params = new URLSearchParams(window.location.search);
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
             const inherited = {};
             
-            // Get source world info
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
             
-            // Movement attributes
             if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
-            
-            // Visual attributes
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
             if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
             if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
             if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
-            
-            // World properties
             if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
             if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
             if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
             
+            console.log('Parsed inherited attributes:', inherited);
             return inherited;
         }
         
-        // Merge inherited attributes with defaults
         const inheritedAttributes = parseInheritedAttributes();
         const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
         
-        // Update specific world properties based on inheritance
         if (inheritedAttributes.portalColor1) {
             CURRENT_WORLD.colors.primary = inheritedAttributes.portalColor1;
         }
@@ -428,9 +453,11 @@
             CURRENT_WORLD.colors.secondary = inheritedAttributes.portalColor2;
         }
         
-        // Check if device is mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         
         class QuantumNexusWorld {
             constructor() {
@@ -443,7 +470,6 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Quantum systems
                 this.quantumField = null;
                 this.realityPhase = 0;
                 this.quantumFlux = 0;
@@ -457,7 +483,6 @@
                 this.wormholes = [];
                 this.quantumEntanglements = [];
                 
-                // Use inherited movement attributes
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
                 this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { 
@@ -468,34 +493,43 @@
                 this.velocity = new THREE.Vector3();
                 this.phaseShiftActive = false;
                 
-                // Mobile
                 this.isMobile = isMobile;
+                this.isIOS = isIOS;
                 this.joystickActive = false;
                 this.joystickVector = new THREE.Vector2();
-                this.touches = { start: null, current: null };
+                this.lookTouch = null;
+                this.joystickTouch = null;
                 
-                // UI
+                this.touches = new Map();
+                this.lastTap = 0;
+                
                 this.hoveredPortal = null;
                 this.tooltip = document.getElementById('portal-tooltip');
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
                 
-                // Inherited attributes
                 this.inheritedAttributes = inheritedAttributes;
                 
-                // Audio context for quantum sounds (optional)
                 this.audioContext = null;
                 this.oscillators = [];
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
             }
             
             async init() {
-                // Show origin world if we came from somewhere
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
                     originName.textContent = this.inheritedAttributes.sourceWorldName;
                     originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
                 
                 setTimeout(() => {
@@ -520,8 +554,13 @@
                 this.initAudio();
                 
                 if (this.isMobile) {
-                    document.getElementById('controls-hint').textContent = 'Swipe: Look | Joystick: Move | Tap portals to travel';
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
                     document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to quantum leap';
+                    }
                 }
                 
                 this.animate();
@@ -534,8 +573,13 @@
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 20);
                 
-                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -544,16 +588,12 @@
             }
             
             setupLighting() {
-                // Minimal ambient for dark quantum space
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.2);
                 this.scene.add(ambientLight);
-                
-                // Dynamic quantum lights will be added with objects
             }
             
             setupPostProcessing() {
-                // In a real implementation, you'd use THREE.EffectComposer here
-                // For simplicity, we'll simulate effects with fog and materials
+                // Simulated post-processing with fog and materials
             }
             
             async loadWorlds() {
@@ -610,9 +650,6 @@
             }
             
             createQuantumEnvironment() {
-                // Create a complex multi-layered environment
-                
-                // Quantum grid floor
                 const gridGeometry = new THREE.PlaneGeometry(500, 500, 100, 100);
                 const gridMaterial = new THREE.ShaderMaterial({
                     uniforms: {
@@ -659,7 +696,6 @@
                 this.quantumGrid.position.y = -10;
                 this.scene.add(this.quantumGrid);
                 
-                // Skybox with quantum field
                 const skyGeometry = new THREE.SphereGeometry(400, 64, 64);
                 const skyMaterial = new THREE.ShaderMaterial({
                     uniforms: {
@@ -704,10 +740,8 @@
             }
             
             createTesseract() {
-                // Create a 4D tesseract (hypercube) projection
                 const tesseractGroup = new THREE.Group();
                 
-                // Inner cube
                 const innerGeometry = new THREE.BoxGeometry(5, 5, 5);
                 const innerMaterial = new THREE.MeshBasicMaterial({
                     color: CURRENT_WORLD.colors.primary,
@@ -717,7 +751,6 @@
                 });
                 const innerCube = new THREE.Mesh(innerGeometry, innerMaterial);
                 
-                // Outer cube
                 const outerGeometry = new THREE.BoxGeometry(10, 10, 10);
                 const outerMaterial = new THREE.MeshBasicMaterial({
                     color: CURRENT_WORLD.colors.secondary,
@@ -727,14 +760,12 @@
                 });
                 const outerCube = new THREE.Mesh(outerGeometry, outerMaterial);
                 
-                // Connect vertices with lines
                 const lineMaterial = new THREE.LineBasicMaterial({ 
                     color: CURRENT_WORLD.colors.quantum,
                     transparent: true,
                     opacity: 0.5
                 });
                 
-                // Create connections between inner and outer cube vertices
                 const innerVertices = innerCube.geometry.attributes.position.array;
                 const outerVertices = outerCube.geometry.attributes.position.array;
                 
@@ -761,14 +792,12 @@
                 this.tesseract = tesseractGroup;
                 this.scene.add(this.tesseract);
                 
-                // Add point light at center
                 const tesseractLight = new THREE.PointLight(CURRENT_WORLD.colors.primary, 2, 30);
                 tesseractLight.position.copy(tesseractGroup.position);
                 this.scene.add(tesseractLight);
             }
             
             createQuantumField() {
-                // Create a particle system representing quantum field
                 const particleCount = CURRENT_WORLD.particleCount;
                 const geometry = new THREE.BufferGeometry();
                 const positions = new Float32Array(particleCount * 3);
@@ -778,7 +807,6 @@
                 for (let i = 0; i < particleCount; i++) {
                     const i3 = i * 3;
                     
-                    // Sphere distribution
                     const radius = Math.random() * 200;
                     const theta = Math.random() * Math.PI * 2;
                     const phi = Math.acos(Math.random() * 2 - 1);
@@ -787,7 +815,6 @@
                     positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
                     positions[i3 + 2] = radius * Math.cos(phi);
                     
-                    // Random colors based on inherited portal colors
                     const colorChoice = Math.random();
                     const color1 = new THREE.Color(CURRENT_WORLD.colors.primary);
                     const color2 = new THREE.Color(CURRENT_WORLD.colors.secondary);
@@ -860,11 +887,9 @@
             }
             
             createRealityLayers() {
-                // Create multiple translucent reality layers
                 for (let i = 0; i < CURRENT_WORLD.realityLayers; i++) {
                     const layerGroup = new THREE.Group();
                     
-                    // Create geometric shapes for each layer
                     const shapes = ['icosahedron', 'octahedron', 'dodecahedron', 'tetrahedron'];
                     const shapeType = shapes[i % shapes.length];
                     
@@ -908,11 +933,9 @@
             }
             
             createDimensionalRifts() {
-                // Create tear-like rifts in space
                 for (let i = 0; i < CURRENT_WORLD.dimensionalRifts; i++) {
                     const riftGroup = new THREE.Group();
                     
-                    // Create a plane with custom shader for rift effect
                     const riftGeometry = new THREE.PlaneGeometry(10, 20, 32, 32);
                     const riftMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -954,7 +977,6 @@
                     
                     const rift = new THREE.Mesh(riftGeometry, riftMaterial);
                     
-                    // Position rifts around the space
                     const angle = (i / CURRENT_WORLD.dimensionalRifts) * Math.PI * 2;
                     const radius = 50 + Math.random() * 50;
                     
@@ -969,7 +991,6 @@
                     this.dimensionalRifts.push(riftGroup);
                     this.scene.add(riftGroup);
                     
-                    // Add rift light
                     const riftLight = new THREE.PointLight(CURRENT_WORLD.colors.quantum, 1, 20);
                     riftLight.position.copy(riftGroup.position);
                     this.scene.add(riftLight);
@@ -977,7 +998,6 @@
             }
             
             createEnergyBeams() {
-                // Create energy beams connecting various points
                 const beamCount = 12;
                 
                 for (let i = 0; i < beamCount; i++) {
@@ -1018,7 +1038,6 @@
                     
                     const beam = new THREE.Mesh(beamGeometry, beamMaterial);
                     
-                    // Random positioning
                     beam.position.x = (Math.random() - 0.5) * 100;
                     beam.position.z = (Math.random() - 0.5) * 100;
                     beam.rotation.x = Math.random() * Math.PI;
@@ -1031,7 +1050,6 @@
             }
             
             createFractalStructures() {
-                // Create recursive fractal structures
                 const createFractal = (depth, size, position, parent) => {
                     if (depth <= 0) return;
                     
@@ -1048,7 +1066,6 @@
                     mesh.position.copy(position);
                     parent.add(mesh);
                     
-                    // Create children
                     const childSize = size * 0.5;
                     const positions = [
                         new THREE.Vector3(size, 0, 0),
@@ -1064,7 +1081,6 @@
                     });
                 };
                 
-                // Create multiple fractal structures
                 for (let i = 0; i < 3; i++) {
                     const fractalGroup = new THREE.Group();
                     createFractal(4, 5, new THREE.Vector3(), fractalGroup);
@@ -1080,11 +1096,9 @@
             }
             
             createWormholes() {
-                // Create toroidal wormhole structures
                 for (let i = 0; i < 4; i++) {
                     const wormholeGroup = new THREE.Group();
                     
-                    // Torus geometry for wormhole
                     const geometry = new THREE.TorusGeometry(8, 3, 16, 32);
                     const material = new THREE.ShaderMaterial({
                         uniforms: {
@@ -1124,7 +1138,6 @@
                     const wormhole = new THREE.Mesh(geometry, material);
                     wormhole.userData = { material: material };
                     
-                    // Create event horizon effect
                     const eventHorizonGeometry = new THREE.CircleGeometry(5, 32);
                     const eventHorizonMaterial = new THREE.MeshBasicMaterial({
                         color: 0x000000,
@@ -1135,7 +1148,6 @@
                     wormholeGroup.add(wormhole);
                     wormholeGroup.add(eventHorizon);
                     
-                    // Position wormholes
                     const positions = [
                         { x: 60, y: 20, z: 0 },
                         { x: -60, y: 20, z: 0 },
@@ -1153,7 +1165,6 @@
             }
             
             createQuantumEntanglements() {
-                // Create visual representations of quantum entanglements
                 const entanglementCount = 20;
                 
                 for (let i = 0; i < entanglementCount; i++) {
@@ -1169,7 +1180,6 @@
                         (Math.random() - 0.5) * 100
                     );
                     
-                    // Create curved path
                     const curve = new THREE.CatmullRomCurve3([
                         startPoint,
                         new THREE.Vector3(
@@ -1212,7 +1222,6 @@
                     
                     const portalGroup = new THREE.Group();
                     
-                    // Create quantum portal with complex shader
                     const portalGeometry = new THREE.TorusGeometry(4, 0.5, 16, 32);
                     const portalFrameMaterial = new THREE.MeshPhongMaterial({
                         color: 0xffffff,
@@ -1223,7 +1232,6 @@
                     });
                     const portalFrame = new THREE.Mesh(portalGeometry, portalFrameMaterial);
                     
-                    // Portal surface with quantum effect using inherited colors
                     const portalSurfaceGeometry = new THREE.CircleGeometry(3.5, 64);
                     const portalSurfaceMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -1256,18 +1264,14 @@
                                 vec2 center = vUv - 0.5;
                                 float dist = length(center);
                                 
-                                // Swirling effect
                                 float angle = atan(center.y, center.x);
                                 float spiral = sin(dist * 20.0 - time * 3.0 + angle * 5.0);
                                 
-                                // Quantum fluctuation
                                 float n = noise(vUv * 10.0 + time);
                                 
-                                // Color mixing
                                 vec3 color = mix(portalColor1, portalColor2, spiral * 0.5 + 0.5);
                                 color = mix(color, portalColor3, n * 0.5 + 0.5);
                                 
-                                // Vortex alpha
                                 float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
                                 alpha *= 0.8 + sin(time * 2.0 + dist * 10.0) * 0.2;
                                 
@@ -1281,7 +1285,6 @@
                     const portalSurface = new THREE.Mesh(portalSurfaceGeometry, portalSurfaceMaterial);
                     portalSurface.position.z = 0.1;
                     
-                    // Particle ring around portal
                     const particleCount = 100;
                     const particleGeometry = new THREE.BufferGeometry();
                     const particlePositions = new Float32Array(particleCount * 3);
@@ -1310,18 +1313,15 @@
                     portalGroup.add(portalSurface);
                     portalGroup.add(particles);
                     
-                    // Position portal
                     portalGroup.position.x = Math.cos(angle) * radius;
                     portalGroup.position.z = Math.sin(angle) * radius;
                     portalGroup.position.y = 5 + Math.sin(angle * 2) * 10;
                     portalGroup.rotation.y = -angle + Math.PI;
                     
-                    // Portal light
                     const portalLight = new THREE.PointLight(0xffffff, 2, 20);
                     portalLight.position.copy(portalGroup.position);
                     this.scene.add(portalLight);
                     
-                    // Store portal data
                     portalSurface.userData = {
                         world: world,
                         material: portalSurfaceMaterial,
@@ -1336,29 +1336,20 @@
                     this.scene.add(portalGroup);
                 }
                 
-                // Update portal count in UI
                 document.getElementById('portals-active').textContent = numPortals;
             }
             
             buildInheritanceParams() {
-                // Build URL parameters to pass to the next world
                 const params = new URLSearchParams();
                 
-                // Source world info
                 params.set('from', window.location.pathname.split('/').pop() || 'quantum-nexus.html');
                 params.set('fromName', CURRENT_WORLD.name);
-                
-                // Movement attributes
                 params.set('moveSpeed', this.moveSpeed.toString());
                 params.set('lookSpeed', this.lookSpeed.toString());
-                
-                // Visual attributes (convert to hex strings)
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
                 params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
                 params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
                 params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
-                
-                // World properties
                 params.set('particleCount', CURRENT_WORLD.particleCount.toString());
                 params.set('cameraHeight', this.camera.position.y.toString());
                 params.set('fogNear', CURRENT_WORLD.fogNear.toString());
@@ -1368,11 +1359,9 @@
             }
             
             initAudio() {
-                // Optional: Initialize Web Audio API for quantum sounds
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     
-                    // Create ambient quantum hum
                     const oscillator = this.audioContext.createOscillator();
                     const gainNode = this.audioContext.createGain();
                     
@@ -1383,7 +1372,6 @@
                     oscillator.connect(gainNode);
                     gainNode.connect(this.audioContext.destination);
                     
-                    // Start after user interaction
                     document.addEventListener('click', () => {
                         if (this.audioContext.state === 'suspended') {
                             this.audioContext.resume();
@@ -1396,7 +1384,6 @@
             }
             
             setupEventListeners() {
-                // Resize
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -1411,7 +1398,6 @@
             }
             
             setupDesktopControls() {
-                // Keyboard
                 window.addEventListener('keydown', (e) => {
                     const key = e.key.toLowerCase();
                     if (key in this.keys) {
@@ -1433,13 +1419,10 @@
                     }
                 });
                 
-                // Mouse click handling
                 this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
-                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
                     } else {
-                        // Check for portal clicks when pointer is locked
                         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                         const intersects = this.raycaster.intersectObjects(this.portals);
                         
@@ -1466,82 +1449,118 @@
             }
             
             setupMobileControls() {
-                const canvas = this.renderer.domElement;
+                const lookArea = document.getElementById('look-area');
                 
-                // Touch controls for looking
-                canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
+                lookArea.addEventListener('touchstart', (e) => {
                     const touch = e.touches[0];
-                    this.touches.start = { x: touch.clientX, y: touch.clientY };
-                    this.touches.current = { ...this.touches.start };
-                });
-                
-                canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (!this.touches.start) return;
                     
-                    const touch = e.touches[0];
-                    const deltaX = touch.clientX - this.touches.current.x;
-                    const deltaY = touch.clientY - this.touches.current.y;
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
                     
-                    this.rotation.y -= deltaX * this.lookSpeed * 2;
-                    this.rotation.x -= deltaY * this.lookSpeed * 2;
-                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
                     
-                    this.touches.current = { x: touch.clientX, y: touch.clientY };
-                });
-                
-                canvas.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    
-                    // Check for tap
-                    if (this.touches.start && this.touches.current) {
-                        const dx = this.touches.current.x - this.touches.start.x;
-                        const dy = this.touches.current.y - this.touches.start.y;
-                        
-                        if (Math.sqrt(dx * dx + dy * dy) < 10) {
-                            // It's a tap
-                            const rect = canvas.getBoundingClientRect();
-                            const x = ((this.touches.start.x - rect.left) / rect.width) * 2 - 1;
-                            const y = -((this.touches.start.y - rect.top) / rect.height) * 2 + 1;
-                            
-                            this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-                            const intersects = this.raycaster.intersectObjects(this.portals);
-                            
-                            if (intersects.length > 0) {
-                                const portal = intersects[0].object;
-                                if (portal.userData.url) {
-                                    this.enterWorld(portal.userData.url);
-                                }
-                            }
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
                         }
                     }
                     
-                    this.touches.start = null;
-                    this.touches.current = null;
-                });
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
                 
-                // Joystick
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
                 const joystick = document.getElementById('movement-joystick');
                 const handle = document.getElementById('movement-handle');
                 
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
                     this.joystickActive = true;
-                    this.updateJoystick(e.touches[0], joystick, handle);
-                });
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
                 
                 joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
                     e.preventDefault();
-                    if (this.joystickActive) {
-                        this.updateJoystick(e.touches[0], joystick, handle);
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
                     }
-                });
+                }, { passive: false });
                 
-                joystick.addEventListener('touchend', () => {
-                    this.joystickActive = false;
-                    this.joystickVector.set(0, 0);
-                    handle.style.transform = 'translate(-50%, -50%)';
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
                 });
             }
             
@@ -1577,7 +1596,6 @@
                 
                 right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
                 
-                // Apply quantum drag
                 this.velocity.multiplyScalar(0.9);
                 
                 if (this.isMobile) {
@@ -1593,15 +1611,13 @@
                     if (this.keys.a) this.velocity.add(right.multiplyScalar(-this.moveSpeed));
                     if (this.keys.d) this.velocity.add(right.multiplyScalar(this.moveSpeed));
                     
-                    // Quantum movement abilities
                     if (this.keys[' ']) {
-                        this.velocity.y = 0.4; // Jump/fly
+                        this.velocity.y = 0.4;
                     }
                     if (this.keys.shift) {
-                        this.velocity.y = -0.4; // Descend
+                        this.velocity.y = -0.4;
                     }
                     
-                    // Phase shift
                     if (this.keys.q) {
                         this.phaseShiftActive = true;
                         this.camera.position.x += Math.sin(this.clock.getElapsedTime() * 10) * 0.5;
@@ -1611,7 +1627,6 @@
                         this.camera.position.z += Math.cos(this.clock.getElapsedTime() * 10) * 0.5;
                     }
                     
-                    // Reality warp
                     if (this.keys.r) {
                         this.realityPhase += 0.1;
                         if (this.realityPhase > Math.PI * 2) {
@@ -1620,17 +1635,14 @@
                     }
                 }
                 
-                // Apply velocity
                 this.camera.position.add(this.velocity);
                 
-                // Update camera rotation
                 this.camera.rotation.order = 'YXZ';
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
             
             updateHover() {
-                // Cast ray from camera center
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const intersects = this.raycaster.intersectObjects(this.portals);
                 
@@ -1640,12 +1652,10 @@
                     if (portal !== this.hoveredPortal) {
                         this.hoveredPortal = portal;
                         
-                        // Show tooltip
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
                         this.tooltip.classList.add('visible');
                         
-                        // Position tooltip
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
@@ -1665,62 +1675,51 @@
             }
             
             updateQuantumSystems(time) {
-                // Update quantum field particles
                 if (this.quantumParticles) {
                     this.quantumParticles.rotation.y = time * 0.05;
                     this.quantumParticles.material.uniforms.time.value = time;
                     this.quantumParticles.material.uniforms.phase.value = this.realityPhase;
                 }
                 
-                // Update tesseract
                 if (this.tesseract) {
                     this.tesseract.rotation.x = time * 0.1;
                     this.tesseract.rotation.y = time * 0.15;
                     this.tesseract.rotation.z = time * 0.05;
                     
-                    // 4D rotation simulation
                     const scale = 1 + Math.sin(time * 0.5) * 0.1;
                     this.tesseract.scale.set(scale, scale, scale);
                 }
                 
-                // Update reality layers
                 this.realityLayers.forEach((layer, index) => {
                     layer.rotation.x += layer.children[0].userData.rotationSpeed;
                     layer.rotation.y += layer.children[0].userData.rotationSpeed * 1.5;
                     layer.rotation.z += layer.children[0].userData.rotationSpeed * 0.5;
                     
-                    // Phase-based visibility
                     const phase = this.realityPhase + layer.children[0].userData.phaseOffset;
                     const opacity = 0.2 + Math.sin(phase) * 0.1;
                     layer.children[0].material.opacity = opacity;
                 });
                 
-                // Update dimensional rifts
                 this.dimensionalRifts.forEach((rift, index) => {
                     rift.userData.material.uniforms.time.value = time;
                     rift.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
                     
-                    // Rift pulsing
                     const scale = 1 + Math.sin(time * 2 + index * 0.5) * 0.1;
                     rift.scale.set(scale, scale, 1);
                 });
                 
-                // Update energy beams
                 this.energyBeams.forEach((beam, index) => {
                     beam.userData.material.uniforms.time.value = time;
                     beam.rotation.y += 0.01;
                     
-                    // Beam fluctuation
                     const intensity = 0.5 + Math.sin(time * 3 + index) * 0.5;
                     beam.material.opacity = intensity;
                 });
                 
-                // Update fractals
                 this.fractals.forEach((fractal, index) => {
                     fractal.rotation.x = time * 0.1 + index;
                     fractal.rotation.y = time * 0.15 + index;
                     
-                    // Recursive scaling
                     fractal.traverse((child) => {
                         if (child.isMesh) {
                             const scale = 1 + Math.sin(time * 2 + child.position.length() * 0.1) * 0.05;
@@ -1729,7 +1728,6 @@
                     });
                 });
                 
-                // Update wormholes
                 this.wormholes.forEach((wormhole, index) => {
                     wormhole.rotation.x += 0.02;
                     wormhole.rotation.y += 0.01;
@@ -1740,33 +1738,26 @@
                     }
                 });
                 
-                // Update quantum entanglements
                 this.quantumEntanglements.forEach((entanglement, index) => {
-                    // Pulsing effect
                     const pulse = Math.sin(time * 4 + index) * 0.5 + 0.5;
                     entanglement.userData.material.opacity = 0.3 + pulse * 0.3;
                     
-                    // Slight position variation
                     const offset = Math.sin(time + index) * 0.5;
                     entanglement.position.y = offset;
                 });
                 
-                // Update quantum grid
                 if (this.quantumGrid) {
                     this.quantumGrid.material.uniforms.time.value = time;
                     this.quantumGrid.material.uniforms.phase.value = this.realityPhase;
                 }
                 
-                // Update quantum sky
                 if (this.quantumSky) {
                     this.quantumSky.material.uniforms.time.value = time;
                 }
                 
-                // Calculate quantum metrics
                 this.quantumFlux = Math.abs(Math.sin(time * 0.5)) * 100;
                 this.dimensionalDrift = Math.abs(Math.cos(time * 0.3)) * 100;
                 
-                // Update UI stats
                 document.getElementById('reality-phase').textContent = (this.realityPhase / (Math.PI * 2) * 100).toFixed(2);
                 document.getElementById('quantum-flux').textContent = this.quantumFlux.toFixed(2);
                 document.getElementById('dimensional-drift').textContent = this.dimensionalDrift.toFixed(2);
@@ -1777,19 +1768,15 @@
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
                         
-                        // Portal rotation
                         portal.rotation.z = time * 0.5 + index;
                         
-                        // Update particles around portal
                         if (portal.userData.particles) {
                             portal.userData.particles.rotation.z = -time * 2;
                         }
                         
-                        // Light pulsing
                         const intensity = 1.5 + Math.sin(time * 3 + index) * 0.5;
                         portal.userData.light.intensity = intensity;
                         
-                        // Color shift based on reality phase
                         const hue = (this.realityPhase / (Math.PI * 2) + index * 0.1) % 1;
                         portal.userData.light.color.setHSL(hue, 1, 0.5);
                     }
@@ -1797,25 +1784,21 @@
             }
             
             createQuantumDistortion() {
-                // Create visual distortion effects when phase shifting
                 if (this.phaseShiftActive) {
                     const distortionAmount = Math.sin(this.clock.getElapsedTime() * 20) * 0.02;
                     this.camera.position.x += (Math.random() - 0.5) * distortionAmount;
                     this.camera.position.y += (Math.random() - 0.5) * distortionAmount;
                     this.camera.position.z += (Math.random() - 0.5) * distortionAmount;
                     
-                    // Reset phase shift
                     this.phaseShiftActive = false;
                 }
             }
             
             async enterWorld(url) {
                 try {
-                    // Show loading with quantum effect
                     document.getElementById('loading').style.display = 'block';
                     document.getElementById('loading').innerHTML = 'Quantum tunneling initiated...';
                     
-                    // Create quantum transition effect
                     const transitionDuration = 2000;
                     const startTime = Date.now();
                     
@@ -1825,10 +1808,8 @@
                         
                         if (progress >= 1) {
                             clearInterval(transitionEffect);
-                            // Proceed with world loading
                             this.loadNewWorld(url);
                         } else {
-                            // Quantum dissolution effect
                             this.renderer.domElement.style.filter = `hue-rotate(${progress * 360}deg) blur(${progress * 10}px)`;
                             this.renderer.domElement.style.opacity = 1 - progress * 0.5;
                         }
@@ -1852,27 +1833,28 @@
                     
                     let htmlContent = await response.text();
                     
-                    // Inject inheritance parameters into the loaded world
                     const inheritanceParams = this.buildInheritanceParams();
                     
-                    // Find the script tag and inject our parameters
-                    htmlContent = htmlContent.replace(
-                        /(window\.location\.search)/g,
-                        `'?${inheritanceParams}'`
-                    );
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
                     
-                    // Also update any direct world links to include inheritance
-                    htmlContent = htmlContent.replace(
-                        /window\.location\.href = blobUrl;/g,
-                        `window.location.href = blobUrl + '?${inheritanceParams}';`
-                    );
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
                     
-                    // Create blob and navigate
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world with inheritance parameters
-                    window.location.href = blobUrl + '?' + inheritanceParams;
+                    window.location.href = blobUrl;
                     
                 } catch (error) {
                     console.error('Error loading world:', error);
@@ -1890,23 +1872,36 @@
                 
                 const time = this.clock.getElapsedTime();
                 
-                // Update all systems
                 this.updateMovement();
                 this.updateHover();
                 this.updateQuantumSystems(time);
                 this.updatePortals(time);
                 this.createQuantumDistortion();
                 
-                // Render scene
                 this.renderer.render(this.scene, this.camera);
             }
         }
         
-        // Initialize when DOM is loaded
         window.addEventListener('DOMContentLoaded', () => {
             const world = new QuantumNexusWorld();
             world.init();
         });
+        
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
     </script>
 </body>
 </html>
