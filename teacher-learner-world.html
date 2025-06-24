@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Teacher-Learner Activity World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #742774, #4a90e2, #22a7f0);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 400px;
+        }
+
+        .controls-panel {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(116, 39, 116, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 1002;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            max-width: 90%;
+            pointer-events: auto;
+        }
+
+        .control-button {
+            background: rgba(116, 39, 116, 0.8);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+        }
+
+        .control-button:hover {
+            background: rgba(116, 39, 116, 1);
+            transform: translateY(-2px);
+        }
+
+        .control-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .control-button.secondary {
+            background: rgba(74, 144, 226, 0.8);
+        }
+
+        .control-button.secondary:hover {
+            background: rgba(74, 144, 226, 1);
+        }
+
+        .control-button.danger {
+            background: rgba(220, 53, 69, 0.8);
+        }
+
+        .control-button.danger:hover {
+            background: rgba(220, 53, 69, 1);
+        }
+
+        .progress-display {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-weight: 500;
+            color: #ffd700;
+        }
+
+        .upload-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .upload-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .upload-panel {
+            background: rgba(20, 20, 20, 0.95);
+            border: 2px solid rgba(116, 39, 116, 0.5);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .upload-title {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #ffd700;
+        }
+
+        .file-drop-zone {
+            border: 3px dashed rgba(116, 39, 116, 0.5);
+            border-radius: 15px;
+            padding: 40px;
+            margin: 20px 0;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .file-drop-zone:hover,
+        .file-drop-zone.dragover {
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .file-drop-zone i {
+            font-size: 3em;
+            color: #742774;
+            margin-bottom: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .close-upload {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        /* Speech bubbles */
+        .speech-bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 15px 20px;
+            border-radius: 20px;
+            max-width: 300px;
+            font-size: 0.9em;
+            line-height: 1.4;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s, transform 0.5s;
+            pointer-events: none;
+            z-index: 1005;
+        }
+
+        .speech-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .speech-bubble.teacher {
+            background: rgba(116, 39, 116, 0.9);
+            color: white;
+        }
+
+        .speech-bubble.teacher::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 30px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid rgba(116, 39, 116, 0.9);
+        }
+
+        .speech-bubble.student-original {
+            background: rgba(229, 114, 0, 0.9);
+            color: white;
+        }
+
+        .speech-bubble.student-original::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            right: 30px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid rgba(229, 114, 0, 0.9);
+        }
+
+        .speech-bubble.student-live {
+            background: rgba(34, 167, 240, 0.9);
+            color: white;
+        }
+
+        .speech-bubble.student-live::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            right: 30px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid rgba(34, 167, 240, 0.9);
+        }
+
+        .auto-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            border-radius: 24px;
+            transition: 0.4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.4s;
+        }
+
+        input:checked + .slider {
+            background-color: #742774;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 60px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #742774;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 1001;
+        }
+
+        .status-text {
+            color: #ffd700;
+            font-weight: 500;
+        }
+
+        .api-config-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px solid rgba(116, 39, 116, 0.5);
+            max-width: 400px;
+            text-align: center;
+            z-index: 1500;
+            display: none;
+        }
+
+        .api-config-hint.visible {
+            display: block;
+        }
+
+        .api-config-hint h3 {
+            color: #ffd700;
+            margin-bottom: 15px;
+        }
+
+        .api-config-hint input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .api-config-hint button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #742774;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 1.8em;
+            }
+            
+            .world-description {
+                font-size: 0.9em;
+            }
+
+            .controls-panel {
+                bottom: env(safe-area-inset-bottom, 10px);
+                padding: 15px;
+                gap: 10px;
+            }
+
+            .control-button {
+                padding: 8px 15px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title">TEACHER-LEARNER ACTIVITY</h1>
+        <p class="world-description">Watch conversations come to life in 3D space</p>
+    </div>
+    
+    <div class="status-indicator">
+        <span class="status-text" id="status-text">Ready to load conversation</span>
+    </div>
+    
+    <div class="controls-panel">
+        <button id="upload-btn" class="control-button">
+            <i class="fas fa-upload"></i> Upload Conversation
+        </button>
+        <button id="start-btn" class="control-button" disabled>
+            <i class="fas fa-play"></i> Start
+        </button>
+        <button id="next-btn" class="control-button secondary" disabled>
+            <i class="fas fa-step-forward"></i> Next
+        </button>
+        <button id="reset-btn" class="control-button danger" disabled>
+            <i class="fas fa-redo"></i> Reset
+        </button>
+        <div class="auto-toggle">
+            <span>Auto Play</span>
+            <label class="switch">
+                <input type="checkbox" id="auto-toggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="progress-display">
+            <span id="progress-text">0 / 0</span>
+        </div>
+    </div>
+    
+    <div class="upload-overlay" id="upload-overlay">
+        <div class="upload-panel">
+            <button class="close-upload" id="close-upload">&times;</button>
+            <h2 class="upload-title">Upload Conversation JSON</h2>
+            <div class="file-drop-zone" id="drop-zone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Drag & drop your conversation file here</p>
+                <p style="font-size: 0.8em; opacity: 0.7;">or click to browse</p>
+            </div>
+            <input type="file" id="file-input" class="file-input" accept=".json">
+            <button class="control-button" id="paste-json-btn">
+                <i class="fas fa-paste"></i> Paste JSON
+            </button>
+        </div>
+    </div>
+    
+    <div class="api-config-hint" id="api-config">
+        <h3>API Configuration Required</h3>
+        <p>Please enter your API details for live responses:</p>
+        <input type="text" id="api-url" placeholder="API Endpoint URL" value="https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function">
+        <input type="password" id="api-key" placeholder="API Key">
+        <button id="save-api-config">Save Configuration</button>
+    </div>
+    
+    <div id="teacher-bubble" class="speech-bubble teacher"></div>
+    <div id="student-original-bubble" class="speech-bubble student-original"></div>
+    <div id="student-live-bubble" class="speech-bubble student-live"></div>
+    
+    <div class="loading" id="loading">Initializing classroom...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Teacher-Learner Activity World
+        class TeacherLearnerWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.teacher = null;
+                this.studentOriginal = null;
+                this.studentLive = null;
+                this.clock = new THREE.Clock();
+                
+                // Conversation state
+                this.conversationData = null;
+                this.currentIndex = 0;
+                this.isPlaying = false;
+                this.autoMode = false;
+                this.messages = [];
+                
+                // API configuration
+                this.apiUrl = localStorage.getItem('tlw_apiUrl') || '';
+                this.apiKey = localStorage.getItem('tlw_apiKey') || '';
+                
+                // UI elements
+                this.statusText = document.getElementById('status-text');
+                this.progressText = document.getElementById('progress-text');
+                this.uploadBtn = document.getElementById('upload-btn');
+                this.startBtn = document.getElementById('start-btn');
+                this.nextBtn = document.getElementById('next-btn');
+                this.resetBtn = document.getElementById('reset-btn');
+                this.autoToggle = document.getElementById('auto-toggle');
+                this.uploadOverlay = document.getElementById('upload-overlay');
+                this.dropZone = document.getElementById('drop-zone');
+                this.fileInput = document.getElementById('file-input');
+                this.apiConfig = document.getElementById('api-config');
+                this.teacherBubble = document.getElementById('teacher-bubble');
+                this.studentOriginalBubble = document.getElementById('student-original-bubble');
+                this.studentLiveBubble = document.getElementById('student-live-bubble');
+                
+                this.setupEventListeners();
+                this.init();
+            }
+            
+            setupEventListeners() {
+                this.uploadBtn.addEventListener('click', () => this.showUploadOverlay());
+                this.startBtn.addEventListener('click', () => this.startConversation());
+                this.nextBtn.addEventListener('click', () => this.nextStep());
+                this.resetBtn.addEventListener('click', () => this.resetConversation());
+                this.autoToggle.addEventListener('change', (e) => {
+                    this.autoMode = e.target.checked;
+                    if (this.autoMode && this.isPlaying) {
+                        this.scheduleNextStep();
+                    }
+                });
+                
+                // Upload handling
+                document.getElementById('close-upload').addEventListener('click', () => this.hideUploadOverlay());
+                this.dropZone.addEventListener('click', () => this.fileInput.click());
+                this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+                
+                // Drag and drop
+                this.dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    this.dropZone.classList.add('dragover');
+                });
+                
+                this.dropZone.addEventListener('dragleave', () => {
+                    this.dropZone.classList.remove('dragover');
+                });
+                
+                this.dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    this.dropZone.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        this.handleFile(e.dataTransfer.files[0]);
+                    }
+                });
+                
+                // Paste JSON button
+                document.getElementById('paste-json-btn').addEventListener('click', () => {
+                    const jsonText = prompt('Paste your conversation JSON:');
+                    if (jsonText) {
+                        try {
+                            const data = JSON.parse(jsonText);
+                            this.loadConversation(data);
+                        } catch (error) {
+                            alert('Invalid JSON format');
+                        }
+                    }
+                });
+                
+                // API configuration
+                document.getElementById('save-api-config').addEventListener('click', () => {
+                    this.apiUrl = document.getElementById('api-url').value;
+                    this.apiKey = document.getElementById('api-key').value;
+                    localStorage.setItem('tlw_apiUrl', this.apiUrl);
+                    localStorage.setItem('tlw_apiKey', this.apiKey);
+                    this.apiConfig.classList.remove('visible');
+                    this.updateStatus('API configured');
+                });
+                
+                // Window resize
+                window.addEventListener('resize', () => this.handleResize());
+            }
+            
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createClassroom();
+                this.createCharacters();
+                this.setupCamera();
+                this.animate();
+                
+                // Hide loading
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+                
+                // Check API configuration
+                if (!this.apiUrl || !this.apiKey) {
+                    this.apiConfig.classList.add('visible');
+                }
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x4a3a5a, 10, 50);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0x8888aa, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Main directional light (window light)
+                const sunLight = new THREE.DirectionalLight(0xffffcc, 0.8);
+                sunLight.position.set(5, 10, 5);
+                sunLight.castShadow = true;
+                sunLight.shadow.camera.near = 0.1;
+                sunLight.shadow.camera.far = 50;
+                sunLight.shadow.camera.left = -20;
+                sunLight.shadow.camera.right = 20;
+                sunLight.shadow.camera.top = 20;
+                sunLight.shadow.camera.bottom = -20;
+                this.scene.add(sunLight);
+                
+                // Classroom lights
+                const classLight1 = new THREE.PointLight(0xffeedd, 0.5, 20);
+                classLight1.position.set(-5, 8, -5);
+                this.scene.add(classLight1);
+                
+                const classLight2 = new THREE.PointLight(0xffeedd, 0.5, 20);
+                classLight2.position.set(5, 8, 5);
+                this.scene.add(classLight2);
+            }
+            
+            createClassroom() {
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(40, 40);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8b7355,
+                    roughness: 0.8
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Walls
+                const wallMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xf5f5dc,
+                    roughness: 0.9
+                });
+                
+                // Back wall
+                const backWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(40, 20),
+                    wallMaterial
+                );
+                backWall.position.set(0, 10, -20);
+                backWall.receiveShadow = true;
+                this.scene.add(backWall);
+                
+                // Side walls
+                const leftWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(40, 20),
+                    wallMaterial
+                );
+                leftWall.position.set(-20, 10, 0);
+                leftWall.rotation.y = Math.PI / 2;
+                leftWall.receiveShadow = true;
+                this.scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(40, 20),
+                    wallMaterial
+                );
+                rightWall.position.set(20, 10, 0);
+                rightWall.rotation.y = -Math.PI / 2;
+                rightWall.receiveShadow = true;
+                this.scene.add(rightWall);
+                
+                // Blackboard
+                const blackboardGeometry = new THREE.BoxGeometry(15, 8, 0.5);
+                const blackboardMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a1a,
+                    roughness: 0.3
+                });
+                const blackboard = new THREE.Mesh(blackboardGeometry, blackboardMaterial);
+                blackboard.position.set(0, 5, -19.5);
+                blackboard.castShadow = true;
+                this.scene.add(blackboard);
+                
+                // Teacher's desk
+                const deskGeometry = new THREE.BoxGeometry(4, 1, 2);
+                const deskMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8b4513,
+                    roughness: 0.7
+                });
+                const teacherDesk = new THREE.Mesh(deskGeometry, deskMaterial);
+                teacherDesk.position.set(0, 0.5, -15);
+                teacherDesk.castShadow = true;
+                this.scene.add(teacherDesk);
+                
+                // Student desks
+                const createStudentDesk = (x, z) => {
+                    const desk = new THREE.Mesh(
+                        new THREE.BoxGeometry(2, 0.8, 1.5),
+                        deskMaterial
+                    );
+                    desk.position.set(x, 0.4, z);
+                    desk.castShadow = true;
+                    
+                    const chair = new THREE.Mesh(
+                        new THREE.BoxGeometry(1.5, 0.5, 1.5),
+                        deskMaterial
+                    );
+                    chair.position.set(x, 0.25, z + 1.5);
+                    chair.castShadow = true;
+                    
+                    this.scene.add(desk);
+                    this.scene.add(chair);
+                };
+                
+                createStudentDesk(-5, -5);
+                createStudentDesk(5, -5);
+                
+                // Windows
+                const windowGeometry = new THREE.PlaneGeometry(4, 6);
+                const windowMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x87ceeb,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                
+                const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+                window1.position.set(-19.9, 8, -10);
+                window1.rotation.y = Math.PI / 2;
+                this.scene.add(window1);
+                
+                const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
+                window2.position.set(-19.9, 8, 0);
+                window2.rotation.y = Math.PI / 2;
+                this.scene.add(window2);
+            }
+            
+            createCharacters() {
+                // Teacher character
+                const teacherGroup = new THREE.Group();
+                
+                // Teacher body
+                const teacherBodyGeometry = new THREE.CylinderGeometry(0.8, 1, 3);
+                const teacherBodyMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x742774,
+                    roughness: 0.7
+                });
+                const teacherBody = new THREE.Mesh(teacherBodyGeometry, teacherBodyMaterial);
+                teacherBody.position.y = 1.5;
+                teacherBody.castShadow = true;
+                teacherGroup.add(teacherBody);
+                
+                // Teacher head
+                const teacherHeadGeometry = new THREE.SphereGeometry(0.6);
+                const teacherHeadMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xffdbac,
+                    roughness: 0.8
+                });
+                const teacherHead = new THREE.Mesh(teacherHeadGeometry, teacherHeadMaterial);
+                teacherHead.position.y = 3.5;
+                teacherHead.castShadow = true;
+                teacherGroup.add(teacherHead);
+                
+                // Teacher hat (academic cap)
+                const hatGeometry = new THREE.ConeGeometry(0.8, 0.3, 4);
+                const hatMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000
+                });
+                const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+                hat.position.y = 4.2;
+                hat.rotation.y = Math.PI / 4;
+                teacherGroup.add(hat);
+                
+                teacherGroup.position.set(0, 0, -12);
+                teacherGroup.userData.baseY = 0;
+                this.teacher = teacherGroup;
+                this.scene.add(teacherGroup);
+                
+                // Original Student
+                const studentOriginalGroup = new THREE.Group();
+                
+                const studentBodyGeometry = new THREE.CylinderGeometry(0.6, 0.8, 2.5);
+                const studentOriginalMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xe57200,
+                    roughness: 0.7
+                });
+                const studentOriginalBody = new THREE.Mesh(studentBodyGeometry, studentOriginalMaterial);
+                studentOriginalBody.position.y = 1.25;
+                studentOriginalBody.castShadow = true;
+                studentOriginalGroup.add(studentOriginalBody);
+                
+                const studentOriginalHead = new THREE.Mesh(teacherHeadGeometry, teacherHeadMaterial);
+                studentOriginalHead.position.y = 3;
+                studentOriginalHead.castShadow = true;
+                studentOriginalGroup.add(studentOriginalHead);
+                
+                studentOriginalGroup.position.set(-5, 0, -3);
+                studentOriginalGroup.userData.baseY = 0;
+                this.studentOriginal = studentOriginalGroup;
+                this.scene.add(studentOriginalGroup);
+                
+                // Live Student
+                const studentLiveGroup = new THREE.Group();
+                
+                const studentLiveMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x22a7f0,
+                    roughness: 0.7
+                });
+                const studentLiveBody = new THREE.Mesh(studentBodyGeometry, studentLiveMaterial);
+                studentLiveBody.position.y = 1.25;
+                studentLiveBody.castShadow = true;
+                studentLiveGroup.add(studentLiveBody);
+                
+                const studentLiveHead = new THREE.Mesh(teacherHeadGeometry, teacherHeadMaterial);
+                studentLiveHead.position.y = 3;
+                studentLiveHead.castShadow = true;
+                studentLiveGroup.add(studentLiveHead);
+                
+                studentLiveGroup.position.set(5, 0, -3);
+                studentLiveGroup.userData.baseY = 0;
+                this.studentLive = studentLiveGroup;
+                this.scene.add(studentLiveGroup);
+            }
+            
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                
+                // Set camera for a good classroom view
+                this.camera.position.set(0, 8, 15);
+                this.camera.lookAt(0, 2, -8);
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const deltaTime = this.clock.getDelta();
+                const time = this.clock.getElapsedTime();
+                
+                // Animate characters with subtle movements
+                if (this.teacher) {
+                    this.teacher.position.y = this.teacher.userData.baseY + Math.sin(time * 0.5) * 0.05;
+                    this.teacher.rotation.y = Math.sin(time * 0.3) * 0.1;
+                }
+                
+                if (this.studentOriginal) {
+                    this.studentOriginal.position.y = this.studentOriginal.userData.baseY + Math.sin(time * 0.4 + 1) * 0.05;
+                }
+                
+                if (this.studentLive) {
+                    this.studentLive.position.y = this.studentLive.userData.baseY + Math.sin(time * 0.4 + 2) * 0.05;
+                }
+                
+                // Update speech bubble positions
+                this.updateSpeechBubblePositions();
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            updateSpeechBubblePositions() {
+                // Convert 3D positions to 2D screen positions
+                const updateBubblePosition = (character, bubble, yOffset = 5) => {
+                    if (!character || !bubble) return;
+                    
+                    const position = new THREE.Vector3();
+                    character.getWorldPosition(position);
+                    position.y += yOffset;
+                    
+                    const screenPosition = position.project(this.camera);
+                    const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
+                    
+                    bubble.style.left = `${x}px`;
+                    bubble.style.top = `${y}px`;
+                    bubble.style.transform = 'translate(-50%, -100%)';
+                };
+                
+                updateBubblePosition(this.teacher, this.teacherBubble);
+                updateBubblePosition(this.studentOriginal, this.studentOriginalBubble);
+                updateBubblePosition(this.studentLive, this.studentLiveBubble);
+            }
+            
+            handleResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            showUploadOverlay() {
+                this.uploadOverlay.classList.add('visible');
+            }
+            
+            hideUploadOverlay() {
+                this.uploadOverlay.classList.remove('visible');
+            }
+            
+            handleFileSelect(event) {
+                if (event.target.files.length > 0) {
+                    this.handleFile(event.target.files[0]);
+                }
+            }
+            
+            handleFile(file) {
+                if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            this.loadConversation(data);
+                        } catch (error) {
+                            alert('Error parsing JSON file');
+                        }
+                    };
+                    reader.readAsText(file);
+                } else {
+                    alert('Please upload a JSON file');
+                }
+            }
+            
+            loadConversation(data) {
+                if (!data.conversation || !Array.isArray(data.conversation)) {
+                    alert('Invalid conversation format');
+                    return;
+                }
+                
+                this.conversationData = data;
+                this.resetConversation();
+                this.hideUploadOverlay();
+                this.updateStatus('Conversation loaded');
+                this.startBtn.disabled = false;
+                this.updateProgress();
+            }
+            
+            startConversation() {
+                if (!this.conversationData) return;
+                
+                this.isPlaying = true;
+                this.startBtn.disabled = true;
+                this.nextBtn.disabled = false;
+                this.resetBtn.disabled = false;
+                
+                this.nextStep();
+            }
+            
+            async nextStep() {
+                if (!this.isPlaying || this.currentIndex >= this.conversationData.conversation.length) {
+                    this.endConversation();
+                    return;
+                }
+                
+                const message = this.conversationData.conversation[this.currentIndex];
+                
+                if (message.role === 'user') {
+                    // Teacher speaks
+                    this.showSpeechBubble(this.teacherBubble, message.content);
+                    this.hideSpeechBubble(this.studentOriginalBubble);
+                    this.hideSpeechBubble(this.studentLiveBubble);
+                    this.updateStatus('Teacher speaking...');
+                    
+                    this.currentIndex++;
+                    this.updateProgress();
+                    
+                    if (this.autoMode) {
+                        this.scheduleNextStep(2000);
+                    }
+                } else if (message.role === 'assistant') {
+                    // Students respond
+                    this.updateStatus('Students responding...');
+                    
+                    // Show original response
+                    this.showSpeechBubble(this.studentOriginalBubble, message.content);
+                    this.hideSpeechBubble(this.teacherBubble);
+                    
+                    // Make live API call
+                    try {
+                        const historyUpToNow = this.conversationData.conversation.slice(0, this.currentIndex);
+                        const lastUserMessage = this.getLastUserMessage(historyUpToNow);
+                        
+                        if (lastUserMessage) {
+                            const liveResponse = await this.makeLiveApiCall(lastUserMessage, historyUpToNow);
+                            const liveContent = liveResponse.assistant_response || liveResponse.text || 'No response';
+                            this.showSpeechBubble(this.studentLiveBubble, liveContent);
+                        }
+                    } catch (error) {
+                        console.error('API call error:', error);
+                        this.showSpeechBubble(this.studentLiveBubble, 'Error: Could not generate response');
+                    }
+                    
+                    this.currentIndex++;
+                    this.updateProgress();
+                    
+                    if (this.autoMode) {
+                        this.scheduleNextStep(4000);
+                    }
+                }
+            }
+            
+            scheduleNextStep(delay = 2000) {
+                setTimeout(() => {
+                    if (this.isPlaying && this.autoMode) {
+                        this.nextStep();
+                    }
+                }, delay);
+            }
+            
+            getLastUserMessage(history) {
+                for (let i = history.length - 1; i >= 0; i--) {
+                    if (history[i].role === 'user') {
+                        return history[i].content;
+                    }
+                }
+                return null;
+            }
+            
+            async makeLiveApiCall(userMessage, conversationHistory) {
+                if (!this.apiUrl || !this.apiKey) {
+                    this.apiConfig.classList.add('visible');
+                    throw new Error('API not configured');
+                }
+                
+                const response = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: userMessage,
+                        conversation_history: conversationHistory,
+                        user_guid: this.conversationData.guid || null
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                return await response.json();
+            }
+            
+            showSpeechBubble(bubble, text) {
+                bubble.textContent = text.length > 150 ? text.substring(0, 150) + '...' : text;
+                bubble.classList.add('visible');
+            }
+            
+            hideSpeechBubble(bubble) {
+                bubble.classList.remove('visible');
+            }
+            
+            resetConversation() {
+                this.currentIndex = 0;
+                this.isPlaying = false;
+                this.startBtn.disabled = false;
+                this.nextBtn.disabled = true;
+                this.resetBtn.disabled = true;
+                
+                this.hideSpeechBubble(this.teacherBubble);
+                this.hideSpeechBubble(this.studentOriginalBubble);
+                this.hideSpeechBubble(this.studentLiveBubble);
+                
+                this.updateStatus('Ready to start');
+                this.updateProgress();
+            }
+            
+            endConversation() {
+                this.isPlaying = false;
+                this.updateStatus('Conversation complete');
+                this.startBtn.disabled = false;
+                this.nextBtn.disabled = true;
+            }
+            
+            updateStatus(text) {
+                this.statusText.textContent = text;
+            }
+            
+            updateProgress() {
+                const total = this.conversationData ? this.conversationData.conversation.length : 0;
+                this.progressText.textContent = `${this.currentIndex} / ${total}`;
+            }
+        }
+        
+        // Initialize world when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const world = new TeacherLearnerWorld();
+        });
+    </script>
+</body>
+</html>

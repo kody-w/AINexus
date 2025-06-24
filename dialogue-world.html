@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Philosophical Dialogue World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #8b4513, #ff6347, #ffd700);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 400px;
+        }
+
+        .dialogue-panel {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 800px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid rgba(139, 69, 19, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 1002;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .dialogue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .dialogue-title {
+            color: #ffd700;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .dialogue-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .dialogue-button {
+            background: rgba(139, 69, 19, 0.8);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            pointer-events: auto;
+        }
+
+        .dialogue-button:hover {
+            background: rgba(139, 69, 19, 1);
+            transform: translateY(-2px);
+        }
+
+        .dialogue-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .dialogue-message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 10px;
+            position: relative;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dialogue-message.socrates {
+            background: rgba(70, 130, 180, 0.3);
+            border-left: 3px solid #4682b4;
+            margin-right: 20%;
+        }
+
+        .dialogue-message.glaucon {
+            background: rgba(178, 34, 34, 0.3);
+            border-left: 3px solid #b22222;
+            margin-left: 20%;
+        }
+
+        .speaker-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #ffd700;
+            font-size: 0.9em;
+        }
+
+        .message-content {
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .topic-input-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid rgba(139, 69, 19, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            z-index: 2000;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            display: none;
+        }
+
+        .topic-input-panel.visible {
+            display: block;
+        }
+
+        .topic-input-panel h2 {
+            color: #ffd700;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .topic-input-panel p {
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95em;
+        }
+
+        .topic-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+
+        .topic-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .topic-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .preset-button {
+            background: rgba(139, 69, 19, 0.6);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+        }
+
+        .preset-button:hover {
+            background: rgba(139, 69, 19, 0.8);
+            border-color: rgba(255, 215, 0, 0.6);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .action-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-button.primary {
+            background: #8b4513;
+            color: white;
+        }
+
+        .action-button.primary:hover {
+            background: #a0522d;
+        }
+
+        .action-button.secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .action-button.secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .config-panel {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 1001;
+            display: none;
+        }
+
+        .config-panel.visible {
+            display: block;
+        }
+
+        .config-button {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1002;
+            transition: all 0.3s;
+        }
+
+        .config-button:hover {
+            background: rgba(139, 69, 19, 0.8);
+        }
+
+        .config-field {
+            margin-bottom: 15px;
+        }
+
+        .config-field label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ffd700;
+            font-size: 0.9em;
+        }
+
+        .config-field input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 60px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #8b4513;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .thinking-indicator {
+            display: inline-block;
+            margin-left: 5px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .thinking-indicator.visible {
+            opacity: 1;
+        }
+
+        .thinking-indicator span {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background: #ffd700;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: thinking 1.4s infinite ease-in-out;
+        }
+
+        .thinking-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes thinking {
+            0%, 60%, 100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+            30% {
+                transform: scale(1.5);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 1.8em;
+            }
+            
+            .dialogue-panel {
+                width: 95%;
+                max-height: 250px;
+            }
+            
+            .topic-presets {
+                gap: 5px;
+            }
+            
+            .preset-button {
+                font-size: 0.8em;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title">DIALOGUE WORLD</h1>
+        <p class="world-description">Witness philosophical discussions by the campfire</p>
+    </div>
+    
+    <button class="config-button" id="config-button">⚙️</button>
+    
+    <div class="config-panel" id="config-panel">
+        <h3 style="color: #ffd700; margin-bottom: 15px;">API Configuration</h3>
+        <div class="config-field">
+            <label for="api-url">API Endpoint</label>
+            <input type="text" id="api-url" placeholder="Enter API URL">
+        </div>
+        <div class="config-field">
+            <label for="api-key">API Key</label>
+            <input type="password" id="api-key" placeholder="Enter API Key">
+        </div>
+        <button class="dialogue-button" id="save-config">Save</button>
+    </div>
+    
+    <div class="topic-input-panel visible" id="topic-panel">
+        <h2>Choose a Discussion Topic</h2>
+        <p>Enter a topic for the philosophers to discuss, or choose from the presets below:</p>
+        
+        <input type="text" class="topic-input" id="topic-input" 
+               placeholder="e.g., What is justice?" 
+               value="What is justice? Let us discuss as in Plato's Republic">
+        
+        <div class="topic-presets">
+            <button class="preset-button" data-topic="What is justice? Let us discuss as in Plato's Republic">Plato's Justice</button>
+            <button class="preset-button" data-topic="What is the nature of reality?">Nature of Reality</button>
+            <button class="preset-button" data-topic="What makes a life worth living?">Meaning of Life</button>
+            <button class="preset-button" data-topic="Can we have knowledge of the external world?">Knowledge & Truth</button>
+            <button class="preset-button" data-topic="What is consciousness?">Consciousness</button>
+            <button class="preset-button" data-topic="Do we have free will?">Free Will</button>
+        </div>
+        
+        <div class="action-buttons">
+            <button class="action-button primary" id="start-dialogue">Begin Dialogue</button>
+            <button class="action-button secondary" id="default-dialogue">Use Default Scene</button>
+        </div>
+    </div>
+    
+    <div class="dialogue-panel" id="dialogue-panel" style="display: none;">
+        <div class="dialogue-header">
+            <div class="dialogue-title">Philosophical Dialogue</div>
+            <div class="dialogue-controls">
+                <button class="dialogue-button" id="pause-btn">Pause</button>
+                <button class="dialogue-button" id="restart-btn">New Topic</button>
+            </div>
+        </div>
+        <div id="dialogue-content">
+            <!-- Dialogue messages will appear here -->
+        </div>
+        <div class="thinking-indicator" id="thinking">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">Creating the ancient scene...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        class DialogueWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.socrates = null;
+                this.glaucon = null;
+                this.campfire = null;
+                this.clock = new THREE.Clock();
+                
+                // Dialogue state
+                this.currentTopic = '';
+                this.conversationHistory = [];
+                this.isDialogueActive = false;
+                this.isPaused = false;
+                this.currentSpeaker = 'socrates';
+                
+                // API configuration
+                this.apiUrl = localStorage.getItem('dw_apiUrl') || 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.apiKey = localStorage.getItem('dw_apiKey') || '';
+                
+                // UI elements
+                this.topicPanel = document.getElementById('topic-panel');
+                this.dialoguePanel = document.getElementById('dialogue-panel');
+                this.dialogueContent = document.getElementById('dialogue-content');
+                this.topicInput = document.getElementById('topic-input');
+                this.configPanel = document.getElementById('config-panel');
+                this.configButton = document.getElementById('config-button');
+                this.apiUrlInput = document.getElementById('api-url');
+                this.apiKeyInput = document.getElementById('api-key');
+                this.thinkingIndicator = document.getElementById('thinking');
+                
+                this.setupEventListeners();
+                this.init();
+            }
+            
+            setupEventListeners() {
+                // Topic selection
+                document.getElementById('start-dialogue').addEventListener('click', () => {
+                    const topic = this.topicInput.value.trim();
+                    if (topic) {
+                        this.startDialogue(topic);
+                    }
+                });
+                
+                document.getElementById('default-dialogue').addEventListener('click', () => {
+                    this.startDialogue("What is justice? Let us discuss as in Plato's Republic");
+                });
+                
+                // Preset buttons
+                document.querySelectorAll('.preset-button').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        this.topicInput.value = e.target.dataset.topic;
+                    });
+                });
+                
+                // Dialogue controls
+                document.getElementById('pause-btn').addEventListener('click', () => {
+                    this.togglePause();
+                });
+                
+                document.getElementById('restart-btn').addEventListener('click', () => {
+                    this.resetDialogue();
+                });
+                
+                // Config panel
+                this.configButton.addEventListener('click', () => {
+                    this.configPanel.classList.toggle('visible');
+                    this.apiUrlInput.value = this.apiUrl;
+                    this.apiKeyInput.value = this.apiKey;
+                });
+                
+                document.getElementById('save-config').addEventListener('click', () => {
+                    this.apiUrl = this.apiUrlInput.value;
+                    this.apiKey = this.apiKeyInput.value;
+                    localStorage.setItem('dw_apiUrl', this.apiUrl);
+                    localStorage.setItem('dw_apiKey', this.apiKey);
+                    this.configPanel.classList.remove('visible');
+                });
+                
+                // Window resize
+                window.addEventListener('resize', () => this.handleResize());
+            }
+            
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createEnvironment();
+                this.createCharacters();
+                this.createCampfire();
+                this.setupCamera();
+                this.animate();
+                
+                // Hide loading
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1500);
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x0a0a0a, 10, 100);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 0.8;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Minimal ambient light for night scene
+                const ambientLight = new THREE.AmbientLight(0x1a1a2e, 0.2);
+                this.scene.add(ambientLight);
+                
+                // Moonlight
+                const moonLight = new THREE.DirectionalLight(0x4169e1, 0.3);
+                moonLight.position.set(10, 30, -10);
+                moonLight.castShadow = true;
+                moonLight.shadow.camera.near = 0.1;
+                moonLight.shadow.camera.far = 100;
+                moonLight.shadow.camera.left = -30;
+                moonLight.shadow.camera.right = 30;
+                moonLight.shadow.camera.top = 30;
+                moonLight.shadow.camera.bottom = -30;
+                this.scene.add(moonLight);
+                
+                // Stars
+                const starsGeometry = new THREE.BufferGeometry();
+                const starsCount = 2000;
+                const positions = new Float32Array(starsCount * 3);
+                
+                for (let i = 0; i < starsCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 200;
+                    positions[i + 1] = Math.random() * 100 + 20;
+                    positions[i + 2] = (Math.random() - 0.5) * 200;
+                }
+                
+                starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const starsMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 0.5,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const stars = new THREE.Points(starsGeometry, starsMaterial);
+                this.scene.add(stars);
+            }
+            
+            createEnvironment() {
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x2a1810,
+                    roughness: 0.9
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                
+                // Add some height variation
+                const vertices = ground.geometry.attributes.position;
+                for (let i = 0; i < vertices.count; i++) {
+                    const x = vertices.getX(i);
+                    const y = vertices.getY(i);
+                    const distance = Math.sqrt(x * x + y * y);
+                    vertices.setZ(i, Math.sin(distance * 0.1) * 0.3 + Math.random() * 0.2);
+                }
+                ground.geometry.computeVertexNormals();
+                
+                this.scene.add(ground);
+                
+                // Rocks around campfire
+                const rockGeometry = new THREE.DodecahedronGeometry(1);
+                const rockMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x444444,
+                    roughness: 0.9
+                });
+                
+                for (let i = 0; i < 8; i++) {
+                    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                    const angle = (i / 8) * Math.PI * 2;
+                    const radius = 4 + Math.random() * 0.5;
+                    rock.position.set(
+                        Math.cos(angle) * radius,
+                        0.3,
+                        Math.sin(angle) * radius
+                    );
+                    rock.scale.set(
+                        0.8 + Math.random() * 0.4,
+                        0.6 + Math.random() * 0.3,
+                        0.8 + Math.random() * 0.4
+                    );
+                    rock.rotation.set(
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI
+                    );
+                    rock.castShadow = true;
+                    rock.receiveShadow = true;
+                    this.scene.add(rock);
+                }
+                
+                // Trees in the background
+                const createTree = (x, z) => {
+                    const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 5);
+                    const trunkMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x4a3426,
+                        roughness: 0.9
+                    });
+                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                    trunk.position.set(x, 2.5, z);
+                    trunk.castShadow = true;
+                    this.scene.add(trunk);
+                    
+                    const foliageGeometry = new THREE.ConeGeometry(3, 6, 8);
+                    const foliageMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x1a3a1a,
+                        roughness: 0.8
+                    });
+                    const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+                    foliage.position.set(x, 6, z);
+                    foliage.castShadow = true;
+                    this.scene.add(foliage);
+                };
+                
+                // Place trees around the scene
+                for (let i = 0; i < 15; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 15 + Math.random() * 20;
+                    createTree(
+                        Math.cos(angle) * distance,
+                        Math.sin(angle) * distance
+                    );
+                }
+            }
+            
+            createCharacters() {
+                // Socrates
+                const socratesGroup = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.6, 0.8, 2.5);
+                const socratesMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x4682b4,
+                    roughness: 0.7
+                });
+                const socratesBody = new THREE.Mesh(bodyGeometry, socratesMaterial);
+                socratesBody.position.y = 1.25;
+                socratesBody.castShadow = true;
+                socratesGroup.add(socratesBody);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.5);
+                const skinMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xffdbac,
+                    roughness: 0.8
+                });
+                const socratesHead = new THREE.Mesh(headGeometry, skinMaterial);
+                socratesHead.position.y = 2.8;
+                socratesHead.castShadow = true;
+                socratesGroup.add(socratesHead);
+                
+                // Beard
+                const beardGeometry = new THREE.ConeGeometry(0.4, 0.8, 8);
+                const beardMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xcccccc,
+                    roughness: 0.9
+                });
+                const beard = new THREE.Mesh(beardGeometry, beardMaterial);
+                beard.position.y = 2.4;
+                beard.position.z = 0.3;
+                socratesGroup.add(beard);
+                
+                socratesGroup.position.set(-3, 0, 0);
+                socratesGroup.rotation.y = Math.PI / 4;
+                socratesGroup.userData.baseY = 0;
+                this.socrates = socratesGroup;
+                this.scene.add(socratesGroup);
+                
+                // Glaucon
+                const glauconGroup = new THREE.Group();
+                
+                const glauconMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xb22222,
+                    roughness: 0.7
+                });
+                const glauconBody = new THREE.Mesh(bodyGeometry, glauconMaterial);
+                glauconBody.position.y = 1.25;
+                glauconBody.castShadow = true;
+                glauconGroup.add(glauconBody);
+                
+                const glauconHead = new THREE.Mesh(headGeometry, skinMaterial);
+                glauconHead.position.y = 2.8;
+                glauconHead.castShadow = true;
+                glauconGroup.add(glauconHead);
+                
+                glauconGroup.position.set(3, 0, 0);
+                glauconGroup.rotation.y = -Math.PI / 4;
+                glauconGroup.userData.baseY = 0;
+                this.glaucon = glauconGroup;
+                this.scene.add(glauconGroup);
+            }
+            
+            createCampfire() {
+                const campfireGroup = new THREE.Group();
+                
+                // Fire base (logs)
+                const logGeometry = new THREE.CylinderGeometry(0.15, 0.15, 2);
+                const logMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x3a2317,
+                    roughness: 0.9
+                });
+                
+                for (let i = 0; i < 4; i++) {
+                    const log = new THREE.Mesh(logGeometry, logMaterial);
+                    const angle = (i / 4) * Math.PI;
+                    log.position.set(
+                        Math.cos(angle) * 0.3,
+                        0.1,
+                        Math.sin(angle) * 0.3
+                    );
+                    log.rotation.z = Math.PI / 2;
+                    log.rotation.y = angle;
+                    log.castShadow = true;
+                    campfireGroup.add(log);
+                }
+                
+                // Fire light
+                const fireLight = new THREE.PointLight(0xff6600, 2, 10);
+                fireLight.position.y = 0.5;
+                fireLight.castShadow = true;
+                campfireGroup.add(fireLight);
+                
+                // Additional warm light
+                const warmLight = new THREE.PointLight(0xffaa00, 1, 15);
+                warmLight.position.y = 1;
+                campfireGroup.add(warmLight);
+                
+                // Fire particles
+                const particlesGeometry = new THREE.BufferGeometry();
+                const particlesCount = 100;
+                const positions = new Float32Array(particlesCount * 3);
+                const colors = new Float32Array(particlesCount * 3);
+                
+                for (let i = 0; i < particlesCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 0.5;
+                    positions[i + 1] = Math.random() * 2;
+                    positions[i + 2] = (Math.random() - 0.5) * 0.5;
+                    
+                    const intensity = Math.random();
+                    colors[i] = 1;
+                    colors[i + 1] = 0.5 + intensity * 0.5;
+                    colors[i + 2] = intensity * 0.3;
+                }
+                
+                particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const particlesMaterial = new THREE.PointsMaterial({
+                    size: 0.1,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const fireParticles = new THREE.Points(particlesGeometry, particlesMaterial);
+                campfireGroup.add(fireParticles);
+                
+                campfireGroup.userData = { fireLight, warmLight, fireParticles };
+                this.campfire = campfireGroup;
+                this.scene.add(campfireGroup);
+            }
+            
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                
+                this.camera.position.set(0, 5, 12);
+                this.camera.lookAt(0, 1, 0);
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                // Animate characters
+                if (this.socrates) {
+                    this.socrates.position.y = this.socrates.userData.baseY + Math.sin(time * 0.5) * 0.05;
+                    if (this.currentSpeaker === 'socrates' && this.isDialogueActive) {
+                        this.socrates.rotation.y = Math.PI / 4 + Math.sin(time * 2) * 0.1;
+                    }
+                }
+                
+                if (this.glaucon) {
+                    this.glaucon.position.y = this.glaucon.userData.baseY + Math.sin(time * 0.5 + 1) * 0.05;
+                    if (this.currentSpeaker === 'glaucon' && this.isDialogueActive) {
+                        this.glaucon.rotation.y = -Math.PI / 4 + Math.sin(time * 2) * 0.1;
+                    }
+                }
+                
+                // Animate campfire
+                if (this.campfire) {
+                    const { fireLight, warmLight, fireParticles } = this.campfire.userData;
+                    
+                    // Flicker lights
+                    fireLight.intensity = 2 + Math.sin(time * 10) * 0.5 + Math.sin(time * 20) * 0.2;
+                    warmLight.intensity = 1 + Math.sin(time * 8) * 0.3;
+                    
+                    // Animate particles
+                    const positions = fireParticles.geometry.attributes.position;
+                    for (let i = 0; i < positions.count; i++) {
+                        const y = positions.getY(i);
+                        positions.setY(i, (y + 0.02) % 2);
+                        
+                        const x = positions.getX(i);
+                        positions.setX(i, x + Math.sin(time + i) * 0.001);
+                    }
+                    positions.needsUpdate = true;
+                }
+                
+                // Gentle camera movement
+                this.camera.position.x = Math.sin(time * 0.1) * 2;
+                this.camera.position.y = 5 + Math.sin(time * 0.15) * 0.5;
+                this.camera.lookAt(0, 1, 0);
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            handleResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            async startDialogue(topic) {
+                this.currentTopic = topic;
+                this.conversationHistory = [];
+                this.isDialogueActive = true;
+                this.isPaused = false;
+                
+                // Hide topic panel, show dialogue panel
+                this.topicPanel.classList.remove('visible');
+                this.dialoguePanel.style.display = 'block';
+                this.dialogueContent.innerHTML = '';
+                
+                // Add initial context
+                this.addMessage('system', 'Setting', `The scene: A campfire discussion in ancient Athens. Topic: "${topic}"`);
+                
+                // Start the dialogue
+                await this.continueDialogue();
+            }
+            
+            async continueDialogue() {
+                if (!this.isDialogueActive || this.isPaused) return;
+                
+                // Show thinking indicator
+                this.thinkingIndicator.classList.add('visible');
+                
+                try {
+                    // Determine current speaker and persona
+                    const speaker = this.currentSpeaker;
+                    const persona = speaker === 'socrates' 
+                        ? "You are Socrates, the ancient Greek philosopher known for the Socratic method. Respond thoughtfully, ask probing questions, and guide the discussion toward truth."
+                        : "You are Glaucon, Plato's brother and student of Socrates. Engage earnestly with the questions, offer your perspectives, and sometimes challenge ideas respectfully.";
+                    
+                    // Create the prompt
+                    const prompt = this.conversationHistory.length === 0
+                        ? `${persona} Begin a philosophical dialogue about: ${this.currentTopic}`
+                        : `${persona} Continue the philosophical dialogue. Respond to the previous statement.`;
+                    
+                    // Make API call
+                    const response = await this.makeApiCall(prompt);
+                    
+                    // Add the response to the dialogue
+                    this.addMessage(speaker, speaker === 'socrates' ? 'Socrates' : 'Glaucon', response);
+                    
+                    // Switch speakers
+                    this.currentSpeaker = speaker === 'socrates' ? 'glaucon' : 'socrates';
+                    
+                    // Continue dialogue after a pause
+                    if (this.conversationHistory.length < 20) { // Limit conversation length
+                        setTimeout(() => this.continueDialogue(), 3000);
+                    } else {
+                        this.addMessage('system', 'End', 'The dialogue continues into the night...');
+                        this.isDialogueActive = false;
+                    }
+                    
+                } catch (error) {
+                    console.error('Dialogue error:', error);
+                    this.addMessage('system', 'Error', 'The dialogue has been interrupted.');
+                    this.isDialogueActive = false;
+                } finally {
+                    this.thinkingIndicator.classList.remove('visible');
+                }
+            }
+            
+            async makeApiCall(prompt) {
+                if (!this.apiUrl || !this.apiKey) {
+                    throw new Error('API not configured');
+                }
+                
+                const response = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: prompt,
+                        conversation_history: this.conversationHistory
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.assistant_response || data.text || 'No response';
+            }
+            
+            addMessage(type, speaker, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `dialogue-message ${type}`;
+                
+                if (type !== 'system') {
+                    messageDiv.innerHTML = `
+                        <div class="speaker-name">${speaker}:</div>
+                        <div class="message-content">${content}</div>
+                    `;
+                    
+                    // Add to conversation history
+                    this.conversationHistory.push({
+                        role: type === 'socrates' ? 'assistant' : 'user',
+                        content: `${speaker}: ${content}`
+                    });
+                } else {
+                    messageDiv.innerHTML = `<div class="message-content"><em>${content}</em></div>`;
+                }
+                
+                this.dialogueContent.appendChild(messageDiv);
+                this.dialogueContent.scrollTop = this.dialogueContent.scrollHeight;
+            }
+            
+            togglePause() {
+                this.isPaused = !this.isPaused;
+                document.getElementById('pause-btn').textContent = this.isPaused ? 'Resume' : 'Pause';
+                
+                if (!this.isPaused && this.isDialogueActive) {
+                    this.continueDialogue();
+                }
+            }
+            
+            resetDialogue() {
+                this.isDialogueActive = false;
+                this.isPaused = false;
+                this.currentSpeaker = 'socrates';
+                this.conversationHistory = [];
+                
+                // Show topic panel, hide dialogue panel
+                this.topicPanel.classList.add('visible');
+                this.dialoguePanel.style.display = 'none';
+                this.dialogueContent.innerHTML = '';
+            }
+        }
+        
+        // Initialize world when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const world = new DialogueWorld();
+        });
+    </script>
+</body>
+</html>
