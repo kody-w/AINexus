@@ -199,6 +199,14 @@
             border: 1px solid rgba(255, 107, 53, 0.3);
         }
 
+        .message.system {
+            background: rgba(100, 100, 255, 0.2);
+            margin: 0 auto;
+            border: 1px solid rgba(100, 100, 255, 0.3);
+            text-align: center;
+            font-size: 0.9em;
+        }
+
         .message-sender {
             font-size: 0.8em;
             opacity: 0.7;
@@ -487,9 +495,8 @@
         const REPO_NAME = 'AINexus';
         const BRANCH = 'main';
         
-        // Azure Function App endpoint - REPLACE WITH YOUR ACTUAL ENDPOINT
-        const AI_ENDPOINT = 'https://your-function-app.azurewebsites.net/api/businessinsightbot_function';
-        const FUNCTION_KEY = 'your-function-key-here'; // Add your function key
+        // Azure Function App endpoint
+        const AI_ENDPOINT = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
         
         // World attributes
         const DEFAULT_WORLD_ATTRIBUTES = {
@@ -598,6 +605,8 @@
                 
                 this.conversationHistory = [];
                 this.isTyping = false;
+                this.apiKey = localStorage.getItem('dojoApiKey') || null;
+                this.isWaitingForKey = false;
                 
                 this.setupChatEventListeners();
             }
@@ -616,6 +625,26 @@
             async sendMessage() {
                 const message = this.chatInput.value.trim();
                 if (!message || this.isTyping) return;
+                
+                // If we're waiting for an API key
+                if (this.isWaitingForKey) {
+                    this.apiKey = message;
+                    localStorage.setItem('dojoApiKey', this.apiKey);
+                    this.addMessageToChat('system', 'System', 'API key saved successfully! You can now chat with Master Takeshi.');
+                    this.chatInput.placeholder = 'Ask the Sensei for wisdom...';
+                    this.chatInput.value = '';
+                    this.isWaitingForKey = false;
+                    return;
+                }
+                
+                // Check if we need to request API key
+                if (!this.apiKey) {
+                    this.addMessageToChat('system', 'System', 'Please provide your Azure Function API key to continue. Your key will be stored locally for future sessions.');
+                    this.chatInput.placeholder = 'Enter your API key here...';
+                    this.chatInput.value = '';
+                    this.isWaitingForKey = true;
+                    return;
+                }
                 
                 // Add user message to chat
                 this.addMessageToChat('user', 'You', message);
@@ -637,7 +666,16 @@
                 } catch (error) {
                     console.error('Error calling AI endpoint:', error);
                     this.hideTypingIndicator();
-                    this.addMessageToChat('sensei', 'Master Takeshi', 'The spiritual connection is weak. Please try speaking to me again.');
+                    
+                    if (error.message.includes('401') || error.message.includes('403')) {
+                        this.addMessageToChat('system', 'System', 'API key authentication failed. Please provide a valid API key.');
+                        this.apiKey = null;
+                        localStorage.removeItem('dojoApiKey');
+                        this.chatInput.placeholder = 'Enter your API key here...';
+                        this.isWaitingForKey = true;
+                    } else {
+                        this.addMessageToChat('sensei', 'Master Takeshi', 'The spiritual connection is weak. Please try speaking to me again.');
+                    }
                 }
             }
             
@@ -651,7 +689,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-functions-key': FUNCTION_KEY
+                        'x-functions-key': this.apiKey
                     },
                     body: JSON.stringify(payload)
                 });
@@ -674,15 +712,17 @@
                 this.chatMessages.insertBefore(messageElement, this.typingIndicator);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
                 
-                // Add to conversation history
-                this.conversationHistory.push({
-                    role: type === 'user' ? 'user' : 'assistant',
-                    content: message
-                });
-                
-                // Keep conversation history manageable
-                if (this.conversationHistory.length > 20) {
-                    this.conversationHistory = this.conversationHistory.slice(-10);
+                // Add to conversation history (except system messages)
+                if (type !== 'system') {
+                    this.conversationHistory.push({
+                        role: type === 'user' ? 'user' : 'assistant',
+                        content: message
+                    });
+                    
+                    // Keep conversation history manageable
+                    if (this.conversationHistory.length > 20) {
+                        this.conversationHistory = this.conversationHistory.slice(-10);
+                    }
                 }
             }
             
@@ -711,6 +751,15 @@
             openChatInterface() {
                 this.chatInterface.classList.add('visible');
                 this.chatInput.focus();
+                
+                // Show initial key request if needed
+                if (!this.apiKey) {
+                    setTimeout(() => {
+                        this.addMessageToChat('system', 'System', 'Please provide your Azure Function API key to continue. Your key will be stored locally for future sessions.');
+                        this.chatInput.placeholder = 'Enter your API key here...';
+                        this.isWaitingForKey = true;
+                    }, 100);
+                }
             }
             
             closeChatInterface() {
@@ -817,836 +866,698 @@
                     this.worlds.unshift({
                         name: "Nexus Hub",
                         description: "Return to the central hub",
-                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/index.html`
+                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/nexus_hub.html`,
+                        raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/nexus_hub.html`
                     });
                     
-                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    // Limit to 4 portals
+                    this.worlds = this.worlds.slice(0, 4);
                     
+                    console.log(`Loaded ${this.worlds.length} worlds`);
                 } catch (error) {
-                    console.error("Error loading worlds:", error);
-                    this.worlds = this.getDemoWorlds();
+                    console.error('Error loading worlds:', error);
+                    this.worlds = [{
+                        name: "Nexus Hub",
+                        description: "Return to the central hub",
+                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/nexus_hub.html`,
+                        raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/nexus_hub.html`
+                    }];
                 }
             }
             
             formatWorldName(filename) {
                 return filename
                     .replace('.html', '')
-                    .replace(/[-_]/g, ' ')
-                    .replace(/\b\w/g, l => l.toUpperCase());
-            }
-            
-            getDemoWorlds() {
-                return [
-                    { name: "Nexus Hub", description: "Return to the central hub" },
-                    { name: "Crystal Caves", description: "Explore glowing crystal caverns" },
-                    { name: "Sky Islands", description: "Float among the clouds" }
-                ];
+                    .replace(/_/g, ' ')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
             }
             
             createDojoEnvironment() {
-                // Dojo floor (tatami mats)
-                const floorGeometry = new THREE.PlaneGeometry(40, 40);
-                const floorMaterial = new THREE.MeshStandardMaterial({
+                // Wooden floor
+                const floorGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
                     color: CURRENT_WORLD.groundColor,
                     roughness: 0.8,
                     metalness: 0.1
                 });
-                
                 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
                 floor.receiveShadow = true;
                 this.scene.add(floor);
                 
-                // Dojo walls
-                this.createWalls();
+                // Tatami mat area (training area)
+                const matGeometry = new THREE.BoxGeometry(20, 0.2, 20);
+                const matMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xdaa520,
+                    roughness: 0.9
+                });
+                const mat = new THREE.Mesh(matGeometry, matMaterial);
+                mat.position.y = 0.1;
+                mat.receiveShadow = true;
+                mat.castShadow = true;
+                this.scene.add(mat);
+                
+                // Dojo walls (simple frames)
+                const createWall = (x, z, rotY) => {
+                    const wallGroup = new THREE.Group();
+                    
+                    // Pillars
+                    const pillarGeometry = new THREE.BoxGeometry(0.5, 10, 0.5);
+                    const pillarMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x4a3528,
+                        roughness: 0.7
+                    });
+                    
+                    for (let i = -15; i <= 15; i += 10) {
+                        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                        pillar.position.set(i, 5, 0);
+                        pillar.castShadow = true;
+                        wallGroup.add(pillar);
+                    }
+                    
+                    // Horizontal beams
+                    const beamGeometry = new THREE.BoxGeometry(30, 0.5, 0.5);
+                    const beamMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x654321,
+                        roughness: 0.7
+                    });
+                    
+                    const topBeam = new THREE.Mesh(beamGeometry, beamMaterial);
+                    topBeam.position.y = 9.5;
+                    topBeam.castShadow = true;
+                    wallGroup.add(topBeam);
+                    
+                    wallGroup.position.set(x, 0, z);
+                    wallGroup.rotation.y = rotY;
+                    
+                    return wallGroup;
+                };
+                
+                // Add walls
+                this.scene.add(createWall(0, -25, 0));
+                this.scene.add(createWall(0, 25, 0));
+                this.scene.add(createWall(-25, 0, Math.PI / 2));
+                this.scene.add(createWall(25, 0, Math.PI / 2));
                 
                 // Training equipment
-                this.createTrainingEquipment();
+                const createTrainingDummy = (x, z) => {
+                    const dummyGroup = new THREE.Group();
+                    
+                    // Body
+                    const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3);
+                    const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x8b4513,
+                        roughness: 0.8
+                    });
+                    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                    body.position.y = 1.5;
+                    body.castShadow = true;
+                    dummyGroup.add(body);
+                    
+                    // Head
+                    const headGeometry = new THREE.SphereGeometry(0.4);
+                    const head = new THREE.Mesh(headGeometry, bodyMaterial);
+                    head.position.y = 3.2;
+                    head.castShadow = true;
+                    dummyGroup.add(head);
+                    
+                    // Arms
+                    const armGeometry = new THREE.BoxGeometry(2, 0.3, 0.3);
+                    const arms = new THREE.Mesh(armGeometry, bodyMaterial);
+                    arms.position.y = 2.5;
+                    arms.castShadow = true;
+                    dummyGroup.add(arms);
+                    
+                    dummyGroup.position.set(x, 0, z);
+                    return dummyGroup;
+                };
                 
-                // Decorative elements
-                this.createDecorations();
+                // Add training dummies
+                this.scene.add(createTrainingDummy(-8, -8));
+                this.scene.add(createTrainingDummy(8, -8));
                 
-                // Meditation platform for sensei
-                const platformGeometry = new THREE.CylinderGeometry(3, 3, 0.2, 16);
-                const platformMaterial = new THREE.MeshStandardMaterial({
+                // Weapon rack
+                const rackGroup = new THREE.Group();
+                const rackGeometry = new THREE.BoxGeometry(4, 0.1, 0.5);
+                const rackMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0x654321,
                     roughness: 0.7
                 });
-                this.senseiPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
-                this.senseiPlatform.position.set(0, 0.1, -8);
-                this.senseiPlatform.receiveShadow = true;
-                this.senseiPlatform.castShadow = true;
-                this.scene.add(this.senseiPlatform);
                 
-                // Floating particles (incense smoke)
-                const particleGeometry = new THREE.BufferGeometry();
-                const particleCount = CURRENT_WORLD.particleCount;
-                const positions = new Float32Array(particleCount * 3);
-                
-                for (let i = 0; i < particleCount * 3; i += 3) {
-                    positions[i] = (Math.random() - 0.5) * 30;
-                    positions[i + 1] = Math.random() * 20;
-                    positions[i + 2] = (Math.random() - 0.5) * 30;
+                for (let i = 0; i < 3; i++) {
+                    const rack = new THREE.Mesh(rackGeometry, rackMaterial);
+                    rack.position.set(-20, 2 + i * 1.5, -20);
+                    rack.castShadow = true;
+                    rackGroup.add(rack);
                 }
+                this.scene.add(rackGroup);
                 
-                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
-                const particleMaterial = new THREE.PointsMaterial({
+                // Decorative elements
+                const scrollGeometry = new THREE.BoxGeometry(2, 3, 0.1);
+                const scrollMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0xffd700,
-                    size: 0.2,
-                    transparent: true,
-                    opacity: 0.6
+                    emissive: 0xffd700,
+                    emissiveIntensity: 0.1
                 });
-                
-                this.particles = new THREE.Points(particleGeometry, particleMaterial);
-                this.scene.add(this.particles);
-            }
-            
-            createWalls() {
-                const wallHeight = 8;
-                const wallMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x8b7355,
-                    roughness: 0.8
-                });
-                
-                // Four walls
-                const walls = [
-                    { pos: [0, wallHeight/2, -20], size: [40, wallHeight, 1] },
-                    { pos: [0, wallHeight/2, 20], size: [40, wallHeight, 1] },
-                    { pos: [-20, wallHeight/2, 0], size: [1, wallHeight, 40] },
-                    { pos: [20, wallHeight/2, 0], size: [1, wallHeight, 40] }
-                ];
-                
-                walls.forEach(wall => {
-                    const geometry = new THREE.BoxGeometry(...wall.size);
-                    const mesh = new THREE.Mesh(geometry, wallMaterial);
-                    mesh.position.set(...wall.pos);
-                    mesh.receiveShadow = true;
-                    mesh.castShadow = true;
-                    this.scene.add(mesh);
-                });
-                
-                // Wooden beams
-                for (let i = 0; i < 4; i++) {
-                    const beamGeometry = new THREE.BoxGeometry(1, wallHeight, 1);
-                    const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3c28 });
-                    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-                    
-                    const angle = (i / 4) * Math.PI * 2;
-                    beam.position.x = Math.cos(angle) * 18;
-                    beam.position.y = wallHeight / 2;
-                    beam.position.z = Math.sin(angle) * 18;
-                    beam.castShadow = true;
-                    this.scene.add(beam);
-                }
-            }
-            
-            createTrainingEquipment() {
-                // Makiwara (striking post)
-                const postGeometry = new THREE.CylinderGeometry(0.3, 0.3, 6);
-                const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-                const post = new THREE.Mesh(postGeometry, postMaterial);
-                post.position.set(-10, 3, 5);
-                post.castShadow = true;
-                this.scene.add(post);
-                
-                // Training dummy
-                const dummyBodyGeometry = new THREE.CylinderGeometry(1, 1.2, 4);
-                const dummyBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
-                const dummyBody = new THREE.Mesh(dummyBodyGeometry, dummyBodyMaterial);
-                dummyBody.position.set(10, 2, -5);
-                dummyBody.castShadow = true;
-                this.scene.add(dummyBody);
-                
-                // Training weapons rack
-                const rackGeometry = new THREE.BoxGeometry(0.2, 4, 3);
-                const rackMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3c28 });
-                const rack = new THREE.Mesh(rackGeometry, rackMaterial);
-                rack.position.set(15, 2, 10);
-                rack.castShadow = true;
-                this.scene.add(rack);
-                
-                // Training swords on rack
-                for (let i = 0; i < 3; i++) {
-                    const swordGeometry = new THREE.BoxGeometry(0.1, 3, 0.1);
-                    const swordMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
-                    const sword = new THREE.Mesh(swordGeometry, swordMaterial);
-                    sword.position.set(15.2, 2.5, 9 + i);
-                    sword.castShadow = true;
-                    this.scene.add(sword);
-                }
-            }
-            
-            createDecorations() {
-                // Zen garden corner
-                const gardenBaseGeometry = new THREE.BoxGeometry(6, 0.2, 6);
-                const gardenBaseMaterial = new THREE.MeshStandardMaterial({ color: 0xf5deb3 });
-                const gardenBase = new THREE.Mesh(gardenBaseGeometry, gardenBaseMaterial);
-                gardenBase.position.set(-12, 0.1, -12);
-                gardenBase.receiveShadow = true;
-                this.scene.add(gardenBase);
-                
-                // Rocks in zen garden
-                for (let i = 0; i < 5; i++) {
-                    const rockGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 0.3, 8, 6);
-                    const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x696969 });
-                    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-                    rock.position.set(
-                        -12 + (Math.random() - 0.5) * 4,
-                        0.3,
-                        -12 + (Math.random() - 0.5) * 4
-                    );
-                    rock.castShadow = true;
-                    this.scene.add(rock);
-                }
-                
-                // Hanging lanterns
-                for (let i = 0; i < 4; i++) {
-                    const lanternGeometry = new THREE.CylinderGeometry(0.8, 0.8, 2);
-                    const lanternMaterial = new THREE.MeshStandardMaterial({
-                        color: 0xff6b35,
-                        emissive: 0xff4500,
-                        emissiveIntensity: 0.3
-                    });
-                    const lantern = new THREE.Mesh(lanternGeometry, lanternMaterial);
-                    
-                    const angle = (i / 4) * Math.PI * 2;
-                    lantern.position.x = Math.cos(angle) * 12;
-                    lantern.position.y = 6;
-                    lantern.position.z = Math.sin(angle) * 12;
-                    lantern.castShadow = true;
-                    this.scene.add(lantern);
-                    
-                    // Lantern light
-                    const lanternLight = new THREE.PointLight(0xff6b35, 0.5, 10);
-                    lanternLight.position.copy(lantern.position);
-                    this.scene.add(lanternLight);
-                }
-                
-                // Bonsai trees
-                for (let i = 0; i < 3; i++) {
-                    const bonsaiGroup = this.createBonsai();
-                    bonsaiGroup.position.set(
-                        12 + i * 3,
-                        0,
-                        12 + (Math.random() - 0.5) * 4
-                    );
-                    this.scene.add(bonsaiGroup);
-                }
-            }
-            
-            createBonsai() {
-                const bonsaiGroup = new THREE.Group();
-                
-                // Pot
-                const potGeometry = new THREE.CylinderGeometry(1, 0.8, 0.5);
-                const potMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-                const pot = new THREE.Mesh(potGeometry, potMaterial);
-                pot.position.y = 0.25;
-                pot.castShadow = true;
-                bonsaiGroup.add(pot);
-                
-                // Trunk
-                const trunkGeometry = new THREE.CylinderGeometry(0.1, 0.2, 1.5);
-                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
-                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-                trunk.position.y = 1.25;
-                trunk.rotation.x = 0.2;
-                trunk.castShadow = true;
-                bonsaiGroup.add(trunk);
-                
-                // Leaves
-                const leavesGeometry = new THREE.SphereGeometry(0.8, 8, 6);
-                const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22 });
-                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-                leaves.position.y = 2;
-                leaves.scale.set(1.2, 0.8, 1.2);
-                leaves.castShadow = true;
-                bonsaiGroup.add(leaves);
-                
-                return bonsaiGroup;
+                const scroll = new THREE.Mesh(scrollGeometry, scrollMaterial);
+                scroll.position.set(0, 5, -24.5);
+                this.scene.add(scroll);
             }
             
             createSensei() {
                 const senseiGroup = new THREE.Group();
                 
-                // Body (sitting in lotus position)
-                const bodyGeometry = new THREE.CylinderGeometry(0.8, 1.2, 2);
-                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff }); // White gi
+                // Body (simple robe)
+                const bodyGeometry = new THREE.ConeGeometry(1, 3, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xff6b35,
+                    roughness: 0.7
+                });
                 const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-                body.position.y = 1;
+                body.position.y = 1.5;
                 body.castShadow = true;
                 senseiGroup.add(body);
                 
                 // Head
-                const headGeometry = new THREE.SphereGeometry(0.4, 16, 12);
-                const headMaterial = new THREE.MeshStandardMaterial({ color: 0xfdbcb4 }); // Skin tone
+                const headGeometry = new THREE.SphereGeometry(0.5);
+                const headMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xffdbac,
+                    roughness: 0.8
+                });
                 const head = new THREE.Mesh(headGeometry, headMaterial);
-                head.position.y = 2.4;
+                head.position.y = 3.5;
                 head.castShadow = true;
                 senseiGroup.add(head);
                 
-                // Hair (traditional topknot)
-                const hairGeometry = new THREE.SphereGeometry(0.3, 8, 6);
-                const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
-                const hair = new THREE.Mesh(hairGeometry, hairMaterial);
-                hair.position.y = 2.7;
-                hair.scale.set(0.8, 1.2, 0.8);
-                hair.castShadow = true;
-                senseiGroup.add(hair);
+                // Eyes
+                const eyeGeometry = new THREE.SphereGeometry(0.1);
+                const eyeMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000
+                });
+                const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                leftEye.position.set(-0.15, 3.5, 0.4);
+                senseiGroup.add(leftEye);
                 
-                // Meditation pose arms
-                const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.2);
-                const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                rightEye.position.set(0.15, 3.5, 0.4);
+                senseiGroup.add(rightEye);
                 
-                const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-                leftArm.position.set(-0.7, 1.5, 0.3);
-                leftArm.rotation.z = Math.PI / 3;
-                leftArm.castShadow = true;
-                senseiGroup.add(leftArm);
+                // Belt
+                const beltGeometry = new THREE.TorusGeometry(0.8, 0.1, 8, 20);
+                const beltMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000,
+                    roughness: 0.9
+                });
+                const belt = new THREE.Mesh(beltGeometry, beltMaterial);
+                belt.position.y = 1.8;
+                belt.rotation.x = Math.PI / 2;
+                senseiGroup.add(belt);
                 
-                const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-                rightArm.position.set(0.7, 1.5, 0.3);
-                rightArm.rotation.z = -Math.PI / 3;
-                rightArm.castShadow = true;
-                senseiGroup.add(rightArm);
-                
-                // Meditation aura (subtle glow)
-                const auraGeometry = new THREE.SphereGeometry(2, 16, 12);
-                const auraMaterial = new THREE.MeshBasicMaterial({
+                // Glow effect
+                const glowGeometry = new THREE.SphereGeometry(2.5, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({
                     color: 0xffd700,
                     transparent: true,
-                    opacity: 0.1,
-                    side: THREE.BackSide
+                    opacity: 0.1
                 });
-                const aura = new THREE.Mesh(auraGeometry, auraMaterial);
-                aura.position.y = 1.5;
-                senseiGroup.add(aura);
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.position.y = 2;
+                senseiGroup.add(glow);
                 
-                // Position sensei on platform
-                senseiGroup.position.copy(this.senseiPlatform.position);
-                senseiGroup.position.y += 0.2;
+                // Click detection mesh
+                const clickGeometry = new THREE.BoxGeometry(3, 4, 3);
+                const clickMaterial = new THREE.MeshBasicMaterial({ 
+                    visible: false 
+                });
+                const clickMesh = new THREE.Mesh(clickGeometry, clickMaterial);
+                clickMesh.position.y = 2;
+                clickMesh.userData.isNPC = true;
+                clickMesh.userData.npcName = 'Master Takeshi';
+                senseiGroup.add(clickMesh);
                 
-                // Add interaction data
-                senseiGroup.userData = {
-                    isNPC: true,
-                    name: "Master Takeshi",
-                    interactionDistance: 8
-                };
+                senseiGroup.position.set(0, 0, -10);
+                senseiGroup.userData.isNPC = true;
                 
                 this.sensei = senseiGroup;
-                this.scene.add(senseiGroup);
+                this.scene.add(this.sensei);
+                
+                // Floating animation
+                this.sensei.userData.floatOffset = 0;
             }
             
             createPortals() {
-                const numPortals = Math.min(this.worlds.length, 4);
+                const portalPositions = [
+                    { x: -15, z: 0, rotation: Math.PI / 2 },
+                    { x: 15, z: 0, rotation: -Math.PI / 2 },
+                    { x: 0, z: 15, rotation: Math.PI },
+                    { x: 0, z: -20, rotation: 0 }
+                ];
                 
-                for (let i = 0; i < numPortals; i++) {
-                    const world = this.worlds[i];
+                this.worlds.forEach((world, index) => {
+                    if (index >= portalPositions.length) return;
                     
-                    const portalGroup = new THREE.Group();
-                    
-                    const frameGeometry = new THREE.TorusGeometry(2, 0.2, 16, 32);
-                    const frameMaterial = new THREE.MeshStandardMaterial({
-                        color: 0xff6b35,
-                        emissive: 0xff4500,
-                        emissiveIntensity: 0.5,
-                        metalness: 0.8,
-                        roughness: 0.2
-                    });
-                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-                    
-                    const portalGeometry = new THREE.CircleGeometry(1.8, 32);
-                    const portalMaterial = new THREE.ShaderMaterial({
-                        uniforms: {
-                            time: { value: 0 },
-                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
-                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
-                        },
-                        vertexShader: `
-                            varying vec2 vUv;
-                            void main() {
-                                vUv = uv;
-                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                            }
-                        `,
-                        fragmentShader: `
-                            uniform float time;
-                            uniform vec3 color1;
-                            uniform vec3 color2;
-                            varying vec2 vUv;
-                            
-                            void main() {
-                                vec2 center = vUv - 0.5;
-                                float dist = length(center);
-                                float ripple = sin(dist * 15.0 - time * 3.0) * 0.5 + 0.5;
-                                vec3 color = mix(color1, color2, ripple);
-                                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
-                                gl_FragColor = vec4(color, alpha * 0.8);
-                            }
-                        `,
-                        transparent: true,
-                        side: THREE.DoubleSide
-                    });
-                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
-                    portal.position.z = 0.1;
-                    
-                    portalGroup.add(frame);
-                    portalGroup.add(portal);
-                    
-                    // Position portals around the dojo walls
-                    const positions = [
-                        { x: 0, z: -18, y: 3, rotY: 0 },
-                        { x: 18, z: 0, y: 3, rotY: Math.PI / 2 },
-                        { x: 0, z: 18, y: 3, rotY: Math.PI },
-                        { x: -18, z: 0, y: 3, rotY: -Math.PI / 2 }
-                    ];
-                    
-                    if (positions[i]) {
-                        const pos = positions[i];
-                        portalGroup.position.set(pos.x, pos.y, pos.z);
-                        portalGroup.rotation.y = pos.rotY;
-                    }
-                    
-                    const light = new THREE.PointLight(0xff6b35, 1, 15);
-                    light.position.copy(portalGroup.position);
-                    this.scene.add(light);
-                    
-                    portal.userData = {
-                        world: world,
-                        material: portalMaterial,
-                        light: light,
-                        url: world.url || world.raw_url,
-                        name: world.name,
-                        description: world.description || `Enter the ${world.name} world`
-                    };
-                    
+                    const pos = portalPositions[index];
+                    const portal = this.createPortal(world, pos.x, pos.z, pos.rotation);
                     this.portals.push(portal);
-                    this.scene.add(portalGroup);
-                }
+                    this.scene.add(portal);
+                });
             }
             
-            buildInheritanceParams() {
-                const params = new URLSearchParams();
+            createPortal(world, x, z, rotation) {
+                const portalGroup = new THREE.Group();
                 
-                params.set('from', window.location.pathname.split('/').pop() || 'interactive-dojo.html');
-                params.set('fromName', CURRENT_WORLD.name);
-                params.set('moveSpeed', this.moveSpeed.toString());
-                params.set('lookSpeed', this.lookSpeed.toString());
-                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
-                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
-                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
-                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
-                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
-                params.set('cameraHeight', this.camera.position.y.toString());
-                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
-                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                // Portal frame
+                const frameGeometry = new THREE.TorusGeometry(2.5, 0.3, 8, 20);
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.portalColor1,
+                    emissive: CURRENT_WORLD.portalColor1,
+                    emissiveIntensity: 0.5,
+                    roughness: 0.3,
+                    metalness: 0.7
+                });
+                const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                frame.castShadow = true;
+                portalGroup.add(frame);
                 
-                return params.toString();
+                // Portal surface
+                const portalGeometry = new THREE.CircleGeometry(2.2, 32);
+                const portalMaterial = new THREE.MeshBasicMaterial({
+                    color: CURRENT_WORLD.portalColor2,
+                    transparent: true,
+                    opacity: 0.7,
+                    side: THREE.DoubleSide
+                });
+                const portalMesh = new THREE.Mesh(portalGeometry, portalMaterial);
+                portalGroup.add(portalMesh);
+                
+                // Particles
+                const particlesGeometry = new THREE.BufferGeometry();
+                const particlesCount = CURRENT_WORLD.particleCount;
+                const positions = new Float32Array(particlesCount * 3);
+                
+                for (let i = 0; i < particlesCount * 3; i += 3) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.random() * 2.2;
+                    positions[i] = Math.cos(angle) * radius;
+                    positions[i + 1] = Math.sin(angle) * radius;
+                    positions[i + 2] = (Math.random() - 0.5) * 0.5;
+                }
+                
+                particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const particlesMaterial = new THREE.PointsMaterial({
+                    color: CURRENT_WORLD.portalColor2,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+                portalGroup.add(particles);
+                
+                // Click detection
+                const clickGeometry = new THREE.CircleGeometry(2.5, 32);
+                const clickMaterial = new THREE.MeshBasicMaterial({ 
+                    visible: false,
+                    side: THREE.DoubleSide
+                });
+                const clickMesh = new THREE.Mesh(clickGeometry, clickMaterial);
+                clickMesh.userData.isPortal = true;
+                clickMesh.userData.world = world;
+                portalGroup.add(clickMesh);
+                
+                // World label
+                const labelCanvas = document.createElement('canvas');
+                const context = labelCanvas.getContext('2d');
+                labelCanvas.width = 512;
+                labelCanvas.height = 128;
+                
+                context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                context.fillRect(0, 0, 512, 128);
+                
+                context.font = 'bold 48px Arial';
+                context.fillStyle = '#ffd700';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(world.name, 256, 64);
+                
+                const labelTexture = new THREE.CanvasTexture(labelCanvas);
+                const labelMaterial = new THREE.SpriteMaterial({ 
+                    map: labelTexture,
+                    transparent: true
+                });
+                const labelSprite = new THREE.Sprite(labelMaterial);
+                labelSprite.scale.set(4, 1, 1);
+                labelSprite.position.y = 3.5;
+                portalGroup.add(labelSprite);
+                
+                portalGroup.position.set(x, 2, z);
+                portalGroup.rotation.y = rotation;
+                portalGroup.userData = { 
+                    particles, 
+                    portalMesh, 
+                    frame,
+                    rotationSpeed: 0.005 + Math.random() * 0.005
+                };
+                
+                return portalGroup;
             }
             
             setupEventListeners() {
-                window.addEventListener('resize', () => {
-                    this.camera.aspect = window.innerWidth / window.innerHeight;
-                    this.camera.updateProjectionMatrix();
-                    this.renderer.setSize(window.innerWidth, window.innerHeight);
-                });
-                
-                if (this.isMobile) {
-                    this.setupMobileControls();
+                if (!this.isMobile) {
+                    window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                    window.addEventListener('keyup', (e) => this.handleKeyUp(e));
+                    window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                    this.renderer.domElement.addEventListener('click', (e) => this.handleClick(e));
+                    this.renderer.domElement.addEventListener('mousedown', () => this.requestPointerLock());
                 } else {
-                    this.setupDesktopControls();
+                    this.setupMobileControls();
                 }
+                
+                window.addEventListener('resize', () => this.handleResize());
+                
+                // NPC interaction
+                this.renderer.domElement.addEventListener('mousemove', (e) => this.checkNPCHover(e));
+                this.renderer.domElement.addEventListener('touchstart', (e) => this.handleTouchStart(e));
             }
             
-            setupDesktopControls() {
-                window.addEventListener('keydown', (e) => {
-                    if (e.key.toLowerCase() in this.keys) {
-                        this.keys[e.key.toLowerCase()] = true;
-                    }
-                });
+            checkNPCHover(event) {
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
                 
-                window.addEventListener('keyup', (e) => {
-                    if (e.key.toLowerCase() in this.keys) {
-                        this.keys[e.key.toLowerCase()] = false;
-                    }
-                });
+                this.raycaster.setFromCamera(mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.scene.children, true);
                 
-                this.renderer.domElement.addEventListener('click', (e) => {
-                    if (!this.isPointerLocked) {
-                        this.renderer.domElement.requestPointerLock();
-                    } else {
-                        this.handleClick();
+                let foundNPC = false;
+                for (const intersect of intersects) {
+                    if (intersect.object.userData.isNPC) {
+                        foundNPC = true;
+                        this.npcHint.style.left = event.clientX + 'px';
+                        this.npcHint.style.top = event.clientY + 'px';
+                        this.npcHint.classList.add('visible');
+                        this.renderer.domElement.style.cursor = 'pointer';
+                        break;
                     }
-                });
+                }
                 
-                document.addEventListener('pointerlockchange', () => {
-                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
-                });
-                
-                document.addEventListener('mousemove', (e) => {
-                    if (this.isPointerLocked) {
-                        this.rotation.y -= e.movementX * this.lookSpeed;
-                        this.rotation.x -= e.movementY * this.lookSpeed;
-                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                    }
-                });
+                if (!foundNPC) {
+                    this.npcHint.classList.remove('visible');
+                    this.renderer.domElement.style.cursor = 'default';
+                }
             }
             
             setupMobileControls() {
                 const lookArea = document.getElementById('look-area');
+                const joystick = document.getElementById('movement-joystick');
+                const joystickHandle = document.getElementById('movement-handle');
                 
+                // Look controls
                 lookArea.addEventListener('touchstart', (e) => {
-                    const touch = e.touches[0];
-                    
-                    // Check for interactions
-                    const rect = this.renderer.domElement.getBoundingClientRect();
-                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-                    
-                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-                    
-                    // Check sensei interaction
-                    if (this.sensei) {
-                        const senseiIntersects = this.raycaster.intersectObject(this.sensei, true);
-                        if (senseiIntersects.length > 0) {
-                            e.preventDefault();
-                            this.interactWithSensei();
-                            return;
-                        }
-                    }
-                    
-                    // Check portal interaction
-                    const portalIntersects = this.raycaster.intersectObjects(this.portals);
-                    if (portalIntersects.length > 0) {
-                        const portal = portalIntersects[0].object;
-                        if (portal.userData.url) {
-                            e.preventDefault();
-                            this.enterWorld(portal.userData.url);
-                            return;
-                        }
-                    }
-                    
-                    this.lookTouch = {
-                        id: touch.identifier,
-                        startX: touch.clientX,
-                        startY: touch.clientY,
-                        currentX: touch.clientX,
-                        currentY: touch.clientY
-                    };
-                }, { passive: true });
+                    if (this.joystickTouch) return;
+                    e.preventDefault();
+                    this.lookTouch = e.touches[0];
+                });
                 
                 lookArea.addEventListener('touchmove', (e) => {
-                    if (!this.lookTouch) return;
+                    if (!this.lookTouch || this.joystickTouch) return;
+                    e.preventDefault();
                     
-                    for (let i = 0; i < e.touches.length; i++) {
-                        const touch = e.touches[i];
-                        if (touch.identifier === this.lookTouch.id) {
-                            const deltaX = touch.clientX - this.lookTouch.currentX;
-                            const deltaY = touch.clientY - this.lookTouch.currentY;
-                            
-                            this.rotation.y -= deltaX * this.lookSpeed * 2;
-                            this.rotation.x -= deltaY * this.lookSpeed * 2;
-                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                            
-                            this.lookTouch.currentX = touch.clientX;
-                            this.lookTouch.currentY = touch.clientY;
-                            
-                            e.preventDefault();
-                            break;
-                        }
+                    const touch = Array.from(e.touches).find(t => t.identifier === this.lookTouch.identifier);
+                    if (touch) {
+                        const deltaX = touch.clientX - this.lookTouch.clientX;
+                        const deltaY = touch.clientY - this.lookTouch.clientY;
+                        
+                        this.rotation.y -= deltaX * this.lookSpeed * 2;
+                        this.rotation.x -= deltaY * this.lookSpeed * 2;
+                        this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+                        
+                        this.lookTouch = touch;
                     }
-                }, { passive: false });
+                });
                 
                 lookArea.addEventListener('touchend', (e) => {
-                    for (let i = 0; i < e.changedTouches.length; i++) {
-                        const touch = e.changedTouches[i];
-                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                    if (this.lookTouch) {
+                        const touch = Array.from(e.changedTouches).find(t => t.identifier === this.lookTouch.identifier);
+                        if (touch) {
                             this.lookTouch = null;
-                            break;
                         }
                     }
-                }, { passive: true });
+                });
                 
-                // Joystick setup
-                const joystick = document.getElementById('movement-joystick');
-                const handle = document.getElementById('movement-handle');
-                
+                // Movement joystick
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    
-                    const touch = e.touches[0];
-                    this.joystickTouch = { id: touch.identifier };
                     this.joystickActive = true;
-                    this.updateJoystick(touch, joystick, handle);
-                }, { passive: false });
+                    this.joystickTouch = e.touches[0];
+                });
                 
                 joystick.addEventListener('touchmove', (e) => {
                     if (!this.joystickActive || !this.joystickTouch) return;
-                    
                     e.preventDefault();
                     e.stopPropagation();
                     
-                    for (let i = 0; i < e.touches.length; i++) {
-                        const touch = e.touches[i];
-                        if (touch.identifier === this.joystickTouch.id) {
-                            this.updateJoystick(touch, joystick, handle);
-                            break;
+                    const touch = Array.from(e.touches).find(t => t.identifier === this.joystickTouch.identifier);
+                    if (touch) {
+                        const rect = joystick.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
+                        const maxDistance = rect.width / 2;
+                        
+                        let deltaX = touch.clientX - centerX;
+                        let deltaY = touch.clientY - centerY;
+                        
+                        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                        if (distance > maxDistance) {
+                            deltaX = (deltaX / distance) * maxDistance;
+                            deltaY = (deltaY / distance) * maxDistance;
                         }
+                        
+                        joystickHandle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                        
+                        this.joystickVector.x = deltaX / maxDistance;
+                        this.joystickVector.y = -deltaY / maxDistance;
                     }
-                }, { passive: false });
+                });
+                
+                const resetJoystick = () => {
+                    this.joystickActive = false;
+                    this.joystickTouch = null;
+                    this.joystickVector.set(0, 0);
+                    joystickHandle.style.transform = 'translate(0, 0)';
+                };
                 
                 joystick.addEventListener('touchend', (e) => {
-                    for (let i = 0; i < e.changedTouches.length; i++) {
-                        const touch = e.changedTouches[i];
-                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
-                            this.joystickActive = false;
-                            this.joystickTouch = null;
-                            this.joystickVector.set(0, 0);
-                            handle.style.transform = 'translate(-50%, -50%)';
-                            
-                            e.preventDefault();
-                            e.stopPropagation();
-                            break;
+                    if (this.joystickTouch) {
+                        const touch = Array.from(e.changedTouches).find(t => t.identifier === this.joystickTouch.identifier);
+                        if (touch) {
+                            resetJoystick();
                         }
                     }
-                }, { passive: false });
+                });
+                
+                joystick.addEventListener('touchcancel', resetJoystick);
             }
             
-            updateJoystick(touch, joystick, handle) {
-                const rect = joystick.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                
-                let deltaX = touch.clientX - centerX;
-                let deltaY = touch.clientY - centerY;
-                
-                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                const maxDistance = rect.width / 2 - 25;
-                
-                if (distance > maxDistance) {
-                    deltaX = (deltaX / distance) * maxDistance;
-                    deltaY = (deltaY / distance) * maxDistance;
+            requestPointerLock() {
+                if (!this.isPointerLocked && !this.isMobile) {
+                    this.renderer.domElement.requestPointerLock();
                 }
-                
-                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
-                
-                this.joystickVector.x = deltaX / maxDistance;
-                this.joystickVector.y = -deltaY / maxDistance;
             }
             
-            handleClick() {
-                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            handleKeyDown(e) {
+                const key = e.key.toLowerCase();
+                if (key in this.keys) {
+                    this.keys[key] = true;
+                }
+            }
+            
+            handleKeyUp(e) {
+                const key = e.key.toLowerCase();
+                if (key in this.keys) {
+                    this.keys[key] = false;
+                }
+            }
+            
+            handleMouseMove(e) {
+                if (document.pointerLockElement === this.renderer.domElement) {
+                    this.rotation.y -= e.movementX * this.lookSpeed;
+                    this.rotation.x -= e.movementY * this.lookSpeed;
+                    this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+                    this.isPointerLocked = true;
+                } else {
+                    this.isPointerLocked = false;
+                }
+            }
+            
+            handleClick(event) {
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
                 
-                // Check sensei interaction first
-                if (this.sensei) {
-                    const senseiIntersects = this.raycaster.intersectObject(this.sensei, true);
-                    if (senseiIntersects.length > 0) {
-                        this.interactWithSensei();
+                this.raycaster.setFromCamera(mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                
+                for (const intersect of intersects) {
+                    if (intersect.object.userData.isNPC) {
+                        this.openChatInterface();
+                        return;
+                    }
+                    
+                    if (intersect.object.userData.isPortal) {
+                        const world = intersect.object.userData.world;
+                        this.transitionToWorld(world);
                         return;
                     }
                 }
-                
-                // Check portal interaction
-                const portalIntersects = this.raycaster.intersectObjects(this.portals);
-                if (portalIntersects.length > 0) {
-                    const portal = portalIntersects[0].object;
-                    if (portal.userData.url) {
-                        this.enterWorld(portal.userData.url);
+            }
+            
+            handleTouchStart(event) {
+                if (event.touches.length === 1) {
+                    const touch = event.touches[0];
+                    const mouse = new THREE.Vector2();
+                    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(mouse, this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                    
+                    for (const intersect of intersects) {
+                        if (intersect.object.userData.isNPC) {
+                            this.openChatInterface();
+                            return;
+                        }
+                        
+                        if (intersect.object.userData.isPortal) {
+                            const world = intersect.object.userData.world;
+                            this.transitionToWorld(world);
+                            return;
+                        }
                     }
                 }
             }
             
-            interactWithSensei() {
-                const distance = this.camera.position.distanceTo(this.sensei.position);
-                if (distance <= this.sensei.userData.interactionDistance) {
-                    this.openChatInterface();
-                }
+            handleResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
             }
             
-            updateMovement() {
-                const forward = new THREE.Vector3();
-                const right = new THREE.Vector3();
+            updateMovement(deltaTime) {
+                const moveVector = new THREE.Vector3();
                 
-                this.camera.getWorldDirection(forward);
-                forward.y = 0;
-                forward.normalize();
-                
-                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-                
-                if (this.isMobile) {
-                    if (this.joystickActive) {
-                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
-                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
-                        this.camera.position.add(moveForward);
-                        this.camera.position.add(moveRight);
-                    }
+                if (this.isMobile && this.joystickActive) {
+                    moveVector.z = this.joystickVector.y;
+                    moveVector.x = -this.joystickVector.x;
                 } else {
-                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
-                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
-                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
-                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                    if (this.keys.w) moveVector.z -= 1;
+                    if (this.keys.s) moveVector.z += 1;
+                    if (this.keys.a) moveVector.x -= 1;
+                    if (this.keys.d) moveVector.x += 1;
                 }
                 
-                // Keep camera within dojo bounds
-                this.camera.position.x = Math.max(-18, Math.min(18, this.camera.position.x));
-                this.camera.position.z = Math.max(-18, Math.min(18, this.camera.position.z));
-                this.camera.position.y = Math.max(1, Math.min(6, this.camera.position.y));
-                
-                this.camera.rotation.order = 'YXZ';
-                this.camera.rotation.y = this.rotation.y;
-                this.camera.rotation.x = this.rotation.x;
-            }
-            
-            updateNPCInteraction() {
-                if (!this.sensei) return;
-                
-                const distance = this.camera.position.distanceTo(this.sensei.position);
-                const isInRange = distance <= this.sensei.userData.interactionDistance;
-                
-                if (isInRange && !this.npcHint.classList.contains('visible')) {
-                    // Show interaction hint
-                    this.npcHint.classList.add('visible');
+                if (moveVector.length() > 0) {
+                    moveVector.normalize();
+                    moveVector.multiplyScalar(this.moveSpeed);
                     
-                    // Position hint above sensei
-                    const vector = new THREE.Vector3();
-                    this.sensei.getWorldPosition(vector);
-                    vector.project(this.camera);
+                    const quaternion = new THREE.Quaternion();
+                    quaternion.setFromEuler(new THREE.Euler(0, this.rotation.y, 0));
+                    moveVector.applyQuaternion(quaternion);
                     
-                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
-                    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                    this.camera.position.add(moveVector);
                     
-                    this.npcHint.style.left = `${x}px`;
-                    this.npcHint.style.top = `${y}px`;
-                } else if (!isInRange && this.npcHint.classList.contains('visible')) {
-                    this.npcHint.classList.remove('visible');
+                    const boundary = 23;
+                    this.camera.position.x = Math.max(-boundary, Math.min(boundary, this.camera.position.x));
+                    this.camera.position.z = Math.max(-boundary, Math.min(boundary, this.camera.position.z));
                 }
-            }
-            
-            async enterWorld(url) {
-                try {
-                    document.getElementById('loading').style.display = 'block';
-                    document.getElementById('loading').innerHTML = 'Leaving the dojo...';
-                    
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to load world (${response.status})`);
-                    }
-                    
-                    let htmlContent = await response.text();
-                    
-                    const inheritanceParams = this.buildInheritanceParams();
-                    
-                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
-                    
-                    const inheritanceData = {
-                        params: inheritanceParams,
-                        timestamp: Date.now()
-                    };
-                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
-                    
-                    const paramScript = `<script>
-                        window.INJECTED_PARAMS = '?${inheritanceParams}';
-                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
-                        console.log('Injected params:', window.INJECTED_PARAMS);
-                    <\/script>`;
-                    
-                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
-                    
-                    const blob = new Blob([htmlContent], { type: 'text/html' });
-                    const blobUrl = URL.createObjectURL(blob);
-                    
-                    window.location.href = blobUrl;
-                    
-                } catch (error) {
-                    console.error('Error entering world:', error);
-                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
-                    setTimeout(() => {
-                        document.getElementById('loading').style.display = 'none';
-                    }, 3000);
-                }
+                
+                this.camera.quaternion.setFromEuler(new THREE.Euler(this.rotation.x, this.rotation.y, 0, 'YXZ'));
             }
             
             animate() {
                 requestAnimationFrame(() => this.animate());
                 
-                const time = this.clock.getElapsedTime();
-                
-                this.updateMovement();
-                this.updateNPCInteraction();
+                const deltaTime = this.clock.getDelta();
+                this.updateMovement(deltaTime);
                 
                 // Animate portals
-                this.portals.forEach((portal, index) => {
-                    if (portal.userData.material) {
-                        portal.userData.material.uniforms.time.value = time;
+                this.portals.forEach(portal => {
+                    if (portal.userData.particles) {
+                        portal.userData.particles.rotation.z += portal.userData.rotationSpeed;
+                        portal.userData.portalMesh.rotation.z -= portal.userData.rotationSpeed * 0.5;
                         
-                        const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
-                        portal.userData.light.intensity = intensity;
+                        // Pulsing effect
+                        const scale = 1 + Math.sin(Date.now() * 0.001) * 0.05;
+                        portal.userData.portalMesh.scale.set(scale, scale, scale);
                     }
-                    
-                    portal.rotation.z += 0.005;
                 });
                 
-                // Animate sensei (gentle breathing)
+                // Animate sensei
                 if (this.sensei) {
-                    this.sensei.position.y = 0.2 + Math.sin(time * 2) * 0.02;
+                    this.sensei.userData.floatOffset += deltaTime;
+                    this.sensei.position.y = Math.sin(this.sensei.userData.floatOffset) * 0.1;
+                    this.sensei.rotation.y += deltaTime * 0.1;
                 }
-                
-                // Animate particles (incense smoke)
-                if (this.particles) {
-                    this.particles.rotation.y = time * 0.02;
-                    
-                    const positions = this.particles.geometry.attributes.position.array;
-                    for (let i = 1; i < positions.length; i += 3) {
-                        positions[i] += 0.01; // Drift upward
-                        if (positions[i] > 20) {
-                            positions[i] = 0; // Reset to ground level
-                        }
-                    }
-                    this.particles.geometry.attributes.position.needsUpdate = true;
-                }
-                
-                // Animate lanterns (gentle flicker)
-                this.scene.traverse((child) => {
-                    if (child.isLight && child.type === 'PointLight' && child.color.getHex() === 0xff6b35) {
-                        const baseIntensity = child.userData.baseIntensity || 0.5;
-                        child.userData.baseIntensity = baseIntensity;
-                        child.intensity = baseIntensity * (0.8 + Math.sin(time * 5 + child.position.x) * 0.2);
-                    }
-                });
                 
                 this.renderer.render(this.scene, this.camera);
             }
+            
+            transitionToWorld(world) {
+                console.log(`Transitioning to: ${world.name}`);
+                
+                const currentAttributes = {
+                    from: window.location.href,
+                    fromName: CURRENT_WORLD.name,
+                    moveSpeed: CURRENT_WORLD.moveSpeed,
+                    lookSpeed: CURRENT_WORLD.lookSpeed,
+                    ambientColor: CURRENT_WORLD.ambientColor.toString(16),
+                    fogColor: CURRENT_WORLD.fogColor.toString(16),
+                    portalColor1: CURRENT_WORLD.portalColor1.toString(16),
+                    portalColor2: CURRENT_WORLD.portalColor2.toString(16),
+                    particleCount: CURRENT_WORLD.particleCount,
+                    cameraHeight: CURRENT_WORLD.cameraHeight,
+                    fogNear: CURRENT_WORLD.fogNear,
+                    fogFar: CURRENT_WORLD.fogFar
+                };
+                
+                const params = new URLSearchParams(currentAttributes).toString();
+                
+                fetch(world.raw_url || world.url)
+                    .then(response => response.text())
+                    .then(html => {
+                        const modifiedHtml = html.replace(
+                            /<\/head>/,
+                            `<script>window.INJECTED_PARAMS = '?${params}';</script></head>`
+                        );
+                        
+                        const blob = new Blob([modifiedHtml], { type: 'text/html' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        
+                        sessionStorage.setItem('worldInheritanceParams', '?' + params);
+                        localStorage.setItem('worldTransition', JSON.stringify({
+                            params: params,
+                            timestamp: Date.now()
+                        }));
+                        
+                        window.location.href = blobUrl;
+                    })
+                    .catch(error => {
+                        console.error('Error loading world:', error);
+                        alert('Failed to load world. Please try again.');
+                    });
+            }
         }
         
-        // Initialize the world when DOM is loaded
-        window.addEventListener('DOMContentLoaded', () => {
+        // Initialize world when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
             const world = new InteractiveDojoWorld();
-            world.init();
-        });
-        
-        // Prevent pull-to-refresh on mobile
-        let lastY = 0;
-        window.addEventListener('touchstart', (e) => {
-            lastY = e.touches[0].clientY;
-        }, { passive: true });
-        
-        window.addEventListener('touchmove', (e) => {
-            const y = e.touches[0].clientY;
-            const scrollingUp = y > lastY;
-            const atTop = window.pageYOffset === 0;
-            
-            if (scrollingUp && atTop) {
-                e.preventDefault();
-            }
-            lastY = y;
-        }, { passive: false });
-        
-        // Prevent context menu
-        window.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            return false;
+            world.init().catch(error => {
+                console.error('Failed to initialize world:', error);
+                document.getElementById('loading').textContent = 'Failed to initialize world';
+            });
         });
     </script>
 </body>
