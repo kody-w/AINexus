@@ -1,0 +1,2612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Pallet Town - Creature Trainer World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff1744, #ffaa00, #00ff88);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        /* Save/Load UI */
+        .save-controls {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            z-index: 1002;
+            display: flex;
+            gap: 10px;
+        }
+
+        .save-button, .load-button {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s ease;
+        }
+
+        .save-button:hover, .load-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        /* Dialog System */
+        .dialog-box {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            background: rgba(248, 248, 248, 0.95);
+            border: 4px solid #000;
+            border-radius: 10px;
+            padding: 20px;
+            color: #000;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            line-height: 1.6;
+            display: none;
+            z-index: 1002;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .dialog-box.visible {
+            display: block;
+        }
+
+        .dialog-speaker {
+            font-weight: bold;
+            color: #ff1744;
+            margin-bottom: 10px;
+        }
+
+        .dialog-text {
+            margin-bottom: 10px;
+        }
+
+        .dialog-prompt {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #666;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Creature Selection */
+        .creature-selection {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(248, 248, 248, 0.95);
+            border: 4px solid #000;
+            border-radius: 10px;
+            padding: 30px;
+            color: #000;
+            display: none;
+            z-index: 1003;
+            text-align: center;
+        }
+
+        .creature-selection.visible {
+            display: block;
+        }
+
+        .creature-selection h2 {
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .creature-options {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .creature-ball {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .creature-ball:hover {
+            transform: scale(1.1);
+        }
+
+        .creature-ball::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #000;
+            transform: translateY(-50%);
+        }
+
+        .creature-ball::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border: 3px solid #000;
+            border-radius: 50%;
+        }
+
+        .grass-ball {
+            background: linear-gradient(to bottom, #4CAF50 50%, #fff 50%);
+        }
+
+        .fire-ball {
+            background: linear-gradient(to bottom, #ff5722 50%, #fff 50%);
+        }
+
+        .water-ball {
+            background: linear-gradient(to bottom, #2196F3 50%, #fff 50%);
+        }
+
+        .creature-name {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        /* Battle System */
+        .battle-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #87CEEB, #98D8C8);
+            display: none;
+            z-index: 1004;
+        }
+
+        .battle-screen.visible {
+            display: block;
+        }
+
+        .battle-field {
+            position: relative;
+            width: 100%;
+            height: 60%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 20px;
+        }
+
+        .creature-sprite {
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 3px solid #000;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .player-creature {
+            align-self: flex-end;
+            margin-bottom: 50px;
+        }
+
+        .opponent-creature {
+            align-self: flex-start;
+            margin-top: 50px;
+        }
+
+        .creature-status {
+            position: absolute;
+            background: rgba(248, 248, 248, 0.95);
+            border: 3px solid #000;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            min-width: 200px;
+        }
+
+        .player-status {
+            bottom: 10px;
+            left: 10px;
+        }
+
+        .opponent-status {
+            top: 10px;
+            right: 10px;
+        }
+
+        .hp-bar {
+            width: 100%;
+            height: 10px;
+            background: #ccc;
+            border: 2px solid #000;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .hp-fill {
+            height: 100%;
+            background: #4CAF50;
+            transition: width 0.5s ease;
+        }
+
+        .hp-fill.low {
+            background: #ff9800;
+        }
+
+        .hp-fill.critical {
+            background: #f44336;
+        }
+
+        .battle-menu {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40%;
+            background: rgba(248, 248, 248, 0.95);
+            border-top: 4px solid #000;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .battle-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .battle-button {
+            background: #fff;
+            border: 3px solid #000;
+            padding: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Courier New', monospace;
+        }
+
+        .battle-button:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .battle-button:active {
+            transform: scale(0.95);
+        }
+
+        /* Location Indicator */
+        .location-indicator {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 100px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            z-index: 1001;
+        }
+
+        /* Portal Return */
+        .portal-return {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .portal-return:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.05);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2000;
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        /* Menu System */
+        .game-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(248, 248, 248, 0.95);
+            border: 4px solid #000;
+            border-radius: 10px;
+            padding: 20px;
+            color: #000;
+            display: none;
+            z-index: 1005;
+            font-family: 'Courier New', monospace;
+            min-width: 300px;
+        }
+
+        .game-menu.visible {
+            display: block;
+        }
+
+        .menu-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .menu-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .menu-button {
+            background: #fff;
+            border: 2px solid #000;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+        }
+
+        .menu-button:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+
+        /* NPC Hover Indicator */
+        .npc-clickable {
+            cursor: pointer;
+        }
+        
+        .interaction-hint {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -150px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .interaction-hint.visible {
+            opacity: 1;
+        }
+
+        .save-data-display {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.8em;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title">PALLET TOWN</h1>
+        <p class="world-description">A quiet town of new beginnings</p>
+    </div>
+    
+    <div class="save-controls">
+        <button class="save-button" onclick="openMenu()">MENU</button>
+    </div>
+    
+    <div class="location-indicator" id="location-indicator">Home - Bedroom</div>
+    
+    <div class="interaction-hint" id="interaction-hint">Click to talk</div>
+    
+    <div class="dialog-box" id="dialog-box">
+        <div class="dialog-speaker" id="dialog-speaker">System</div>
+        <div class="dialog-text" id="dialog-text">Welcome to your adventure!</div>
+        <div class="dialog-prompt">Click to continue...</div>
+    </div>
+    
+    <div class="creature-selection" id="creature-selection">
+        <h2>Choose Your Partner Creature!</h2>
+        <div class="creature-options">
+            <div class="creature-option" onclick="selectCreature('grass')">
+                <div class="creature-ball grass-ball"></div>
+                <div class="creature-name">Leafling</div>
+            </div>
+            <div class="creature-option" onclick="selectCreature('fire')">
+                <div class="creature-ball fire-ball"></div>
+                <div class="creature-name">Emberpup</div>
+            </div>
+            <div class="creature-option" onclick="selectCreature('water')">
+                <div class="creature-ball water-ball"></div>
+                <div class="creature-name">Aquapal</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="battle-screen" id="battle-screen">
+        <div class="battle-field">
+            <div class="creature-sprite player-creature" id="player-sprite">🌱</div>
+            <div class="creature-sprite opponent-creature" id="opponent-sprite">🔥</div>
+            
+            <div class="creature-status player-status">
+                <div class="status-name" id="player-name">Leafling</div>
+                <div class="status-level">Lv 5</div>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="player-hp" style="width: 100%"></div>
+                </div>
+                <div class="hp-text" id="player-hp-text">20/20</div>
+            </div>
+            
+            <div class="creature-status opponent-status">
+                <div class="status-name" id="opponent-name">Emberpup</div>
+                <div class="status-level">Lv 5</div>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="opponent-hp" style="width: 100%"></div>
+                </div>
+                <div class="hp-text" id="opponent-hp-text">20/20</div>
+            </div>
+        </div>
+        
+        <div class="battle-menu">
+            <div class="battle-text" id="battle-text">What will Leafling do?</div>
+            <div class="battle-options" id="battle-options">
+                <button class="battle-button" onclick="useMove('tackle')">Tackle</button>
+                <button class="battle-button" onclick="useMove('special')">Special Move</button>
+                <button class="battle-button" onclick="useMove('defend')">Defend</button>
+                <button class="battle-button" onclick="runFromBattle()">Run</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="game-menu" id="game-menu">
+        <div class="menu-title">MENU</div>
+        <div class="menu-options">
+            <button class="menu-button" onclick="saveGame()">Save Game</button>
+            <button class="menu-button" onclick="loadGame()">Load Game</button>
+            <button class="menu-button" onclick="exportSave()">Export Save</button>
+            <button class="menu-button" onclick="importSave()">Import Save</button>
+            <button class="menu-button" onclick="closeMenu()">Close</button>
+        </div>
+        <div class="save-data-display" id="save-data-display" style="display: none;"></div>
+    </div>
+    
+    <div class="portal-return" id="portal-return" onclick="returnToNexus()">Return to Nexus Hub</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">Loading Pallet Town...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game State Management
+        const GameState = {
+            playerName: "Trainer",
+            rivalName: "Blue",
+            currentLocation: "bedroom",
+            gamePhase: "wake_up", // wake_up, mom_talk, find_oak, choose_creature, first_battle, complete
+            selectedCreature: null,
+            rivalCreature: null,
+            creatures: {
+                player: null,
+                rival: null
+            },
+            battles: {
+                won: 0,
+                lost: 0
+            },
+            flags: {
+                talkedToMom: false,
+                leftHouse: false,
+                metOak: false,
+                choseCreature: false,
+                battledRival: false
+            },
+            position: new THREE.Vector3(0, 2, 0),
+            rotation: { x: 0, y: 0 }
+        };
+
+        // Battle System
+        const BattleSystem = {
+            playerHP: 20,
+            playerMaxHP: 20,
+            opponentHP: 20,
+            opponentMaxHP: 20,
+            playerDefending: false,
+            turn: 'player',
+            
+            typeAdvantages: {
+                grass: { strong: 'water', weak: 'fire' },
+                fire: { strong: 'grass', weak: 'water' },
+                water: { strong: 'fire', weak: 'grass' }
+            },
+            
+            startBattle() {
+                document.getElementById('battle-screen').classList.add('visible');
+                this.playerHP = this.playerMaxHP;
+                this.opponentHP = this.opponentMaxHP;
+                this.updateHP();
+                this.updateSprites();
+                this.showBattleText("A wild battle begins!");
+                
+                setTimeout(() => {
+                    this.showBattleText(`What will ${GameState.creatures.player.name} do?`);
+                    this.enableButtons();
+                }, 2000);
+            },
+            
+            updateSprites() {
+                const playerSprite = document.getElementById('player-sprite');
+                const opponentSprite = document.getElementById('opponent-sprite');
+                const playerName = document.getElementById('player-name');
+                const opponentName = document.getElementById('opponent-name');
+                
+                if (GameState.creatures.player) {
+                    playerSprite.textContent = GameState.creatures.player.emoji;
+                    playerName.textContent = GameState.creatures.player.name;
+                }
+                
+                if (GameState.creatures.rival) {
+                    opponentSprite.textContent = GameState.creatures.rival.emoji;
+                    opponentName.textContent = GameState.creatures.rival.name;
+                }
+            },
+            
+            useMove(move) {
+                this.disableButtons();
+                let damage = 0;
+                let message = "";
+                
+                switch(move) {
+                    case 'tackle':
+                        damage = Math.floor(Math.random() * 5) + 3;
+                        message = `${GameState.creatures.player.name} used Tackle!`;
+                        break;
+                    case 'special':
+                        const advantage = this.checkTypeAdvantage(
+                            GameState.creatures.player.type,
+                            GameState.creatures.rival.type
+                        );
+                        if (advantage === 'strong') {
+                            damage = Math.floor(Math.random() * 7) + 5;
+                            message = `${GameState.creatures.player.name} used ${GameState.creatures.player.special}! It's super effective!`;
+                        } else if (advantage === 'weak') {
+                            damage = Math.floor(Math.random() * 3) + 1;
+                            message = `${GameState.creatures.player.name} used ${GameState.creatures.player.special}! It's not very effective...`;
+                        } else {
+                            damage = Math.floor(Math.random() * 5) + 3;
+                            message = `${GameState.creatures.player.name} used ${GameState.creatures.player.special}!`;
+                        }
+                        break;
+                    case 'defend':
+                        this.playerDefending = true;
+                        message = `${GameState.creatures.player.name} is defending!`;
+                        break;
+                }
+                
+                this.showBattleText(message);
+                
+                if (move !== 'defend') {
+                    setTimeout(() => {
+                        this.dealDamage('opponent', damage);
+                        setTimeout(() => {
+                            if (this.opponentHP > 0) {
+                                this.opponentTurn();
+                            } else {
+                                this.endBattle(true);
+                            }
+                        }, 1500);
+                    }, 1500);
+                } else {
+                    setTimeout(() => {
+                        this.opponentTurn();
+                    }, 1500);
+                }
+            },
+            
+            opponentTurn() {
+                const moves = ['tackle', 'special'];
+                const move = moves[Math.floor(Math.random() * moves.length)];
+                let damage = 0;
+                let message = "";
+                
+                switch(move) {
+                    case 'tackle':
+                        damage = Math.floor(Math.random() * 5) + 3;
+                        message = `${GameState.creatures.rival.name} used Tackle!`;
+                        break;
+                    case 'special':
+                        const advantage = this.checkTypeAdvantage(
+                            GameState.creatures.rival.type,
+                            GameState.creatures.player.type
+                        );
+                        if (advantage === 'strong') {
+                            damage = Math.floor(Math.random() * 7) + 5;
+                            message = `${GameState.creatures.rival.name} used ${GameState.creatures.rival.special}! It's super effective!`;
+                        } else if (advantage === 'weak') {
+                            damage = Math.floor(Math.random() * 3) + 1;
+                            message = `${GameState.creatures.rival.name} used ${GameState.creatures.rival.special}! It's not very effective...`;
+                        } else {
+                            damage = Math.floor(Math.random() * 5) + 3;
+                            message = `${GameState.creatures.rival.name} used ${GameState.creatures.rival.special}!`;
+                        }
+                        break;
+                }
+                
+                if (this.playerDefending) {
+                    damage = Math.max(1, Math.floor(damage / 2));
+                    this.playerDefending = false;
+                }
+                
+                this.showBattleText(message);
+                
+                setTimeout(() => {
+                    this.dealDamage('player', damage);
+                    setTimeout(() => {
+                        if (this.playerHP > 0) {
+                            this.showBattleText(`What will ${GameState.creatures.player.name} do?`);
+                            this.enableButtons();
+                        } else {
+                            this.endBattle(false);
+                        }
+                    }, 1500);
+                }, 1500);
+            },
+            
+            checkTypeAdvantage(attackerType, defenderType) {
+                const advantages = this.typeAdvantages[attackerType];
+                if (advantages.strong === defenderType) return 'strong';
+                if (advantages.weak === defenderType) return 'weak';
+                return 'normal';
+            },
+            
+            dealDamage(target, amount) {
+                if (target === 'player') {
+                    this.playerHP = Math.max(0, this.playerHP - amount);
+                } else {
+                    this.opponentHP = Math.max(0, this.opponentHP - amount);
+                }
+                this.updateHP();
+            },
+            
+            updateHP() {
+                const playerHPBar = document.getElementById('player-hp');
+                const opponentHPBar = document.getElementById('opponent-hp');
+                const playerHPText = document.getElementById('player-hp-text');
+                const opponentHPText = document.getElementById('opponent-hp-text');
+                
+                const playerPercent = (this.playerHP / this.playerMaxHP) * 100;
+                const opponentPercent = (this.opponentHP / this.opponentMaxHP) * 100;
+                
+                playerHPBar.style.width = playerPercent + '%';
+                opponentHPBar.style.width = opponentPercent + '%';
+                
+                playerHPText.textContent = `${this.playerHP}/${this.playerMaxHP}`;
+                opponentHPText.textContent = `${this.opponentHP}/${this.opponentMaxHP}`;
+                
+                // Update HP bar colors
+                this.updateHPColor(playerHPBar, playerPercent);
+                this.updateHPColor(opponentHPBar, opponentPercent);
+            },
+            
+            updateHPColor(bar, percent) {
+                bar.classList.remove('low', 'critical');
+                if (percent <= 20) {
+                    bar.classList.add('critical');
+                } else if (percent <= 50) {
+                    bar.classList.add('low');
+                }
+            },
+            
+            showBattleText(text) {
+                document.getElementById('battle-text').textContent = text;
+            },
+            
+            enableButtons() {
+                const buttons = document.querySelectorAll('.battle-button');
+                buttons.forEach(btn => btn.disabled = false);
+            },
+            
+            disableButtons() {
+                const buttons = document.querySelectorAll('.battle-button');
+                buttons.forEach(btn => btn.disabled = true);
+            },
+            
+            endBattle(won) {
+                if (won) {
+                    GameState.battles.won++;
+                    this.showBattleText(`${GameState.creatures.player.name} won the battle!`);
+                } else {
+                    GameState.battles.lost++;
+                    this.showBattleText(`${GameState.creatures.player.name} fainted...`);
+                }
+                
+                GameState.flags.battledRival = true;
+                GameState.gamePhase = 'complete';
+                
+                setTimeout(() => {
+                    document.getElementById('battle-screen').classList.remove('visible');
+                    showDialog({
+                        speaker: "Professor Elm",
+                        text: "What an incredible battle! You both show great promise as trainers!"
+                    });
+                }, 3000);
+            }
+        };
+
+        // Dialog sequences
+        const dialogSequences = {
+            wake_up: [
+                { speaker: "System", text: "You wake up in your bedroom. Today feels different... special somehow." },
+                { speaker: "System", text: "Maybe you should go talk to your mom downstairs." }
+            ],
+            mom_talk: [
+                { speaker: "Mom", text: "Good morning, sweetie! Professor Elm called earlier." },
+                { speaker: "Mom", text: "He said he has something very important to discuss with you!" },
+                { speaker: "Mom", text: "You should go to his laboratory right away. It's the big building in town." },
+                { speaker: "Mom", text: "Be careful out there! The world can be dangerous without a creature partner." }
+            ],
+            grass_warning: [
+                { speaker: "???", text: "Hey! Wait! Don't go out there!" },
+                { speaker: "Professor Elm", text: "Whew... That was close! Wild creatures live in tall grass!" },
+                { speaker: "Professor Elm", text: "It's not safe to go out without your own creature partner." },
+                { speaker: "Professor Elm", text: "Come with me to my laboratory." }
+            ],
+            lab_intro: [
+                { speaker: "Professor Elm", text: "Welcome to my laboratory! I've been studying creatures for many years." },
+                { speaker: "Professor Elm", text: "I called you here because I have a very special request." },
+                { speaker: "Professor Elm", text: "I'd like you to help me with my research by raising a creature!" },
+                { speaker: "Professor Elm", text: "On this table are three rare creatures. You may choose one!" }
+            ],
+            rival_appears: [
+                { speaker: "???", text: "Gramps! I'm tired of waiting!" },
+                { speaker: "Blue", text: "Oh, it's you. I didn't know you were here too." },
+                { speaker: "Professor Elm", text: "Blue! I told you to wait! But since you're both here..." },
+                { speaker: "Professor Elm", text: "Go ahead and choose first, my friend." }
+            ]
+        };
+
+        // Creature data
+        const creatureData = {
+            grass: {
+                name: "Leafling",
+                type: "grass",
+                emoji: "🌱",
+                special: "Vine Whip",
+                hp: 20
+            },
+            fire: {
+                name: "Emberpup",
+                type: "fire",
+                emoji: "🔥",
+                special: "Ember",
+                hp: 20
+            },
+            water: {
+                name: "Aquapal",
+                type: "water",
+                emoji: "💧",
+                special: "Water Gun",
+                hp: 20
+            }
+        };
+
+        // Dialog system
+        let currentDialogIndex = 0;
+        let currentDialogSequence = [];
+        
+        function showDialog(dialog) {
+            const dialogBox = document.getElementById('dialog-box');
+            const speaker = document.getElementById('dialog-speaker');
+            const text = document.getElementById('dialog-text');
+            
+            dialogBox.classList.add('visible');
+            speaker.textContent = dialog.speaker;
+            text.textContent = dialog.text;
+        }
+        
+        function hideDialog() {
+            document.getElementById('dialog-box').classList.remove('visible');
+        }
+        
+        function startDialogSequence(sequenceName) {
+            currentDialogSequence = dialogSequences[sequenceName] || [];
+            currentDialogIndex = 0;
+            if (currentDialogSequence.length > 0) {
+                showDialog(currentDialogSequence[0]);
+            }
+        }
+        
+        function advanceDialog() {
+            currentDialogIndex++;
+            if (currentDialogIndex < currentDialogSequence.length) {
+                showDialog(currentDialogSequence[currentDialogIndex]);
+            } else {
+                hideDialog();
+                handleDialogEnd();
+            }
+        }
+        
+        function handleDialogEnd() {
+            switch(GameState.gamePhase) {
+                case 'wake_up':
+                    GameState.gamePhase = 'need_mom_talk';
+                    break;
+                case 'mom_talk':
+                    GameState.flags.talkedToMom = true;
+                    GameState.gamePhase = 'find_oak';
+                    break;
+                case 'grass_warning':
+                    GameState.currentLocation = 'lab';
+                    updateLocationIndicator();
+                    startDialogSequence('lab_intro');
+                    break;
+                case 'lab_intro':
+                    startDialogSequence('rival_appears');
+                    break;
+                case 'rival_appears':
+                    document.getElementById('creature-selection').classList.add('visible');
+                    break;
+            }
+        }
+        
+        // Location management
+        function updateLocationIndicator() {
+            const indicator = document.getElementById('location-indicator');
+            const locations = {
+                bedroom: "Home - Bedroom",
+                downstairs: "Home - Living Room",
+                town: "Pallet Town",
+                lab: "Professor Elm's Lab"
+            };
+            indicator.textContent = locations[GameState.currentLocation] || "Unknown";
+        }
+
+        // World configuration
+        const WORLD_CONFIG = {
+            name: "Pallet Town",
+            description: "Where journeys begin",
+            ambientColor: 0x9FA8DA,
+            fogColor: 0xE8EAF6,
+            groundColor: 0x7CB342,
+            skyColor: 0x87CEEB,
+            moveSpeed: 0.1,
+            lookSpeed: 0.002,
+            portalColor1: 0xff1744,
+            portalColor2: 0xffaa00,
+            particleCount: 200,
+            cameraHeight: 2,
+            fogNear: 20,
+            fogFar: 100
+        };
+
+        // Parse inherited attributes
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+            
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            
+            return inherited;
+        }
+
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...WORLD_CONFIG, ...inheritedAttributes };
+
+        class PalletTownWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.clock = new THREE.Clock();
+                this.buildings = [];
+                this.currentScene = null;
+                this.scenes = {};
+                
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = GameState.rotation;
+                
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                this.boundaries = {
+                    minX: -50,
+                    maxX: 50,
+                    minZ: -50,
+                    maxZ: 50
+                };
+                
+                this.collisionBoxes = [];
+                this.doors = [];
+            }
+
+            async init() {
+                this.setupRenderer();
+                this.createScenes();
+                this.setupEventListeners();
+                
+                if (this.isMobile) {
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+                
+                // Start in the appropriate scene
+                if (GameState.currentLocation === 'bedroom') {
+                    this.switchToScene('bedroom');
+                } else {
+                    this.switchToScene('town');
+                }
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                    if (GameState.gamePhase === 'wake_up') {
+                        startDialogSequence('wake_up');
+                    }
+                }, 1000);
+                
+                this.animate();
+            }
+
+            setupRenderer() {
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            createScenes() {
+                // Create all scenes
+                this.scenes.bedroom = this.createBedroomScene();
+                this.scenes.downstairs = this.createDownstairsScene();
+                this.scenes.town = this.createTownScene();
+                this.scenes.lab = this.createLabScene();
+            }
+
+            createBedroomScene() {
+                const scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0xf0f0f0, 5, 20);
+                
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                scene.add(ambientLight);
+                
+                // Window light
+                const windowLight = new THREE.DirectionalLight(0xffffcc, 0.5);
+                windowLight.position.set(5, 5, 5);
+                scene.add(windowLight);
+                
+                // Room dimensions
+                const roomWidth = 10;
+                const roomDepth = 10;
+                const roomHeight = 4;
+                
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(roomWidth, roomDepth);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8B7355,
+                    roughness: 0.8
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                scene.add(floor);
+                
+                // Walls
+                const wallMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xF5DEB3,
+                    side: THREE.DoubleSide
+                });
+                
+                // Back wall
+                const backWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth, roomHeight),
+                    wallMaterial
+                );
+                backWall.position.z = -roomDepth / 2;
+                backWall.position.y = roomHeight / 2;
+                scene.add(backWall);
+                
+                // Front wall with door hole
+                const frontWallLeft = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth * 0.4, roomHeight),
+                    wallMaterial
+                );
+                frontWallLeft.position.z = roomDepth / 2;
+                frontWallLeft.position.x = -roomWidth * 0.3;
+                frontWallLeft.position.y = roomHeight / 2;
+                scene.add(frontWallLeft);
+                
+                const frontWallRight = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth * 0.4, roomHeight),
+                    wallMaterial
+                );
+                frontWallRight.position.z = roomDepth / 2;
+                frontWallRight.position.x = roomWidth * 0.3;
+                frontWallRight.position.y = roomHeight / 2;
+                scene.add(frontWallRight);
+                
+                const frontWallTop = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth * 0.2, roomHeight * 0.3),
+                    wallMaterial
+                );
+                frontWallTop.position.z = roomDepth / 2;
+                frontWallTop.position.y = roomHeight * 0.85;
+                scene.add(frontWallTop);
+                
+                // Side walls
+                const leftWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomDepth, roomHeight),
+                    wallMaterial
+                );
+                leftWall.rotation.y = Math.PI / 2;
+                leftWall.position.x = -roomWidth / 2;
+                leftWall.position.y = roomHeight / 2;
+                scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomDepth, roomHeight),
+                    wallMaterial
+                );
+                rightWall.rotation.y = -Math.PI / 2;
+                rightWall.position.x = roomWidth / 2;
+                rightWall.position.y = roomHeight / 2;
+                scene.add(rightWall);
+                
+                // Ceiling
+                const ceiling = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth, roomDepth),
+                    new THREE.MeshStandardMaterial({ color: 0xffffff })
+                );
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = roomHeight;
+                scene.add(ceiling);
+                
+                // Bed
+                const bedGeometry = new THREE.BoxGeometry(3, 0.5, 4);
+                const bedMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+                const bed = new THREE.Mesh(bedGeometry, bedMaterial);
+                bed.position.set(-2, 0.25, -2);
+                bed.castShadow = true;
+                bed.receiveShadow = true;
+                scene.add(bed);
+                
+                // Desk
+                const deskGeometry = new THREE.BoxGeometry(2, 0.8, 1);
+                const deskMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                const desk = new THREE.Mesh(deskGeometry, deskMaterial);
+                desk.position.set(3, 0.4, -3);
+                desk.castShadow = true;
+                scene.add(desk);
+                
+                // Computer
+                const computerGeometry = new THREE.BoxGeometry(0.6, 0.4, 0.4);
+                const computerMaterial = new THREE.MeshStandardMaterial({ color: 0x696969 });
+                const computer = new THREE.Mesh(computerGeometry, computerMaterial);
+                computer.position.set(3, 1, -3);
+                scene.add(computer);
+                
+                // Window
+                const windowGeometry = new THREE.PlaneGeometry(2, 2);
+                const windowMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x87CEEB,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+                windowMesh.position.set(4.9, 2, -2);
+                windowMesh.rotation.y = -Math.PI / 2;
+                scene.add(windowMesh);
+                
+                // Door area (invisible, for collision)
+                const doorArea = {
+                    position: { x: 0, z: roomDepth / 2 },
+                    width: 2,
+                    depth: 0.5,
+                    destination: 'downstairs',
+                    newPosition: new THREE.Vector3(0, 2, 0)
+                };
+                
+                scene.userData = {
+                    doors: [doorArea],
+                    collisionBoxes: [
+                        { position: { x: -2, z: -2 }, width: 3, depth: 4 }, // bed
+                        { position: { x: 3, z: -3 }, width: 2, depth: 1 }, // desk
+                        // Wall boundaries
+                        { position: { x: 0, z: -roomDepth/2 }, width: roomWidth, depth: 0.5 },
+                        { position: { x: -roomWidth/2, z: 0 }, width: 0.5, depth: roomDepth },
+                        { position: { x: roomWidth/2, z: 0 }, width: 0.5, depth: roomDepth },
+                        { position: { x: -roomWidth*0.3, z: roomDepth/2 }, width: roomWidth*0.4, depth: 0.5 },
+                        { position: { x: roomWidth*0.3, z: roomDepth/2 }, width: roomWidth*0.4, depth: 0.5 }
+                    ]
+                };
+                
+                return scene;
+            }
+
+            createDownstairsScene() {
+                const scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0xf0f0f0, 5, 30);
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                scene.add(ambientLight);
+                
+                const mainLight = new THREE.PointLight(0xffffcc, 0.5, 20);
+                mainLight.position.set(0, 3, 0);
+                scene.add(mainLight);
+                
+                // Room dimensions (larger than bedroom)
+                const roomWidth = 15;
+                const roomDepth = 12;
+                const roomHeight = 4;
+                
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(roomWidth, roomDepth);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xDEB887,
+                    roughness: 0.7
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                scene.add(floor);
+                
+                // Walls (similar structure to bedroom but larger)
+                const wallMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFFF8DC,
+                    side: THREE.DoubleSide
+                });
+                
+                // Create walls with door opening
+                this.createDownstairsWalls(scene, roomWidth, roomDepth, roomHeight, wallMaterial);
+                
+                // Living room furniture
+                // Couch
+                const couchGeometry = new THREE.BoxGeometry(4, 0.8, 2);
+                const couchMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                const couch = new THREE.Mesh(couchGeometry, couchMaterial);
+                couch.position.set(-3, 0.4, 0);
+                couch.castShadow = true;
+                scene.add(couch);
+                
+                // TV Stand
+                const tvStandGeometry = new THREE.BoxGeometry(3, 0.6, 1);
+                const tvStandMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+                const tvStand = new THREE.Mesh(tvStandGeometry, tvStandMaterial);
+                tvStand.position.set(-3, 0.3, -4);
+                scene.add(tvStand);
+                
+                // Table
+                const tableGeometry = new THREE.BoxGeometry(2, 0.7, 2);
+                const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                const table = new THREE.Mesh(tableGeometry, tableMaterial);
+                table.position.set(3, 0.35, 2);
+                scene.add(table);
+                
+                // Mom NPC - Using a different geometry since CapsuleGeometry isn't available in r128
+                const momGroup = new THREE.Group();
+                
+                // Body (cylinder)
+                const bodyGeometry = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xFF69B4 });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 0.6;
+                momGroup.add(body);
+                
+                // Head (sphere)
+                const headGeometry = new THREE.SphereGeometry(0.3, 8, 6);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDDB4 });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 1.5;
+                momGroup.add(head);
+                
+                momGroup.position.set(5, 0, 0);
+                momGroup.userData = { type: 'npc', name: 'Mom' };
+                scene.add(momGroup);
+                
+                const doorArea = {
+                    position: { x: 0, z: roomDepth / 2 },
+                    width: 2,
+                    depth: 0.5,
+                    destination: 'town',
+                    newPosition: new THREE.Vector3(-20, 2, 0)
+                };
+                
+                scene.userData = {
+                    doors: [doorArea],
+                    npcs: [momGroup],
+                    collisionBoxes: [
+                        { position: { x: -3, z: 0 }, width: 4, depth: 2 }, // couch
+                        { position: { x: -3, z: -4 }, width: 3, depth: 1 }, // tv stand
+                        { position: { x: 3, z: 2 }, width: 2, depth: 2 }, // table
+                        { position: { x: 5, z: 0 }, width: 1, depth: 1 }, // mom
+                        // Walls (with gaps for door)
+                        { position: { x: 0, z: -roomDepth/2 }, width: roomWidth, depth: 0.5 },
+                        { position: { x: -roomWidth/2, z: 0 }, width: 0.5, depth: roomDepth },
+                        { position: { x: roomWidth/2, z: 0 }, width: 0.5, depth: roomDepth },
+                        // Front walls around door
+                        { position: { x: -roomWidth*0.3, z: roomDepth/2 }, width: roomWidth*0.4, depth: 0.5 },
+                        { position: { x: roomWidth*0.3, z: roomDepth/2 }, width: roomWidth*0.4, depth: 0.5 }
+                    ]
+                };
+                
+                return scene;
+            }
+
+            createDownstairsWalls(scene, roomWidth, roomDepth, roomHeight, wallMaterial) {
+                // Back wall
+                const backWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth, roomHeight),
+                    wallMaterial
+                );
+                backWall.position.z = -roomDepth / 2;
+                backWall.position.y = roomHeight / 2;
+                scene.add(backWall);
+                
+                // Front wall with door
+                const frontWallLeft = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth * 0.4, roomHeight),
+                    wallMaterial
+                );
+                frontWallLeft.position.z = roomDepth / 2;
+                frontWallLeft.position.x = -roomWidth * 0.3;
+                frontWallLeft.position.y = roomHeight / 2;
+                scene.add(frontWallLeft);
+                
+                const frontWallRight = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth * 0.4, roomHeight),
+                    wallMaterial
+                );
+                frontWallRight.position.z = roomDepth / 2;
+                frontWallRight.position.x = roomWidth * 0.3;
+                frontWallRight.position.y = roomHeight / 2;
+                scene.add(frontWallRight);
+                
+                // Side walls
+                const leftWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomDepth, roomHeight),
+                    wallMaterial
+                );
+                leftWall.rotation.y = Math.PI / 2;
+                leftWall.position.x = -roomWidth / 2;
+                leftWall.position.y = roomHeight / 2;
+                scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomDepth, roomHeight),
+                    wallMaterial
+                );
+                rightWall.rotation.y = -Math.PI / 2;
+                rightWall.position.x = roomWidth / 2;
+                rightWall.position.y = roomHeight / 2;
+                scene.add(rightWall);
+                
+                // Ceiling
+                const ceiling = new THREE.Mesh(
+                    new THREE.PlaneGeometry(roomWidth, roomDepth),
+                    new THREE.MeshStandardMaterial({ color: 0xffffff })
+                );
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = roomHeight;
+                scene.add(ceiling);
+            }
+
+            createTownScene() {
+                const scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(20, 30, 10);
+                dirLight.castShadow = true;
+                dirLight.shadow.camera.near = 0.1;
+                dirLight.shadow.camera.far = 100;
+                dirLight.shadow.camera.left = -50;
+                dirLight.shadow.camera.right = 50;
+                dirLight.shadow.camera.top = 50;
+                dirLight.shadow.camera.bottom = -50;
+                scene.add(dirLight);
+                
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 0.8
+                });
+                
+                const vertices = groundGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i + 2] = Math.random() * 0.2;
+                }
+                groundGeometry.computeVertexNormals();
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                scene.add(ground);
+                
+                // Buildings with collision boxes
+                const buildings = [];
+                const collisionBoxes = [];
+                const doors = [];
+                
+                // Player's house
+                this.createBuildingForTown(scene, -20, 0, 10, 8, 6, 0x8D6E63, "Your House", buildings, collisionBoxes);
+                doors.push({
+                    position: { x: -20, z: 5 },
+                    width: 2,
+                    depth: 2,
+                    destination: 'downstairs',
+                    newPosition: new THREE.Vector3(0, 2, 5)
+                });
+                
+                // Rival's house
+                this.createBuildingForTown(scene, 20, 0, 10, 8, 6, 0x7986CB, "Blue's House", buildings, collisionBoxes);
+                
+                // Professor's Lab
+                this.createBuildingForTown(scene, 0, -20, 12, 10, 8, 0x9E9E9E, "Professor's Lab", buildings, collisionBoxes, true);
+                doors.push({
+                    position: { x: 0, z: -15 },
+                    width: 2,
+                    depth: 2,
+                    destination: 'lab',
+                    newPosition: new THREE.Vector3(0, 2, 15)
+                });
+                
+                // Trees with collision
+                for (let i = 0; i < 30; i++) {
+                    const x = (Math.random() - 0.5) * 80;
+                    const z = (Math.random() - 0.5) * 80;
+                    
+                    if (Math.abs(x) > 15 || Math.abs(z) > 15) {
+                        this.createTreeForTown(scene, x, z, collisionBoxes);
+                    }
+                }
+                
+                // Tall grass area
+                this.createTallGrassForTown(scene);
+                
+                // Paths
+                this.createPathsForTown(scene);
+                
+                scene.userData = {
+                    buildings: buildings,
+                    collisionBoxes: collisionBoxes,
+                    doors: doors,
+                    tallGrassArea: { z: -35, trigger: true }
+                };
+                
+                return scene;
+            }
+
+            createBuildingForTown(scene, x, z, width, depth, height, color, name, buildings, collisionBoxes, isLab = false) {
+                const building = new THREE.Group();
+                
+                // Base
+                const baseGeometry = new THREE.BoxGeometry(width, height, depth);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: color });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = height / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                building.add(base);
+                
+                // Roof
+                const roofGeometry = new THREE.ConeGeometry(width * 0.7, height * 0.5, 4);
+                const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xB71C1C });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = height + height * 0.25;
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                building.add(roof);
+                
+                // Door
+                const doorGeometry = new THREE.BoxGeometry(width * 0.2, height * 0.4, 0.1);
+                const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x5D4037 });
+                const door = new THREE.Mesh(doorGeometry, doorMaterial);
+                door.position.y = height * 0.2;
+                door.position.z = depth / 2 + 0.05;
+                building.add(door);
+                
+                building.position.set(x, 0, z);
+                building.userData = { name: name, type: 'building' };
+                buildings.push(building);
+                scene.add(building);
+                
+                // Add collision box
+                collisionBoxes.push({
+                    position: { x: x, z: z },
+                    width: width,
+                    depth: depth
+                });
+            }
+
+            createTreeForTown(scene, x, z, collisionBoxes) {
+                const tree = new THREE.Group();
+                
+                // Trunk
+                const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 4);
+                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8D6E63 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = 2;
+                trunk.castShadow = true;
+                tree.add(trunk);
+                
+                // Leaves
+                const leavesGeometry = new THREE.SphereGeometry(2, 8, 6);
+                const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x4CAF50 });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = 5;
+                leaves.castShadow = true;
+                tree.add(leaves);
+                
+                tree.position.set(x, 0, z);
+                scene.add(tree);
+                
+                // Add collision
+                collisionBoxes.push({
+                    position: { x: x, z: z },
+                    width: 1.4,
+                    depth: 1.4
+                });
+            }
+
+            createTallGrassForTown(scene) {
+                const grassArea = new THREE.Group();
+                
+                for (let i = 0; i < 50; i++) {
+                    const grassGeometry = new THREE.PlaneGeometry(0.5, 1);
+                    const grassMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x2E7D32,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+                    grass.position.x = (Math.random() - 0.5) * 20;
+                    grass.position.y = 0.5;
+                    grass.position.z = -35 + Math.random() * 10;
+                    grass.rotation.y = Math.random() * Math.PI;
+                    
+                    grassArea.add(grass);
+                }
+                
+                grassArea.userData = { type: 'tallGrass' };
+                scene.add(grassArea);
+            }
+
+            createPathsForTown(scene) {
+                const pathMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xD7CCC8,
+                    roughness: 0.9
+                });
+                
+                // Path from player's house to lab
+                const path1 = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3, 30),
+                    pathMaterial
+                );
+                path1.rotation.x = -Math.PI / 2;
+                path1.position.set(-20, 0.1, -5);
+                path1.receiveShadow = true;
+                scene.add(path1);
+                
+                // Path from rival's house to lab
+                const path2 = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3, 30),
+                    pathMaterial
+                );
+                path2.rotation.x = -Math.PI / 2;
+                path2.position.set(20, 0.1, -5);
+                path2.receiveShadow = true;
+                scene.add(path2);
+                
+                // Connecting path
+                const path3 = new THREE.Mesh(
+                    new THREE.PlaneGeometry(40, 3),
+                    pathMaterial
+                );
+                path3.rotation.x = -Math.PI / 2;
+                path3.position.set(0, 0.1, -20);
+                path3.receiveShadow = true;
+                scene.add(path3);
+            }
+
+            createLabScene() {
+                const scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0xf0f0f0, 10, 50);
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                
+                const labLight1 = new THREE.PointLight(0xffffcc, 0.5, 20);
+                labLight1.position.set(-10, 5, 0);
+                scene.add(labLight1);
+                
+                const labLight2 = new THREE.PointLight(0xffffcc, 0.5, 20);
+                labLight2.position.set(10, 5, 0);
+                scene.add(labLight2);
+                
+                // Lab interior
+                const labWidth = 20;
+                const labDepth = 30;
+                const labHeight = 6;
+                
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(labWidth, labDepth);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xf5f5f5,
+                    roughness: 0.3
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                scene.add(floor);
+                
+                // Create lab walls and equipment
+                this.createLabInterior(scene, labWidth, labDepth, labHeight);
+                
+                const doorArea = {
+                    position: { x: 0, z: labDepth / 2 },
+                    width: 3,
+                    depth: 1,
+                    destination: 'town',
+                    newPosition: new THREE.Vector3(0, 2, -10)
+                };
+                
+                scene.userData = {
+                    doors: [doorArea],
+                    collisionBoxes: this.getLabCollisions(labWidth, labDepth),
+                    pokeballs: this.createPokeballs(scene)
+                };
+                
+                return scene;
+            }
+
+            createLabInterior(scene, width, depth, height) {
+                const wallMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xe0e0e0,
+                    side: THREE.DoubleSide
+                });
+                
+                // Walls
+                // Back wall
+                const backWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(width, height),
+                    wallMaterial
+                );
+                backWall.position.z = -depth / 2;
+                backWall.position.y = height / 2;
+                scene.add(backWall);
+                
+                // Side walls
+                const leftWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(depth, height),
+                    wallMaterial
+                );
+                leftWall.rotation.y = Math.PI / 2;
+                leftWall.position.x = -width / 2;
+                leftWall.position.y = height / 2;
+                scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(depth, height),
+                    wallMaterial
+                );
+                rightWall.rotation.y = -Math.PI / 2;
+                rightWall.position.x = width / 2;
+                rightWall.position.y = height / 2;
+                scene.add(rightWall);
+                
+                // Lab tables
+                for (let i = 0; i < 3; i++) {
+                    const tableGeometry = new THREE.BoxGeometry(4, 1, 2);
+                    const tableMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8D6E63,
+                        roughness: 0.7
+                    });
+                    const table = new THREE.Mesh(tableGeometry, tableMaterial);
+                    table.position.x = (i - 1) * 6;
+                    table.position.y = 0.5;
+                    table.position.z = -10;
+                    table.castShadow = true;
+                    table.receiveShadow = true;
+                    scene.add(table);
+                }
+                
+                // Bookshelves
+                const shelfGeometry = new THREE.BoxGeometry(6, 8, 1);
+                const shelfMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x5D4037,
+                    roughness: 0.8
+                });
+                
+                const leftShelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                leftShelf.position.set(-8, 4, -14);
+                scene.add(leftShelf);
+                
+                const rightShelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                rightShelf.position.set(8, 4, -14);
+                scene.add(rightShelf);
+            }
+
+            createPokeballs(scene) {
+                const pokeballs = [];
+                const positions = [
+                    { x: -6, type: 'grass' },
+                    { x: 0, type: 'fire' },
+                    { x: 6, type: 'water' }
+                ];
+                
+                positions.forEach((pos) => {
+                    // Pedestal
+                    const pedestalGeometry = new THREE.CylinderGeometry(0.5, 0.7, 0.5);
+                    const pedestalMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x757575,
+                        metalness: 0.3
+                    });
+                    const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+                    pedestal.position.set(pos.x, 1, -10);
+                    pedestal.castShadow = true;
+                    scene.add(pedestal);
+                    
+                    // Pokeball
+                    const ballGeometry = new THREE.SphereGeometry(0.3, 32, 16);
+                    const ballMaterial = new THREE.MeshStandardMaterial({
+                        color: pos.type === 'grass' ? 0x4CAF50 : pos.type === 'fire' ? 0xff5722 : 0x2196F3,
+                        metalness: 0.5,
+                        roughness: 0.2
+                    });
+                    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                    ball.position.set(pos.x, 1.5, -10);
+                    ball.userData = { type: pos.type, baseY: 1.5 };
+                    pokeballs.push(ball);
+                    scene.add(ball);
+                });
+                
+                return pokeballs;
+            }
+
+            getLabCollisions(width, depth) {
+                return [
+                    // Tables
+                    { position: { x: -6, z: -10 }, width: 4, depth: 2 },
+                    { position: { x: 0, z: -10 }, width: 4, depth: 2 },
+                    { position: { x: 6, z: -10 }, width: 4, depth: 2 },
+                    // Bookshelves
+                    { position: { x: -8, z: -14 }, width: 6, depth: 1 },
+                    { position: { x: 8, z: -14 }, width: 6, depth: 1 },
+                    // Walls
+                    { position: { x: 0, z: -depth/2 }, width: width, depth: 0.5 },
+                    { position: { x: -width/2, z: 0 }, width: 0.5, depth: depth },
+                    { position: { x: width/2, z: 0 }, width: 0.5, depth: depth }
+                ];
+            }
+
+            switchToScene(sceneName) {
+                this.currentScene = this.scenes[sceneName];
+                this.scene = this.currentScene;
+                
+                // Update collision and door data
+                if (this.currentScene.userData) {
+                    this.collisionBoxes = this.currentScene.userData.collisionBoxes || [];
+                    this.doors = this.currentScene.userData.doors || [];
+                }
+                
+                // Update location
+                GameState.currentLocation = sceneName;
+                updateLocationIndicator();
+            }
+
+            checkCollision(newPosition) {
+                for (const box of this.collisionBoxes) {
+                    const halfWidth = box.width / 2;
+                    const halfDepth = box.depth / 2;
+                    
+                    if (newPosition.x > box.position.x - halfWidth &&
+                        newPosition.x < box.position.x + halfWidth &&
+                        newPosition.z > box.position.z - halfDepth &&
+                        newPosition.z < box.position.z + halfDepth) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            checkDoors() {
+                const playerPos = this.camera.position;
+                
+                for (const door of this.doors) {
+                    const halfWidth = door.width / 2;
+                    const halfDepth = door.depth / 2;
+                    
+                    if (playerPos.x > door.position.x - halfWidth &&
+                        playerPos.x < door.position.x + halfWidth &&
+                        playerPos.z > door.position.z - halfDepth &&
+                        playerPos.z < door.position.z + halfDepth) {
+                        
+                        // Switch scene
+                        this.switchToScene(door.destination);
+                        this.camera.position.copy(door.newPosition);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            checkInteractions() {
+                const playerPos = this.camera.position;
+                
+                // Check doors first
+                if (this.checkDoors()) {
+                    return;
+                }
+                
+                // Check for tall grass trigger in town
+                if (GameState.currentLocation === 'town' && 
+                    this.currentScene.userData.tallGrassArea &&
+                    playerPos.z < this.currentScene.userData.tallGrassArea.z && 
+                    !GameState.flags.choseCreature && 
+                    GameState.gamePhase === 'find_oak') {
+                    
+                    GameState.gamePhase = 'grass_warning';
+                    GameState.currentLocation = 'lab';
+                    updateLocationIndicator();
+                    startDialogSequence('grass_warning');
+                }
+            }
+            
+            checkNPCClick(event) {
+                if (GameState.currentLocation !== 'downstairs' || !this.currentScene.userData.npcs) {
+                    return;
+                }
+                
+                // Calculate mouse position in normalized device coordinates
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                // Create raycaster
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                
+                // Check for intersections with NPCs
+                for (const npc of this.currentScene.userData.npcs) {
+                    const intersects = raycaster.intersectObject(npc, true);
+                    if (intersects.length > 0) {
+                        const distance = this.camera.position.distanceTo(npc.position);
+                        if (distance < 5 && GameState.gamePhase === 'need_mom_talk' && !GameState.flags.talkedToMom) {
+                            GameState.gamePhase = 'mom_talk';
+                            startDialogSequence('mom_talk');
+                            return;
+                        }
+                    }
+                }
+            }
+
+            setupEventListeners() {
+                // Dialog advancement
+                document.getElementById('dialog-box').addEventListener('click', advanceDialog);
+                
+                // Click to interact with NPCs
+                this.renderer.domElement.addEventListener('click', (event) => {
+                    if (document.pointerLockElement !== this.renderer.domElement) {
+                        return; // Only check clicks when not in pointer lock
+                    }
+                    this.checkNPCClick(event);
+                });
+                
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('click', () => {
+                    this.renderer.domElement.requestPointerLock();
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (document.pointerLockElement === this.renderer.domElement) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                        
+                        // Check for NPC hover
+                        this.checkNPCHover(window.innerWidth / 2, window.innerHeight / 2);
+                    }
+                });
+            }
+            
+            checkNPCHover(x, y) {
+                if (GameState.currentLocation !== 'downstairs' || !this.currentScene.userData.npcs) {
+                    document.getElementById('interaction-hint').classList.remove('visible');
+                    return;
+                }
+                
+                const mouse = new THREE.Vector2();
+                mouse.x = (x / window.innerWidth) * 2 - 1;
+                mouse.y = -(y / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                
+                let foundNPC = false;
+                for (const npc of this.currentScene.userData.npcs) {
+                    const intersects = raycaster.intersectObject(npc, true);
+                    if (intersects.length > 0) {
+                        const distance = this.camera.position.distanceTo(npc.position);
+                        if (distance < 5 && GameState.gamePhase === 'need_mom_talk' && !GameState.flags.talkedToMom) {
+                            foundNPC = true;
+                            document.getElementById('interaction-hint').classList.add('visible');
+                            break;
+                        }
+                    }
+                }
+                
+                if (!foundNPC) {
+                    document.getElementById('interaction-hint').classList.remove('visible');
+                }
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    this.joystickTouch = { id: touch.identifier };
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                // Calculate new position
+                let newPosition = this.camera.position.clone();
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        newPosition.add(moveForward);
+                        newPosition.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) newPosition.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) newPosition.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) newPosition.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) newPosition.add(right.multiplyScalar(this.moveSpeed));
+                }
+                
+                // Check collision before moving
+                if (!this.checkCollision(newPosition)) {
+                    this.camera.position.copy(newPosition);
+                }
+                
+                // Keep camera at consistent height
+                this.camera.position.y = CURRENT_WORLD.cameraHeight;
+                
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+                
+                // Update game state position
+                if (!GameState.position) {
+                    GameState.position = new THREE.Vector3();
+                }
+                GameState.position.copy(this.camera.position);
+                GameState.rotation.x = this.rotation.x;
+                GameState.rotation.y = this.rotation.y;
+                
+                // Check for interactions
+                this.checkInteractions();
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                this.updateMovement();
+                
+                // Animate pokeballs in lab
+                if (this.currentScene && this.currentScene.userData.pokeballs) {
+                    this.currentScene.userData.pokeballs.forEach((ball, i) => {
+                        ball.position.y = ball.userData.baseY + Math.sin(time + i * 2) * 0.1;
+                        ball.rotation.y = time * 0.5;
+                    });
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Game functions
+        function selectCreature(type) {
+            GameState.selectedCreature = type;
+            GameState.creatures.player = creatureData[type];
+            
+            // Determine rival's creature (type advantage)
+            const rivalChoices = {
+                grass: 'fire',
+                fire: 'water',
+                water: 'grass'
+            };
+            GameState.rivalCreature = rivalChoices[type];
+            GameState.creatures.rival = creatureData[GameState.rivalCreature];
+            
+            document.getElementById('creature-selection').classList.remove('visible');
+            
+            showDialog({
+                speaker: "You",
+                text: `I choose ${GameState.creatures.player.name}!`
+            });
+            
+            setTimeout(() => {
+                showDialog({
+                    speaker: "Blue",
+                    text: `Then I'll take ${GameState.creatures.rival.name}! Let's battle!`
+                });
+                
+                setTimeout(() => {
+                    hideDialog();
+                    GameState.flags.choseCreature = true;
+                    GameState.gamePhase = 'first_battle';
+                    BattleSystem.startBattle();
+                }, 3000);
+            }, 2000);
+        }
+
+        function useMove(move) {
+            BattleSystem.useMove(move);
+        }
+
+        function runFromBattle() {
+            BattleSystem.showBattleText("Can't run from a trainer battle!");
+        }
+
+        // Save/Load System
+        function saveGame() {
+            const saveData = JSON.stringify(GameState);
+            localStorage.setItem('creatureTrainerSave', saveData);
+            alert('Game saved!');
+        }
+
+        function loadGame() {
+            const saveData = localStorage.getItem('creatureTrainerSave');
+            if (saveData) {
+                const loadedState = JSON.parse(saveData);
+                Object.assign(GameState, loadedState);
+                
+                // Update UI
+                updateLocationIndicator();
+                if (window.world) {
+                    window.world.camera.position.copy(GameState.position);
+                    window.world.rotation = GameState.rotation;
+                }
+                
+                alert('Game loaded!');
+                closeMenu();
+            } else {
+                alert('No save data found!');
+            }
+        }
+
+        function exportSave() {
+            const saveData = JSON.stringify(GameState);
+            const encoded = btoa(saveData);
+            const displayArea = document.getElementById('save-data-display');
+            displayArea.textContent = encoded;
+            displayArea.style.display = 'block';
+            alert('Copy the text below to save your game externally:');
+        }
+
+        function importSave() {
+            const saveCode = prompt('Paste your save code here:');
+            if (saveCode) {
+                try {
+                    const decoded = atob(saveCode);
+                    const loadedState = JSON.parse(decoded);
+                    
+                    // Convert position back to THREE.Vector3
+                    if (loadedState.position) {
+                        loadedState.position = new THREE.Vector3(
+                            loadedState.position.x,
+                            loadedState.position.y,
+                            loadedState.position.z
+                        );
+                    }
+                    
+                    Object.assign(GameState, loadedState);
+                    
+                    // Update UI
+                    updateLocationIndicator();
+                    if (window.world && window.world.camera) {
+                        window.world.camera.position.copy(GameState.position);
+                        window.world.rotation = GameState.rotation;
+                    }
+                    
+                    alert('Save imported successfully!');
+                    closeMenu();
+                } catch (error) {
+                    alert('Invalid save code!');
+                }
+            }
+        }
+
+        function openMenu() {
+            document.getElementById('game-menu').classList.add('visible');
+            document.getElementById('save-data-display').style.display = 'none';
+        }
+
+        function closeMenu() {
+            document.getElementById('game-menu').classList.remove('visible');
+        }
+
+        function returnToNexus() {
+            window.location.href = 'index.html';
+        }
+
+        // Initialize the world
+        window.addEventListener('DOMContentLoaded', () => {
+            window.world = new PalletTownWorld();
+            window.world.init();
+        });
+
+        // Auto-save every 30 seconds
+        setInterval(() => {
+            if (GameState.gamePhase !== 'wake_up') {
+                // Convert position to plain object for JSON serialization
+                const saveState = {
+                    ...GameState,
+                    position: {
+                        x: GameState.position.x,
+                        y: GameState.position.y,
+                        z: GameState.position.z
+                    }
+                };
+                const saveData = JSON.stringify(saveState);
+                localStorage.setItem('creatureTrainerAutoSave', saveData);
+            }
+        }, 30000);
+
+        // Check for auto-save on load
+        window.addEventListener('load', () => {
+            const autoSave = localStorage.getItem('creatureTrainerAutoSave');
+            if (autoSave && !localStorage.getItem('creatureTrainerSave')) {
+                if (confirm('Auto-save detected. Would you like to continue from where you left off?')) {
+                    const loadedState = JSON.parse(autoSave);
+                    
+                    // Convert position back to THREE.Vector3
+                    if (loadedState.position) {
+                        loadedState.position = new THREE.Vector3(
+                            loadedState.position.x,
+                            loadedState.position.y,
+                            loadedState.position.z
+                        );
+                    }
+                    
+                    Object.assign(GameState, loadedState);
+                    updateLocationIndicator();
+                }
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (document.getElementById('game-menu').classList.contains('visible')) {
+                    closeMenu();
+                } else {
+                    openMenu();
+                }
+            }
+        });
+
+        // Handle visibility change for auto-pause
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && window.world) {
+                // Pause game logic if needed
+                saveGame(); // Auto-save when tab loses focus
+            }
+        });
+
+        // Prevent accidental navigation
+        window.addEventListener('beforeunload', (e) => {
+            if (GameState.gamePhase !== 'wake_up' && GameState.gamePhase !== 'complete') {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved progress. Are you sure you want to leave?';
+            }
+        });
+
+        // Touch event optimization for mobile
+        if ('ontouchstart' in window) {
+            document.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 1) {
+                    e.preventDefault(); // Prevent pinch zoom
+                }
+            }, { passive: false });
+        }
+
+        // Performance monitoring
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+
+        function updateFPS() {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime >= lastFrameTime + 1000) {
+                fps = Math.round((frameCount * 1000) / (currentTime - lastFrameTime));
+                frameCount = 0;
+                lastFrameTime = currentTime;
+                
+                // Adjust quality based on FPS
+                if (fps < 30 && window.world && window.world.renderer) {
+                    window.world.renderer.setPixelRatio(1); // Lower quality for better performance
+                }
+            }
+            
+            requestAnimationFrame(updateFPS);
+        }
+
+        // Start FPS monitoring
+        updateFPS();
+
+        // Additional battle moves and effects
+        const specialMoves = {
+            grass: {
+                moves: ['Vine Whip', 'Razor Leaf', 'Sleep Powder'],
+                effects: ['damage', 'damage', 'status']
+            },
+            fire: {
+                moves: ['Ember', 'Fire Spin', 'Smokescreen'],
+                effects: ['damage', 'damage', 'status']
+            },
+            water: {
+                moves: ['Water Gun', 'Bubble', 'Withdraw'],
+                effects: ['damage', 'damage', 'defense']
+            }
+        };
+
+        // Extended battle animations
+        function animateBattleEffect(effect, target) {
+            const sprite = document.getElementById(target + '-sprite');
+            
+            switch(effect) {
+                case 'hit':
+                    sprite.style.animation = 'shake 0.5s';
+                    setTimeout(() => {
+                        sprite.style.animation = '';
+                    }, 500);
+                    break;
+                case 'faint':
+                    sprite.style.animation = 'faint 1s forwards';
+                    break;
+                case 'glow':
+                    sprite.style.animation = 'glow 1s';
+                    setTimeout(() => {
+                        sprite.style.animation = '';
+                    }, 1000);
+                    break;
+            }
+        }
+
+        // CSS animations for battle effects
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-10px); }
+                75% { transform: translateX(10px); }
+            }
+            
+            @keyframes faint {
+                0% { opacity: 1; transform: scale(1); }
+                100% { opacity: 0; transform: scale(0.5) translateY(50px); }
+            }
+            
+            @keyframes glow {
+                0%, 100% { filter: brightness(1); }
+                50% { filter: brightness(1.5) hue-rotate(30deg); }
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        // Sound effect placeholders (would need actual audio files)
+        const soundEffects = {
+            buttonClick: () => console.log('Button click sound'),
+            creatureSound: (type) => console.log(`${type} creature sound`),
+            battleStart: () => console.log('Battle start sound'),
+            victory: () => console.log('Victory sound'),
+            damage: () => console.log('Damage sound')
+        };
+
+        // Add click sounds to all buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.matches('button, .battle-button, .menu-button')) {
+                soundEffects.buttonClick();
+            }
+        });
+
+        // Weather effects based on time
+        function updateWeatherEffects() {
+            const hour = new Date().getHours();
+            
+            if (window.world && window.world.scene) {
+                if (hour >= 6 && hour < 18) {
+                    // Daytime
+                    window.world.scene.fog.color.setHex(0xE8EAF6);
+                    window.world.renderer.setClearColor(0x87CEEB);
+                } else {
+                    // Nighttime
+                    window.world.scene.fog.color.setHex(0x1A237E);
+                    window.world.renderer.setClearColor(0x0D47A1);
+                }
+            }
+        }
+
+        // Update weather every minute
+        setInterval(updateWeatherEffects, 60000);
+        updateWeatherEffects(); // Initial call
+
+        // Debug commands (for development)
+        window.debugCommands = {
+            skipToLab: () => {
+                GameState.flags.talkedToMom = true;
+                GameState.flags.metOak = true;
+                GameState.gamePhase = 'lab_intro';
+                GameState.currentLocation = 'lab';
+                if (window.world) {
+                    window.world.camera.position.set(0, 2, -10);
+                }
+                updateLocationIndicator();
+                startDialogSequence('lab_intro');
+            },
+            
+            winBattle: () => {
+                if (BattleSystem.opponentHP > 0) {
+                    BattleSystem.opponentHP = 0;
+                    BattleSystem.updateHP();
+                    BattleSystem.endBattle(true);
+                }
+            },
+            
+            resetGame: () => {
+                if (confirm('This will reset all progress. Are you sure?')) {
+                    localStorage.removeItem('creatureTrainerSave');
+                    localStorage.removeItem('creatureTrainerAutoSave');
+                    location.reload();
+                }
+            }
+        };
+
+        // Console message for developers
+        console.log('%c🎮 Creature Trainer Debug Mode', 'color: #ff1744; font-size: 16px; font-weight: bold;');
+        console.log('Available commands:');
+        console.log('- debugCommands.skipToLab() : Skip to Pokemon selection');
+        console.log('- debugCommands.winBattle() : Instantly win current battle');
+        console.log('- debugCommands.resetGame() : Reset all progress');
+    </script>
+</body>
+</html>

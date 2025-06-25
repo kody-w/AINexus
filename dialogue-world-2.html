@@ -72,7 +72,7 @@
 
         .controls-hint {
             position: absolute;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 380px);
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 250px);
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
@@ -88,92 +88,94 @@
 
         .dialogue-panel {
             position: absolute;
-            bottom: env(safe-area-inset-bottom, 20px);
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            max-width: 800px;
-            background: rgba(0, 0, 0, 0.85);
+            bottom: env(safe-area-inset-bottom, 0px);
+            left: 0;
+            right: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.9);
             border: 2px solid rgba(139, 69, 19, 0.5);
-            border-radius: 20px;
-            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            padding: 15px;
             backdrop-filter: blur(10px);
             z-index: 1002;
-            max-height: 300px;
+            max-height: 40vh;
             display: flex;
             flex-direction: column;
+            pointer-events: auto;
         }
 
         .dialogue-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             padding-bottom: 10px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .dialogue-title {
             color: #ffd700;
-            font-size: 1.2em;
+            font-size: 1.1em;
             font-weight: 600;
         }
 
         .dialogue-controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .dialogue-button {
             background: rgba(139, 69, 19, 0.8);
             border: none;
             color: white;
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 0.9em;
+            font-size: 0.85em;
             transition: all 0.3s;
             pointer-events: auto;
         }
 
-        .dialogue-button:hover {
+        .dialogue-button:hover, .dialogue-button:active {
             background: rgba(139, 69, 19, 1);
-            transform: translateY(-2px);
         }
 
         .dialogue-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            transform: none;
         }
 
         .dialogue-messages {
             flex: 1;
             overflow-y: auto;
-            margin-bottom: 15px;
-            padding-right: 10px;
+            margin-bottom: 10px;
+            padding-right: 5px;
+            min-height: 100px;
+            max-height: 20vh;
+            -webkit-overflow-scrolling: touch;
         }
 
         .dialogue-messages::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
 
         .dialogue-messages::-webkit-scrollbar-track {
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+            border-radius: 3px;
         }
 
         .dialogue-messages::-webkit-scrollbar-thumb {
             background: rgba(139, 69, 19, 0.6);
-            border-radius: 4px;
+            border-radius: 3px;
         }
 
         .dialogue-message {
-            margin-bottom: 15px;
-            padding: 12px;
-            border-radius: 10px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 8px;
             position: relative;
             animation: fadeIn 0.5s ease-in;
+            font-size: 0.9em;
         }
 
         @keyframes fadeIn {
@@ -190,39 +192,39 @@
         .dialogue-message.socrates {
             background: rgba(70, 130, 180, 0.3);
             border-left: 3px solid #4682b4;
-            margin-right: 20%;
+            margin-right: 15%;
         }
 
         .dialogue-message.glaucon {
             background: rgba(178, 34, 34, 0.3);
             border-left: 3px solid #b22222;
-            margin-left: 20%;
+            margin-left: 15%;
         }
 
         .dialogue-message.player {
             background: rgba(50, 205, 50, 0.3);
             border-left: 3px solid #32cd32;
-            margin-left: 10%;
-            margin-right: 10%;
+            margin-left: 5%;
+            margin-right: 5%;
         }
 
         .speaker-name {
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
             color: #ffd700;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
 
         .message-content {
-            line-height: 1.5;
+            line-height: 1.4;
             color: rgba(255, 255, 255, 0.9);
         }
 
         .user-input-container {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.2);
-            padding-top: 15px;
+            padding-top: 10px;
         }
 
         .user-input {
@@ -230,11 +232,13 @@
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 10px;
-            padding: 10px 15px;
+            padding: 8px 12px;
             color: white;
-            font-size: 0.95em;
+            font-size: 0.9em;
             outline: none;
             transition: all 0.3s;
+            -webkit-user-select: text;
+            user-select: text;
         }
 
         .user-input:focus {
@@ -250,22 +254,21 @@
             background: rgba(50, 205, 50, 0.8);
             border: none;
             color: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s;
+            font-size: 0.9em;
         }
 
-        .send-button:hover {
+        .send-button:hover, .send-button:active {
             background: rgba(50, 205, 50, 1);
-            transform: translateY(-2px);
         }
 
         .send-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            transform: none;
         }
 
         .topic-input-panel {
@@ -276,12 +279,14 @@
             background: rgba(0, 0, 0, 0.95);
             border: 2px solid rgba(139, 69, 19, 0.8);
             border-radius: 20px;
-            padding: 40px;
+            padding: 30px 20px;
             z-index: 2000;
             text-align: center;
-            max-width: 500px;
-            width: 90%;
+            max-width: 90%;
+            width: 450px;
             display: none;
+            max-height: 85vh;
+            overflow-y: auto;
         }
 
         .topic-input-panel.visible {
@@ -290,25 +295,27 @@
 
         .topic-input-panel h2 {
             color: #ffd700;
-            margin-bottom: 20px;
-            font-size: 1.5em;
+            margin-bottom: 15px;
+            font-size: 1.3em;
         }
 
         .topic-input-panel p {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             color: rgba(255, 255, 255, 0.8);
-            font-size: 0.95em;
+            font-size: 0.9em;
         }
 
         .topic-input {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 10px;
             color: white;
-            font-size: 1em;
-            margin-bottom: 20px;
+            font-size: 0.95em;
+            margin-bottom: 15px;
+            -webkit-user-select: text;
+            user-select: text;
         }
 
         .topic-input::placeholder {
@@ -318,8 +325,8 @@
         .topic-presets {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin-bottom: 15px;
             justify-content: center;
         }
 
@@ -327,31 +334,33 @@
             background: rgba(139, 69, 19, 0.6);
             border: 1px solid rgba(255, 215, 0, 0.3);
             color: white;
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 0.85em;
+            font-size: 0.8em;
             transition: all 0.3s;
         }
 
-        .preset-button:hover {
+        .preset-button:hover, .preset-button:active {
             background: rgba(139, 69, 19, 0.8);
             border-color: rgba(255, 215, 0, 0.6);
         }
 
         .action-buttons {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             justify-content: center;
+            flex-wrap: wrap;
         }
 
         .action-button {
-            padding: 12px 25px;
+            padding: 10px 20px;
             border: none;
             border-radius: 10px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            font-size: 0.9em;
         }
 
         .action-button.primary {
@@ -359,7 +368,7 @@
             color: white;
         }
 
-        .action-button.primary:hover {
+        .action-button.primary:hover, .action-button.primary:active {
             background: #a0522d;
         }
 
@@ -368,7 +377,7 @@
             color: white;
         }
 
-        .action-button.secondary:hover {
+        .action-button.secondary:hover, .action-button.secondary:active {
             background: rgba(255, 255, 255, 0.3);
         }
 
@@ -376,13 +385,14 @@
             position: absolute;
             top: env(safe-area-inset-top, 20px);
             right: env(safe-area-inset-right, 20px);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 15px;
             border-radius: 15px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(10px);
             z-index: 1001;
             display: none;
+            max-width: 300px;
         }
 
         .config-panel.visible {
@@ -407,7 +417,7 @@
             transition: all 0.3s;
         }
 
-        .config-button:hover {
+        .config-button:hover, .config-button:active {
             background: rgba(139, 69, 19, 0.8);
         }
 
@@ -430,12 +440,14 @@
             border-radius: 5px;
             color: white;
             font-size: 0.9em;
+            -webkit-user-select: text;
+            user-select: text;
         }
 
         /* Mobile controls */
         .mobile-controls {
             position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 340px);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 45vh);
             left: 20px;
             display: none;
             z-index: 1001;
@@ -447,8 +459,8 @@
         }
 
         .joystick-container {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             background: rgba(255, 255, 255, 0.1);
             border: 2px solid rgba(139, 69, 19, 0.5);
             border-radius: 50%;
@@ -458,8 +470,8 @@
         }
 
         .joystick-handle {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             background: rgba(139, 69, 19, 0.8);
             border-radius: 50%;
             position: absolute;
@@ -474,7 +486,7 @@
             top: 0;
             left: 0;
             right: 0;
-            bottom: 350px;
+            bottom: 45vh;
             z-index: 999;
             touch-action: none;
         }
@@ -552,7 +564,7 @@
             position: absolute;
             background: rgba(50, 205, 50, 0.9);
             color: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 20px;
             font-weight: 600;
             pointer-events: none;
@@ -560,6 +572,7 @@
             transition: opacity 0.3s;
             z-index: 1003;
             transform: translate(-50%, -120%);
+            font-size: 0.85em;
         }
 
         .interaction-prompt.visible {
@@ -568,12 +581,53 @@
 
         @media (max-width: 768px) {
             .world-title {
-                font-size: 1.8em;
+                font-size: 1.5em;
+                letter-spacing: 0.1em;
+            }
+            
+            .world-description {
+                font-size: 0.9em;
             }
             
             .dialogue-panel {
-                width: 95%;
-                max-height: 250px;
+                max-height: 35vh;
+                padding: 12px;
+            }
+            
+            .dialogue-title {
+                font-size: 1em;
+            }
+            
+            .dialogue-button {
+                padding: 5px 10px;
+                font-size: 0.8em;
+            }
+            
+            .dialogue-messages {
+                max-height: 15vh;
+            }
+            
+            .dialogue-message {
+                padding: 6px;
+                font-size: 0.85em;
+            }
+            
+            .user-input {
+                padding: 6px 10px;
+                font-size: 0.85em;
+            }
+            
+            .send-button {
+                padding: 6px 12px;
+                font-size: 0.85em;
+            }
+            
+            .topic-input-panel {
+                padding: 20px 15px;
+            }
+            
+            .topic-input-panel h2 {
+                font-size: 1.2em;
             }
             
             .topic-presets {
@@ -581,13 +635,50 @@
             }
             
             .preset-button {
-                font-size: 0.8em;
-                padding: 6px 12px;
+                font-size: 0.75em;
+                padding: 5px 10px;
             }
 
             .controls-hint {
-                bottom: calc(env(safe-area-inset-bottom, 30px) + 280px);
-                font-size: 0.8em;
+                bottom: calc(env(safe-area-inset-bottom, 20px) + 36vh);
+                font-size: 0.75em;
+                padding: 10px 20px;
+            }
+            
+            .mobile-controls {
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 37vh);
+            }
+            
+            .look-area {
+                bottom: 40vh;
+            }
+            
+            .config-panel {
+                right: env(safe-area-inset-right, 10px);
+                top: env(safe-area-inset-top, 60px);
+                max-width: 250px;
+            }
+        }
+        
+        @media (max-height: 600px) {
+            .dialogue-panel {
+                max-height: 45vh;
+            }
+            
+            .dialogue-messages {
+                max-height: 20vh;
+            }
+            
+            .mobile-controls {
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 47vh);
+            }
+            
+            .controls-hint {
+                bottom: calc(env(safe-area-inset-bottom, 20px) + 46vh);
+            }
+            
+            .look-area {
+                bottom: 50vh;
             }
         }
     </style>
