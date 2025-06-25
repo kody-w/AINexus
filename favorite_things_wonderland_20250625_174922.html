@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Favorite Things: Wonderland</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff61a6, #5be7c4, #ffd166, #f9fafc);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes shimmer {
+            0%, 100% { 
+                background-position: 0% 50%; 
+                filter: hue-rotate(0deg);
+            }
+            50% { 
+                background-position: 100% 50%;
+                filter: hue-rotate(30deg);
+            }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .world-origin {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #ff61a6;
+            font-weight: 500;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid transparent;
+            border-image: linear-gradient(45deg, #ff61a6, #5be7c4, #ffd166) 1;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff61a6, #5be7c4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #ffd166;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 97, 166, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(255, 97, 166, 0.5);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #ff61a6, #5be7c4);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 100px;
+            margin: 30px auto;
+            border: 2px solid transparent;
+            border-top-color: #ff61a6;
+            border-radius: 50%;
+            animation: quantum-spin 1s ease-in-out infinite;
+        }
+
+        @keyframes quantum-spin {
+            0% { 
+                transform: rotate(0deg) scale(1);
+                border-top-color: #ff61a6;
+            }
+            50% { 
+                transform: rotate(180deg) scale(1.2);
+                border-top-color: #5be7c4;
+            }
+            100% { 
+                transform: rotate(360deg) scale(1);
+                border-top-color: #ff61a6;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+        }
+
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">FAVORITE THINGS: WONDERLAND</h1>
+        <p class="world-description" id="world-description">A vibrant realm filled with universally loved treasures—cozy books under ancient trees, playful cats, floating pizza islands, neon arcade memories, lush forests, and magical chromatic skies. Portals hint at endless adventures and the simple joys of life.</p>
+    </div>
+    
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">WASD: Move | Mouse: Look | Click: Travel | Q/E: Fly Up/Down</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+    
+    <div class="loading" id="loading">Materializing favorite things: wonderland...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'nexus-worlds';
+        const BRANCH = 'main';
+        
+        // World configuration
+        const DEFAULT_WORLD_ATTRIBUTES = {
+            name: "Favorite Things: Wonderland",
+            description: "A vibrant realm filled with universally loved treasures—cozy books under ancient trees, playful cats, floating pizza islands, neon arcade memories, lush forests, and magical chromatic skies. Portals hint at endless adventures and the simple joys of life.",
+            ambientColor: 0xffe5b4,
+            fogColor: 0xd6eaff,
+            groundColor: 0x95d5b2,
+            skyTopColor: 0xa3cef1,
+            skyBottomColor: 0xffcfd2,
+            primaryColor: 0xff61a6,
+            secondaryColor: 0x5be7c4,
+            tertiaryColor: 0xffd166,
+            emissiveColor: 0xf9fafc,
+            moveSpeed: 0.18,
+            lookSpeed: 0.0025,
+            portalColor1: 0xffd166,
+            portalColor2: 0xffd166,
+            particleCount: 300,
+            cameraHeight: 2,
+            fogNear: 10,
+            fogFar: 100,
+            enablePhysics: false,
+            enableFlying: true,
+            gravity: 0.5,
+            jumpForce: 0.4
+        };
+        
+        // Shader definitions
+        
+        // Shader definitions
+        const skyVertexShader = `
+            varying vec3 vWorldPosition;
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const skyFragmentShader = `
+            uniform vec3 topColor;
+            uniform vec3 bottomColor;
+            uniform float offset;
+            uniform float exponent;
+            varying vec3 vWorldPosition;
+            void main() {
+                float h = normalize(vWorldPosition + offset).y;
+                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+            }
+        `;
+        
+        const portalVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const portalFragmentShader = `
+            uniform float time;
+            uniform vec3 color1;
+            uniform vec3 color2;
+            uniform float distortion;
+            varying vec2 vUv;
+            
+            float noise(vec2 p) {
+                return sin(p.x * 10.0) * sin(p.y * 10.0);
+            }
+            
+            void main() {
+                vec2 center = vUv - 0.5;
+                float dist = length(center);
+                float angle = atan(center.y, center.x);
+                
+                // Spiral pattern
+                float spiral = sin(dist * 20.0 - time * 3.0 + angle * 5.0);
+                
+                // Distortion
+                vec2 distortedUV = vUv;
+                if (distortion > 0.0) {
+                    distortedUV += sin(time + vUv * 10.0) * 0.02 * distortion;
+                }
+                
+                // Noise
+                float n = noise(distortedUV * 10.0 + time);
+                
+                // Mix colors
+                vec3 color = mix(color1, color2, spiral * 0.5 + 0.5);
+                color += n * 0.1;
+                
+                // Alpha falloff
+                float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+                alpha *= 0.8 + sin(time * 2.0 + dist * 10.0) * 0.2;
+                
+                gl_FragColor = vec4(color, alpha);
+            }
+        `;
+        
+        
+        // Parse inherited attributes
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+            
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+            
+            console.log('Parsed inherited attributes:', inherited);
+            return inherited;
+        }
+        
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        class WorldNavigator {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.composer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.structures = [];
+                this.effects = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false, q: false, e: false, ' ': false };
+                this.rotation = { x: 0, y: 0 };
+                this.velocity = new THREE.Vector3();
+                this.canJump = true;
+                
+                this.isMobile = isMobile;
+                this.isIOS = isIOS;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+                
+                this.inheritedAttributes = inheritedAttributes;
+                
+                
+            // Audio system
+            this.audioContext = null;
+            this.audioNodes = {};
+            
+            this.initAudio = function() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Master gain
+                    this.audioNodes.masterGain = this.audioContext.createGain();
+                    this.audioNodes.masterGain.gain.setValueAtTime(0.7, this.audioContext.currentTime);
+                    
+                    // Reverb
+                    
+            // Create reverb
+            const reverbConvolver = this.audioContext.createConvolver();
+            const reverbLength = 2;
+            const sampleRate = this.audioContext.sampleRate;
+            const reverbBuffer = this.audioContext.createBuffer(2, reverbLength * sampleRate, sampleRate);
+            
+            for (let channel = 0; channel < 2; channel++) {
+                const channelData = reverbBuffer.getChannelData(channel);
+                for (let i = 0; i < channelData.length; i++) {
+                    channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / channelData.length, 2);
+                }
+            }
+            
+            reverbConvolver.buffer = reverbBuffer;
+            this.audioNodes.reverb = reverbConvolver;
+            reverbConvolver.connect(this.audioNodes.masterGain);
+        
+                    
+                    // Ambient sound
+                    
+            // Create ambient sound: Forest ambience
+            const ambientOscillator = this.audioContext.createOscillator();
+            const ambientGain = this.audioContext.createGain();
+            const ambientFilter = this.audioContext.createBiquadFilter();
+            
+            ambientOscillator.type = 'sine';
+            ambientOscillator.frequency.setValueAtTime(200, this.audioContext.currentTime);
+            
+            ambientFilter.type = 'lowpass';
+            ambientFilter.frequency.setValueAtTime(1000, this.audioContext.currentTime);
+            ambientFilter.Q.setValueAtTime(1, this.audioContext.currentTime);
+            
+            ambientGain.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+            
+            // Add noise
+            const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 2, this.audioContext.sampleRate);
+            const noiseData = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseData.length; i++) {
+                noiseData[i] = (Math.random() * 2 - 1) * 0.4;
+            }
+            
+            const noiseSource = this.audioContext.createBufferSource();
+            noiseSource.buffer = noiseBuffer;
+            noiseSource.loop = true;
+            
+            const noiseGain = this.audioContext.createGain();
+            noiseGain.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+            
+            // Connect ambient sound chain
+            ambientOscillator.connect(ambientFilter);
+            ambientFilter.connect(ambientGain);
+            noiseSource.connect(noiseGain);
+            noiseGain.connect(ambientGain);
+            
+            if (this.audioNodes.reverb) {
+                ambientGain.connect(this.audioNodes.reverb);
+            } else {
+                ambientGain.connect(this.audioNodes.masterGain);
+            }
+            
+            ambientOscillator.start();
+            noiseSource.start();
+            
+            this.audioNodes.ambient = ambientOscillator;
+            this.audioNodes.ambientGain = ambientGain;
+            this.audioNodes.noise = noiseSource;
+        
+                    
+                    // Connect to output
+                    this.audioNodes.masterGain.connect(this.audioContext.destination);
+                    
+                    // Resume on interaction
+                    document.addEventListener('click', () => {
+                        if (this.audioContext.state === 'suspended') {
+                            this.audioContext.resume();
+                        }
+                    }, { once: true });
+                    
+                } catch (e) {
+                    console.log('Web Audio API not supported');
+                }
+            };
+            
+            this.audioUpdate = function(time) {
+                if (!this.audioContext) return;
+                
+                // Update audio parameters based on world state
+                if (this.audioNodes.ambient) {
+                    // Modulate ambient sound
+                    const modulation = Math.sin(time * 0.1) * 0.2 + 0.8;
+                    this.audioNodes.ambientGain.gain.setValueAtTime(0.7 * modulation, this.audioContext.currentTime);
+                }
+            };
+            
+            this.initAudio();
+        
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+            
+            async init() {
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                }
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 2000);
+                
+                document.getElementById('world-title').textContent = CURRENT_WORLD.name.toUpperCase();
+                document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+                
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createEnvironment();
+                this.createStructures();
+                this.createEffects();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter';
+                    }
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0xd6eaff, 0.025);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 600);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 1.2;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.7);
+                this.scene.add(ambientLight);
+                
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                dirLight.position.set(40, 180, 37);
+                dirLight.castShadow = true;
+                if (dirLight.castShadow) {
+                    dirLight.shadow.camera.near = 0.1;
+                    dirLight.shadow.camera.far = 200;
+                    dirLight.shadow.camera.left = -100;
+                    dirLight.shadow.camera.right = 100;
+                    dirLight.shadow.camera.top = 100;
+                    dirLight.shadow.camera.bottom = -100;
+                    dirLight.shadow.mapSize.width = 4096;
+                    dirLight.shadow.mapSize.height = 4096;
+                }
+                this.scene.add(dirLight);
+                
+                const hemiLight = new THREE.HemisphereLight(0xece9f1, 0xfdf6e3, 0.3);
+                this.scene.add(hemiLight);
+                
+                
+// Point lights
+
+                const pointLight0 = new THREE.PointLight(0xffd166, 0.6, 30, 2);
+                pointLight0.position.set(20, 8, 10);
+                pointLight0.castShadow = true;
+                pointLight0.userData = {
+                    baseIntensity: 0.6,
+                    animationType: 'pulse',
+                    basePosition: new THREE.Vector3(20, 8, 10)
+                };
+                this.scene.add(pointLight0);
+            
+                const pointLight1 = new THREE.PointLight(0x5be7c4, 0.5, 22, 2);
+                pointLight1.position.set(-25, 12, -18);
+                pointLight1.castShadow = true;
+                pointLight1.userData = {
+                    baseIntensity: 0.5,
+                    animationType: 'orbit',
+                    basePosition: new THREE.Vector3(-25, 12, -18)
+                };
+                this.scene.add(pointLight1);
+            
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('favorite_things_wonderland')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    // Always include portal to hub
+                    this.worlds.unshift({
+                        name: "Nexus Hub",
+                        description: "Return to the central hub",
+                        url: "https://raw.githubusercontent.com/" + REPO_OWNER + "/" + REPO_NAME + "/" + BRANCH + "/index.html"
+                    });
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "A mystical underground realm" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds" },
+                    { name: "Neon City", description: "Cyberpunk metropolis" },
+                    { name: "Quantum Realm", description: "Where physics breaks down" }
+                ];
+            }
+            
+            createEnvironment() {
+                // Terrain
+                const groundGeometry = new THREE.PlaneGeometry(350, 350, 100, 100);
+                
+                const vertices = groundGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    const x = vertices[i];
+                    const y = vertices[i + 1];
+                    let height = 0;
+                    let amplitude = 2.5;
+                    let frequency = 0.01;
+                    
+                    for (let o = 0; o < 4; o++) {
+                        height += Math.sin(x * frequency) * Math.cos(y * frequency) * amplitude;
+                        amplitude *= 0.5;
+                        frequency *= 2;
+                    }
+                    
+                    vertices[i + 2] = height;
+                }
+                groundGeometry.computeVertexNormals();
+            
+                
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 0.8,
+                    metalness: 0.2,
+                    wireframe: false
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+                
+                // Sky
+                const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+                const skyMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        topColor: { value: new THREE.Color(CURRENT_WORLD.skyTopColor) },
+                        bottomColor: { value: new THREE.Color(CURRENT_WORLD.skyBottomColor) },
+                        offset: { value: 33 },
+                        exponent: { value: 0.6 }
+                    },
+                    vertexShader: skyVertexShader,
+                    fragmentShader: skyFragmentShader,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+                
+                // Particles
+                
+                // Floating particles
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 300;
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                const sizes = new Float32Array(particleCount);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 100;
+                    positions[i + 1] = Math.random() * 50;
+                    positions[i + 2] = (Math.random() - 0.5) * 100;
+                    
+                    const color = new THREE.Color();
+                    color.setHSL(Math.random(), 0.5, 0.5);
+                    colors[i] = color.r;
+                    colors[i + 1] = color.g;
+                    colors[i + 2] = color.b;
+                    
+                    sizes[i / 3] = Math.random() * 0.15 + 0.075;
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                particleGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    size: 0.15,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(this.particles);
+            
+                
+                // Water
+                
+            // Water plane with shader
+            const waterGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+            const waterMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    waveHeight: { value: 0.5 },
+                    waveSpeed: { value: 1 },
+                    waterColor: { value: new THREE.Color(0x006994) },
+                    foamColor: { value: new THREE.Color(0xffffff) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    varying float vElevation;
+                    uniform float time;
+                    uniform float waveHeight;
+                    uniform float waveSpeed;
+                    
+                    void main() {
+                        vUv = uv;
+                        vec3 pos = position;
+                        
+                        float wave1 = sin(pos.x * 0.1 + time * waveSpeed) * cos(pos.y * 0.1 + time * waveSpeed) * waveHeight;
+                        float wave2 = sin(pos.x * 0.05 - time * waveSpeed * 0.5) * sin(pos.y * 0.05 + time * waveSpeed * 0.5) * waveHeight * 0.5;
+                        
+                        pos.z = wave1 + wave2;
+                        vElevation = pos.z;
+                        
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    varying vec2 vUv;
+                    varying float vElevation;
+                    uniform vec3 waterColor;
+                    uniform vec3 foamColor;
+                    
+                    void main() {
+                        float foam = smoothstep(0.3, 0.5, vElevation);
+                        vec3 color = mix(waterColor, foamColor, foam);
+                        float alpha = 0.8;
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            
+            this.water = new THREE.Mesh(waterGeometry, waterMaterial);
+            this.water.rotation.x = -Math.PI / 2;
+            this.water.position.y = 0;
+            this.scene.add(this.water);
+            
+            // Water animation function
+            this.animateWater = function(time) {
+                this.water.material.uniforms.time.value = time;
+            };
+        
+            }
+            
+            createStructures() {
+                
+// World structures
+this.structures = [];
+
+                // Structure 0: cube
+                const structure0Geometry = new THREE.BoxGeometry(1, 1, 1);
+            
+                const structure0Material = new THREE.MeshPhongMaterial({
+                    color: 0x9d9bf6,
+                    emissive: 0xe0c3fc,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.5,
+                    roughness: 0.5,
+                    transparent: true,
+                    opacity: 0.9,
+                    wireframe: false
+                });
+                
+                const structure0 = new THREE.Mesh(structure0Geometry, structure0Material);
+                structure0.position.set(22, 4, 19);
+                structure0.rotation.set(0, 0, 0);
+                structure0.scale.set(2.5, 2.5, 2.5);
+                structure0.castShadow = true;
+                structure0.receiveShadow = true;
+                structure0.userData = {
+                    animation: 'pulse',
+                    animationSpeed: 2,
+                    baseY: 4,
+                    material: structure0Material
+                };
+                this.structures.push(structure0);
+                this.scene.add(structure0);
+            
+                const structure0Light = new THREE.PointLight(0xe0c3fc, 0.5, 10);
+                structure0Light.position.copy(structure0.position);
+                this.scene.add(structure0Light);
+                
+                // Structure 1: crystal
+                const structure1Geometry = new THREE.OctahedronGeometry(1, 0);
+            
+                const structure1Material = new THREE.MeshPhongMaterial({
+                    color: 0xffd166,
+                    emissive: 0xffeeee,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.5,
+                    roughness: 0.5,
+                    transparent: false,
+                    opacity: 1,
+                    wireframe: false
+                });
+                
+                const structure1 = new THREE.Mesh(structure1Geometry, structure1Material);
+                structure1.position.set(-14, 2, -5);
+                structure1.rotation.set(0, 0, 0);
+                structure1.scale.set(1.2, 3.2, 1.2);
+                structure1.castShadow = true;
+                structure1.receiveShadow = true;
+                structure1.userData = {
+                    animation: 'float',
+                    animationSpeed: 1.3,
+                    baseY: 2,
+                    material: structure1Material
+                };
+                this.structures.push(structure1);
+                this.scene.add(structure1);
+            
+                const structure1Light = new THREE.PointLight(0xffeeee, 0.5, 10);
+                structure1Light.position.copy(structure1.position);
+                this.scene.add(structure1Light);
+                
+                // Structure 2: cube
+                const structure2Geometry = new THREE.BoxGeometry(1, 1, 1);
+            
+                const structure2Material = new THREE.MeshPhongMaterial({
+                    color: 0xf57a7a,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    metalness: 0.5,
+                    roughness: 0.5,
+                    transparent: false,
+                    opacity: 1,
+                    wireframe: false
+                });
+                
+                const structure2 = new THREE.Mesh(structure2Geometry, structure2Material);
+                structure2.position.set(0, 2.5, 11);
+                structure2.rotation.set(0, 0, 0);
+                structure2.scale.set(3, 1.5, 2);
+                structure2.castShadow = true;
+                structure2.receiveShadow = true;
+                structure2.userData = {
+                    animation: 'none',
+                    animationSpeed: 1,
+                    baseY: 2.5,
+                    material: structure2Material
+                };
+                this.structures.push(structure2);
+                this.scene.add(structure2);
+            
+                // Structure 3: custom
+                const structure3Geometry = new THREE.BoxGeometry(1, 1, 1);
+            
+                const structure3Material = new THREE.MeshPhongMaterial({
+                    color: 0xfff,
+                    emissive: 0xfbd46d,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.5,
+                    roughness: 0.5,
+                    transparent: false,
+                    opacity: 1,
+                    wireframe: false
+                });
+                
+                const structure3 = new THREE.Mesh(structure3Geometry, structure3Material);
+                structure3.position.set(12, 8, 0);
+                structure3.rotation.set(0, 0, 0);
+                structure3.scale.set(1.8, 1.8, 1.8);
+                structure3.castShadow = true;
+                structure3.receiveShadow = true;
+                structure3.userData = {
+                    animation: 'orbit',
+                    animationSpeed: 2.6,
+                    baseY: 8,
+                    material: structure3Material
+                };
+                this.structures.push(structure3);
+                this.scene.add(structure3);
+            
+                const structure3Light = new THREE.PointLight(0xfbd46d, 0.5, 10);
+                structure3Light.position.copy(structure3.position);
+                this.scene.add(structure3Light);
+                
+            }
+            
+            createEffects() {
+                
+// Special effects
+this.effects = [];
+
+                    // Aurora effect
+                    const auroraGeometry = new THREE.PlaneGeometry(650, 260, 50, 20);
+                    const auroraMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(0x5be7c4) },
+                            color2: { value: new THREE.Color(0xffd166) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            uniform float time;
+                            void main() {
+                                vUv = uv;
+                                vec3 pos = position;
+                                pos.z += sin(pos.x * 0.1 + time) * sin(pos.y * 0.1 + time) * 2.0;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            void main() {
+                                float wave = sin(vUv.x * 10.0 + time * 1.2) * sin(vUv.y * 5.0 - time * 0.6);
+                                vec3 color = mix(color1, color2, wave * 0.5 + 0.5);
+                                float alpha = 0.8 * (1.0 - vUv.y) * (sin(time + vUv.x * 20.0) * 0.5 + 0.5);
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide,
+                        blending: THREE.AdditiveBlending
+                    });
+                    const aurora0 = new THREE.Mesh(auroraGeometry, auroraMaterial);
+                    aurora0.position.set(0, 28, 0);
+                    aurora0.rotation.x = -Math.PI / 4;
+                    aurora0.userData.material = auroraMaterial;
+                    aurora0.update = function(time) {
+                        this.userData.material.uniforms.time.value = time;
+                    };
+                    this.effects.push(aurora0);
+                    this.scene.add(aurora0);
+                
+                    // Portal field effect
+                    const portalField1Geometry = new THREE.RingGeometry(2 * 2.7, 3 * 2.7, 32);
+                    const portalField1Material = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(0x9d9bf6) },
+                            color2: { value: new THREE.Color(0xf57a7a) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float angle = atan(center.y, center.x);
+                                float spiral = sin(dist * 20.0 - time * 6.6000000000000005 + angle * 5.0);
+                                vec3 color = mix(color1, color2, spiral * 0.5 + 0.5);
+                                float alpha = 0.9 * (1.0 - smoothstep(0.3, 0.5, abs(dist - 0.4)));
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide,
+                        blending: THREE.AdditiveBlending
+                    });
+                    const portalField1 = new THREE.Mesh(portalField1Geometry, portalField1Material);
+                    portalField1.position.set(-20, 2, 18);
+                    portalField1.userData.material = portalField1Material;
+                    portalField1.update = function(time) {
+                        this.userData.material.uniforms.time.value = time;
+                        this.rotation.z = time * 1.1;
+                    };
+                    this.effects.push(portalField1);
+                    this.scene.add(portalField1);
+                
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 8);
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i];
+                    const angle = (i / numPortals) * Math.PI * 2;
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Portal frame
+                    const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xff61a6,
+                        emissive: 0xff61a6,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(2.7, 64);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) },
+                            distortion: { value: 1 }
+                        },
+                        vertexShader: portalVertexShader,
+                        fragmentShader: portalFragmentShader,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+                    
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    // Portal particles
+                    
+            // Portal particles
+            const particleCount = 100;
+            const particleGeometry = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            
+            for (let j = 0; j < particleCount; j++) {
+                const angle = (j / particleCount) * Math.PI * 2;
+                const radius = 3.5 + Math.random() * 0.5;
+                particlePositions[j * 3] = Math.cos(angle) * radius;
+                particlePositions[j * 3 + 1] = Math.sin(angle) * radius;
+                particlePositions[j * 3 + 2] = (Math.random() - 0.5) * 0.5;
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            portalGroup.add(particles);
+            portalGroup.userData.particles = particles;
+        
+                    
+                    portalGroup.position.x = Math.cos(angle) * 32;
+                    portalGroup.position.z = Math.sin(angle) * 32;
+                    portalGroup.position.y = 11;
+                    portalGroup.rotation.y = -angle + Math.PI;
+                    
+                    const light = new THREE.PointLight(0xff61a6, 1, 10);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+                    
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`,
+                        particles: portalGroup.userData.particles
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                    
+                    // Platform
+                    const platformGeometry = new THREE.CylinderGeometry(4, 4, 0.5, 32);
+                    const platformMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x444444,
+                        metalness: 0.5,
+                        roughness: 0.5
+                    });
+                    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                    platform.position.copy(portalGroup.position);
+                    platform.position.y = 0.25;
+                    platform.receiveShadow = true;
+                    platform.castShadow = true;
+                    this.scene.add(platform);
+                }
+            }
+            
+            buildInheritanceParams() {
+                const params = new URLSearchParams();
+                
+                params.set('from', window.location.pathname.split('/').pop() || 'favorite_things_wonderland.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
+            }
+            
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = true;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = true;
+                        e.preventDefault();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = false;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = false;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                // Apply damping
+                if (CURRENT_WORLD.enablePhysics) {
+                    this.velocity.x *= 0.9;
+                    this.velocity.z *= 0.9;
+                }
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        
+                        if (CURRENT_WORLD.enablePhysics) {
+                            this.velocity.add(moveForward);
+                            this.velocity.add(moveRight);
+                        } else {
+                            this.camera.position.add(moveForward);
+                            this.camera.position.add(moveRight);
+                        }
+                    }
+                } else {
+                    if (this.keys.w) {
+                        if (CURRENT_WORLD.enablePhysics) {
+                            this.velocity.add(forward.multiplyScalar(this.moveSpeed));
+                        } else {
+                            this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.s) {
+                        if (CURRENT_WORLD.enablePhysics) {
+                            this.velocity.add(forward.multiplyScalar(-this.moveSpeed));
+                        } else {
+                            this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.a) {
+                        if (CURRENT_WORLD.enablePhysics) {
+                            this.velocity.add(right.multiplyScalar(-this.moveSpeed));
+                        } else {
+                            this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.d) {
+                        if (CURRENT_WORLD.enablePhysics) {
+                            this.velocity.add(right.multiplyScalar(this.moveSpeed));
+                        } else {
+                            this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                        }
+                    }
+                    
+                    // Vertical movement
+                    if (CURRENT_WORLD.enableFlying) {
+                        if (this.keys.q) this.camera.position.y -= this.moveSpeed;
+                        if (this.keys.e) this.camera.position.y += this.moveSpeed;
+                    }
+                    
+                    // Jumping
+                    if (CURRENT_WORLD.enablePhysics && this.keys[' '] && this.canJump) {
+                        this.velocity.y = CURRENT_WORLD.jumpForce;
+                        this.canJump = false;
+                    }
+                }
+                
+                // Apply physics
+                if (CURRENT_WORLD.enablePhysics) {
+                    this.velocity.y -= CURRENT_WORLD.gravity * 0.01;
+                    this.camera.position.add(this.velocity);
+                    
+                    // Ground collision
+                    if (this.camera.position.y < CURRENT_WORLD.cameraHeight) {
+                        this.camera.position.y = CURRENT_WORLD.cameraHeight;
+                        this.velocity.y = 0;
+                        this.canJump = true;
+                    }
+                }
+                
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Quantum tunneling...';
+                    
+                    // Transition effect
+                    const transitionDuration = 1500;
+                    const startTime = Date.now();
+                    
+                    const transitionEffect = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = elapsed / transitionDuration;
+                        
+                        if (progress >= 1) {
+                            clearInterval(transitionEffect);
+                            this.loadNewWorld(url);
+                        } else {
+                            this.renderer.domElement.style.filter = `hue-rotate(${progress * 360}deg) blur(${progress * 10}px)`;
+                            this.renderer.domElement.style.opacity = 1 - progress * 0.5;
+                        }
+                    }, 16);
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Portal malfunction. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            async loadNewWorld(url) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error loading world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to establish connection.';
+                    this.renderer.domElement.style.filter = 'none';
+                    this.renderer.domElement.style.opacity = '1';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                const delta = this.clock.getDelta();
+                
+                this.updateMovement();
+                this.updateHover();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        const intensity = 0.5 + Math.sin(time * 2 + index) * 0.3;
+                        portal.userData.light.intensity = intensity;
+                        
+                        if (portal.userData.particles) {
+                            portal.userData.particles.rotation.z = time * 0.5;
+                        }
+                    }
+                    
+                    portal.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
+                });
+                
+                // Animate particles
+                if (this.particles) {
+                    this.particles.rotation.y = time * 0.05;
+                    
+                    if (this.particleSystem) {
+                        this.particleSystem.update(delta);
+                    }
+                }
+                
+                // Animate structures
+                if (this.structures) {
+                    this.structures.forEach((structure, i) => {
+                        if (structure.userData.animation === 'rotate') {
+                            structure.rotation.y = time * (structure.userData.animationSpeed || 1);
+                        } else if (structure.userData.animation === 'float') {
+                            structure.position.y = structure.userData.baseY + Math.sin(time * (structure.userData.animationSpeed || 1)) * 2;
+                        } else if (structure.userData.animation === 'pulse') {
+                            const scale = 1 + Math.sin(time * (structure.userData.animationSpeed || 1) * 2) * 0.1;
+                            structure.scale.setScalar(scale);
+                        }
+                    });
+                }
+                
+                // Animate effects
+                if (this.effects) {
+                    this.effects.forEach((effect, i) => {
+                        if (effect.update) {
+                            effect.update(time, delta);
+                        }
+                    });
+                }
+                
+                // Animate water
+                if (this.water && this.animateWater) {
+                    this.animateWater(time);
+                }
+                
+                // Update audio
+                if (this.audioUpdate) {
+                    this.audioUpdate(time);
+                }
+                
+                
+// Animation updates
+
+        // Animate lights
+        this.scene.traverse((child) => {
+            if (child.isLight && child.type === 'PointLight' && child.userData.animationType) {
+                const time = this.clock.getElapsedTime();
+                const animType = child.userData.animationType;
+                
+                if (animType === 'pulse') {
+                    child.intensity = child.userData.baseIntensity * (0.5 + Math.sin(time * 2) * 0.5);
+                } else if (animType === 'orbit') {
+                    const angle = time * 0.5;
+                    const radius = 10;
+                    child.position.x = child.userData.basePosition.x + Math.cos(angle) * radius;
+                    child.position.z = child.userData.basePosition.z + Math.sin(angle) * radius;
+                } else if (animType === 'flicker') {
+                    child.intensity = child.userData.baseIntensity * (0.8 + Math.random() * 0.2);
+                }
+            }
+        });
+        
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize world
+        window.addEventListener('DOMContentLoaded', () => {
+            const navigator = new WorldNavigator();
+            navigator.init();
+        });
+        
+        // Prevent pull-to-refresh on mobile
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+    </script>
+</body>
+</html>
