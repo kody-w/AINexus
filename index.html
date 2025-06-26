@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Nexus Hub</title>
+    <title>Nexus Hub - GPS World Explorer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {
             margin: 0;
@@ -40,6 +41,559 @@
             user-select: none;
         }
 
+        /* Map View */
+        #map-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            display: none;
+        }
+
+        #map-container.active {
+            display: block;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            right: env(safe-area-inset-right, 20px);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .map-title {
+            font-size: 2em;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Location Setter */
+        .location-setter {
+            position: fixed;
+            top: env(safe-area-inset-top, 80px);
+            left: env(safe-area-inset-left, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1001;
+            display: none;
+            pointer-events: auto;
+        }
+
+        .location-setter.active {
+            display: block;
+        }
+
+        .location-setter button {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 5px;
+        }
+
+        .location-setter button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        .location-setter button.cancel {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        /* AI Companion Modal */
+        .ai-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2002;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .ai-modal.show {
+            display: flex;
+        }
+
+        .ai-modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .ai-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .ai-modal-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .ai-modal h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .ai-api-key-input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .ai-api-key-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .ai-activate-btn {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+
+        .ai-activate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(131, 56, 236, 0.4);
+        }
+
+        .ai-companion-list {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .ai-companion-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-companion-name {
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .ai-companion-status {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* AI Chat Interface */
+        .ai-chat-interface {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px) + 100px);
+            right: calc(env(safe-area-inset-right, 20px));
+            width: 350px;
+            height: 450px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            z-index: 1003;
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.3);
+        }
+
+        .ai-chat-interface.active {
+            display: flex;
+        }
+
+        .ai-chat-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-title {
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .ai-chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .ai-message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .ai-message.user {
+            background: rgba(131, 56, 236, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .ai-message.ai {
+            background: rgba(6, 255, 165, 0.2);
+            margin-right: auto;
+        }
+
+        .ai-chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 10px;
+        }
+
+        .ai-chat-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .ai-chat-send {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .ai-chat-send:hover {
+            transform: scale(1.05);
+        }
+
+        /* AI Companion Button */
+        .ai-companion-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 220px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(131, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(131, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+        }
+
+        .ai-companion-button:hover {
+            background: rgba(131, 56, 236, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.5);
+        }
+
+        .ai-companion-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            border-color: rgba(6, 255, 165, 0.5);
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        /* GPS Status */
+        .gps-status {
+            position: fixed;
+            top: env(safe-area-inset-top, 80px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1001;
+            pointer-events: auto;
+        }
+
+        .gps-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+            transition: all 0.3s ease;
+        }
+
+        .gps-indicator.active {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .gps-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+        }
+
+        .gps-accuracy {
+            color: #06ffa5;
+            font-size: 0.8em;
+        }
+
+        /* View Toggle Button */
+        .view-toggle {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 150px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(138, 56, 236, 0.3);
+        }
+
+        .view-toggle:hover {
+            background: rgba(138, 56, 236, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.5);
+        }
+
+        .view-toggle-icon {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* World Portal Markers */
+        .world-marker {
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, rgba(138, 56, 236, 0.8), rgba(255, 0, 110, 0.8));
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(138, 56, 236, 0.6);
+            animation: markerPulse 2s infinite;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        @keyframes markerPulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(138, 56, 236, 0.6); }
+            50% { transform: scale(1.1); box-shadow: 0 0 30px rgba(138, 56, 236, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(138, 56, 236, 0.6); }
+        }
+
+        .world-marker-popup {
+            text-align: center;
+        }
+
+        .popup-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #8338ec;
+        }
+
+        .popup-description {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .popup-distance {
+            font-size: 0.8em;
+            color: #06ffa5;
+            margin-bottom: 10px;
+        }
+
+        .enter-world-btn {
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .enter-world-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
+        }
+
+        .enter-world-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Location Permission Modal */
+        .permission-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .permission-modal.hidden {
+            display: none;
+        }
+
+        .permission-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .permission-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .permission-title {
+            font-size: 24px;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .permission-description {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .permission-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .permission-btn {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .permission-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        .permission-btn.manual {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+        }
+
         .world-ui {
             position: absolute;
             top: env(safe-area-inset-top, 20px);
@@ -60,11 +614,6 @@
             background-clip: text;
             animation: shimmer 8s ease-in-out infinite;
             margin-bottom: 10px;
-        }
-
-        @keyframes shimmer {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
         }
 
         .world-description {
@@ -105,7 +654,7 @@
         /* Multiplayer Status */
         .multiplayer-status {
             position: fixed;
-            top: env(safe-area-inset-top, 80px);
+            top: env(safe-area-inset-top, 140px);
             right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.8);
             padding: 10px 20px;
@@ -324,6 +873,263 @@
             100% { transform: translateX(100px); }
         }
 
+        /* World Scanner Styles */
+        .scanner-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 290px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 106, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 106, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
+        }
+
+        .scanner-button:hover {
+            background: rgba(255, 106, 0, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
+        }
+
+        .scanner-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        .world-scanner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            z-index: 3000;
+            display: none;
+        }
+
+        .world-scanner.active {
+            display: block;
+        }
+
+        .scanner-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #scanner-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            pointer-events: none;
+        }
+
+        .scanner-frame {
+            width: 250px;
+            height: 250px;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            position: relative;
+        }
+
+        .scanner-frame::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            border-radius: 20px;
+            opacity: 0.5;
+            animation: pulse 2s infinite;
+        }
+
+        .scanner-instruction {
+            margin-top: 20px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+
+        .scanner-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .capture-btn, .cancel-scan-btn {
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .capture-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
+        }
+
+        .cancel-scan-btn {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .world-creation-form {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .form-container {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .form-container h2 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .anchor-preview {
+            width: 100%;
+            max-width: 300px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin: 0 auto 20px;
+            display: block;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .form-container input,
+        .form-container textarea,
+        .form-container select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+        }
+
+        .form-container input::placeholder,
+        .form-container textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .create-world-btn {
+            width: 100%;
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 15px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .create-world-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        .form-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .form-close-btn:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .download-json-btn {
+            background: linear-gradient(45deg, #3a86ff, #8338ec);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .download-json-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(58, 134, 255, 0.4);
+        }
+
         /* QR Code Share Button */
         .share-button {
             position: fixed;
@@ -484,6 +1290,12 @@
                 font-size: 1em;
                 max-width: 300px;
             }
+
+            .ai-chat-interface {
+                width: calc(100% - 40px);
+                right: 20px;
+                left: 20px;
+            }
         }
 
         /* iOS specific fixes */
@@ -504,6 +1316,70 @@
 <body>
     <div id="three-container"></div>
     
+    <!-- Map Container -->
+    <div id="map-container">
+        <div id="map"></div>
+        <div class="map-overlay">
+            <h1 class="map-title">GPS WORLD MAP</h1>
+        </div>
+        <div class="location-setter" id="location-setter">
+            <p>Click on the map to set your reference location</p>
+            <button class="confirm" id="confirm-location">Confirm Location</button>
+            <button class="cancel" id="cancel-location">Cancel</button>
+        </div>
+    </div>
+    
+    <!-- Location Permission Modal -->
+    <div class="permission-modal" id="permission-modal">
+        <div class="permission-content">
+            <div class="permission-icon">📍</div>
+            <h2 class="permission-title">Choose Your Location</h2>
+            <p class="permission-description">
+                Set up your world's location. You can use your current GPS location or manually select a point on the map.
+            </p>
+            <div class="permission-buttons">
+                <button class="permission-btn" id="enable-location-btn">Use My Location</button>
+                <button class="permission-btn manual" id="manual-location-btn">Choose on Map</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Companion Modal -->
+    <div class="ai-modal" id="ai-modal">
+        <div class="ai-modal-content">
+            <button class="ai-modal-close" id="ai-close">&times;</button>
+            <h3>AI Companion Settings</h3>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
+                Activate AI companions to join your world. They can interact with you and other players in real-time.
+            </p>
+            <input type="password" class="ai-api-key-input" id="ai-api-key" placeholder="Enter your API key to wake up AI companions">
+            <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Companions</button>
+            
+            <div class="ai-companion-list" id="ai-companion-list">
+                <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
+                <div class="ai-companion-item">
+                    <div>
+                        <div class="ai-companion-name">No AI companions active</div>
+                        <div class="ai-companion-status">Enter API key to activate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Interface -->
+    <div class="ai-chat-interface" id="ai-chat-interface">
+        <div class="ai-chat-header">
+            <div class="ai-chat-title">AI Companion Chat</div>
+            <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
+        </div>
+        <div class="ai-chat-messages" id="ai-chat-messages"></div>
+        <div class="ai-chat-input-container">
+            <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
+            <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
+        </div>
+    </div>
+    
     <div class="look-area" id="look-area"></div>
     
     <div class="world-ui">
@@ -516,6 +1392,13 @@
         <span class="origin-world" id="origin-world-name">Origin</span>
     </div>
 
+    <!-- GPS Status -->
+    <div class="gps-status" id="gps-status">
+        <div class="gps-indicator" id="gps-indicator"></div>
+        <span class="gps-text" id="gps-text">GPS: Acquiring...</span>
+        <span class="gps-accuracy" id="gps-accuracy"></span>
+    </div>
+
     <!-- Multiplayer Status -->
     <div class="multiplayer-status" id="multiplayer-status">
         <div class="status-indicator" id="status-indicator"></div>
@@ -525,6 +1408,45 @@
         </div>
     </div>
     
+    <!-- View Toggle Button -->
+    <div class="view-toggle" id="view-toggle">
+        <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+    </div>
+
+    <!-- AI Companion Button -->
+    <div class="ai-companion-button" id="ai-companion-button">
+        <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+        </svg>
+    </div>
+    
+    <!-- World Scanner Button -->
+    <div class="scanner-button" id="scanner-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="12" cy="12" r="3"/>
+            <circle cx="12" cy="12" r="1"/>
+        </svg>
+    </div>
+
+    <!-- World Scanner UI -->
+    <div class="world-scanner" id="world-scanner">
+        <div class="scanner-container">
+            <video id="scanner-video" autoplay playsinline></video>
+            <div class="scanner-overlay">
+                <div class="scanner-frame"></div>
+                <p class="scanner-instruction">Point at object to create portal anchor</p>
+            </div>
+            <div class="scanner-controls">
+                <button class="capture-btn" id="capture-btn">📸 Capture Anchor</button>
+                <button class="cancel-scan-btn" id="cancel-scan-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
@@ -568,11 +1490,26 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Configuration - Update these with your GitHub details
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
+        
+        // Default reference location (can be overridden by user)
+        let REFERENCE_LOCATION = {
+            lat: 33.8405,  // Default coordinates
+            lng: -84.5140,
+            name: "Custom Location"
+        };
+        
+        // World spawn configuration
+        const WORLD_SPAWN_CONFIG = {
+            minDistance: 50,    // Minimum distance in meters from reference point
+            maxDistance: 500,   // Maximum distance in meters from reference point
+            interactionRadius: 30  // How close you need to be to interact with a portal (meters)
+        };
         
         // Default world attributes
         const DEFAULT_WORLD_ATTRIBUTES = {
@@ -624,6 +1561,15 @@
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
             
+            // Check for location parameters
+            if (params.has('lat') && params.has('lng')) {
+                REFERENCE_LOCATION.lat = parseFloat(params.get('lat'));
+                REFERENCE_LOCATION.lng = parseFloat(params.get('lng'));
+                if (params.has('locationName')) {
+                    REFERENCE_LOCATION.name = params.get('locationName');
+                }
+            }
+            
             // Visual attributes only (no moveSpeed)
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
@@ -647,6 +1593,1051 @@
                         (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
         
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        // World Creator Class
+        class WorldCreator {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.isScanning = false;
+                this.scannedImage = null;
+                this.stream = null;
+                this.newWorldData = {
+                    name: '',
+                    description: '',
+                    location: null,
+                    anchorImage: null,
+                    createdBy: null,
+                    timestamp: null,
+                    id: null
+                };
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                // Scanner button
+                document.getElementById('scanner-button').addEventListener('click', () => {
+                    this.startScanning();
+                });
+                
+                // Capture button
+                document.getElementById('capture-btn').addEventListener('click', () => {
+                    this.captureAnchor();
+                });
+                
+                // Cancel button
+                document.getElementById('cancel-scan-btn').addEventListener('click', () => {
+                    this.stopScanning();
+                });
+            }
+            
+            async startScanning() {
+                try {
+                    // Show scanner UI
+                    document.getElementById('world-scanner').classList.add('active');
+                    this.isScanning = true;
+                    
+                    // Get camera stream
+                    const video = document.getElementById('scanner-video');
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        }
+                    });
+                    video.srcObject = this.stream;
+                    
+                } catch (error) {
+                    console.error('Error starting scanner:', error);
+                    this.world.showNotification('Camera access denied or not available');
+                    this.stopScanning();
+                }
+            }
+            
+            captureAnchor() {
+                const video = document.getElementById('scanner-video');
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                
+                // Store captured image
+                this.scannedImage = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // Get current GPS location
+                this.newWorldData.location = {
+                    lat: this.world.gpsManager.currentLocation.lat,
+                    lng: this.world.gpsManager.currentLocation.lng,
+                    accuracy: this.world.gpsManager.accuracy
+                };
+                
+                // Stop scanner
+                this.stopScanning();
+                
+                // Show world creation form
+                this.showWorldCreationForm();
+            }
+            
+            stopScanning() {
+                document.getElementById('world-scanner').classList.remove('active');
+                this.isScanning = false;
+                
+                // Stop camera stream
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                
+                const video = document.getElementById('scanner-video');
+                video.srcObject = null;
+            }
+            
+            showWorldCreationForm() {
+                const formUI = document.createElement('div');
+                formUI.className = 'world-creation-form';
+                formUI.id = 'world-creation-form';
+                formUI.innerHTML = `
+                    <div class="form-container">
+                        <button class="form-close-btn" onclick="document.getElementById('world-creation-form').remove()">&times;</button>
+                        <h2>Create New Portal World</h2>
+                        <img src="${this.scannedImage}" class="anchor-preview">
+                        <input type="text" id="world-name" placeholder="World Name" required>
+                        <textarea id="world-description" placeholder="Describe this world..." rows="3"></textarea>
+                        <select id="world-template">
+                            <option value="custom">Custom World</option>
+                            <option value="crystal">Crystal Cave Template</option>
+                            <option value="neon">Neon City Template</option>
+                            <option value="forest">Enchanted Forest Template</option>
+                            <option value="space">Space Station Template</option>
+                            <option value="ocean">Ocean Depths Template</option>
+                        </select>
+                        <input type="text" id="world-emoji" placeholder="Choose an emoji for your world (e.g., 🌟)" maxlength="2">
+                        <button class="create-world-btn" onclick="window.worldNavigator.worldCreator.createWorld()">
+                            ✨ Create Portal
+                        </button>
+                        <button class="download-json-btn" onclick="window.worldNavigator.worldCreator.downloadWorldJSON()">
+                            💾 Download World Data (JSON)
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(formUI);
+            }
+            
+            generateWorldID() {
+                return 'world_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+            
+            createWorld() {
+                const name = document.getElementById('world-name').value;
+                const description = document.getElementById('world-description').value;
+                const template = document.getElementById('world-template').value;
+                const emoji = document.getElementById('world-emoji').value || '🌀';
+                
+                if (!name) {
+                    this.world.showNotification('Please enter a world name');
+                    return;
+                }
+                
+                // Create comprehensive world data
+                this.newWorldData = {
+                    id: this.generateWorldID(),
+                    name: name,
+                    description: description,
+                    template: template,
+                    emoji: emoji,
+                    location: this.newWorldData.location,
+                    anchorImage: this.scannedImage,
+                    createdBy: this.world.multiplayer?.peer?.id || 'anonymous',
+                    createdAt: new Date().toISOString(),
+                    referenceLocation: REFERENCE_LOCATION,
+                    worldAttributes: {
+                        ...CURRENT_WORLD,
+                        name: name,
+                        description: description
+                    },
+                    portalPosition: this.calculatePortalPosition()
+                };
+                
+                // Show success and download prompt
+                this.showCreationSuccess();
+            }
+            
+            calculatePortalPosition() {
+                // Calculate where this portal should appear in 3D space
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 10 + Math.random() * 10; // 10-20 units from center
+                
+                return {
+                    x: Math.cos(angle) * distance,
+                    y: 3,
+                    z: Math.sin(angle) * distance,
+                    rotation: -angle + Math.PI
+                };
+            }
+            
+            downloadWorldJSON() {
+                if (!this.newWorldData.id) {
+                    this.createWorld();
+                    return;
+                }
+                
+                // Create downloadable JSON
+                const jsonData = JSON.stringify(this.newWorldData, null, 2);
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${this.newWorldData.id}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                this.world.showNotification('World data downloaded! Use the World Builder tool to generate the HTML.');
+            }
+            
+            showCreationSuccess() {
+                const formContainer = document.querySelector('.form-container');
+                formContainer.innerHTML = `
+                    <h2>🎉 Portal Created!</h2>
+                    <img src="${this.scannedImage}" class="anchor-preview">
+                    <p style="color: #06ffa5; text-align: center; margin: 20px 0;">
+                        <strong>${this.newWorldData.name}</strong><br>
+                        ${this.newWorldData.description}
+                    </p>
+                    <p style="color: rgba(255, 255, 255, 0.7); text-align: center;">
+                        Location: ${this.newWorldData.location.lat.toFixed(6)}, ${this.newWorldData.location.lng.toFixed(6)}
+                    </p>
+                    <button class="download-json-btn" onclick="window.worldNavigator.worldCreator.downloadWorldJSON()">
+                        💾 Download World Data (JSON)
+                    </button>
+                    <p style="color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 20px; font-size: 14px;">
+                        Use the World Builder tool to convert this JSON into a full HTML world file.
+                    </p>
+                    <button class="create-world-btn" onclick="document.getElementById('world-creation-form').remove()">
+                        Close
+                    </button>
+                `;
+            }
+        }
+
+        // AI Manager Class
+        class AIManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.apiKey = null;
+                this.endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.companions = new Map();
+                this.conversationHistory = [];
+                this.isActive = false;
+                this.userGuid = this.generateUserGuid();
+                
+                // UI elements
+                this.chatInterface = document.getElementById('ai-chat-interface');
+                this.chatMessages = document.getElementById('ai-chat-messages');
+                this.chatInput = document.getElementById('ai-chat-input');
+                this.companionButton = document.getElementById('ai-companion-button');
+                this.aiModal = document.getElementById('ai-modal');
+                
+                this.setupEventListeners();
+            }
+            
+            generateUserGuid() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+            
+            setupEventListeners() {
+                // AI Companion button
+                this.companionButton.addEventListener('click', () => {
+                    if (this.isActive) {
+                        this.chatInterface.classList.toggle('active');
+                    } else {
+                        this.aiModal.classList.add('show');
+                    }
+                });
+                
+                // AI Modal events
+                document.getElementById('ai-close').addEventListener('click', () => {
+                    this.aiModal.classList.remove('show');
+                });
+                
+                document.getElementById('ai-activate-btn').addEventListener('click', () => {
+                    this.activateAI();
+                });
+                
+                // Close modal on outside click
+                this.aiModal.addEventListener('click', (e) => {
+                    if (e.target === this.aiModal) {
+                        this.aiModal.classList.remove('show');
+                    }
+                });
+            }
+            
+            async activateAI() {
+                const apiKeyInput = document.getElementById('ai-api-key');
+                const apiKey = apiKeyInput.value.trim();
+                
+                if (!apiKey) {
+                    this.showNotification('Please enter an API key');
+                    return;
+                }
+                
+                this.apiKey = apiKey;
+                
+                try {
+                    // Test the API key with an initial request
+                    const response = await this.sendToAPI('Hello! I have joined the Nexus world.');
+                    
+                    if (response.assistant_response) {
+                        this.isActive = true;
+                        this.companionButton.classList.add('active');
+                        this.aiModal.classList.remove('show');
+                        this.showNotification('AI Companion activated!');
+                        
+                        // Create AI companion in the world
+                        this.createAICompanion();
+                        
+                        // Update companion list
+                        this.updateCompanionList();
+                        
+                        // Show initial message
+                        this.addMessage(response.assistant_response, 'ai');
+                        
+                        // Clear the API key input for security
+                        apiKeyInput.value = '';
+                    }
+                } catch (error) {
+                    console.error('Failed to activate AI:', error);
+                    this.showNotification('Failed to activate AI. Please check your API key.');
+                }
+            }
+            
+            createAICompanion() {
+                // Create a visual representation of the AI companion in the world
+                const companionGroup = new THREE.Group();
+                
+                // Create a glowing orb as the AI companion
+                const geometry = new THREE.SphereGeometry(0.8, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const orb = new THREE.Mesh(geometry, material);
+                orb.position.y = 2;
+                companionGroup.add(orb);
+                
+                // Add glow effect
+                const glowLight = new THREE.PointLight(0x8338ec, 2, 10);
+                glowLight.position.y = 2;
+                companionGroup.add(glowLight);
+                
+                // Add particle effect around the orb
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 100;
+                const positions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI;
+                    const radius = 1.5 + Math.random() * 0.5;
+                    
+                    positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta) + 2;
+                    positions[i + 2] = radius * Math.cos(phi);
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x06ffa5,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                companionGroup.add(particles);
+                
+                // Position near the player
+                companionGroup.position.set(3, 0, 3);
+                
+                // Add to scene
+                this.world.scene.add(companionGroup);
+                
+                // Store reference
+                this.companions.set('ai-assistant', {
+                    object: companionGroup,
+                    orb: orb,
+                    particles: particles,
+                    light: glowLight
+                });
+                
+                // Animate the companion
+                this.animateCompanion();
+            }
+            
+            animateCompanion() {
+                const companion = this.companions.get('ai-assistant');
+                if (!companion) return;
+                
+                const animate = () => {
+                    if (!this.isActive) return;
+                    
+                    const time = Date.now() * 0.001;
+                    
+                    // Float animation
+                    companion.orb.position.y = 2 + Math.sin(time * 2) * 0.2;
+                    
+                    // Rotate particles
+                    companion.particles.rotation.y = time * 0.5;
+                    
+                    // Pulse glow
+                    companion.light.intensity = 2 + Math.sin(time * 3) * 0.5;
+                    
+                    // Follow player at a distance
+                    const targetPos = new THREE.Vector3();
+                    targetPos.copy(this.world.camera.position);
+                    targetPos.x += 3;
+                    targetPos.z += 3;
+                    
+                    companion.object.position.lerp(targetPos, 0.05);
+                    
+                    requestAnimationFrame(animate);
+                };
+                
+                animate();
+            }
+            
+            async sendToAPI(message) {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'x-functions-key': this.apiKey
+                };
+                
+                const body = {
+                    user_input: message,
+                    conversation_history: this.conversationHistory,
+                    user_guid: this.userGuid
+                };
+                
+                const response = await fetch(this.endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+                
+                return await response.json();
+            }
+            
+            async sendMessage() {
+                const message = this.chatInput.value.trim();
+                if (!message || !this.isActive) return;
+                
+                // Add user message to chat
+                this.addMessage(message, 'user');
+                this.chatInput.value = '';
+                
+                // Add to conversation history
+                this.conversationHistory.push({
+                    role: 'user',
+                    content: message
+                });
+                
+                try {
+                    // Send to API
+                    const response = await this.sendToAPI(message);
+                    
+                    if (response.assistant_response) {
+                        // Add AI response to chat
+                        this.addMessage(response.assistant_response, 'ai');
+                        
+                        // Add to conversation history
+                        this.conversationHistory.push({
+                            role: 'assistant',
+                            content: response.assistant_response
+                        });
+                        
+                        // Animate companion when speaking
+                        this.animateCompanionSpeaking();
+                    }
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                    this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
+                }
+            }
+            
+            addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `ai-message ${sender}`;
+                messageDiv.textContent = text;
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+            
+            animateCompanionSpeaking() {
+                const companion = this.companions.get('ai-assistant');
+                if (!companion) return;
+                
+                // Quick pulse animation
+                const originalScale = companion.orb.scale.x;
+                const pulseAnimation = () => {
+                    let progress = 0;
+                    const animate = () => {
+                        progress += 0.1;
+                        if (progress > 1) return;
+                        
+                        const scale = originalScale + Math.sin(progress * Math.PI) * 0.3;
+                        companion.orb.scale.setScalar(scale);
+                        
+                        requestAnimationFrame(animate);
+                    };
+                    animate();
+                };
+                
+                pulseAnimation();
+            }
+            
+            updateCompanionList() {
+                const listContainer = document.getElementById('ai-companion-list');
+                listContainer.innerHTML = `
+                    <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
+                    <div class="ai-companion-item">
+                        <div>
+                            <div class="ai-companion-name">AI Assistant</div>
+                            <div class="ai-companion-status">Active and ready to chat</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'multiplayer-notification';
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+            
+            // Broadcast AI presence to multiplayer
+            broadcastPresence() {
+                if (this.world.multiplayer) {
+                    this.world.multiplayer.broadcastAIPresence({
+                        type: 'ai_companion',
+                        name: 'AI Assistant',
+                        position: this.companions.get('ai-assistant')?.object.position
+                    });
+                }
+            }
+        }
+
+        // GPS Manager Class
+        class GPSManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.watchId = null;
+                this.currentLocation = null;
+                this.accuracy = null;
+                this.lastUpdate = 0;
+                this.updateInterval = 5000; // Update every 5 seconds
+                this.manualMode = false;
+                
+                this.gpsIndicator = document.getElementById('gps-indicator');
+                this.gpsText = document.getElementById('gps-text');
+                this.gpsAccuracy = document.getElementById('gps-accuracy');
+                
+                this.hasPermission = false;
+            }
+            
+            async requestPermission() {
+                const permissionModal = document.getElementById('permission-modal');
+                const enableBtn = document.getElementById('enable-location-btn');
+                const manualBtn = document.getElementById('manual-location-btn');
+                
+                return new Promise((resolve) => {
+                    enableBtn.addEventListener('click', async () => {
+                        permissionModal.classList.add('hidden');
+                        
+                        try {
+                            // Request location permission
+                            const position = await this.getCurrentPosition();
+                            this.hasPermission = true;
+                            
+                            // Update reference location to current position
+                            REFERENCE_LOCATION.lat = position.coords.latitude;
+                            REFERENCE_LOCATION.lng = position.coords.longitude;
+                            REFERENCE_LOCATION.name = "My Location";
+                            
+                            resolve(true);
+                        } catch (error) {
+                            console.error('Location permission denied:', error);
+                            this.updateStatus('GPS: Disabled', false);
+                            resolve(false);
+                        }
+                    });
+                    
+                    manualBtn.addEventListener('click', () => {
+                        permissionModal.classList.add('hidden');
+                        this.manualMode = true;
+                        this.updateStatus('GPS: Manual Mode', true);
+                        
+                        // Show map in location setting mode
+                        this.world.mapManager.showMapForLocationSetting();
+                        resolve(true);
+                    });
+                });
+            }
+            
+            getCurrentPosition() {
+                return new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
+            }
+            
+            startTracking() {
+                if (this.manualMode) {
+                    this.updateStatus('GPS: Manual Mode', true);
+                    this.currentLocation = REFERENCE_LOCATION;
+                    return;
+                }
+                
+                if (!navigator.geolocation) {
+                    console.error('Geolocation not supported');
+                    this.updateStatus('GPS: Not Supported', false);
+                    return;
+                }
+                
+                this.updateStatus('GPS: Acquiring...', false);
+                
+                // Initial position
+                navigator.geolocation.getCurrentPosition(
+                    (position) => this.handlePosition(position),
+                    (error) => this.handleError(error),
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+                
+                // Watch position
+                this.watchId = navigator.geolocation.watchPosition(
+                    (position) => this.handlePosition(position),
+                    (error) => this.handleError(error),
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0,
+                        distanceFilter: 5 // Update when moved 5 meters
+                    }
+                );
+            }
+            
+            handlePosition(position) {
+                this.currentLocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                this.accuracy = position.coords.accuracy;
+                
+                this.updateStatus('GPS: Active', true);
+                this.gpsAccuracy.textContent = `±${Math.round(this.accuracy)}m`;
+                
+                // Update world portals based on location
+                if (this.world) {
+                    this.world.updatePortalDistances(this.currentLocation);
+                    
+                    // Update map if active
+                    if (this.world.mapManager && this.world.mapManager.isActive) {
+                        this.world.mapManager.updateUserLocation(this.currentLocation);
+                    }
+                }
+                
+                this.lastUpdate = Date.now();
+            }
+            
+            handleError(error) {
+                console.error('GPS Error:', error);
+                
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        this.updateStatus('GPS: Permission Denied', false);
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        this.updateStatus('GPS: Position Unavailable', false);
+                        break;
+                    case error.TIMEOUT:
+                        this.updateStatus('GPS: Timeout', false);
+                        break;
+                    default:
+                        this.updateStatus('GPS: Error', false);
+                }
+            }
+            
+            updateStatus(text, active) {
+                this.gpsText.textContent = text;
+                this.gpsIndicator.classList.toggle('active', active);
+            }
+            
+            getDistanceToReference() {
+                if (!this.currentLocation) return null;
+                return this.calculateDistance(
+                    this.currentLocation.lat,
+                    this.currentLocation.lng,
+                    REFERENCE_LOCATION.lat,
+                    REFERENCE_LOCATION.lng
+                );
+            }
+            
+            calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371e3; // Earth radius in meters
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+                
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                
+                return R * c; // Distance in meters
+            }
+            
+            stopTracking() {
+                if (this.watchId) {
+                    navigator.geolocation.clearWatch(this.watchId);
+                    this.watchId = null;
+                }
+            }
+        }
+
+        // Map Manager Class
+        class MapManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.map = null;
+                this.userMarker = null;
+                this.worldMarkers = new Map();
+                this.isActive = false;
+                this.mapContainer = document.getElementById('map-container');
+                this.viewToggle = document.getElementById('view-toggle');
+                this.locationSetter = document.getElementById('location-setter');
+                this.isSettingLocation = false;
+                this.tempMarker = null;
+                
+                this.setupToggle();
+                this.setupLocationSetter();
+            }
+            
+            setupToggle() {
+                this.viewToggle.addEventListener('click', () => {
+                    if (!this.isSettingLocation) {
+                        this.toggleView();
+                    }
+                });
+            }
+            
+            setupLocationSetter() {
+                document.getElementById('confirm-location').addEventListener('click', () => {
+                    this.confirmLocation();
+                });
+                
+                document.getElementById('cancel-location').addEventListener('click', () => {
+                    this.cancelLocationSetting();
+                });
+            }
+            
+            showMapForLocationSetting() {
+                this.isSettingLocation = true;
+                this.showMap();
+                this.locationSetter.classList.add('active');
+                
+                // Add click handler for setting location
+                this.map.on('click', (e) => {
+                    if (this.isSettingLocation) {
+                        this.setTempLocation(e.latlng);
+                    }
+                });
+            }
+            
+            setTempLocation(latlng) {
+                // Remove existing temp marker
+                if (this.tempMarker) {
+                    this.map.removeLayer(this.tempMarker);
+                }
+                
+                // Create new temp marker
+                const tempIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="
+                        width: 50px;
+                        height: 50px;
+                        background: radial-gradient(circle, rgba(255, 0, 110, 0.8), rgba(138, 56, 236, 0.8));
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 0 30px rgba(255, 0, 110, 0.8);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 24px;
+                    ">📍</div>`,
+                    iconSize: [50, 50],
+                    iconAnchor: [25, 25]
+                });
+                
+                this.tempMarker = L.marker([latlng.lat, latlng.lng], { icon: tempIcon })
+                    .addTo(this.map);
+                
+                // Store temp location
+                this.tempLocation = latlng;
+            }
+            
+            confirmLocation() {
+                if (!this.tempLocation) return;
+                
+                // Update reference location
+                REFERENCE_LOCATION.lat = this.tempLocation.lat;
+                REFERENCE_LOCATION.lng = this.tempLocation.lng;
+                REFERENCE_LOCATION.name = "Custom Location";
+                
+                // Update GPS manager
+                if (this.world.gpsManager) {
+                    this.world.gpsManager.currentLocation = REFERENCE_LOCATION;
+                    this.world.gpsManager.updateStatus('GPS: Manual Location Set', true);
+                }
+                
+                // Regenerate world locations based on new reference
+                this.world.generateWorldLocations();
+                this.world.updatePortalDistances(REFERENCE_LOCATION);
+                
+                // Clean up
+                this.isSettingLocation = false;
+                this.locationSetter.classList.remove('active');
+                if (this.tempMarker) {
+                    this.map.removeLayer(this.tempMarker);
+                }
+                
+                // Add permanent marker for reference location
+                this.addReferenceMarker();
+                
+                // Show notification
+                this.world.showNotification('Location set successfully!');
+            }
+            
+            cancelLocationSetting() {
+                this.isSettingLocation = false;
+                this.locationSetter.classList.remove('active');
+                if (this.tempMarker) {
+                    this.map.removeLayer(this.tempMarker);
+                }
+                this.hideMap();
+            }
+            
+            toggleView() {
+                this.isActive = !this.isActive;
+                
+                if (this.isActive) {
+                    this.showMap();
+                } else {
+                    this.hideMap();
+                }
+            }
+            
+            showMap() {
+                this.mapContainer.classList.add('active');
+                
+                if (!this.map) {
+                    this.initializeMap();
+                }
+                
+                // Update view toggle icon
+                this.viewToggle.innerHTML = `
+                    <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <polyline points="9 11 12 14 15 11"></polyline>
+                        <line x1="12" y1="14" x2="12" y2="7"></line>
+                    </svg>
+                `;
+            }
+            
+            hideMap() {
+                this.mapContainer.classList.remove('active');
+                
+                // Update view toggle icon
+                this.viewToggle.innerHTML = `
+                    <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                `;
+            }
+            
+            initializeMap() {
+                // Initialize Leaflet map
+                this.map = L.map('map').setView([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], 16);
+                
+                // Add dark theme tile layer
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(this.map);
+                
+                // Add reference location marker
+                this.addReferenceMarker();
+            }
+            
+            addReferenceMarker() {
+                const referenceIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="
+                        width: 50px;
+                        height: 50px;
+                        background: radial-gradient(circle, rgba(6, 255, 165, 0.8), rgba(58, 134, 255, 0.8));
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 0 30px rgba(6, 255, 165, 0.8);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 24px;
+                    ">🏠</div>`,
+                    iconSize: [50, 50],
+                    iconAnchor: [25, 25]
+                });
+                
+                L.marker([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], { icon: referenceIcon })
+                    .addTo(this.map)
+                    .bindPopup(`<b>${REFERENCE_LOCATION.name}</b><br>The origin point of all worlds`)
+                    .openPopup();
+            }
+            
+            updateUserLocation(location) {
+                if (!this.map) return;
+                
+                // Update or create user marker
+                if (this.userMarker) {
+                    this.userMarker.setLatLng([location.lat, location.lng]);
+                } else {
+                    const userIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style="
+                            width: 30px;
+                            height: 30px;
+                            background: radial-gradient(circle, rgba(0, 255, 0, 0.8), rgba(0, 255, 0, 0.4));
+                            border: 3px solid white;
+                            border-radius: 50%;
+                            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+                            animation: pulse 2s infinite;
+                        "></div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    
+                    this.userMarker = L.marker([location.lat, location.lng], { icon: userIcon })
+                        .addTo(this.map)
+                        .bindPopup('<b>You are here</b>');
+                }
+                
+                // Center map on user if first update
+                if (this.isActive && !this.hasCentered) {
+                    this.map.setView([location.lat, location.lng], 17);
+                    this.hasCentered = true;
+                }
+            }
+            
+            addWorldMarker(world, location) {
+                if (!this.map) return;
+                
+                const worldIcon = L.divIcon({
+                    className: 'world-marker',
+                    html: world.emoji || '🌀',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+                
+                const marker = L.marker([location.lat, location.lng], { icon: worldIcon })
+                    .addTo(this.map);
+                
+                // Create popup content
+                const popupContent = `
+                    <div class="world-marker-popup">
+                        <div class="popup-title">${world.name}</div>
+                        <div class="popup-description">${world.description || 'A mysterious world awaits...'}</div>
+                        <div class="popup-distance" id="distance-${world.name.replace(/\s+/g, '-')}">Calculating distance...</div>
+                        <button class="enter-world-btn" id="enter-${world.name.replace(/\s+/g, '-')}" disabled>Too far away</button>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                
+                // Store marker reference
+                this.worldMarkers.set(world.name, {
+                    marker: marker,
+                    world: world,
+                    location: location
+                });
+                
+                // Handle popup events
+                marker.on('popupopen', () => {
+                    const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
+                    if (enterBtn && world.distance <= WORLD_SPAWN_CONFIG.interactionRadius) {
+                        enterBtn.disabled = false;
+                        enterBtn.textContent = 'Enter World';
+                        enterBtn.addEventListener('click', () => {
+                            this.world.enterWorld(world.url || world.raw_url);
+                        });
+                    }
+                });
+            }
+            
+            updateWorldDistances(distances) {
+                distances.forEach(({ world, distance }) => {
+                    const distanceEl = document.getElementById(`distance-${world.name.replace(/\s+/g, '-')}`);
+                    if (distanceEl) {
+                        distanceEl.textContent = `${Math.round(distance)}m away`;
+                    }
+                    
+                    const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
+                    if (enterBtn) {
+                        if (distance <= WORLD_SPAWN_CONFIG.interactionRadius) {
+                            enterBtn.disabled = false;
+                            enterBtn.textContent = 'Enter World';
+                        } else {
+                            enterBtn.disabled = true;
+                            enterBtn.textContent = 'Too far away';
+                        }
+                    }
+                });
+            }
+        }
 
         // Multiplayer Manager Class
         class MultiplayerManager {
@@ -774,7 +2765,17 @@
                             this.syncWorldState(data.worldState);
                         }
                         break;
+                    
+                    case 'ai_companion':
+                        this.handleAICompanionData(peerId, data);
+                        break;
                 }
+            }
+            
+            handleAICompanionData(peerId, data) {
+                // Handle AI companion presence from other players
+                console.log(`AI companion data from ${peerId}:`, data);
+                // Could show AI companions from other players here
             }
             
             createPlayerAvatar(peerId, metadata) {
@@ -883,10 +2884,27 @@
                 this.lastUpdate = now;
             }
             
+            broadcastAIPresence(aiData) {
+                this.connections.forEach((conn) => {
+                    if (conn && conn.open) {
+                        conn.send({
+                            type: 'ai_companion',
+                            ...aiData
+                        });
+                    }
+                });
+            }
+            
             updateShareUrl() {
-                // Update QR code to include host parameter
+                // Update QR code to include host parameter and location
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
-                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.roomId}`;
+                const params = new URLSearchParams({
+                    host: this.roomId,
+                    lat: REFERENCE_LOCATION.lat,
+                    lng: REFERENCE_LOCATION.lng,
+                    locationName: REFERENCE_LOCATION.name
+                });
+                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                 
                 // Update QR code
                 const qrUrlElement = document.getElementById('qr-url');
@@ -1024,8 +3042,15 @@
                 
                 this.inheritedAttributes = inheritedAttributes;
                 
-                // Multiplayer
+                // Managers
+                this.gpsManager = null;
+                this.mapManager = null;
                 this.multiplayer = null;
+                this.aiManager = null;
+                this.worldCreator = null;
+                
+                // World locations cache
+                this.worldLocations = new Map();
                 
                 if (this.isIOS) {
                     document.body.addEventListener('touchmove', (e) => {
@@ -1037,6 +3062,19 @@
             }
             
             async init() {
+                // Initialize map manager early
+                this.mapManager = new MapManager(this);
+                
+                // Initialize GPS
+                this.gpsManager = new GPSManager(this);
+                const hasPermission = await this.gpsManager.requestPermission();
+                
+                if (!hasPermission) {
+                    console.warn('GPS permission denied, using default locations');
+                }
+                
+                this.gpsManager.startTracking();
+                
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
@@ -1056,12 +3094,19 @@
                 this.setupLighting();
                 await this.loadWorlds();
                 this.createEnvironment();
+                this.generateWorldLocations();
                 this.createPortals();
                 this.setupEventListeners();
                 this.setupQRCode();
                 
                 // Initialize multiplayer
                 this.multiplayer = new MultiplayerManager(this);
+                
+                // Initialize AI manager
+                this.aiManager = new AIManager(this);
+                
+                // Initialize World Creator
+                this.worldCreator = new WorldCreator(this);
                 
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
@@ -1073,6 +3118,9 @@
                     }
                 }
                 
+                // Make WorldNavigator globally accessible for AI chat
+                window.worldNavigator = this;
+                
                 this.animate();
             }
             
@@ -1080,7 +3128,8 @@
                 return {
                     worldName: CURRENT_WORLD.name,
                     position: this.camera.position,
-                    rotation: this.camera.rotation
+                    rotation: this.camera.rotation,
+                    location: REFERENCE_LOCATION
                 };
             }
             
@@ -1142,7 +3191,8 @@
                             path: item.path,
                             name: this.formatWorldName(item.path),
                             url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
-                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            emoji: this.getWorldEmoji(item.path)
                         }));
                     
                     console.log(`Found ${this.worlds.length} worlds to connect`);
@@ -1160,14 +3210,83 @@
                     .replace(/\b\w/g, l => l.toUpperCase());
             }
             
+            getWorldEmoji(filename) {
+                // Assign emojis based on world names
+                const emojiMap = {
+                    'crystal': '💎',
+                    'cave': '🏔️',
+                    'sky': '☁️',
+                    'island': '🏝️',
+                    'neon': '🌃',
+                    'city': '🏙️',
+                    'ancient': '🏛️',
+                    'ruins': '🗿',
+                    'ocean': '🌊',
+                    'water': '💧',
+                    'forest': '🌲',
+                    'desert': '🏜️',
+                    'space': '🚀',
+                    'cyber': '💻',
+                    'magic': '✨'
+                };
+                
+                const lower = filename.toLowerCase();
+                for (const [key, emoji] of Object.entries(emojiMap)) {
+                    if (lower.includes(key)) return emoji;
+                }
+                return '🌀'; // Default portal emoji
+            }
+            
             getDemoWorlds() {
                 return [
-                    { name: "Crystal Caves", description: "A world of glowing crystals and underground mysteries" },
-                    { name: "Sky Islands", description: "Floating islands connected by bridges of light" },
-                    { name: "Neon City", description: "A cyberpunk metropolis bathed in neon lights" },
-                    { name: "Ancient Ruins", description: "Explore the remnants of a lost civilization" },
-                    { name: "Ocean Depths", description: "An underwater realm of bioluminescent wonders" }
+                    { name: "Crystal Caves", description: "A world of glowing crystals and underground mysteries", emoji: "💎" },
+                    { name: "Sky Islands", description: "Floating islands connected by bridges of light", emoji: "☁️" },
+                    { name: "Neon City", description: "A cyberpunk metropolis bathed in neon lights", emoji: "🌃" },
+                    { name: "Ancient Ruins", description: "Explore the remnants of a lost civilization", emoji: "🏛️" },
+                    { name: "Ocean Depths", description: "An underwater realm of bioluminescent wonders", emoji: "🌊" }
                 ];
+            }
+            
+            generateWorldLocations() {
+                // Clear existing markers
+                this.worldLocations.clear();
+                if (this.mapManager) {
+                    this.mapManager.worldMarkers.forEach((marker) => {
+                        if (marker.marker && this.mapManager.map) {
+                            this.mapManager.map.removeLayer(marker.marker);
+                        }
+                    });
+                    this.mapManager.worldMarkers.clear();
+                }
+                
+                const numWorlds = this.worlds.length;
+                
+                this.worlds.forEach((world, index) => {
+                    // Generate locations in a spiral pattern around the reference point
+                    const angle = (index / numWorlds) * Math.PI * 2;
+                    const distance = WORLD_SPAWN_CONFIG.minDistance + 
+                                   (WORLD_SPAWN_CONFIG.maxDistance - WORLD_SPAWN_CONFIG.minDistance) * 
+                                   (index / numWorlds);
+                    
+                    // Calculate offset in meters and convert to lat/lng
+                    const offsetX = Math.cos(angle) * distance;
+                    const offsetY = Math.sin(angle) * distance;
+                    
+                    // Convert meters to degrees (approximate)
+                    const metersPerDegreeLat = 111320;
+                    const metersPerDegreeLng = metersPerDegreeLat * Math.cos(REFERENCE_LOCATION.lat * Math.PI / 180);
+                    
+                    const lat = REFERENCE_LOCATION.lat + (offsetY / metersPerDegreeLat);
+                    const lng = REFERENCE_LOCATION.lng + (offsetX / metersPerDegreeLng);
+                    
+                    const location = { lat, lng };
+                    this.worldLocations.set(world.name, location);
+                    
+                    // Add marker to map
+                    if (this.mapManager) {
+                        this.mapManager.addWorldMarker(world, location);
+                    }
+                });
             }
             
             createEnvironment() {
@@ -1273,7 +3392,8 @@
                         uniforms: {
                             time: { value: 0 },
                             color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
-                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) },
+                            accessible: { value: 0.8 } // Always accessible in teleport mode
                         },
                         vertexShader: `
                             varying vec2 vUv;
@@ -1286,6 +3406,7 @@
                             uniform float time;
                             uniform vec3 color1;
                             uniform vec3 color2;
+                            uniform float accessible;
                             varying vec2 vUv;
                             
                             void main() {
@@ -1293,8 +3414,8 @@
                                 float dist = length(center);
                                 float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
                                 vec3 color = mix(color1, color2, wave);
-                                float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
-                                gl_FragColor = vec4(color, alpha * 0.8);
+                                float alpha = (1.0 - smoothstep(0.4, 0.5, dist)) * accessible;
+                                gl_FragColor = vec4(color, alpha);
                             }
                         `,
                         transparent: true,
@@ -1321,7 +3442,10 @@
                         light: light,
                         url: world.url || world.raw_url,
                         name: world.name,
-                        description: world.description || `Enter the ${world.name} world`
+                        description: world.description || `Enter the ${world.name} world`,
+                        location: this.worldLocations.get(world.name),
+                        distance: 0,
+                        accessible: true // Always accessible in teleport mode
                     };
                     
                     this.portals.push(portal);
@@ -1342,13 +3466,57 @@
                 }
             }
             
+            updatePortalDistances(userLocation) {
+                const distances = [];
+                
+                this.portals.forEach(portal => {
+                    const worldLocation = portal.userData.location;
+                    if (!worldLocation || !userLocation) return;
+                    
+                    const distance = this.gpsManager.calculateDistance(
+                        userLocation.lat,
+                        userLocation.lng,
+                        worldLocation.lat,
+                        worldLocation.lng
+                    );
+                    
+                    portal.userData.distance = distance;
+                    // In teleport mode, all portals are always accessible
+                    portal.userData.accessible = true;
+                    
+                    // Keep visual at full brightness
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.accessible.value = 0.8;
+                    }
+                    
+                    if (portal.userData.light) {
+                        portal.userData.light.intensity = 1;
+                    }
+                    
+                    distances.push({
+                        world: portal.userData.world,
+                        distance: distance
+                    });
+                });
+                
+                // Update map markers
+                if (this.mapManager) {
+                    this.mapManager.updateWorldDistances(distances);
+                }
+            }
+            
             buildInheritanceParams() {
                 const params = new URLSearchParams();
                 
                 params.set('from', window.location.pathname.split('/').pop() || 'index.html');
                 params.set('fromName', CURRENT_WORLD.name);
                 
-                // Remove moveSpeed from inheritance
+                // Include location parameters
+                params.set('lat', REFERENCE_LOCATION.lat.toString());
+                params.set('lng', REFERENCE_LOCATION.lng.toString());
+                params.set('locationName', REFERENCE_LOCATION.name);
+                
+                // Visual attributes
                 params.set('lookSpeed', this.lookSpeed.toString());
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
                 params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
@@ -1376,14 +3544,25 @@
                 
                 let worldUrl;
                 if (this.multiplayer && this.multiplayer.isHost) {
-                    // Host URL includes room ID
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.multiplayer.roomId}`;
+                    // Host URL includes room ID and location
+                    const params = new URLSearchParams({
+                        host: this.multiplayer.roomId,
+                        lat: REFERENCE_LOCATION.lat,
+                        lng: REFERENCE_LOCATION.lng,
+                        locationName: REFERENCE_LOCATION.name
+                    });
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                 } else if (hostId) {
                     // Already in multiplayer session
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${hostId}`;
+                    worldUrl = window.location.href;
                 } else {
-                    // Single player URL (will become multiplayer when generated)
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
+                    // Single player URL with location
+                    const params = new URLSearchParams({
+                        lat: REFERENCE_LOCATION.lat,
+                        lng: REFERENCE_LOCATION.lng,
+                        locationName: REFERENCE_LOCATION.name
+                    });
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                 }
                 
                 qrUrlElement.textContent = worldUrl;
@@ -1392,7 +3571,13 @@
                     qrModal.classList.add('show');
                     // Update URL if multiplayer is active
                     if (this.multiplayer && this.multiplayer.roomId) {
-                        const multiplayerUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.multiplayer.roomId}`;
+                        const params = new URLSearchParams({
+                            host: this.multiplayer.roomId,
+                            lat: REFERENCE_LOCATION.lat,
+                            lng: REFERENCE_LOCATION.lng,
+                            locationName: REFERENCE_LOCATION.name
+                        });
+                        const multiplayerUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                         qrUrlElement.textContent = multiplayerUrl;
                         this.generateQRCode(multiplayerUrl);
                     } else {
@@ -1501,6 +3686,7 @@
                         
                         if (intersects.length > 0) {
                             const portal = intersects[0].object;
+                            // Always allow entering worlds in teleport mode
                             if (portal.userData.url) {
                                 this.enterWorld(portal.userData.url);
                             }
@@ -1536,6 +3722,7 @@
                     
                     if (intersects.length > 0) {
                         const portal = intersects[0].object;
+                        // Always allow entering worlds in teleport mode
                         if (portal.userData.url) {
                             e.preventDefault();
                             this.enterWorld(portal.userData.url);
@@ -1700,6 +3887,12 @@
                         
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
+                        
+                        // Show distance but don't restrict access
+                        if (portal.userData.distance > 0) {
+                            this.tooltipDescription.textContent += ` (${Math.round(portal.userData.distance)}m away - Teleport Enabled)`;
+                        }
+                        
                         this.tooltip.classList.add('visible');
                         
                         const vector = new THREE.Vector3();
@@ -1718,6 +3911,19 @@
                         this.tooltip.classList.remove('visible');
                     }
                 }
+            }
+            
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'multiplayer-notification';
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
             }
             
             async enterWorld(url) {
@@ -1788,7 +3994,8 @@
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
                         
-                        const intensity = 0.5 + Math.sin(time * 2 + index) * 0.3;
+                        const baseIntensity = 0.8; // Always bright in teleport mode
+                        const intensity = baseIntensity + Math.sin(time * 2 + index) * 0.2;
                         portal.userData.light.intensity = intensity;
                     }
                     
