@@ -70,31 +70,72 @@
             max-width: 400px;
         }
 
-        .portal-return {
+        .world-origin {
             position: absolute;
-            bottom: env(safe-area-inset-bottom, 30px);
-            left: 50%;
-            transform: translateX(-50%);
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.7);
-            padding: 15px 30px;
-            border-radius: 25px;
+            padding: 10px 20px;
+            border-radius: 20px;
             font-size: 0.9em;
             color: rgba(255, 255, 255, 0.8);
             z-index: 1001;
-            text-align: center;
             backdrop-filter: blur(10px);
-            cursor: pointer;
-            border: 2px solid rgba(255, 0, 110, 0.5);
-            transition: all 0.3s ease;
-            pointer-events: auto;
-            box-shadow: 0 0 20px rgba(255, 0, 110, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
         }
 
-        .portal-return:hover {
-            background: rgba(255, 0, 110, 0.2);
-            border-color: rgba(255, 0, 110, 0.8);
-            transform: translateX(-50%) scale(1.05);
-            box-shadow: 0 0 30px rgba(255, 0, 110, 0.5);
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #ff006e;
+            font-weight: 500;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(255, 0, 110, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #ff006e;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #06ffa5;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .loading {
@@ -158,6 +199,141 @@
             z-index: 999;
             touch-action: none;
         }
+
+        /* QR Code Share Button */
+        .share-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 80px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 0, 110, 0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 0, 110, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(255, 0, 110, 0.3);
+        }
+
+        .share-button:hover {
+            background: rgba(255, 0, 110, 0.3);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 0, 110, 0.5);
+        }
+
+        .share-icon {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+
+        /* QR Code Modal */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2001;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .qr-modal.show {
+            display: flex;
+        }
+
+        .qr-modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 0, 110, 0.5);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 50px rgba(255, 0, 110, 0.3);
+        }
+
+        .qr-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .qr-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .qr-modal h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #qr-code-container {
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+        }
+
+        #qr-code-container canvas,
+        #qr-code-container img {
+            border-radius: 10px;
+        }
+
+        .qr-url {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            word-break: break-all;
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-family: monospace;
+        }
+
+        .copy-url-btn {
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .copy-url-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
+        }
+
+        .copy-url-btn.copied {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+        }
     </style>
 </head>
 <body>
@@ -170,7 +346,10 @@
         <p class="world-description">A cyberpunk cityscape where technology and humanity merge in a symphony of light and code.</p>
     </div>
     
-    <div class="portal-return" id="portal-return" onclick="returnToNexus()">Return to Nexus Hub</div>
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
     
     <div class="mobile-controls" id="mobile-controls">
         <div class="joystick-container" id="movement-joystick">
@@ -178,10 +357,41 @@
         </div>
     </div>
     
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter world</p>
+    </div>
+    
     <div class="loading" id="loading">Building cityscape...</div>
+
+    <!-- QR Code Share Button -->
+    <div class="share-button" id="share-button">
+        <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"></path>
+            <polyline points="16 6 12 2 8 6"></polyline>
+            <line x1="12" y1="2" x2="12" y2="15"></line>
+        </svg>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div class="qr-modal" id="qr-modal">
+        <div class="qr-modal-content">
+            <button class="qr-close" id="qr-close">&times;</button>
+            <h3>Share This World</h3>
+            <div id="qr-code-container"></div>
+            <p class="qr-url" id="qr-url"></p>
+            <button class="copy-url-btn" id="copy-url-btn">Copy URL</button>
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
+        const BRANCH = 'main';
+        
         // World configuration
         const WORLD_CONFIG = {
             name: "Neon Metropolis",
@@ -214,8 +424,19 @@
             const params = new URLSearchParams(paramString);
             const inherited = {};
             
-            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            // Visual attributes only (no moveSpeed)
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
             
             return inherited;
         }
@@ -230,6 +451,9 @@
                 this.renderer = null;
                 this.buildings = [];
                 this.neonSigns = [];
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
@@ -242,18 +466,41 @@
                 this.joystickVector = new THREE.Vector2();
                 this.lookTouch = null;
                 this.joystickTouch = null;
+                this.isPointerLocked = false;
+                
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                
+                this.inheritedAttributes = inheritedAttributes;
             }
 
             async init() {
+                // Show origin world if we came from somewhere
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                }
+                
                 this.setupScene();
                 this.setupLighting();
+                await this.loadWorlds();
                 this.createCity();
                 this.createNeonSigns();
                 this.createTraffic();
+                this.createPortals();
                 this.setupEventListeners();
+                this.setupQRCode();
                 
                 if (this.isMobile) {
                     document.getElementById('mobile-controls').classList.add('show');
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter world';
+                    }
                 }
                 
                 setTimeout(() => {
@@ -295,6 +542,59 @@
                     );
                     this.scene.add(light);
                 }
+            }
+
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Find all HTML files, excluding the current one
+                    const currentFile = window.location.pathname.split('/').pop() || 'neon-metropolis.html';
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            item.path !== currentFile &&
+                            !item.path.includes('neon-metropolis')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "A world of glowing crystals" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds" }
+                ];
             }
 
             createCity() {
@@ -377,7 +677,6 @@
 
             createNeonSigns() {
                 const neonColors = [0xff006e, 0x06ffa5, 0x3a86ff, 0xffaa00, 0xff00ff];
-                const signTexts = ['CYBER', 'NEON', 'TECH', 'DATA', 'GRID'];
                 
                 for (let i = 0; i < 10; i++) {
                     const color = neonColors[Math.floor(Math.random() * neonColors.length)];
@@ -466,6 +765,213 @@
                 this.scene.add(this.rain);
             }
 
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 4);
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i] || this.getDemoWorlds()[i];
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Portal frame
+                    const frameGeometry = new THREE.TorusGeometry(2.5, 0.3, 8, 6);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: CURRENT_WORLD.portalColor1,
+                        emissive: CURRENT_WORLD.portalColor1,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(2.2, 32);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, wave);
+                                float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.8);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+                    
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    // Position portals in corners of the city
+                    const positions = [
+                        { x: -30, z: -30 },
+                        { x: 30, z: -30 },
+                        { x: -30, z: 30 },
+                        { x: 30, z: 30 }
+                    ];
+                    
+                    const pos = positions[i % positions.length];
+                    portalGroup.position.x = pos.x;
+                    portalGroup.position.z = pos.z;
+                    portalGroup.position.y = 3;
+                    
+                    // Add light
+                    const light = new THREE.PointLight(CURRENT_WORLD.portalColor1, 2, 15);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+                    
+                    // Store portal data
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                    
+                    // Platform under portal
+                    const platformGeometry = new THREE.CylinderGeometry(3, 3, 0.5, 32);
+                    const platformMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x222222,
+                        metalness: 0.8,
+                        roughness: 0.2,
+                        emissive: CURRENT_WORLD.portalColor1,
+                        emissiveIntensity: 0.1
+                    });
+                    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                    platform.position.copy(portalGroup.position);
+                    platform.position.y = 0.25;
+                    platform.receiveShadow = true;
+                    this.scene.add(platform);
+                }
+            }
+            
+            buildInheritanceParams() {
+                const params = new URLSearchParams();
+                
+                params.set('from', window.location.pathname.split('/').pop() || 'neon-metropolis.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                
+                // Visual attributes only (no moveSpeed)
+                params.set('lookSpeed', this.lookSpeed.toString());
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
+            }
+            
+            setupQRCode() {
+                const shareButton = document.getElementById('share-button');
+                const qrModal = document.getElementById('qr-modal');
+                const qrClose = document.getElementById('qr-close');
+                const copyButton = document.getElementById('copy-url-btn');
+                const qrUrlElement = document.getElementById('qr-url');
+                
+                const currentFile = window.location.pathname.split('/').pop() || 'neon-metropolis.html';
+                const worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
+                
+                qrUrlElement.textContent = worldUrl;
+                
+                shareButton.addEventListener('click', () => {
+                    qrModal.classList.add('show');
+                    this.generateQRCode(worldUrl);
+                });
+                
+                qrClose.addEventListener('click', () => {
+                    qrModal.classList.remove('show');
+                });
+                
+                qrModal.addEventListener('click', (e) => {
+                    if (e.target === qrModal) {
+                        qrModal.classList.remove('show');
+                    }
+                });
+                
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(worldUrl);
+                        copyButton.textContent = 'Copied!';
+                        copyButton.classList.add('copied');
+                        
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy URL';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                    }
+                });
+            }
+
+            generateQRCode(url) {
+                const container = document.getElementById('qr-code-container');
+                container.innerHTML = '';
+                
+                const loadQRious = () => {
+                    return new Promise((resolve, reject) => {
+                        if (window.QRious) {
+                            resolve();
+                        } else {
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js';
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        }
+                    });
+                };
+                
+                loadQRious().then(() => {
+                    const canvas = document.createElement('canvas');
+                    container.appendChild(canvas);
+                    
+                    new window.QRious({
+                        element: canvas,
+                        value: url,
+                        size: 250,
+                        background: 'white',
+                        foreground: 'black',
+                        level: 'H'
+                    });
+                }).catch(() => {
+                    const img = document.createElement('img');
+                    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`;
+                    img.alt = 'QR Code';
+                    container.appendChild(img);
+                });
+            }
+
             setupEventListeners() {
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -494,11 +1000,27 @@
                 });
                 
                 this.renderer.domElement.addEventListener('click', () => {
-                    this.renderer.domElement.requestPointerLock();
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
                 });
                 
                 document.addEventListener('mousemove', (e) => {
-                    if (document.pointerLockElement === this.renderer.domElement) {
+                    if (this.isPointerLocked) {
                         this.rotation.y -= e.movementX * this.lookSpeed;
                         this.rotation.x -= e.movementY * this.lookSpeed;
                         this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
@@ -511,6 +1033,23 @@
                 
                 lookArea.addEventListener('touchstart', (e) => {
                     const touch = e.touches[0];
+                    
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
                     this.lookTouch = {
                         id: touch.identifier,
                         startX: touch.clientX,
@@ -646,6 +1185,82 @@
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
+            
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Entering new world...';
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
 
             animate() {
                 requestAnimationFrame(() => this.animate());
@@ -653,6 +1268,17 @@
                 const time = this.clock.getElapsedTime();
                 
                 this.updateMovement();
+                this.updateHover();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
+                        portal.userData.light.intensity = intensity * 2;
+                    }
+                });
                 
                 // Animate neon signs
                 this.neonSigns.forEach((sign, i) => {
@@ -685,10 +1311,6 @@
                 
                 this.renderer.render(this.scene, this.camera);
             }
-        }
-
-        function returnToNexus() {
-            window.location.href = 'index.html';
         }
 
         window.addEventListener('DOMContentLoaded', () => {

@@ -102,6 +102,87 @@
             font-weight: 500;
         }
 
+        /* Multiplayer Status */
+        .multiplayer-status {
+            position: fixed;
+            top: env(safe-area-inset-top, 80px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.connected {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .status-indicator.hosting {
+            background: #06ffa5;
+            box-shadow: 0 0 10px #06ffa5;
+        }
+
+        .status-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+        }
+
+        .player-count {
+            color: #06ffa5;
+            font-weight: bold;
+        }
+
+        /* Multiplayer Notifications */
+        .multiplayer-notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            animation: slideIn 0.3s ease;
+            z-index: 1005;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
         .controls-hint {
             position: absolute;
             bottom: env(safe-area-inset-bottom, 30px);
@@ -243,6 +324,157 @@
             100% { transform: translateX(100px); }
         }
 
+        /* QR Code Share Button */
+        .share-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 80px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .share-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+        }
+
+        .share-button.multiplayer {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: rgba(0, 255, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .share-icon {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+
+        /* QR Code Modal */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2001;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .qr-modal.show {
+            display: flex;
+        }
+
+        .qr-modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .qr-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .qr-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .qr-modal h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .multiplayer-info {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 0.9em;
+            color: #06ffa5;
+        }
+
+        #qr-code-container {
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+        }
+
+        #qr-code-container canvas,
+        #qr-code-container img {
+            border-radius: 10px;
+        }
+
+        .qr-url {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            word-break: break-all;
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-family: monospace;
+        }
+
+        .copy-url-btn {
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .copy-url-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
+        }
+
+        .copy-url-btn.copied {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+        }
+
         @media (max-width: 768px) {
             .world-title {
                 font-size: 2em;
@@ -283,6 +515,15 @@
         <span class="origin-label">Arrived from:</span>
         <span class="origin-world" id="origin-world-name">Origin</span>
     </div>
+
+    <!-- Multiplayer Status -->
+    <div class="multiplayer-status" id="multiplayer-status">
+        <div class="status-indicator" id="status-indicator"></div>
+        <span class="status-text" id="status-text">Connecting...</span>
+        <div class="player-count">
+            <span id="player-count">1</span> players
+        </div>
+    </div>
     
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
@@ -302,7 +543,31 @@
     
     <div class="loading" id="loading">Initializing nexus...</div>
 
+    <!-- QR Code Share Button -->
+    <div class="share-button" id="share-button">
+        <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"></path>
+            <polyline points="16 6 12 2 8 6"></polyline>
+            <line x1="12" y1="2" x2="12" y2="15"></line>
+        </svg>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div class="qr-modal" id="qr-modal">
+        <div class="qr-modal-content">
+            <button class="qr-close" id="qr-close">&times;</button>
+            <h3>Share This World</h3>
+            <div class="multiplayer-info" id="multiplayer-info" style="display:none;">
+                🌐 Multiplayer Session Active - Others who scan this code will join your world!
+            </div>
+            <div id="qr-code-container"></div>
+            <p class="qr-url" id="qr-url"></p>
+            <button class="copy-url-btn" id="copy-url-btn">Copy URL</button>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         // Configuration - Update these with your GitHub details
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
@@ -329,10 +594,8 @@
         
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
-            // Check for injected params first, then fall back to URL params
             let paramString = window.INJECTED_PARAMS || window.location.search;
             
-            // If we're in a blob URL, check sessionStorage for params
             if (window.location.protocol === 'blob:') {
                 const storedParams = sessionStorage.getItem('worldInheritanceParams');
                 if (storedParams) {
@@ -340,13 +603,11 @@
                 }
             }
             
-            // Also check localStorage as fallback
             if (!paramString || paramString === '?') {
                 const transitionData = localStorage.getItem('worldTransition');
                 if (transitionData) {
                     try {
                         const data = JSON.parse(transitionData);
-                        // Check if data is recent (within 5 seconds)
                         if (Date.now() - data.timestamp < 5000) {
                             paramString = '?' + data.params;
                         }
@@ -360,21 +621,15 @@
             const params = new URLSearchParams(paramString);
             const inherited = {};
             
-            // Get source world info
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
             
-            // Movement attributes
-            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            // Visual attributes only (no moveSpeed)
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
-            
-            // Visual attributes
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
             if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
             if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
             if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
-            
-            // World properties
             if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
             if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
@@ -384,17 +639,357 @@
             return inherited;
         }
         
-        // Merge inherited attributes with defaults
         const inheritedAttributes = parseInheritedAttributes();
         const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
         
-        // Enhanced mobile detection
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                         (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
                         (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
         
-        // iOS specific detection
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        // Multiplayer Manager Class
+        class MultiplayerManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.peer = null;
+                this.connections = new Map();
+                this.players = new Map();
+                this.isHost = false;
+                this.roomId = null;
+                
+                // Player update frequency (ms)
+                this.updateInterval = 50;
+                this.lastUpdate = 0;
+                
+                // Initialize peer connection
+                this.initializePeer();
+            }
+            
+            initializePeer() {
+                // Generate or get peer ID
+                const urlParams = new URLSearchParams(window.location.search);
+                const hostId = urlParams.get('host');
+                
+                if (hostId) {
+                    // Joining someone's world
+                    this.roomId = hostId;
+                    this.peer = new Peer();
+                    
+                    this.peer.on('open', (id) => {
+                        console.log('Joining room:', this.roomId);
+                        this.connectToHost(this.roomId);
+                        this.updateStatus('Connected', true);
+                    });
+                } else {
+                    // Creating a new room
+                    this.isHost = true;
+                    this.peer = new Peer();
+                    
+                    this.peer.on('open', (id) => {
+                        this.roomId = id;
+                        console.log('Created room:', this.roomId);
+                        this.updateShareUrl();
+                        this.updateStatus('Hosting', true);
+                    });
+                }
+                
+                // Handle incoming connections
+                this.peer.on('connection', (conn) => {
+                    this.handleNewConnection(conn);
+                });
+                
+                // Handle errors
+                this.peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    this.showError('Connection error: ' + err.message);
+                    this.updateStatus('Error', false);
+                });
+            }
+            
+            connectToHost(hostId) {
+                const conn = this.peer.connect(hostId, {
+                    reliable: true,
+                    metadata: {
+                        username: this.generateUsername(),
+                        worldData: this.world.getCurrentWorldData()
+                    }
+                });
+                
+                this.handleNewConnection(conn);
+            }
+            
+            handleNewConnection(conn) {
+                const peerId = conn.peer;
+                
+                conn.on('open', () => {
+                    console.log('Connected to peer:', peerId);
+                    this.connections.set(peerId, conn);
+                    
+                    // Send initial player data
+                    this.sendPlayerData(conn);
+                    
+                    // Create player avatar
+                    this.createPlayerAvatar(peerId, conn.metadata);
+                    
+                    // Show notification
+                    this.showNotification(`Player joined: ${conn.metadata?.username || 'Anonymous'}`);
+                    
+                    // Update player count
+                    this.updatePlayerCount();
+                });
+                
+                conn.on('data', (data) => {
+                    this.handlePeerData(peerId, data);
+                });
+                
+                conn.on('close', () => {
+                    console.log('Peer disconnected:', peerId);
+                    this.removePlayer(peerId);
+                    this.connections.delete(peerId);
+                    this.updatePlayerCount();
+                });
+                
+                conn.on('error', (err) => {
+                    console.error('Connection error:', err);
+                });
+            }
+            
+            handlePeerData(peerId, data) {
+                switch (data.type) {
+                    case 'playerUpdate':
+                        this.updatePlayerPosition(peerId, data.position, data.rotation);
+                        break;
+                    
+                    case 'chat':
+                        this.displayChat(peerId, data.message);
+                        break;
+                    
+                    case 'interaction':
+                        this.showPlayerInteraction(peerId, data.target);
+                        break;
+                    
+                    case 'worldSync':
+                        if (!this.isHost) {
+                            this.syncWorldState(data.worldState);
+                        }
+                        break;
+                }
+            }
+            
+            createPlayerAvatar(peerId, metadata) {
+                // Create a simple avatar for the player
+                const avatarGroup = new THREE.Group();
+                
+                // Body (capsule-like shape)
+                const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: this.getPlayerColor(peerId),
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1;
+                avatarGroup.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.3, 8, 6);
+                const head = new THREE.Mesh(headGeometry, bodyMaterial);
+                head.position.y = 2.3;
+                avatarGroup.add(head);
+                
+                // Name tag
+                const nameTag = this.createNameTag(peerId, metadata);
+                nameTag.position.y = 3;
+                avatarGroup.add(nameTag);
+                
+                // Glow effect
+                const light = new THREE.PointLight(this.getPlayerColor(peerId), 0.5, 5);
+                light.position.y = 1.5;
+                avatarGroup.add(light);
+                
+                // Add to scene
+                this.world.scene.add(avatarGroup);
+                this.players.set(peerId, {
+                    avatar: avatarGroup,
+                    lastUpdate: Date.now(),
+                    username: metadata?.username || 'Anonymous'
+                });
+            }
+            
+            createNameTag(peerId, metadata) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, 256, 64);
+                
+                ctx.font = '32px Arial';
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.fillText(metadata?.username || this.getPlayerName(peerId), 128, 40);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(material);
+                sprite.scale.set(2, 0.5, 1);
+                
+                return sprite;
+            }
+            
+            updatePlayerPosition(peerId, position, rotation) {
+                const player = this.players.get(peerId);
+                if (!player) return;
+                
+                // Smooth interpolation
+                const targetPos = new THREE.Vector3(position.x, position.y, position.z);
+                player.avatar.position.lerp(targetPos, 0.3);
+                
+                // Update rotation
+                player.avatar.rotation.y = rotation.y;
+                
+                player.lastUpdate = Date.now();
+            }
+            
+            sendPlayerData(conn) {
+                const data = {
+                    type: 'playerUpdate',
+                    position: {
+                        x: this.world.camera.position.x,
+                        y: this.world.camera.position.y,
+                        z: this.world.camera.position.z
+                    },
+                    rotation: {
+                        x: this.world.camera.rotation.x,
+                        y: this.world.camera.rotation.y
+                    }
+                };
+                
+                if (conn && conn.open) {
+                    conn.send(data);
+                }
+            }
+            
+            broadcastPlayerUpdate() {
+                const now = Date.now();
+                if (now - this.lastUpdate < this.updateInterval) return;
+                
+                this.connections.forEach((conn) => {
+                    this.sendPlayerData(conn);
+                });
+                
+                this.lastUpdate = now;
+            }
+            
+            updateShareUrl() {
+                // Update QR code to include host parameter
+                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.roomId}`;
+                
+                // Update QR code
+                const qrUrlElement = document.getElementById('qr-url');
+                if (qrUrlElement) {
+                    qrUrlElement.textContent = shareUrl;
+                }
+                
+                // Regenerate QR code
+                if (this.world.generateQRCode) {
+                    this.world.generateQRCode(shareUrl);
+                }
+                
+                // Update share button to show multiplayer status
+                const shareButton = document.getElementById('share-button');
+                if (shareButton) {
+                    shareButton.classList.add('multiplayer');
+                }
+                
+                // Show multiplayer info in modal
+                const multiplayerInfo = document.getElementById('multiplayer-info');
+                if (multiplayerInfo) {
+                    multiplayerInfo.style.display = 'block';
+                }
+            }
+            
+            updateStatus(status, connected) {
+                const statusText = document.getElementById('status-text');
+                const statusIndicator = document.getElementById('status-indicator');
+                
+                if (statusText) statusText.textContent = status;
+                if (statusIndicator) {
+                    statusIndicator.classList.toggle('connected', connected);
+                    statusIndicator.classList.toggle('hosting', this.isHost);
+                }
+            }
+            
+            updatePlayerCount() {
+                const count = this.connections.size + 1; // +1 for self
+                const playerCountEl = document.getElementById('player-count');
+                if (playerCountEl) playerCountEl.textContent = count;
+            }
+            
+            getPlayerColor(peerId) {
+                // Generate consistent color based on peer ID
+                const colors = [0xff006e, 0x06ffa5, 0x3a86ff, 0xffaa00, 0xff00ff];
+                const index = peerId.charCodeAt(0) % colors.length;
+                return colors[index];
+            }
+            
+            getPlayerName(peerId) {
+                const player = this.players.get(peerId);
+                return player?.username || 'Player ' + peerId.substr(0, 4);
+            }
+            
+            generateUsername() {
+                const adjectives = ['Swift', 'Neon', 'Cyber', 'Quantum', 'Digital'];
+                const nouns = ['Explorer', 'Wanderer', 'Voyager', 'Pilot', 'Navigator'];
+                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const noun = nouns[Math.floor(Math.random() * nouns.length)];
+                return `${adj}${noun}${Math.floor(Math.random() * 100)}`;
+            }
+            
+            removePlayer(peerId) {
+                const player = this.players.get(peerId);
+                if (player) {
+                    this.world.scene.remove(player.avatar);
+                    this.players.delete(peerId);
+                    this.showNotification(`Player left: ${player.username}`);
+                }
+            }
+            
+            showNotification(message) {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = 'multiplayer-notification';
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+            
+            showError(message) {
+                console.error(message);
+                this.showNotification('⚠️ ' + message);
+            }
+            
+            // Call this in the animation loop
+            update() {
+                this.broadcastPlayerUpdate();
+                
+                // Remove inactive players
+                const now = Date.now();
+                this.players.forEach((player, peerId) => {
+                    if (now - player.lastUpdate > 5000) {
+                        this.removePlayer(peerId);
+                    }
+                });
+            }
+        }
         
         class WorldNavigator {
             constructor() {
@@ -406,13 +1001,11 @@
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
                 
-                // Use inherited movement attributes
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
                 this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false };
                 this.rotation = { x: 0, y: 0 };
                 
-                // Mobile
                 this.isMobile = isMobile;
                 this.isIOS = isIOS;
                 this.joystickActive = false;
@@ -420,21 +1013,20 @@
                 this.lookTouch = null;
                 this.joystickTouch = null;
                 
-                // Touch tracking
                 this.touches = new Map();
                 this.lastTap = 0;
                 
-                // UI
                 this.hoveredPortal = null;
                 this.tooltip = document.getElementById('portal-tooltip');
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
                 
-                // Inherited attributes
                 this.inheritedAttributes = inheritedAttributes;
                 
-                // Prevent iOS bounce
+                // Multiplayer
+                this.multiplayer = null;
+                
                 if (this.isIOS) {
                     document.body.addEventListener('touchmove', (e) => {
                         if (e.target === document.body) {
@@ -445,7 +1037,6 @@
             }
             
             async init() {
-                // Show origin world if we came from somewhere
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
@@ -454,29 +1045,28 @@
                     console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
                 
-                // Hide loading after scene is ready
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
                 }, 1000);
                 
-                // Update UI
                 document.getElementById('world-title').textContent = CURRENT_WORLD.name;
                 document.getElementById('world-description').textContent = CURRENT_WORLD.description;
                 
-                // Setup Three.js
                 this.setupScene();
                 this.setupLighting();
                 await this.loadWorlds();
                 this.createEnvironment();
                 this.createPortals();
                 this.setupEventListeners();
+                this.setupQRCode();
                 
-                // Update controls hint for mobile
+                // Initialize multiplayer
+                this.multiplayer = new MultiplayerManager(this);
+                
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
                     document.getElementById('mobile-controls').classList.add('show');
                     
-                    // Change tooltip instruction for mobile
                     const instruction = this.tooltip.querySelector('.tooltip-instruction');
                     if (instruction) {
                         instruction.textContent = 'Tap to enter world';
@@ -486,16 +1076,21 @@
                 this.animate();
             }
             
+            getCurrentWorldData() {
+                return {
+                    worldName: CURRENT_WORLD.name,
+                    position: this.camera.position,
+                    rotation: this.camera.rotation
+                };
+            }
+            
             setupScene() {
-                // Scene with inherited fog attributes
                 this.scene = new THREE.Scene();
                 this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
-                // Camera with inherited height
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
                 
-                // Renderer
                 this.renderer = new THREE.WebGLRenderer({ 
                     antialias: true, 
                     alpha: true,
@@ -509,11 +1104,9 @@
             }
             
             setupLighting() {
-                // Ambient light with inherited color
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.5);
                 this.scene.add(ambientLight);
                 
-                // Main directional light
                 const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
                 dirLight.position.set(10, 20, 10);
                 dirLight.castShadow = true;
@@ -537,14 +1130,13 @@
                     
                     const data = await response.json();
                     
-                    // Find all HTML files in root directory (these are world files)
                     this.worlds = data.tree
                         .filter(item => 
                             item.type === 'blob' && 
                             item.path.endsWith('.html') && 
-                            !item.path.includes('/') && // Only root directory
-                            !item.path.toLowerCase().includes('index') && // Exclude index files
-                            !item.path.toLowerCase().includes('readme') // Exclude readme files
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme')
                         )
                         .map(item => ({
                             path: item.path,
@@ -557,7 +1149,6 @@
                     
                 } catch (error) {
                     console.error("Error loading worlds:", error);
-                    // Continue with demo portals if GitHub fails
                     this.worlds = this.getDemoWorlds();
                 }
             }
@@ -570,7 +1161,6 @@
             }
             
             getDemoWorlds() {
-                // Fallback demo worlds if GitHub fetch fails
                 return [
                     { name: "Crystal Caves", description: "A world of glowing crystals and underground mysteries" },
                     { name: "Sky Islands", description: "Floating islands connected by bridges of light" },
@@ -581,7 +1171,6 @@
             }
             
             createEnvironment() {
-                // Ground
                 const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
                 const groundMaterial = new THREE.MeshStandardMaterial({
                     color: CURRENT_WORLD.groundColor,
@@ -589,7 +1178,6 @@
                     metalness: 0.2
                 });
                 
-                // Add some vertex displacement for terrain
                 const vertices = groundGeometry.attributes.position.array;
                 for (let i = 0; i < vertices.length; i += 3) {
                     vertices[i + 2] = Math.sin(vertices[i] * 0.1) * Math.cos(vertices[i + 1] * 0.1) * 0.5;
@@ -601,12 +1189,10 @@
                 ground.receiveShadow = true;
                 this.scene.add(ground);
                 
-                // Grid overlay
                 const gridHelper = new THREE.GridHelper(200, 100, 0x444444, 0x222222);
                 gridHelper.position.y = 0.1;
                 this.scene.add(gridHelper);
                 
-                // Skybox gradient
                 const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
                 const skyMaterial = new THREE.ShaderMaterial({
                     uniforms: {
@@ -639,7 +1225,6 @@
                 const sky = new THREE.Mesh(skyGeometry, skyMaterial);
                 this.scene.add(sky);
                 
-                // Floating particles with inherited count
                 const particleGeometry = new THREE.BufferGeometry();
                 const particleCount = CURRENT_WORLD.particleCount;
                 const positions = new Float32Array(particleCount * 3);
@@ -664,17 +1249,15 @@
             }
             
             createPortals() {
-                const numPortals = Math.min(this.worlds.length, 8); // Limit to 8 portals max
+                const numPortals = Math.min(this.worlds.length, 8);
                 const radius = 15;
                 
                 for (let i = 0; i < numPortals; i++) {
                     const world = this.worlds[i] || this.getDemoWorlds()[i];
                     const angle = (i / numPortals) * Math.PI * 2;
                     
-                    // Portal group
                     const portalGroup = new THREE.Group();
                     
-                    // Portal frame
                     const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
                     const frameMaterial = new THREE.MeshStandardMaterial({
                         color: 0x8338ec,
@@ -685,7 +1268,6 @@
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                     
-                    // Portal surface with inherited colors
                     const portalGeometry = new THREE.CircleGeometry(2.7, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -721,22 +1303,18 @@
                     const portal = new THREE.Mesh(portalGeometry, portalMaterial);
                     portal.position.z = 0.1;
                     
-                    // Add to group
                     portalGroup.add(frame);
                     portalGroup.add(portal);
                     
-                    // Position portal
                     portalGroup.position.x = Math.cos(angle) * radius;
                     portalGroup.position.z = Math.sin(angle) * radius;
                     portalGroup.position.y = 3;
                     portalGroup.rotation.y = -angle + Math.PI;
                     
-                    // Add point light
                     const light = new THREE.PointLight(0x8338ec, 1, 10);
                     light.position.copy(portalGroup.position);
                     this.scene.add(light);
                     
-                    // Store portal data
                     portal.userData = {
                         world: world,
                         material: portalMaterial,
@@ -749,7 +1327,6 @@
                     this.portals.push(portal);
                     this.scene.add(portalGroup);
                     
-                    // Floating platform under portal
                     const platformGeometry = new THREE.CylinderGeometry(4, 4, 0.5, 32);
                     const platformMaterial = new THREE.MeshStandardMaterial({
                         color: 0x444444,
@@ -766,24 +1343,17 @@
             }
             
             buildInheritanceParams() {
-                // Build URL parameters to pass to the next world
                 const params = new URLSearchParams();
                 
-                // Source world info
                 params.set('from', window.location.pathname.split('/').pop() || 'index.html');
                 params.set('fromName', CURRENT_WORLD.name);
                 
-                // Movement attributes
-                params.set('moveSpeed', this.moveSpeed.toString());
+                // Remove moveSpeed from inheritance
                 params.set('lookSpeed', this.lookSpeed.toString());
-                
-                // Visual attributes (convert to hex strings)
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
                 params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
                 params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
                 params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
-                
-                // World properties
                 params.set('particleCount', CURRENT_WORLD.particleCount.toString());
                 params.set('cameraHeight', this.camera.position.y.toString());
                 params.set('fogNear', CURRENT_WORLD.fogNear.toString());
@@ -792,8 +1362,110 @@
                 return params.toString();
             }
             
+            setupQRCode() {
+                const shareButton = document.getElementById('share-button');
+                const qrModal = document.getElementById('qr-modal');
+                const qrClose = document.getElementById('qr-close');
+                const copyButton = document.getElementById('copy-url-btn');
+                const qrUrlElement = document.getElementById('qr-url');
+                
+                // Check if we're in multiplayer mode
+                const urlParams = new URLSearchParams(window.location.search);
+                const hostId = urlParams.get('host');
+                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+                
+                let worldUrl;
+                if (this.multiplayer && this.multiplayer.isHost) {
+                    // Host URL includes room ID
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.multiplayer.roomId}`;
+                } else if (hostId) {
+                    // Already in multiplayer session
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${hostId}`;
+                } else {
+                    // Single player URL (will become multiplayer when generated)
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
+                }
+                
+                qrUrlElement.textContent = worldUrl;
+                
+                shareButton.addEventListener('click', () => {
+                    qrModal.classList.add('show');
+                    // Update URL if multiplayer is active
+                    if (this.multiplayer && this.multiplayer.roomId) {
+                        const multiplayerUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?host=${this.multiplayer.roomId}`;
+                        qrUrlElement.textContent = multiplayerUrl;
+                        this.generateQRCode(multiplayerUrl);
+                    } else {
+                        this.generateQRCode(worldUrl);
+                    }
+                });
+                
+                qrClose.addEventListener('click', () => {
+                    qrModal.classList.remove('show');
+                });
+                
+                qrModal.addEventListener('click', (e) => {
+                    if (e.target === qrModal) {
+                        qrModal.classList.remove('show');
+                    }
+                });
+                
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        const urlToCopy = qrUrlElement.textContent;
+                        await navigator.clipboard.writeText(urlToCopy);
+                        copyButton.textContent = 'Copied!';
+                        copyButton.classList.add('copied');
+                        
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy URL';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                    }
+                });
+            }
+
+            generateQRCode(url) {
+                const container = document.getElementById('qr-code-container');
+                container.innerHTML = '';
+                
+                const loadQRious = () => {
+                    return new Promise((resolve, reject) => {
+                        if (window.QRious) {
+                            resolve();
+                        } else {
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js';
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        }
+                    });
+                };
+                
+                loadQRious().then(() => {
+                    const canvas = document.createElement('canvas');
+                    container.appendChild(canvas);
+                    
+                    new window.QRious({
+                        element: canvas,
+                        value: url,
+                        size: 250,
+                        background: 'white',
+                        foreground: 'black',
+                        level: 'H'
+                    });
+                }).catch(() => {
+                    const img = document.createElement('img');
+                    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`;
+                    img.alt = 'QR Code';
+                    container.appendChild(img);
+                });
+            }
+            
             setupEventListeners() {
-                // Resize
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -808,7 +1480,6 @@
             }
             
             setupDesktopControls() {
-                // Keyboard
                 window.addEventListener('keydown', (e) => {
                     if (e.key.toLowerCase() in this.keys) {
                         this.keys[e.key.toLowerCase()] = true;
@@ -821,13 +1492,10 @@
                     }
                 });
                 
-                // Mouse click handling
                 this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
-                        // Request pointer lock
                         this.renderer.domElement.requestPointerLock();
                     } else {
-                        // Check for portal clicks when pointer is locked
                         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                         const intersects = this.raycaster.intersectObjects(this.portals);
                         
@@ -854,15 +1522,11 @@
             }
             
             setupMobileControls() {
-                // Look area for camera control
                 const lookArea = document.getElementById('look-area');
                 
-                // Touch start
                 lookArea.addEventListener('touchstart', (e) => {
-                    // Allow default behavior to prevent iOS issues
                     const touch = e.touches[0];
                     
-                    // Check for portal tap
                     const rect = this.renderer.domElement.getBoundingClientRect();
                     const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
                     const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
@@ -871,7 +1535,6 @@
                     const intersects = this.raycaster.intersectObjects(this.portals);
                     
                     if (intersects.length > 0) {
-                        // It's a portal tap
                         const portal = intersects[0].object;
                         if (portal.userData.url) {
                             e.preventDefault();
@@ -880,7 +1543,6 @@
                         }
                     }
                     
-                    // Otherwise start look tracking
                     this.lookTouch = {
                         id: touch.identifier,
                         startX: touch.clientX,
@@ -890,7 +1552,6 @@
                     };
                 }, { passive: true });
                 
-                // Touch move for looking
                 lookArea.addEventListener('touchmove', (e) => {
                     if (!this.lookTouch) return;
                     
@@ -913,7 +1574,6 @@
                     }
                 }, { passive: false });
                 
-                // Touch end
                 lookArea.addEventListener('touchend', (e) => {
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const touch = e.changedTouches[i];
@@ -923,12 +1583,10 @@
                         }
                     }
                 }, { passive: true });
-                
-                // Joystick controls
+
                 const joystick = document.getElementById('movement-joystick');
                 const handle = document.getElementById('movement-handle');
                 
-                // Joystick touch start
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -942,7 +1600,6 @@
                     this.updateJoystick(touch, joystick, handle);
                 }, { passive: false });
                 
-                // Joystick touch move
                 joystick.addEventListener('touchmove', (e) => {
                     if (!this.joystickActive || !this.joystickTouch) return;
                     
@@ -958,7 +1615,6 @@
                     }
                 }, { passive: false });
                 
-                // Joystick touch end
                 joystick.addEventListener('touchend', (e) => {
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const touch = e.changedTouches[i];
@@ -975,7 +1631,6 @@
                     }
                 }, { passive: false });
                 
-                // Prevent context menu on long press
                 window.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     return false;
@@ -1028,14 +1683,12 @@
                     if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
                 }
                 
-                // Update camera rotation
                 this.camera.rotation.order = 'YXZ';
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
             
             updateHover() {
-                // Check center of screen for portal hover
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const intersects = this.raycaster.intersectObjects(this.portals);
                 
@@ -1045,12 +1698,10 @@
                     if (portal !== this.hoveredPortal) {
                         this.hoveredPortal = portal;
                         
-                        // Show tooltip
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
                         this.tooltip.classList.add('visible');
                         
-                        // Position tooltip
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
@@ -1071,11 +1722,9 @@
             
             async enterWorld(url) {
                 try {
-                    // Show loading
                     document.getElementById('loading').style.display = 'block';
                     document.getElementById('loading').innerHTML = 'Entering new world...';
                     
-                    // Fetch the HTML content
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`Failed to load world (${response.status})`);
@@ -1083,38 +1732,34 @@
                     
                     let htmlContent = await response.text();
                     
-                    // Build inheritance parameters
                     const inheritanceParams = this.buildInheritanceParams();
                     
-                    // Store params in multiple places for reliability
+                    // If in multiplayer, preserve the host parameter
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const hostId = urlParams.get('host');
+                    if (hostId) {
+                        inheritanceParams += `&host=${hostId}`;
+                    }
+                    
                     sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
                     
-                    // Store in localStorage with timestamp
                     const inheritanceData = {
                         params: inheritanceParams,
                         timestamp: Date.now()
                     };
                     localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
                     
-                    // Create a script to inject the parameters at the start of the page
                     const paramScript = `<script>
-                        // Injected inheritance parameters
                         window.INJECTED_PARAMS = '?${inheritanceParams}';
-                        
-                        // Also store in sessionStorage as backup
                         sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
-                        
                         console.log('Injected params:', window.INJECTED_PARAMS);
                     <\/script>`;
                     
-                    // Inject the script right after the opening body tag
                     htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
                     
-                    // Create blob and navigate
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Navigate to the new world
                     window.location.href = blobUrl;
                     
                 } catch (error) {
@@ -1131,27 +1776,25 @@
                 
                 const time = this.clock.getElapsedTime();
                 
-                // Update movement
                 this.updateMovement();
-                
-                // Update hover detection
                 this.updateHover();
                 
-                // Animate portals
+                // Update multiplayer
+                if (this.multiplayer) {
+                    this.multiplayer.update();
+                }
+                
                 this.portals.forEach((portal, index) => {
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
                         
-                        // Pulsing glow
                         const intensity = 0.5 + Math.sin(time * 2 + index) * 0.3;
                         portal.userData.light.intensity = intensity;
                     }
                     
-                    // Gentle rotation
                     portal.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
                 });
                 
-                // Animate particles
                 const particles = this.scene.getObjectByProperty('type', 'Points');
                 if (particles) {
                     particles.rotation.y = time * 0.05;
@@ -1162,13 +1805,11 @@
             }
         }
         
-        // Initialize when DOM is loaded
         window.addEventListener('DOMContentLoaded', () => {
             const navigator = new WorldNavigator();
             navigator.init();
         });
         
-        // Prevent pull-to-refresh on mobile
         let lastY = 0;
         window.addEventListener('touchstart', (e) => {
             lastY = e.touches[0].clientY;

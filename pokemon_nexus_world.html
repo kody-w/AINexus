@@ -1398,7 +1398,7 @@
                     width: 2,
                     depth: 0.5,
                     destination: 'town',
-                    newPosition: new THREE.Vector3(-20, 2, 0)
+                    newPosition: new THREE.Vector3(-20, 2, 8)
                 };
                 
                 scene.userData = {
@@ -1529,7 +1529,7 @@
                     width: 2,
                     depth: 2,
                     destination: 'downstairs',
-                    newPosition: new THREE.Vector3(0, 2, 5)
+                    newPosition: new THREE.Vector3(0, 2, 4)
                 });
                 
                 // Rival's house
@@ -1539,8 +1539,8 @@
                 this.createBuildingForTown(scene, 0, -20, 12, 10, 8, 0x9E9E9E, "Professor's Lab", buildings, collisionBoxes, true);
                 doors.push({
                     position: { x: 0, z: -15 },
-                    width: 2,
-                    depth: 2,
+                    width: 8,
+                    depth: 6,
                     destination: 'lab',
                     newPosition: new THREE.Vector3(0, 2, 15)
                 });
@@ -1605,12 +1605,34 @@
                 buildings.push(building);
                 scene.add(building);
                 
-                // Add collision box
-                collisionBoxes.push({
-                    position: { x: x, z: z },
-                    width: width,
-                    depth: depth
-                });
+                // Add collision box - special handling for lab to leave door area open
+                if (isLab) {
+                    // Lab at (0, -20) with door at (0, -15)
+                    // Create collision that excludes the door area
+                    // Back wall (away from door)
+                    collisionBoxes.push({
+                        position: { x: x, z: z - depth/2 + 1 },
+                        width: width,
+                        depth: 2
+                    });
+                    // Side walls only
+                    collisionBoxes.push({
+                        position: { x: x - width/2 + 0.5, z: z },
+                        width: 1,
+                        depth: depth - 4
+                    });
+                    collisionBoxes.push({
+                        position: { x: x + width/2 - 0.5, z: z },
+                        width: 1,
+                        depth: depth - 4
+                    });
+                } else {
+                    collisionBoxes.push({
+                        position: { x: x, z: z },
+                        width: width,
+                        depth: depth
+                    });
+                }
             }
 
             createTreeForTown(scene, x, z, collisionBoxes) {
@@ -1870,8 +1892,7 @@
                     // Bookshelves
                     { position: { x: -8, z: -14 }, width: 6, depth: 1 },
                     { position: { x: 8, z: -14 }, width: 6, depth: 1 },
-                    // Walls
-                    { position: { x: 0, z: -depth/2 }, width: width, depth: 0.5 },
+                    // Side walls only (no front wall to block entry)
                     { position: { x: -width/2, z: 0 }, width: 0.5, depth: depth },
                     { position: { x: width/2, z: 0 }, width: 0.5, depth: depth }
                 ];
@@ -1896,11 +1917,12 @@
                 for (const box of this.collisionBoxes) {
                     const halfWidth = box.width / 2;
                     const halfDepth = box.depth / 2;
+                    const buffer = 0.1; // Small buffer to prevent getting stuck at edges
                     
-                    if (newPosition.x > box.position.x - halfWidth &&
-                        newPosition.x < box.position.x + halfWidth &&
-                        newPosition.z > box.position.z - halfDepth &&
-                        newPosition.z < box.position.z + halfDepth) {
+                    if (newPosition.x > box.position.x - halfWidth - buffer &&
+                        newPosition.x < box.position.x + halfWidth + buffer &&
+                        newPosition.z > box.position.z - halfDepth - buffer &&
+                        newPosition.z < box.position.z + halfDepth + buffer) {
                         return true;
                     }
                 }
