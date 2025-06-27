@@ -289,6 +289,14 @@
             border-radius: 15px;
             max-width: 80%;
             word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            font-size: 15px;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            max-width: 100%;
+            overflow-x: auto;
         }
 
         .ai-message.user {
@@ -307,7 +315,117 @@
             opacity: 0.8;
             font-style: italic;
         }
-        
+
+        /* Agent Logs Styling */
+        .ai-message.system {
+            background: rgba(255, 106, 0, 0.1);
+            border: 1px solid rgba(255, 106, 0, 0.3);
+            font-family: monospace;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        .agent-log-section {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 3px solid #ff6a00;
+        }
+
+        .agent-log-header {
+            color: #ffa500;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .agent-log-content {
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.5;
+        }
+
+        .agent-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .agent-status.thinking {
+            background: rgba(58, 134, 255, 0.3);
+            color: #4DD0E1;
+        }
+
+        .agent-status.searching {
+            background: rgba(255, 152, 0, 0.3);
+            color: #ffaa00;
+        }
+
+        .agent-status.processing {
+            background: rgba(156, 39, 176, 0.3);
+            color: #BA68C8;
+        }
+
+        .agent-status.complete {
+            background: rgba(76, 175, 80, 0.3);
+            color: #81C784;
+        }
+
+        .agent-step {
+            margin: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .agent-step::before {
+            content: '▸';
+            position: absolute;
+            left: 5px;
+            color: #06ffa5;
+        }
+
+        .agent-error {
+            color: #ff6b6b;
+            background: rgba(255, 0, 0, 0.1);
+            padding: 5px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+
+        .agent-success {
+            color: #51cf66;
+            background: rgba(0, 255, 0, 0.1);
+            padding: 5px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+
+        /* 3D Agent Log Display */
+        .agent-log-3d {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 106, 0, 0.5);
+            border-radius: 10px;
+            padding: 10px;
+            max-width: 300px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #ffa500;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .agent-log-3d.visible {
+            opacity: 1;
+        }
+
         .ai-typing {
             margin: 10px 0;
             padding: 10px 15px;
@@ -2304,7 +2422,7 @@
             }
         }
 
-        // AI Manager Class (Modified to track conversation history)
+        // AI Manager Class (Modified to track conversation history and show agent logs)
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -2327,6 +2445,10 @@
                 this.textMeshes = [];
                 this.currentTextAnimation = null;
                 this.textGroup = null;
+                
+                // Agent log display
+                this.agentLogMeshes = [];
+                this.agentLogGroup = null;
                 
                 this.setupEventListeners();
                 
@@ -2506,6 +2628,11 @@
                 this.textGroup.position.y = 4; // Position above the orb
                 companionGroup.add(this.textGroup);
                 
+                // Create agent log display group
+                this.agentLogGroup = new THREE.Group();
+                this.agentLogGroup.position.y = 1; // Position below the orb
+                companionGroup.add(this.agentLogGroup);
+                
                 // Position near the player
                 companionGroup.position.set(3, 0, 3);
                 
@@ -2534,7 +2661,7 @@
                 });
             }
             
-            create3DText(text, position = new THREE.Vector3(0, 0, 0)) {
+            create3DText(text, position = new THREE.Vector3(0, 0, 0), isAgentLog = false) {
                 if (!this.font) {
                     console.warn('Font not loaded yet');
                     return null;
@@ -2542,7 +2669,7 @@
                 
                 const textGeometry = new THREE.TextGeometry(text, {
                     font: this.font,
-                    size: 0.3,
+                    size: isAgentLog ? 0.2 : 0.3,
                     height: 0.05,
                     curveSegments: 12,
                     bevelEnabled: true,
@@ -2554,8 +2681,8 @@
                 textGeometry.center();
                 
                 const textMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x06ffa5,
-                    emissive: 0x06ffa5,
+                    color: isAgentLog ? 0xffa500 : 0x06ffa5,
+                    emissive: isAgentLog ? 0xffa500 : 0x06ffa5,
                     emissiveIntensity: 0.3,
                     metalness: 0.5,
                     roughness: 0.3,
@@ -2669,6 +2796,36 @@
                 }, 50); // 50ms per character for readable speed
             }
             
+            animateAgentLog(logText) {
+                // Clear previous agent log meshes
+                this.clearAgentLogs();
+                
+                const logMesh = this.create3DText(logText, new THREE.Vector3(0, 0, 0), true);
+                if (logMesh) {
+                    this.agentLogGroup.add(logMesh);
+                    this.agentLogMeshes.push(logMesh);
+                    
+                    // Fade in animation
+                    const fadeInInterval = setInterval(() => {
+                        logMesh.material.opacity += 0.1;
+                        if (logMesh.material.opacity >= 1) {
+                            clearInterval(fadeInInterval);
+                            
+                            // Fade out after 3 seconds
+                            setTimeout(() => {
+                                const fadeOutInterval = setInterval(() => {
+                                    logMesh.material.opacity -= 0.02;
+                                    if (logMesh.material.opacity <= 0) {
+                                        clearInterval(fadeOutInterval);
+                                        this.clearAgentLogs();
+                                    }
+                                }, 50);
+                            }, 3000);
+                        }
+                    }, 50);
+                }
+            }
+            
             clearTextMeshes() {
                 this.textMeshes.forEach(mesh => {
                     if (mesh.geometry) mesh.geometry.dispose();
@@ -2676,6 +2833,15 @@
                     this.textGroup.remove(mesh);
                 });
                 this.textMeshes = [];
+            }
+            
+            clearAgentLogs() {
+                this.agentLogMeshes.forEach(mesh => {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) mesh.material.dispose();
+                    this.agentLogGroup.remove(mesh);
+                });
+                this.agentLogMeshes = [];
             }
             
             fadeOutText() {
@@ -2725,6 +2891,11 @@
                     // Make text face the camera
                     if (this.textGroup) {
                         this.textGroup.lookAt(this.world.camera.position);
+                    }
+                    
+                    // Make agent logs face the camera
+                    if (this.agentLogGroup) {
+                        this.agentLogGroup.lookAt(this.world.camera.position);
                     }
                     
                     requestAnimationFrame(animate);
@@ -2818,11 +2989,39 @@
                         // Display text in 3D world
                         this.animateTextResponse(response.assistant_response);
                     }
+                    
+                    // Handle agent logs if present
+                    if (response.agent_logs) {
+                        this.addAgentLog(response.agent_logs);
+                        
+                        // Add to current chat history
+                        this.currentChatHistory.push({
+                            text: response.agent_logs,
+                            sender: 'system',
+                            timestamp: Date.now()
+                        });
+                        
+                        // Show simplified log in 3D
+                        const simplifiedLog = this.extractAgentStatus(response.agent_logs);
+                        if (simplifiedLog) {
+                            this.animateAgentLog(simplifiedLog);
+                        }
+                    }
                 } catch (error) {
                     console.error('Failed to send message:', error);
                     this.hideTypingIndicator();
                     this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
                 }
+            }
+            
+            extractAgentStatus(agentLogs) {
+                // Extract key status from agent logs for 3D display
+                if (agentLogs.includes('thinking')) return '🤔 Thinking...';
+                if (agentLogs.includes('searching')) return '🔍 Searching...';
+                if (agentLogs.includes('processing')) return '⚙️ Processing...';
+                if (agentLogs.includes('analyzing')) return '📊 Analyzing...';
+                if (agentLogs.includes('complete')) return '✅ Complete!';
+                return '💭 Working...';
             }
             
             showTypingIndicator() {
@@ -2853,6 +3052,46 @@
                 
                 this.chatMessages.appendChild(messageDiv);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+            
+            addAgentLog(logText) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'ai-message system';
+                
+                // Parse and format the agent logs
+                const formattedLog = this.formatAgentLog(logText);
+                messageDiv.innerHTML = formattedLog;
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+            
+            formatAgentLog(logText) {
+                // Parse and format agent logs for better display
+                let formatted = logText;
+                
+                // Add status indicators
+                formatted = formatted.replace(/thinking/gi, '<span class="agent-status thinking">THINKING</span>');
+                formatted = formatted.replace(/searching/gi, '<span class="agent-status searching">SEARCHING</span>');
+                formatted = formatted.replace(/processing/gi, '<span class="agent-status processing">PROCESSING</span>');
+                formatted = formatted.replace(/complete/gi, '<span class="agent-status complete">COMPLETE</span>');
+                
+                // Format steps
+                formatted = formatted.replace(/Step \d+:/g, (match) => `<div class="agent-step">${match}</div>`);
+                
+                // Format errors
+                formatted = formatted.replace(/Error:([^\\n]*)/g, '<div class="agent-error">Error: $1</div>');
+                
+                // Format success messages
+                formatted = formatted.replace(/Success:([^\\n]*)/g, '<div class="agent-success">Success: $1</div>');
+                
+                // Wrap in container
+                return `
+                    <div class="agent-log-section">
+                        <div class="agent-log-header">🤖 Agent Process Log</div>
+                        <div class="agent-log-content">${formatted}</div>
+                    </div>
+                `;
             }
             
             animateCompanionSpeaking() {
@@ -3156,8 +3395,7 @@
             
             setTempLocation(latlng) {
                 // Remove existing temp marker
-                if (this.tempMarker) {
-                    this.map.removeLayer(this.tempMarker);
+                if (this.tempMarker) {this.map.removeLayer(this.tempMarker);
                 }
                 
                 // Create new temp marker
@@ -4687,7 +4925,6 @@
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
-                        
                         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                         const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
                         
