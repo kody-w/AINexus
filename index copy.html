@@ -7,7 +7,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Nexus Hub - GPS World Explorer</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
         * {
             margin: 0;
@@ -40,6 +39,109 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+        }
+
+        /* Welcome Overlay */
+        .welcome-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.5s ease;
+        }
+
+        .welcome-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .welcome-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+            animation: welcomeFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes welcomeFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .welcome-title {
+            font-size: 36px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 4s ease-in-out infinite;
+        }
+
+        .welcome-subtitle {
+            font-size: 18px;
+            color: #06ffa5;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+
+        .welcome-description {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .welcome-features {
+            text-align: left;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .welcome-feature {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .welcome-feature-icon {
+            font-size: 20px;
+        }
+
+        .welcome-continue-btn {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 20px;
+        }
+
+        .welcome-continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(6, 255, 165, 0.5);
         }
 
         /* Map View */
@@ -269,11 +371,46 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .ai-chat-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
         }
 
         .ai-chat-title {
             font-weight: bold;
             color: #06ffa5;
+        }
+
+        .ai-chat-location {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 5px;
+        }
+
+        .ai-activity-indicator {
+            background: rgba(255, 106, 0, 0.2);
+            border: 1px solid rgba(255, 106, 0, 0.5);
+            border-radius: 10px;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            color: #ffa500;
+            display: none;
+        }
+
+        .ai-activity-indicator.active {
+            display: block;
+            animation: activityPulse 2s infinite;
+        }
+
+        @keyframes activityPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
 
         .ai-chat-messages {
@@ -302,49 +439,35 @@
             margin-right: auto;
         }
 
-        .ai-message.task-replay {
-            border: 1px solid rgba(255, 106, 0, 0.5);
-            opacity: 0.8;
+        .ai-message.system {
+            background: rgba(255, 106, 0, 0.2);
+            font-size: 0.9em;
             font-style: italic;
+            margin: 5px auto;
+            max-width: 90%;
+            text-align: center;
+            border: 1px solid rgba(255, 106, 0, 0.3);
         }
-        
-        .ai-typing {
-            margin: 10px 0;
-            padding: 10px 15px;
-            border-radius: 15px;
-            max-width: 80%;
-            background: rgba(6, 255, 165, 0.2);
+
+        .ai-message.memory {
+            background: rgba(58, 134, 255, 0.2);
+            font-size: 0.9em;
+            margin: 5px auto;
+            max-width: 90%;
+            border: 1px solid rgba(58, 134, 255, 0.3);
+        }
+
+        .ai-message.guide {
+            background: linear-gradient(135deg, rgba(138, 56, 236, 0.2), rgba(58, 134, 255, 0.2));
+            border: 1px solid rgba(138, 56, 236, 0.4);
             margin-right: auto;
-            display: flex;
-            align-items: center;
-            gap: 5px;
+            font-weight: 500;
         }
-        
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.6);
-            border-radius: 50%;
-            animation: typingPulse 1.4s infinite ease-in-out;
-        }
-        
-        .typing-dot:nth-child(1) {
-            animation-delay: -0.32s;
-        }
-        
-        .typing-dot:nth-child(2) {
-            animation-delay: -0.16s;
-        }
-        
-        @keyframes typingPulse {
-            0%, 80%, 100% {
-                transform: scale(0.8);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1);
-                opacity: 1;
-            }
+
+        .ai-message-timestamp {
+            font-size: 0.7em;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 5px;
         }
 
         .ai-chat-input-container {
@@ -378,24 +501,6 @@
             transform: scale(1.05);
         }
 
-        /* Save as Task Button */
-        .save-task-btn {
-            background: linear-gradient(45deg, #ff6a00, #ff8c00);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-left: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .save-task-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 3px 15px rgba(255, 106, 0, 0.4);
-        }
-
         /* AI Companion Button */
         .ai-companion-button {
             position: fixed;
@@ -414,6 +519,18 @@
             transition: all 0.3s ease;
             z-index: 1002;
             box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+            animation: guideGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes guideGlow {
+            0%, 100% { 
+                box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 40px rgba(131, 56, 236, 0.6);
+                transform: scale(1.05);
+            }
         }
 
         .ai-companion-button:hover {
@@ -425,108 +542,95 @@
         .ai-companion-button.active {
             background: rgba(6, 255, 165, 0.3);
             border-color: rgba(6, 255, 165, 0.5);
+            animation: none;
         }
 
-        /* Task List Panel */
-        .task-panel {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 100px));
-            left: calc(env(safe-area-inset-left, 20px));
-            background: rgba(20, 20, 40, 0.95);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 20px;
-            padding: 20px;
-            z-index: 1002;
-            max-width: 350px;
-            max-height: 400px;
-            overflow-y: auto;
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.3);
-            display: none;
+        .ai-companion-button.has-task {
+            animation: taskPulse 2s infinite;
         }
-        
-        .task-panel.active {
-            display: block;
-        }
-        
-        .task-panel h3 {
-            margin: 0 0 15px 0;
-            font-size: 20px;
-            background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .task-item {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-        }
-        
-        .task-item:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 106, 0, 0.5);
-            transform: translateX(5px);
-        }
-        
-        .task-item strong {
-            color: #ffa500;
-        }
-        
-        .task-item small {
-            color: rgba(255, 255, 255, 0.6);
-            display: block;
-            margin-top: 5px;
-        }
-        
-        .task-replay-indicator {
+
+        .ai-companion-button.has-activity::after {
+            content: '';
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(255, 106, 0, 0.8);
-            padding: 5px 10px;
-            border-radius: 10px;
-            font-size: 12px;
+            top: -5px;
+            right: -5px;
+            width: 15px;
+            height: 15px;
+            background: #ff6a00;
+            border-radius: 50%;
+            border: 2px solid #000;
+            animation: activityBounce 2s infinite;
+        }
+
+        @keyframes taskPulse {
+            0%, 100% { 
+                box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 40px rgba(255, 106, 0, 0.8);
+            }
+        }
+
+        @keyframes activityBounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        /* Guide Quick Actions */
+        .guide-actions {
+            padding: 10px 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .guide-actions.show {
+            display: flex;
+        }
+
+        .guide-action-btn {
+            font-size: 0.8em;
+            padding: 6px 12px;
+            background: rgba(138, 56, 236, 0.2);
+            border: 1px solid rgba(138, 56, 236, 0.4);
+            border-radius: 15px;
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .guide-action-btn:hover {
+            background: rgba(138, 56, 236, 0.4);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        /* Task Templates */
+        .task-templates {
+            padding: 10px 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
             display: none;
         }
-        
-        .task-replay-indicator.active {
+
+        .task-templates.show {
             display: block;
-            animation: pulse 1s infinite;
         }
 
-        /* Tasks Button */
-        .tasks-button {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 360px);
-            right: calc(env(safe-area-inset-right, 30px));
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 106, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .task-template-btn {
+            font-size: 0.8em;
+            padding: 5px 10px;
+            margin: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.8);
             cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1002;
-            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
+            transition: all 0.2s;
         }
 
-        .tasks-button:hover {
-            background: rgba(255, 106, 0, 0.5);
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
-        }
-
-        .tasks-button svg {
-            width: 28px;
-            height: 28px;
+        .task-template-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
             color: white;
         }
 
@@ -1483,6 +1587,39 @@
 <body>
     <div id="three-container"></div>
     
+    <!-- Welcome Overlay -->
+    <div class="welcome-overlay" id="welcome-overlay">
+        <div class="welcome-content">
+            <h1 class="welcome-title">NEXUS HUB</h1>
+            <p class="welcome-subtitle">Your Gateway to Infinite Worlds</p>
+            <p class="welcome-description">
+                Welcome to the Nexus Hub - a GPS-located portal system connecting infinite worlds. 
+                I'm your AI guide, ready to help you explore, create, and connect across dimensions.
+            </p>
+            <div class="welcome-features">
+                <div class="welcome-feature">
+                    <span class="welcome-feature-icon">🌍</span>
+                    <span>Explore GPS-anchored worlds</span>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-feature-icon">🤖</span>
+                    <span>AI companions with persistent memory</span>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-feature-icon">📍</span>
+                    <span>Create location-based AI agents</span>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-feature-icon">👥</span>
+                    <span>Multiplayer world sharing</span>
+                </div>
+            </div>
+            <button class="welcome-continue-btn" onclick="window.worldNavigator.startExperience()">
+                Begin Your Journey
+            </button>
+        </div>
+    </div>
+    
     <!-- Map Container -->
     <div id="map-container">
         <div id="map"></div>
@@ -1497,7 +1634,7 @@
     </div>
     
     <!-- Location Permission Modal -->
-    <div class="permission-modal" id="permission-modal">
+    <div class="permission-modal hidden" id="permission-modal">
         <div class="permission-content">
             <div class="permission-icon">📍</div>
             <h2 class="permission-title">Choose Your Location</h2>
@@ -1515,19 +1652,20 @@
     <div class="ai-modal" id="ai-modal">
         <div class="ai-modal-content">
             <button class="ai-modal-close" id="ai-close">&times;</button>
-            <h3>AI Companion Settings</h3>
+            <h3>Activate Your AI Guide</h3>
             <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
-                Activate AI companions to join your world. They can interact with you and other players in real-time.
+                I'm your Nexus Guide, ready to help you navigate worlds, create portals, and deploy AI agents. 
+                Enter your API key to begin our journey together.
             </p>
-            <input type="password" class="ai-api-key-input" id="ai-api-key" placeholder="Enter your API key to wake up AI companions">
-            <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Companions</button>
+            <input type="password" class="ai-api-key-input" id="ai-api-key" placeholder="Enter your API key to activate your guide">
+            <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Guide</button>
             
             <div class="ai-companion-list" id="ai-companion-list">
-                <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
+                <h4 style="color: #06ffa5; margin-top: 20px;">Guide Status:</h4>
                 <div class="ai-companion-item">
                     <div>
-                        <div class="ai-companion-name">No AI companions active</div>
-                        <div class="ai-companion-status">Enter API key to activate</div>
+                        <div class="ai-companion-name">Nexus Guide</div>
+                        <div class="ai-companion-status">Waiting for activation...</div>
                     </div>
                 </div>
             </div>
@@ -1537,23 +1675,28 @@
     <!-- AI Chat Interface -->
     <div class="ai-chat-interface" id="ai-chat-interface">
         <div class="ai-chat-header">
-            <div class="ai-chat-title">AI Companion Chat</div>
-            <button class="save-task-btn" onclick="window.worldNavigator.saveCurrentChatAsTask()">💾 Save as Task</button>
-            <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
+            <div class="ai-chat-header-top">
+                <div>
+                    <div class="ai-chat-title">Nexus Guide</div>
+                    <div class="ai-chat-location" id="ai-chat-location"></div>
+                </div>
+                <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
+            </div>
+            <div class="ai-activity-indicator" id="ai-activity-indicator">
+                🔄 Recent activity detected
+            </div>
         </div>
-        <div class="task-replay-indicator" id="task-replay-indicator">🔄 Replaying Task...</div>
         <div class="ai-chat-messages" id="ai-chat-messages"></div>
-        <div class="ai-chat-input-container">
-            <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
-            <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
+        <div class="guide-actions" id="guide-actions">
+            <button class="guide-action-btn" onclick="window.worldNavigator.aiManager.guideAction('tour')">🎭 Tour Nexus</button>
+            <button class="guide-action-btn" onclick="window.worldNavigator.aiManager.guideAction('create')">🌟 Create World</button>
+            <button class="guide-action-btn" onclick="window.worldNavigator.aiManager.guideAction('deploy')">🤖 Deploy Agent</button>
+            <button class="guide-action-btn" onclick="window.worldNavigator.aiManager.guideAction('explain')">❓ How It Works</button>
+            <button class="guide-action-btn" onclick="window.worldNavigator.aiManager.guideAction('multiplayer')">👥 Invite Others</button>
         </div>
-    </div>
-    
-    <!-- Task Panel -->
-    <div class="task-panel" id="task-panel">
-        <h3>💬 Saved AI Tasks</h3>
-        <div id="task-list">
-            <!-- Tasks populated here -->
+        <div class="ai-chat-input-container">
+            <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Ask your guide anything..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
+            <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
         </div>
     </div>
     
@@ -1597,14 +1740,6 @@
     <div class="ai-companion-button" id="ai-companion-button">
         <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
-        </svg>
-    </div>
-    
-    <!-- Tasks Button -->
-    <div class="tasks-button" id="tasks-button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
         </svg>
     </div>
     
@@ -1677,162 +1812,6 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Add FontLoader to THREE namespace
-        THREE.FontLoader = class FontLoader extends THREE.Loader {
-            constructor(manager) {
-                super(manager);
-            }
-            
-            load(url, onLoad, onProgress, onError) {
-                const scope = this;
-                const loader = new THREE.FileLoader(this.manager);
-                loader.setPath(this.path);
-                loader.setRequestHeader(this.requestHeader);
-                loader.setWithCredentials(this.withCredentials);
-                loader.load(url, function(text) {
-                    try {
-                        const json = JSON.parse(text);
-                        const font = scope.parse(json);
-                        if (onLoad) onLoad(font);
-                    } catch (e) {
-                        console.warn('THREE.FontLoader: typeface.js support is being deprecated. Use typeface.json instead.');
-                        if (onError) onError(e);
-                    }
-                }, onProgress, onError);
-            }
-            
-            parse(json) {
-                return new THREE.Font(json);
-            }
-        };
-        
-        // Add Font class
-        THREE.Font = class Font {
-            constructor(data) {
-                this.type = 'Font';
-                this.data = data;
-            }
-            
-            generateShapes(text, size = 100) {
-                const shapes = [];
-                const paths = createPaths(text, size, this.data);
-                
-                for (let p = 0, pl = paths.length; p < pl; p++) {
-                    Array.prototype.push.apply(shapes, paths[p].toShapes());
-                }
-                
-                return shapes;
-            }
-        };
-        
-        // Add TextGeometry
-        THREE.TextGeometry = class TextGeometry extends THREE.ExtrudeGeometry {
-            constructor(text, parameters = {}) {
-                const font = parameters.font;
-                
-                if (!font || !font.data) {
-                    console.error('THREE.TextGeometry: font parameter is not an instance of THREE.Font.');
-                    super();
-                    return;
-                }
-                
-                const shapes = font.generateShapes(text, parameters.size);
-                
-                parameters.depth = parameters.height !== undefined ? parameters.height : 50;
-                
-                if (parameters.bevelThickness === undefined) parameters.bevelThickness = 10;
-                if (parameters.bevelSize === undefined) parameters.bevelSize = 8;
-                if (parameters.bevelEnabled === undefined) parameters.bevelEnabled = false;
-                
-                super(shapes, parameters);
-                
-                this.type = 'TextGeometry';
-            }
-        };
-        
-        // Helper function for font paths
-        function createPaths(text, size, data) {
-            const chars = Array.from(text);
-            const scale = size / data.resolution;
-            const line_height = (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * scale;
-            
-            const paths = [];
-            
-            let offsetX = 0, offsetY = 0;
-            
-            for (let i = 0; i < chars.length; i++) {
-                const char = chars[i];
-                
-                if (char === '\n') {
-                    offsetX = 0;
-                    offsetY -= line_height;
-                } else {
-                    const ret = createPath(char, scale, offsetX, offsetY, data);
-                    if (ret) {
-                        offsetX += ret.offsetX;
-                        paths.push(ret.path);
-                    }
-                }
-            }
-            
-            return paths;
-        }
-        
-        function createPath(char, scale, offsetX, offsetY, data) {
-            const glyph = data.glyphs[char] || data.glyphs['?'];
-            
-            if (!glyph) {
-                console.error('THREE.Font: character "' + char + '" does not exists in font family ' + data.familyName + '.');
-                return;
-            }
-            
-            const path = new THREE.ShapePath();
-            
-            let x, y, cpx, cpy, cpx1, cpy1, cpx2, cpy2;
-            
-            if (glyph.o) {
-                const outline = glyph._cachedOutline || (glyph._cachedOutline = glyph.o.split(' '));
-                
-                for (let i = 0, l = outline.length; i < l;) {
-                    const action = outline[i++];
-                    
-                    switch (action) {
-                        case 'm': // moveTo
-                            x = outline[i++] * scale + offsetX;
-                            y = outline[i++] * scale + offsetY;
-                            path.moveTo(x, y);
-                            break;
-                        
-                        case 'l': // lineTo
-                            x = outline[i++] * scale + offsetX;
-                            y = outline[i++] * scale + offsetY;
-                            path.lineTo(x, y);
-                            break;
-                        
-                        case 'q': // quadraticCurveTo
-                            cpx = outline[i++] * scale + offsetX;
-                            cpy = outline[i++] * scale + offsetY;
-                            cpx1 = outline[i++] * scale + offsetX;
-                            cpy1 = outline[i++] * scale + offsetY;
-                            path.quadraticCurveTo(cpx1, cpy1, cpx, cpy);
-                            break;
-                        
-                        case 'b': // bezierCurveTo
-                            cpx = outline[i++] * scale + offsetX;
-                            cpy = outline[i++] * scale + offsetY;
-                            cpx1 = outline[i++] * scale + offsetX;
-                            cpy1 = outline[i++] * scale + offsetY;
-                            cpx2 = outline[i++] * scale + offsetX;
-                            cpy2 = outline[i++] * scale + offsetY;
-                            path.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, cpx, cpy);
-                            break;
-                    }
-                }
-            }
-            
-            return { offsetX: glyph.ha * scale, path: path };
-        }
-
         // Configuration - Update these with your GitHub details
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
         const REPO_NAME = 'AINexus'; // Replace with your repository name
@@ -1934,145 +1913,6 @@
                         (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
         
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-        // Task Manager for replayable chat sequences
-        class TaskManager {
-            constructor(worldInstance) {
-                this.world = worldInstance;
-                this.tasks = new Map(); // Store tasks in memory
-                this.currentTaskReplay = null;
-                this.isReplaying = false;
-                
-                // Setup event listeners
-                this.setupEventListeners();
-            }
-            
-            setupEventListeners() {
-                // Tasks button
-                document.getElementById('tasks-button').addEventListener('click', () => {
-                    this.toggleTaskPanel();
-                });
-            }
-            
-            toggleTaskPanel() {
-                const panel = document.getElementById('task-panel');
-                panel.classList.toggle('active');
-                if (panel.classList.contains('active')) {
-                    this.updateTaskList();
-                }
-            }
-            
-            updateTaskList() {
-                const taskList = document.getElementById('task-list');
-                taskList.innerHTML = '';
-                
-                if (this.tasks.size === 0) {
-                    taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No saved tasks yet. Have a conversation with the AI and save it as a task!</p>';
-                    return;
-                }
-                
-                this.tasks.forEach((task, taskId) => {
-                    const taskEl = document.createElement('div');
-                    taskEl.className = 'task-item';
-                    taskEl.innerHTML = `
-                        <strong>${task.name}</strong>
-                        <small>Created: ${new Date(task.created).toLocaleString()}</small>
-                        <small>${task.messages.length} messages</small>
-                    `;
-                    taskEl.onclick = () => this.replayTask(taskId);
-                    taskList.appendChild(taskEl);
-                });
-            }
-            
-            saveCurrentChat(chatMessages) {
-                // Prompt for task name
-                const taskName = prompt('Enter a name for this task:');
-                if (!taskName) return;
-                
-                const taskId = `task_${Date.now()}`;
-                const task = {
-                    id: taskId,
-                    name: taskName,
-                    created: new Date().toISOString(),
-                    messages: chatMessages,
-                    location: {
-                        lat: REFERENCE_LOCATION.lat,
-                        lng: REFERENCE_LOCATION.lng,
-                        name: REFERENCE_LOCATION.name
-                    },
-                    world: CURRENT_WORLD.name
-                };
-                
-                this.tasks.set(taskId, task);
-                this.world.showNotification(`Task "${taskName}" saved!`);
-                
-                // Update task list if panel is open
-                if (document.getElementById('task-panel').classList.contains('active')) {
-                    this.updateTaskList();
-                }
-            }
-            
-            async replayTask(taskId) {
-                const task = this.tasks.get(taskId);
-                if (!task) return;
-                
-                // Show notification
-                this.world.showNotification(`Replaying task: ${task.name}`);
-                
-                // Open chat interface
-                document.getElementById('ai-chat-interface').classList.add('active');
-                
-                // Show replay indicator
-                document.getElementById('task-replay-indicator').classList.add('active');
-                
-                // Clear current chat
-                const chatMessages = document.getElementById('ai-chat-messages');
-                chatMessages.innerHTML = '';
-                
-                // Set replaying flag
-                this.isReplaying = true;
-                this.currentTaskReplay = task;
-                
-                // Replay messages with delay
-                for (let i = 0; i < task.messages.length; i++) {
-                    const message = task.messages[i];
-                    
-                    // Add message with replay styling
-                    this.addReplayMessage(message.text, message.sender);
-                    
-                    // Wait between messages for realistic replay
-                    if (i < task.messages.length - 1) {
-                        await this.delay(1500); // 1.5 seconds between messages
-                    }
-                }
-                
-                // Hide replay indicator
-                document.getElementById('task-replay-indicator').classList.remove('active');
-                this.isReplaying = false;
-                this.currentTaskReplay = null;
-                
-                this.world.showNotification('Task replay completed!');
-            }
-            
-            addReplayMessage(text, sender) {
-                const chatMessages = document.getElementById('ai-chat-messages');
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `ai-message ${sender} task-replay`;
-                messageDiv.textContent = text;
-                
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                
-                // Animate companion if AI message
-                if (sender === 'ai' && this.world.aiManager) {
-                    this.world.aiManager.animateCompanionSpeaking();
-                }
-            }
-            
-            delay(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-        }
 
         // World Creator Class
         class WorldCreator {
@@ -2304,104 +2144,31 @@
             }
         }
 
-        // AI Manager Class (Modified to track conversation history)
-        class AIManager {
+        // Enhanced AI Manager with Guide Functionality
+        class NexusGuideAIManager extends AIManager {
             constructor(worldInstance) {
-                this.world = worldInstance;
-                this.apiKey = null;
-                this.endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
-                this.companions = new Map();
-                this.conversationHistory = [];
-                this.currentChatHistory = []; // Track current chat for saving as task
-                this.isActive = false;
-                this.userGuid = this.generateUserGuid();
+                super(worldInstance);
+                this.isGuide = true;
+                this.hasIntroduced = false;
+                this.guideContext = {
+                    worldName: CURRENT_WORLD.name,
+                    location: REFERENCE_LOCATION,
+                    capabilities: [
+                        'World Navigation',
+                        'Portal Creation',
+                        'AI Agent Deployment',
+                        'Location-Based Tasks',
+                        'Multiplayer Coordination'
+                    ]
+                };
                 
-                // UI elements
-                this.chatInterface = document.getElementById('ai-chat-interface');
-                this.chatMessages = document.getElementById('ai-chat-messages');
-                this.chatInput = document.getElementById('ai-chat-input');
-                this.companionButton = document.getElementById('ai-companion-button');
-                this.aiModal = document.getElementById('ai-modal');
-                
-                // 3D Text display
-                this.textMeshes = [];
-                this.currentTextAnimation = null;
-                this.textGroup = null;
-                
-                this.setupEventListeners();
-                
-                // Check for cached API key
-                this.checkCachedApiKey();
-            }
-            
-            generateUserGuid() {
-                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                    const r = Math.random() * 16 | 0;
-                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
-            }
-            
-            async checkCachedApiKey() {
-                // Check if API key exists in localStorage
-                const cachedApiKey = localStorage.getItem('nexus_ai_api_key');
-                if (cachedApiKey) {
-                    this.apiKey = cachedApiKey;
-                    
-                    try {
-                        // Test the cached API key with a simple request
-                        const response = await this.sendToAPI('System check - testing cached API key.');
-                        
-                        if (response.assistant_response) {
-                            // Cached key is valid, activate AI automatically
-                            this.isActive = true;
-                            this.companionButton.classList.add('active');
-                            this.showNotification('AI Companion activated with cached key!');
-                            
-                            // Create AI companion in the world
-                            this.createAICompanion();
-                            
-                            // Update companion list
-                            this.updateCompanionList();
-                            
-                            // Don't show the initial message for auto-activation
-                            console.log('AI Companion auto-activated with cached API key');
-                        }
-                    } catch (error) {
-                        // Cached key is invalid, clear it
-                        console.error('Cached API key is invalid:', error);
-                        localStorage.removeItem('nexus_ai_api_key');
-                        this.apiKey = null;
-                        this.showNotification('Cached API key expired. Please enter a new one.');
+                // Show guide actions by default
+                setTimeout(() => {
+                    const guideActions = document.getElementById('guide-actions');
+                    if (guideActions) {
+                        guideActions.classList.add('show');
                     }
-                }
-            }
-            
-            setupEventListeners() {
-                // AI Companion button
-                this.companionButton.addEventListener('click', () => {
-                    if (this.isActive) {
-                        this.chatInterface.classList.toggle('active');
-                    } else {
-                        this.aiModal.classList.add('show');
-                    }
-                });
-                
-                // AI Modal events
-                document.getElementById('ai-close').addEventListener('click', () => {
-                    this.aiModal.classList.remove('show');
-                });
-                
-                document.getElementById('ai-activate-btn').addEventListener('click', () => {
-                    this.activateAI();
-                });
-                
-                // Close modal on outside click
-                this.aiModal.addEventListener('click', (e) => {
-                    if (e.target === this.aiModal) {
-                        this.aiModal.classList.remove('show');
-                    }
-                });
+                }, 100);
             }
             
             async activateAI() {
@@ -2416,17 +2183,25 @@
                 this.apiKey = apiKey;
                 
                 try {
-                    // Test the API key with an initial request
-                    const response = await this.sendToAPI('Hello! I have joined the Nexus world.');
+                    // Send initial guide introduction
+                    const guideIntro = `Hello! I'm your Nexus Guide. I've been activated in ${CURRENT_WORLD.name} at location ${REFERENCE_LOCATION.lat.toFixed(6)}, ${REFERENCE_LOCATION.lng.toFixed(6)}. 
+
+I'm here to help you:
+- Navigate between GPS-anchored worlds
+- Create new portal worlds at specific locations
+- Deploy AI agents with persistent tasks
+- Set up location-based monitoring
+- Coordinate with other users in multiplayer sessions
+
+What would you like to explore first?`;
+                    
+                    const response = await this.sendToAPI(guideIntro);
                     
                     if (response.assistant_response) {
                         this.isActive = true;
                         this.companionButton.classList.add('active');
                         this.aiModal.classList.remove('show');
-                        this.showNotification('AI Companion activated!');
-                        
-                        // Save API key to localStorage for future sessions
-                        localStorage.setItem('nexus_ai_api_key', apiKey);
+                        this.showNotification('Nexus Guide activated!');
                         
                         // Create AI companion in the world
                         this.createAICompanion();
@@ -2434,11 +2209,15 @@
                         // Update companion list
                         this.updateCompanionList();
                         
-                        // Show initial message
+                        // Add the guide introduction to chat
+                        this.addMessage(guideIntro, 'guide');
                         this.addMessage(response.assistant_response, 'ai');
                         
-                        // Display text in 3D world
-                        this.animateTextResponse(response.assistant_response);
+                        // Update location in chat header
+                        this.updateLocationDisplay();
+                        
+                        // Check for any previous activity
+                        this.checkWorldActivity();
                         
                         // Clear the API key input for security
                         apiKeyInput.value = '';
@@ -2449,351 +2228,120 @@
                 }
             }
             
-            createAICompanion() {
-                // Create a visual representation of the AI companion in the world
-                const companionGroup = new THREE.Group();
-                
-                // Create a glowing orb as the AI companion
-                const geometry = new THREE.SphereGeometry(0.8, 32, 32);
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0x8338ec,
-                    emissive: 0x8338ec,
-                    emissiveIntensity: 0.5,
-                    metalness: 0.8,
-                    roughness: 0.2,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                
-                const orb = new THREE.Mesh(geometry, material);
-                orb.position.y = 2;
-                companionGroup.add(orb);
-                
-                // Add glow effect
-                const glowLight = new THREE.PointLight(0x8338ec, 2, 10);
-                glowLight.position.y = 2;
-                companionGroup.add(glowLight);
-                
-                // Add particle effect around the orb
-                const particleGeometry = new THREE.BufferGeometry();
-                const particleCount = 100;
-                const positions = new Float32Array(particleCount * 3);
-                
-                for (let i = 0; i < particleCount * 3; i += 3) {
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.random() * Math.PI;
-                    const radius = 1.5 + Math.random() * 0.5;
-                    
-                    positions[i] = radius * Math.sin(phi) * Math.cos(theta);
-                    positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta) + 2;
-                    positions[i + 2] = radius * Math.cos(phi);
+            updateLocationDisplay() {
+                const locationDisplay = document.getElementById('ai-chat-location');
+                if (locationDisplay) {
+                    locationDisplay.textContent = `📍 ${REFERENCE_LOCATION.lat.toFixed(4)}, ${REFERENCE_LOCATION.lng.toFixed(4)} - ${REFERENCE_LOCATION.name}`;
                 }
-                
-                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
-                const particleMaterial = new THREE.PointsMaterial({
-                    color: 0x06ffa5,
-                    size: 0.05,
-                    transparent: true,
-                    opacity: 0.6
-                });
-                
-                const particles = new THREE.Points(particleGeometry, particleMaterial);
-                companionGroup.add(particles);
-                
-                // Create text display group
-                this.textGroup = new THREE.Group();
-                this.textGroup.position.y = 4; // Position above the orb
-                companionGroup.add(this.textGroup);
-                
-                // Position near the player
-                companionGroup.position.set(3, 0, 3);
-                
-                // Add to scene
-                this.world.scene.add(companionGroup);
-                
-                // Store reference
-                this.companions.set('ai-assistant', {
-                    object: companionGroup,
-                    orb: orb,
-                    particles: particles,
-                    light: glowLight
-                });
-                
-                // Load font for 3D text
-                this.loadFont();
-                
-                // Animate the companion
-                this.animateCompanion();
             }
             
-            loadFont() {
-                const loader = new THREE.FontLoader();
-                loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
-                    this.font = font;
-                });
+            async checkWorldActivity() {
+                // Simulate checking for previous activity
+                const activityIndicator = document.getElementById('ai-activity-indicator');
+                
+                // In a real implementation, this would check stored world state
+                const hasRecentActivity = Math.random() > 0.7; // 30% chance for demo
+                
+                if (hasRecentActivity && activityIndicator) {
+                    activityIndicator.classList.add('active');
+                    this.companionButton.classList.add('has-activity');
+                    
+                    // Add activity notification to chat
+                    setTimeout(() => {
+                        this.addMessage('I detected some recent activity in this world while you were away. Would you like me to show you what happened?', 'ai');
+                    }, 2000);
+                }
             }
             
-            create3DText(text, position = new THREE.Vector3(0, 0, 0)) {
-                if (!this.font) {
-                    console.warn('Font not loaded yet');
-                    return null;
+            async guideAction(action) {
+                let message = '';
+                
+                switch(action) {
+                    case 'tour':
+                        message = 'Give me a tour of the Nexus Hub. Show me the available portals and explain how to navigate between worlds.';
+                        break;
+                    case 'create':
+                        message = 'I want to create a new world portal. Guide me through the process of scanning a location and setting up a new world.';
+                        break;
+                    case 'deploy':
+                        message = 'Help me deploy an AI agent at this location. What kind of tasks can I assign to agents in different worlds?';
+                        break;
+                    case 'explain':
+                        message = 'Explain how the Nexus system works. How do GPS-located worlds, persistent AI agents, and multiplayer features connect together?';
+                        break;
+                    case 'multiplayer':
+                        message = 'How do I invite others to join this world? Explain the multiplayer features and how shared AI agents work.';
+                        break;
                 }
                 
-                const textGeometry = new THREE.TextGeometry(text, {
-                    font: this.font,
-                    size: 0.3,
-                    height: 0.05,
-                    curveSegments: 12,
-                    bevelEnabled: true,
-                    bevelThickness: 0.01,
-                    bevelSize: 0.01,
-                    bevelSegments: 8
+                // Add user's request to chat
+                this.addMessage(message, 'user');
+                
+                // Send to AI
+                this.conversationHistory.push({
+                    role: 'user',
+                    content: message
                 });
                 
-                textGeometry.center();
-                
-                const textMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x06ffa5,
-                    emissive: 0x06ffa5,
-                    emissiveIntensity: 0.3,
-                    metalness: 0.5,
-                    roughness: 0.3,
-                    transparent: true,
-                    opacity: 0
-                });
-                
-                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-                textMesh.position.copy(position);
-                
-                return textMesh;
-            }
-            
-            async animateTextResponse(fullText) {
-                // Clear previous text meshes
-                this.clearTextMeshes();
-                
-                // Cancel any ongoing animation
-                if (this.currentTextAnimation) {
-                    clearInterval(this.currentTextAnimation);
-                }
-                
-                // Split text into lines (max ~40 chars per line)
-                const words = fullText.split(' ');
-                const lines = [];
-                let currentLine = '';
-                
-                for (const word of words) {
-                    if ((currentLine + word).length > 40) {
-                        lines.push(currentLine.trim());
-                        currentLine = word + ' ';
-                    } else {
-                        currentLine += word + ' ';
-                    }
-                }
-                if (currentLine.trim()) {
-                    lines.push(currentLine.trim());
-                }
-                
-                // Animate each line
-                let lineIndex = 0;
-                let charIndex = 0;
-                let currentLineMesh = null;
-                
-                this.currentTextAnimation = setInterval(() => {
-                    if (lineIndex >= lines.length) {
-                        clearInterval(this.currentTextAnimation);
-                        this.currentTextAnimation = null;
-                        
-                        // Fade out text after 5 seconds
-                        setTimeout(() => this.fadeOutText(), 5000);
-                        return;
-                    }
+                try {
+                    const response = await this.sendToAPI(message);
                     
-                    const currentLineText = lines[lineIndex];
-                    
-                    // Create new line mesh if needed
-                    if (charIndex === 0) {
-                        if (currentLineMesh) {
-                            // Finish previous line
-                            currentLineMesh.material.opacity = 1;
-                        }
+                    if (response.assistant_response) {
+                        this.addMessage(response.assistant_response, 'ai');
                         
-                        const yOffset = -lineIndex * 0.5;
-                        currentLineMesh = this.create3DText('', new THREE.Vector3(0, yOffset, 0));
-                        
-                        if (currentLineMesh) {
-                            this.textGroup.add(currentLineMesh);
-                            this.textMeshes.push(currentLineMesh);
-                        }
-                    }
-                    
-                    // Update text character by character
-                    if (currentLineMesh && this.font) {
-                        charIndex++;
-                        const displayText = currentLineText.substring(0, charIndex);
-                        
-                        // Update geometry with new text
-                        const newGeometry = new THREE.TextGeometry(displayText, {
-                            font: this.font,
-                            size: 0.3,
-                            height: 0.05,
-                            curveSegments: 12,
-                            bevelEnabled: true,
-                            bevelThickness: 0.01,
-                            bevelSize: 0.01,
-                            bevelSegments: 8
+                        this.conversationHistory.push({
+                            role: 'assistant',
+                            content: response.assistant_response
                         });
-                        newGeometry.center();
                         
-                        currentLineMesh.geometry.dispose();
-                        currentLineMesh.geometry = newGeometry;
-                        
-                        // Fade in
-                        currentLineMesh.material.opacity = Math.min(1, currentLineMesh.material.opacity + 0.1);
-                        
-                        // Flash effect on new character
-                        currentLineMesh.material.emissiveIntensity = 0.8;
-                        setTimeout(() => {
-                            if (currentLineMesh) {
-                                currentLineMesh.material.emissiveIntensity = 0.3;
-                            }
-                        }, 50);
+                        // Trigger specific actions based on the guide action
+                        this.handleGuideActionResponse(action);
                     }
-                    
-                    // Move to next line
-                    if (charIndex >= currentLineText.length) {
-                        lineIndex++;
-                        charIndex = 0;
-                    }
-                }, 50); // 50ms per character for readable speed
-            }
-            
-            clearTextMeshes() {
-                this.textMeshes.forEach(mesh => {
-                    if (mesh.geometry) mesh.geometry.dispose();
-                    if (mesh.material) mesh.material.dispose();
-                    this.textGroup.remove(mesh);
-                });
-                this.textMeshes = [];
-            }
-            
-            fadeOutText() {
-                const fadeInterval = setInterval(() => {
-                    let allFaded = true;
-                    
-                    this.textMeshes.forEach(mesh => {
-                        if (mesh.material.opacity > 0) {
-                            mesh.material.opacity -= 0.02;
-                            allFaded = false;
-                        }
-                    });
-                    
-                    if (allFaded) {
-                        clearInterval(fadeInterval);
-                        this.clearTextMeshes();
-                    }
-                }, 50);
-            }
-            
-            animateCompanion() {
-                const companion = this.companions.get('ai-assistant');
-                if (!companion) return;
-                
-                const animate = () => {
-                    if (!this.isActive) return;
-                    
-                    const time = Date.now() * 0.001;
-                    
-                    // Float animation
-                    companion.orb.position.y = 2 + Math.sin(time * 2) * 0.2;
-                    
-                    // Rotate particles
-                    companion.particles.rotation.y = time * 0.5;
-                    
-                    // Pulse glow
-                    companion.light.intensity = 2 + Math.sin(time * 3) * 0.5;
-                    
-                    // Follow player at a distance
-                    const targetPos = new THREE.Vector3();
-                    targetPos.copy(this.world.camera.position);
-                    targetPos.x += 3;
-                    targetPos.z += 3;
-                    
-                    companion.object.position.lerp(targetPos, 0.05);
-                    
-                    // Make text face the camera
-                    if (this.textGroup) {
-                        this.textGroup.lookAt(this.world.camera.position);
-                    }
-                    
-                    requestAnimationFrame(animate);
-                };
-                
-                animate();
-            }
-            
-            async sendToAPI(message) {
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'x-functions-key': this.apiKey
-                };
-                
-                const body = {
-                    user_input: message,
-                    conversation_history: this.conversationHistory,
-                    user_guid: this.userGuid
-                };
-                
-                const response = await fetch(this.endpoint, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify(body)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API request failed: ${response.status}`);
+                } catch (error) {
+                    console.error('Failed to process guide action:', error);
+                    this.addMessage('I encountered an error. Please try again.', 'ai');
                 }
-                
-                return await response.json();
+            }
+            
+            handleGuideActionResponse(action) {
+                switch(action) {
+                    case 'create':
+                        // Highlight the scanner button
+                        const scannerBtn = document.getElementById('scanner-button');
+                        if (scannerBtn) {
+                            scannerBtn.style.animation = 'guideGlow 2s ease-in-out 3';
+                        }
+                        break;
+                    case 'multiplayer':
+                        // Highlight the share button
+                        const shareBtn = document.getElementById('share-button');
+                        if (shareBtn) {
+                            shareBtn.style.animation = 'guideGlow 2s ease-in-out 3';
+                        }
+                        break;
+                }
             }
             
             async sendMessage() {
                 const message = this.chatInput.value.trim();
                 if (!message || !this.isActive) return;
                 
-                // Check if currently replaying a task
-                if (this.world.taskManager && this.world.taskManager.isReplaying) {
-                    this.showNotification('Cannot send messages during task replay');
-                    return;
-                }
+                // Add context about current world state
+                const contextualMessage = `[Context: User is in ${CURRENT_WORLD.name} at GPS location ${REFERENCE_LOCATION.lat.toFixed(6)}, ${REFERENCE_LOCATION.lng.toFixed(6)}. Current time: ${new Date().toLocaleString()}] ${message}`;
                 
                 // Add user message to chat
                 this.addMessage(message, 'user');
                 this.chatInput.value = '';
                 
-                // Show typing indicator
-                this.showTypingIndicator();
-                
                 // Add to conversation history
                 this.conversationHistory.push({
                     role: 'user',
-                    content: message
-                });
-                
-                // Add to current chat history for task saving
-                this.currentChatHistory.push({
-                    text: message,
-                    sender: 'user',
-                    timestamp: Date.now()
+                    content: contextualMessage
                 });
                 
                 try {
                     // Send to API
-                    const response = await this.sendToAPI(message);
-                    
-                    // Remove typing indicator
-                    this.hideTypingIndicator();
+                    const response = await this.sendToAPI(contextualMessage);
                     
                     if (response.assistant_response) {
                         // Add AI response to chat
@@ -2805,44 +2353,33 @@
                             content: response.assistant_response
                         });
                         
-                        // Add to current chat history for task saving
-                        this.currentChatHistory.push({
-                            text: response.assistant_response,
-                            sender: 'ai',
-                            timestamp: Date.now()
-                        });
-                        
                         // Animate companion when speaking
                         this.animateCompanionSpeaking();
                         
-                        // Display text in 3D world
-                        this.animateTextResponse(response.assistant_response);
+                        // Check for task patterns in the message
+                        this.checkForTaskPatterns(message, response.assistant_response);
                     }
                 } catch (error) {
                     console.error('Failed to send message:', error);
-                    this.hideTypingIndicator();
                     this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
                 }
             }
             
-            showTypingIndicator() {
-                const typingDiv = document.createElement('div');
-                typingDiv.className = 'ai-message ai-typing';
-                typingDiv.id = 'ai-typing-indicator';
-                typingDiv.innerHTML = `
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                `;
+            checkForTaskPatterns(userMessage, aiResponse) {
+                const taskKeywords = ['monitor', 'watch', 'track', 'check', 'alert', 'notify', 'email', 'report'];
+                const hasTaskKeyword = taskKeywords.some(keyword => 
+                    userMessage.toLowerCase().includes(keyword) || 
+                    aiResponse.toLowerCase().includes(keyword)
+                );
                 
-                this.chatMessages.appendChild(typingDiv);
-                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-            }
-            
-            hideTypingIndicator() {
-                const typingIndicator = document.getElementById('ai-typing-indicator');
-                if (typingIndicator) {
-                    typingIndicator.remove();
+                if (hasTaskKeyword) {
+                    // Add task indicator
+                    this.companionButton.classList.add('has-task');
+                    
+                    // Add system message about task persistence
+                    setTimeout(() => {
+                        this.addMessage('Task registered! I\'ll remember this and continue working on it even when you\'re not here.', 'system');
+                    }, 1000);
                 }
             }
             
@@ -2851,76 +2388,33 @@
                 messageDiv.className = `ai-message ${sender}`;
                 messageDiv.textContent = text;
                 
+                // Add timestamp for guide messages
+                if (sender === 'ai' || sender === 'guide') {
+                    const timestamp = document.createElement('div');
+                    timestamp.className = 'ai-message-timestamp';
+                    timestamp.textContent = new Date().toLocaleTimeString();
+                    messageDiv.appendChild(timestamp);
+                }
+                
                 this.chatMessages.appendChild(messageDiv);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-            }
-            
-            animateCompanionSpeaking() {
-                const companion = this.companions.get('ai-assistant');
-                if (!companion) return;
-                
-                // Quick pulse animation
-                const originalScale = companion.orb.scale.x;
-                const pulseAnimation = () => {
-                    let progress = 0;
-                    const animate = () => {
-                        progress += 0.1;
-                        if (progress > 1) return;
-                        
-                        const scale = originalScale + Math.sin(progress * Math.PI) * 0.3;
-                        companion.orb.scale.setScalar(scale);
-                        
-                        // Increase glow while speaking
-                        companion.light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 1;
-                        companion.orb.material.emissiveIntensity = 0.5 + Math.sin(progress * Math.PI) * 0.3;
-                        
-                        requestAnimationFrame(animate);
-                    };
-                    animate();
-                };
-                
-                pulseAnimation();
             }
             
             updateCompanionList() {
                 const listContainer = document.getElementById('ai-companion-list');
                 listContainer.innerHTML = `
-                    <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
+                    <h4 style="color: #06ffa5; margin-top: 20px;">Guide Status:</h4>
                     <div class="ai-companion-item">
                         <div>
-                            <div class="ai-companion-name">AI Assistant</div>
-                            <div class="ai-companion-status">Active and ready to chat</div>
+                            <div class="ai-companion-name">Nexus Guide</div>
+                            <div class="ai-companion-status">Active and ready to assist</div>
                         </div>
                     </div>
                 `;
             }
-            
-            showNotification(message) {
-                const notification = document.createElement('div');
-                notification.className = 'multiplayer-notification';
-                notification.textContent = message;
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.style.animation = 'slideOut 0.3s ease';
-                    setTimeout(() => notification.remove(), 300);
-                }, 3000);
-            }
-            
-            // Broadcast AI presence to multiplayer
-            broadcastPresence() {
-                if (this.world.multiplayer) {
-                    this.world.multiplayer.broadcastAIPresence({
-                        type: 'ai_companion',
-                        name: 'AI Assistant',
-                        position: this.companions.get('ai-assistant')?.object.position
-                    });
-                }
-            }
         }
 
-        // GPS Manager Class
+        // GPS Manager Class (unchanged from original)
         class GPSManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3105,7 +2599,7 @@
             }
         }
 
-        // Map Manager Class
+        // Map Manager Class (unchanged from original)
         class MapManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3216,6 +2710,11 @@
                 
                 // Show notification
                 this.world.showNotification('Location set successfully!');
+                
+                // Update AI manager with new location
+                if (this.world.aiManager && this.world.aiManager.isActive) {
+                    this.world.aiManager.updateLocationDisplay();
+                }
             }
             
             cancelLocationSetting() {
@@ -3406,7 +2905,7 @@
             }
         }
 
-        // Multiplayer Manager Class
+        // Multiplayer Manager Class (unchanged from original)
         class MultiplayerManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3815,7 +3314,6 @@
                 this.multiplayer = null;
                 this.aiManager = null;
                 this.worldCreator = null;
-                this.taskManager = null;
                 
                 // World locations cache
                 this.worldLocations = new Map();
@@ -3827,6 +3325,15 @@
                         }
                     }, { passive: false });
                 }
+            }
+            
+            startExperience() {
+                // Hide welcome overlay
+                const welcomeOverlay = document.getElementById('welcome-overlay');
+                welcomeOverlay.classList.add('hidden');
+                
+                // Initialize the world
+                this.init();
             }
             
             async init() {
@@ -3870,14 +3377,11 @@
                 // Initialize multiplayer
                 this.multiplayer = new MultiplayerManager(this);
                 
-                // Initialize AI manager
-                this.aiManager = new AIManager(this);
+                // Initialize AI manager with Nexus Guide functionality
+                this.aiManager = new NexusGuideAIManager(this);
                 
                 // Initialize World Creator
                 this.worldCreator = new WorldCreator(this);
-                
-                // Initialize Task Manager
-                this.taskManager = new TaskManager(this);
                 
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
@@ -3892,25 +3396,16 @@
                 // Make WorldNavigator globally accessible for AI chat
                 window.worldNavigator = this;
                 
+                // Auto-show AI modal after a short delay for first-time users
+                setTimeout(() => {
+                    const hasSeenGuide = localStorage.getItem('nexus-guide-seen');
+                    if (!hasSeenGuide) {
+                        document.getElementById('ai-modal').classList.add('show');
+                        localStorage.setItem('nexus-guide-seen', 'true');
+                    }
+                }, 2000);
+                
                 this.animate();
-            }
-            
-            saveCurrentChatAsTask() {
-                if (!this.aiManager || !this.aiManager.isActive) {
-                    this.showNotification('Please activate AI companion first');
-                    return;
-                }
-                
-                if (this.aiManager.currentChatHistory.length === 0) {
-                    this.showNotification('No messages to save as task');
-                    return;
-                }
-                
-                // Pass current chat history to task manager
-                this.taskManager.saveCurrentChat(this.aiManager.currentChatHistory);
-                
-                // Clear current chat history for new conversations
-                this.aiManager.currentChatHistory = [];
             }
             
             getCurrentWorldData() {
@@ -4801,9 +4296,18 @@
             }
         }
         
+        
         window.addEventListener('DOMContentLoaded', () => {
             const navigator = new WorldNavigator();
-            navigator.init();
+            window.worldNavigator = navigator; // Make it globally accessible
+            
+            // Add click handler for welcome button
+            const welcomeBtn = document.getElementById('welcome-continue-btn');
+            if (welcomeBtn) {
+                welcomeBtn.addEventListener('click', () => {
+                    navigator.startExperience();
+                });
+            }
         });
         
         let lastY = 0;

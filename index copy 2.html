@@ -7,7 +7,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Nexus Hub - GPS World Explorer</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
         * {
             margin: 0;
@@ -302,51 +301,6 @@
             margin-right: auto;
         }
 
-        .ai-message.task-replay {
-            border: 1px solid rgba(255, 106, 0, 0.5);
-            opacity: 0.8;
-            font-style: italic;
-        }
-        
-        .ai-typing {
-            margin: 10px 0;
-            padding: 10px 15px;
-            border-radius: 15px;
-            max-width: 80%;
-            background: rgba(6, 255, 165, 0.2);
-            margin-right: auto;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.6);
-            border-radius: 50%;
-            animation: typingPulse 1.4s infinite ease-in-out;
-        }
-        
-        .typing-dot:nth-child(1) {
-            animation-delay: -0.32s;
-        }
-        
-        .typing-dot:nth-child(2) {
-            animation-delay: -0.16s;
-        }
-        
-        @keyframes typingPulse {
-            0%, 80%, 100% {
-                transform: scale(0.8);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
         .ai-chat-input-container {
             padding: 15px;
             border-top: 1px solid rgba(255, 255, 255, 0.2);
@@ -378,24 +332,6 @@
             transform: scale(1.05);
         }
 
-        /* Save as Task Button */
-        .save-task-btn {
-            background: linear-gradient(45deg, #ff6a00, #ff8c00);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-left: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .save-task-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 3px 15px rgba(255, 106, 0, 0.4);
-        }
-
         /* AI Companion Button */
         .ai-companion-button {
             position: fixed;
@@ -425,109 +361,6 @@
         .ai-companion-button.active {
             background: rgba(6, 255, 165, 0.3);
             border-color: rgba(6, 255, 165, 0.5);
-        }
-
-        /* Task List Panel */
-        .task-panel {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 100px));
-            left: calc(env(safe-area-inset-left, 20px));
-            background: rgba(20, 20, 40, 0.95);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 20px;
-            padding: 20px;
-            z-index: 1002;
-            max-width: 350px;
-            max-height: 400px;
-            overflow-y: auto;
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.3);
-            display: none;
-        }
-        
-        .task-panel.active {
-            display: block;
-        }
-        
-        .task-panel h3 {
-            margin: 0 0 15px 0;
-            font-size: 20px;
-            background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .task-item {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-        }
-        
-        .task-item:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 106, 0, 0.5);
-            transform: translateX(5px);
-        }
-        
-        .task-item strong {
-            color: #ffa500;
-        }
-        
-        .task-item small {
-            color: rgba(255, 255, 255, 0.6);
-            display: block;
-            margin-top: 5px;
-        }
-        
-        .task-replay-indicator {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(255, 106, 0, 0.8);
-            padding: 5px 10px;
-            border-radius: 10px;
-            font-size: 12px;
-            display: none;
-        }
-        
-        .task-replay-indicator.active {
-            display: block;
-            animation: pulse 1s infinite;
-        }
-
-        /* Tasks Button */
-        .tasks-button {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 360px);
-            right: calc(env(safe-area-inset-right, 30px));
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 106, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1002;
-            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
-        }
-
-        .tasks-button:hover {
-            background: rgba(255, 106, 0, 0.5);
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
-        }
-
-        .tasks-button svg {
-            width: 28px;
-            height: 28px;
-            color: white;
         }
 
         @keyframes shimmer {
@@ -1040,263 +873,6 @@
             100% { transform: translateX(100px); }
         }
 
-        /* World Scanner Styles */
-        .scanner-button {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 290px);
-            right: calc(env(safe-area-inset-right, 30px));
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 106, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1002;
-            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
-        }
-
-        .scanner-button:hover {
-            background: rgba(255, 106, 0, 0.5);
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
-        }
-
-        .scanner-button svg {
-            width: 28px;
-            height: 28px;
-            color: white;
-        }
-
-        .world-scanner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: black;
-            z-index: 3000;
-            display: none;
-        }
-
-        .world-scanner.active {
-            display: block;
-        }
-
-        .scanner-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-
-        #scanner-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .scanner-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            pointer-events: none;
-        }
-
-        .scanner-frame {
-            width: 250px;
-            height: 250px;
-            border: 3px solid rgba(255, 255, 255, 0.5);
-            border-radius: 20px;
-            position: relative;
-        }
-
-        .scanner-frame::before {
-            content: '';
-            position: absolute;
-            top: -3px;
-            left: -3px;
-            right: -3px;
-            bottom: -3px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            border-radius: 20px;
-            opacity: 0.5;
-            animation: pulse 2s infinite;
-        }
-
-        .scanner-instruction {
-            margin-top: 20px;
-            color: white;
-            font-size: 18px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px 20px;
-            border-radius: 20px;
-        }
-
-        .scanner-controls {
-            position: absolute;
-            bottom: 30px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            pointer-events: auto;
-        }
-
-        .capture-btn, .cancel-scan-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .capture-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
-        }
-
-        .cancel-scan-btn {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .world-creation-form {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 3001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .form-container {
-            background: rgba(20, 20, 40, 0.95);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 20px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
-        }
-
-        .form-container h2 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-align: center;
-        }
-
-        .anchor-preview {
-            width: 100%;
-            max-width: 300px;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 10px;
-            margin: 0 auto 20px;
-            display: block;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .form-container input,
-        .form-container textarea,
-        .form-container select {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            color: white;
-            font-size: 16px;
-        }
-
-        .form-container input::placeholder,
-        .form-container textarea::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .create-world-btn {
-            width: 100%;
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
-            color: #000;
-            border: none;
-            padding: 15px;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .create-world-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
-        }
-
-        .form-close-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 30px;
-            cursor: pointer;
-            color: #fff;
-            transition: all 0.3s;
-        }
-
-        .form-close-btn:hover {
-            color: #ff006e;
-            transform: rotate(90deg);
-        }
-
-        .download-json-btn {
-            background: linear-gradient(45deg, #3a86ff, #8338ec);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 10px;
-            width: 100%;
-        }
-
-        .download-json-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(58, 134, 255, 0.4);
-        }
-
         /* QR Code Share Button */
         .share-button {
             position: fixed;
@@ -1538,22 +1114,12 @@
     <div class="ai-chat-interface" id="ai-chat-interface">
         <div class="ai-chat-header">
             <div class="ai-chat-title">AI Companion Chat</div>
-            <button class="save-task-btn" onclick="window.worldNavigator.saveCurrentChatAsTask()">💾 Save as Task</button>
             <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
         </div>
-        <div class="task-replay-indicator" id="task-replay-indicator">🔄 Replaying Task...</div>
         <div class="ai-chat-messages" id="ai-chat-messages"></div>
         <div class="ai-chat-input-container">
             <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
             <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
-        </div>
-    </div>
-    
-    <!-- Task Panel -->
-    <div class="task-panel" id="task-panel">
-        <h3>💬 Saved AI Tasks</h3>
-        <div id="task-list">
-            <!-- Tasks populated here -->
         </div>
     </div>
     
@@ -1600,38 +1166,6 @@
         </svg>
     </div>
     
-    <!-- Tasks Button -->
-    <div class="tasks-button" id="tasks-button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
-        </svg>
-    </div>
-    
-    <!-- World Scanner Button -->
-    <div class="scanner-button" id="scanner-button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <circle cx="12" cy="12" r="3"/>
-            <circle cx="12" cy="12" r="1"/>
-        </svg>
-    </div>
-
-    <!-- World Scanner UI -->
-    <div class="world-scanner" id="world-scanner">
-        <div class="scanner-container">
-            <video id="scanner-video" autoplay playsinline></video>
-            <div class="scanner-overlay">
-                <div class="scanner-frame"></div>
-                <p class="scanner-instruction">Point at object to create portal anchor</p>
-            </div>
-            <div class="scanner-controls">
-                <button class="capture-btn" id="capture-btn">📸 Capture Anchor</button>
-                <button class="cancel-scan-btn" id="cancel-scan-btn">Cancel</button>
-            </div>
-        </div>
-    </div>
-
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
     
     <div class="mobile-controls" id="mobile-controls">
@@ -1677,162 +1211,6 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Add FontLoader to THREE namespace
-        THREE.FontLoader = class FontLoader extends THREE.Loader {
-            constructor(manager) {
-                super(manager);
-            }
-            
-            load(url, onLoad, onProgress, onError) {
-                const scope = this;
-                const loader = new THREE.FileLoader(this.manager);
-                loader.setPath(this.path);
-                loader.setRequestHeader(this.requestHeader);
-                loader.setWithCredentials(this.withCredentials);
-                loader.load(url, function(text) {
-                    try {
-                        const json = JSON.parse(text);
-                        const font = scope.parse(json);
-                        if (onLoad) onLoad(font);
-                    } catch (e) {
-                        console.warn('THREE.FontLoader: typeface.js support is being deprecated. Use typeface.json instead.');
-                        if (onError) onError(e);
-                    }
-                }, onProgress, onError);
-            }
-            
-            parse(json) {
-                return new THREE.Font(json);
-            }
-        };
-        
-        // Add Font class
-        THREE.Font = class Font {
-            constructor(data) {
-                this.type = 'Font';
-                this.data = data;
-            }
-            
-            generateShapes(text, size = 100) {
-                const shapes = [];
-                const paths = createPaths(text, size, this.data);
-                
-                for (let p = 0, pl = paths.length; p < pl; p++) {
-                    Array.prototype.push.apply(shapes, paths[p].toShapes());
-                }
-                
-                return shapes;
-            }
-        };
-        
-        // Add TextGeometry
-        THREE.TextGeometry = class TextGeometry extends THREE.ExtrudeGeometry {
-            constructor(text, parameters = {}) {
-                const font = parameters.font;
-                
-                if (!font || !font.data) {
-                    console.error('THREE.TextGeometry: font parameter is not an instance of THREE.Font.');
-                    super();
-                    return;
-                }
-                
-                const shapes = font.generateShapes(text, parameters.size);
-                
-                parameters.depth = parameters.height !== undefined ? parameters.height : 50;
-                
-                if (parameters.bevelThickness === undefined) parameters.bevelThickness = 10;
-                if (parameters.bevelSize === undefined) parameters.bevelSize = 8;
-                if (parameters.bevelEnabled === undefined) parameters.bevelEnabled = false;
-                
-                super(shapes, parameters);
-                
-                this.type = 'TextGeometry';
-            }
-        };
-        
-        // Helper function for font paths
-        function createPaths(text, size, data) {
-            const chars = Array.from(text);
-            const scale = size / data.resolution;
-            const line_height = (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * scale;
-            
-            const paths = [];
-            
-            let offsetX = 0, offsetY = 0;
-            
-            for (let i = 0; i < chars.length; i++) {
-                const char = chars[i];
-                
-                if (char === '\n') {
-                    offsetX = 0;
-                    offsetY -= line_height;
-                } else {
-                    const ret = createPath(char, scale, offsetX, offsetY, data);
-                    if (ret) {
-                        offsetX += ret.offsetX;
-                        paths.push(ret.path);
-                    }
-                }
-            }
-            
-            return paths;
-        }
-        
-        function createPath(char, scale, offsetX, offsetY, data) {
-            const glyph = data.glyphs[char] || data.glyphs['?'];
-            
-            if (!glyph) {
-                console.error('THREE.Font: character "' + char + '" does not exists in font family ' + data.familyName + '.');
-                return;
-            }
-            
-            const path = new THREE.ShapePath();
-            
-            let x, y, cpx, cpy, cpx1, cpy1, cpx2, cpy2;
-            
-            if (glyph.o) {
-                const outline = glyph._cachedOutline || (glyph._cachedOutline = glyph.o.split(' '));
-                
-                for (let i = 0, l = outline.length; i < l;) {
-                    const action = outline[i++];
-                    
-                    switch (action) {
-                        case 'm': // moveTo
-                            x = outline[i++] * scale + offsetX;
-                            y = outline[i++] * scale + offsetY;
-                            path.moveTo(x, y);
-                            break;
-                        
-                        case 'l': // lineTo
-                            x = outline[i++] * scale + offsetX;
-                            y = outline[i++] * scale + offsetY;
-                            path.lineTo(x, y);
-                            break;
-                        
-                        case 'q': // quadraticCurveTo
-                            cpx = outline[i++] * scale + offsetX;
-                            cpy = outline[i++] * scale + offsetY;
-                            cpx1 = outline[i++] * scale + offsetX;
-                            cpy1 = outline[i++] * scale + offsetY;
-                            path.quadraticCurveTo(cpx1, cpy1, cpx, cpy);
-                            break;
-                        
-                        case 'b': // bezierCurveTo
-                            cpx = outline[i++] * scale + offsetX;
-                            cpy = outline[i++] * scale + offsetY;
-                            cpx1 = outline[i++] * scale + offsetX;
-                            cpy1 = outline[i++] * scale + offsetY;
-                            cpx2 = outline[i++] * scale + offsetX;
-                            cpy2 = outline[i++] * scale + offsetY;
-                            path.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, cpx, cpy);
-                            break;
-                    }
-                }
-            }
-            
-            return { offsetX: glyph.ha * scale, path: path };
-        }
-
         // Configuration - Update these with your GitHub details
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
         const REPO_NAME = 'AINexus'; // Replace with your repository name
@@ -1935,376 +1313,7 @@
         
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-        // Task Manager for replayable chat sequences
-        class TaskManager {
-            constructor(worldInstance) {
-                this.world = worldInstance;
-                this.tasks = new Map(); // Store tasks in memory
-                this.currentTaskReplay = null;
-                this.isReplaying = false;
-                
-                // Setup event listeners
-                this.setupEventListeners();
-            }
-            
-            setupEventListeners() {
-                // Tasks button
-                document.getElementById('tasks-button').addEventListener('click', () => {
-                    this.toggleTaskPanel();
-                });
-            }
-            
-            toggleTaskPanel() {
-                const panel = document.getElementById('task-panel');
-                panel.classList.toggle('active');
-                if (panel.classList.contains('active')) {
-                    this.updateTaskList();
-                }
-            }
-            
-            updateTaskList() {
-                const taskList = document.getElementById('task-list');
-                taskList.innerHTML = '';
-                
-                if (this.tasks.size === 0) {
-                    taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No saved tasks yet. Have a conversation with the AI and save it as a task!</p>';
-                    return;
-                }
-                
-                this.tasks.forEach((task, taskId) => {
-                    const taskEl = document.createElement('div');
-                    taskEl.className = 'task-item';
-                    taskEl.innerHTML = `
-                        <strong>${task.name}</strong>
-                        <small>Created: ${new Date(task.created).toLocaleString()}</small>
-                        <small>${task.messages.length} messages</small>
-                    `;
-                    taskEl.onclick = () => this.replayTask(taskId);
-                    taskList.appendChild(taskEl);
-                });
-            }
-            
-            saveCurrentChat(chatMessages) {
-                // Prompt for task name
-                const taskName = prompt('Enter a name for this task:');
-                if (!taskName) return;
-                
-                const taskId = `task_${Date.now()}`;
-                const task = {
-                    id: taskId,
-                    name: taskName,
-                    created: new Date().toISOString(),
-                    messages: chatMessages,
-                    location: {
-                        lat: REFERENCE_LOCATION.lat,
-                        lng: REFERENCE_LOCATION.lng,
-                        name: REFERENCE_LOCATION.name
-                    },
-                    world: CURRENT_WORLD.name
-                };
-                
-                this.tasks.set(taskId, task);
-                this.world.showNotification(`Task "${taskName}" saved!`);
-                
-                // Update task list if panel is open
-                if (document.getElementById('task-panel').classList.contains('active')) {
-                    this.updateTaskList();
-                }
-            }
-            
-            async replayTask(taskId) {
-                const task = this.tasks.get(taskId);
-                if (!task) return;
-                
-                // Show notification
-                this.world.showNotification(`Replaying task: ${task.name}`);
-                
-                // Open chat interface
-                document.getElementById('ai-chat-interface').classList.add('active');
-                
-                // Show replay indicator
-                document.getElementById('task-replay-indicator').classList.add('active');
-                
-                // Clear current chat
-                const chatMessages = document.getElementById('ai-chat-messages');
-                chatMessages.innerHTML = '';
-                
-                // Set replaying flag
-                this.isReplaying = true;
-                this.currentTaskReplay = task;
-                
-                // Replay messages with delay
-                for (let i = 0; i < task.messages.length; i++) {
-                    const message = task.messages[i];
-                    
-                    // Add message with replay styling
-                    this.addReplayMessage(message.text, message.sender);
-                    
-                    // Wait between messages for realistic replay
-                    if (i < task.messages.length - 1) {
-                        await this.delay(1500); // 1.5 seconds between messages
-                    }
-                }
-                
-                // Hide replay indicator
-                document.getElementById('task-replay-indicator').classList.remove('active');
-                this.isReplaying = false;
-                this.currentTaskReplay = null;
-                
-                this.world.showNotification('Task replay completed!');
-            }
-            
-            addReplayMessage(text, sender) {
-                const chatMessages = document.getElementById('ai-chat-messages');
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `ai-message ${sender} task-replay`;
-                messageDiv.textContent = text;
-                
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                
-                // Animate companion if AI message
-                if (sender === 'ai' && this.world.aiManager) {
-                    this.world.aiManager.animateCompanionSpeaking();
-                }
-            }
-            
-            delay(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-        }
-
-        // World Creator Class
-        class WorldCreator {
-            constructor(worldInstance) {
-                this.world = worldInstance;
-                this.isScanning = false;
-                this.scannedImage = null;
-                this.stream = null;
-                this.newWorldData = {
-                    name: '',
-                    description: '',
-                    location: null,
-                    anchorImage: null,
-                    createdBy: null,
-                    timestamp: null,
-                    id: null
-                };
-                
-                this.setupEventListeners();
-            }
-            
-            setupEventListeners() {
-                // Scanner button
-                document.getElementById('scanner-button').addEventListener('click', () => {
-                    this.startScanning();
-                });
-                
-                // Capture button
-                document.getElementById('capture-btn').addEventListener('click', () => {
-                    this.captureAnchor();
-                });
-                
-                // Cancel button
-                document.getElementById('cancel-scan-btn').addEventListener('click', () => {
-                    this.stopScanning();
-                });
-            }
-            
-            async startScanning() {
-                try {
-                    // Show scanner UI
-                    document.getElementById('world-scanner').classList.add('active');
-                    this.isScanning = true;
-                    
-                    // Get camera stream
-                    const video = document.getElementById('scanner-video');
-                    this.stream = await navigator.mediaDevices.getUserMedia({
-                        video: { 
-                            facingMode: 'environment',
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
-                        }
-                    });
-                    video.srcObject = this.stream;
-                    
-                } catch (error) {
-                    console.error('Error starting scanner:', error);
-                    this.world.showNotification('Camera access denied or not available');
-                    this.stopScanning();
-                }
-            }
-            
-            captureAnchor() {
-                const video = document.getElementById('scanner-video');
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
-                
-                // Store captured image
-                this.scannedImage = canvas.toDataURL('image/jpeg', 0.8);
-                
-                // Get current GPS location
-                this.newWorldData.location = {
-                    lat: this.world.gpsManager.currentLocation.lat,
-                    lng: this.world.gpsManager.currentLocation.lng,
-                    accuracy: this.world.gpsManager.accuracy
-                };
-                
-                // Stop scanner
-                this.stopScanning();
-                
-                // Show world creation form
-                this.showWorldCreationForm();
-            }
-            
-            stopScanning() {
-                document.getElementById('world-scanner').classList.remove('active');
-                this.isScanning = false;
-                
-                // Stop camera stream
-                if (this.stream) {
-                    this.stream.getTracks().forEach(track => track.stop());
-                    this.stream = null;
-                }
-                
-                const video = document.getElementById('scanner-video');
-                video.srcObject = null;
-            }
-            
-            showWorldCreationForm() {
-                const formUI = document.createElement('div');
-                formUI.className = 'world-creation-form';
-                formUI.id = 'world-creation-form';
-                formUI.innerHTML = `
-                    <div class="form-container">
-                        <button class="form-close-btn" onclick="document.getElementById('world-creation-form').remove()">&times;</button>
-                        <h2>Create New Portal World</h2>
-                        <img src="${this.scannedImage}" class="anchor-preview">
-                        <input type="text" id="world-name" placeholder="World Name" required>
-                        <textarea id="world-description" placeholder="Describe this world..." rows="3"></textarea>
-                        <select id="world-template">
-                            <option value="custom">Custom World</option>
-                            <option value="crystal">Crystal Cave Template</option>
-                            <option value="neon">Neon City Template</option>
-                            <option value="forest">Enchanted Forest Template</option>
-                            <option value="space">Space Station Template</option>
-                            <option value="ocean">Ocean Depths Template</option>
-                        </select>
-                        <input type="text" id="world-emoji" placeholder="Choose an emoji for your world (e.g., 🌟)" maxlength="2">
-                        <button class="create-world-btn" onclick="window.worldNavigator.worldCreator.createWorld()">
-                            ✨ Create Portal
-                        </button>
-                        <button class="download-json-btn" onclick="window.worldNavigator.worldCreator.downloadWorldJSON()">
-                            💾 Download World Data (JSON)
-                        </button>
-                    </div>
-                `;
-                document.body.appendChild(formUI);
-            }
-            
-            generateWorldID() {
-                return 'world_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            }
-            
-            createWorld() {
-                const name = document.getElementById('world-name').value;
-                const description = document.getElementById('world-description').value;
-                const template = document.getElementById('world-template').value;
-                const emoji = document.getElementById('world-emoji').value || '🌀';
-                
-                if (!name) {
-                    this.world.showNotification('Please enter a world name');
-                    return;
-                }
-                
-                // Create comprehensive world data
-                this.newWorldData = {
-                    id: this.generateWorldID(),
-                    name: name,
-                    description: description,
-                    template: template,
-                    emoji: emoji,
-                    location: this.newWorldData.location,
-                    anchorImage: this.scannedImage,
-                    createdBy: this.world.multiplayer?.peer?.id || 'anonymous',
-                    createdAt: new Date().toISOString(),
-                    referenceLocation: REFERENCE_LOCATION,
-                    worldAttributes: {
-                        ...CURRENT_WORLD,
-                        name: name,
-                        description: description
-                    },
-                    portalPosition: this.calculatePortalPosition()
-                };
-                
-                // Show success and download prompt
-                this.showCreationSuccess();
-            }
-            
-            calculatePortalPosition() {
-                // Calculate where this portal should appear in 3D space
-                const angle = Math.random() * Math.PI * 2;
-                const distance = 10 + Math.random() * 10; // 10-20 units from center
-                
-                return {
-                    x: Math.cos(angle) * distance,
-                    y: 3,
-                    z: Math.sin(angle) * distance,
-                    rotation: -angle + Math.PI
-                };
-            }
-            
-            downloadWorldJSON() {
-                if (!this.newWorldData.id) {
-                    this.createWorld();
-                    return;
-                }
-                
-                // Create downloadable JSON
-                const jsonData = JSON.stringify(this.newWorldData, null, 2);
-                const blob = new Blob([jsonData], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${this.newWorldData.id}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                this.world.showNotification('World data downloaded! Use the World Builder tool to generate the HTML.');
-            }
-            
-            showCreationSuccess() {
-                const formContainer = document.querySelector('.form-container');
-                formContainer.innerHTML = `
-                    <h2>🎉 Portal Created!</h2>
-                    <img src="${this.scannedImage}" class="anchor-preview">
-                    <p style="color: #06ffa5; text-align: center; margin: 20px 0;">
-                        <strong>${this.newWorldData.name}</strong><br>
-                        ${this.newWorldData.description}
-                    </p>
-                    <p style="color: rgba(255, 255, 255, 0.7); text-align: center;">
-                        Location: ${this.newWorldData.location.lat.toFixed(6)}, ${this.newWorldData.location.lng.toFixed(6)}
-                    </p>
-                    <button class="download-json-btn" onclick="window.worldNavigator.worldCreator.downloadWorldJSON()">
-                        💾 Download World Data (JSON)
-                    </button>
-                    <p style="color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 20px; font-size: 14px;">
-                        Use the World Builder tool to convert this JSON into a full HTML world file.
-                    </p>
-                    <button class="create-world-btn" onclick="document.getElementById('world-creation-form').remove()">
-                        Close
-                    </button>
-                `;
-            }
-        }
-
-        // AI Manager Class (Modified to track conversation history)
+        // AI Manager Class
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -2312,7 +1321,6 @@
                 this.endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
                 this.companions = new Map();
                 this.conversationHistory = [];
-                this.currentChatHistory = []; // Track current chat for saving as task
                 this.isActive = false;
                 this.userGuid = this.generateUserGuid();
                 
@@ -2323,15 +1331,7 @@
                 this.companionButton = document.getElementById('ai-companion-button');
                 this.aiModal = document.getElementById('ai-modal');
                 
-                // 3D Text display
-                this.textMeshes = [];
-                this.currentTextAnimation = null;
-                this.textGroup = null;
-                
                 this.setupEventListeners();
-                
-                // Check for cached API key
-                this.checkCachedApiKey();
             }
             
             generateUserGuid() {
@@ -2340,41 +1340,6 @@
                     const v = c === 'x' ? r : (r & 0x3 | 0x8);
                     return v.toString(16);
                 });
-            }
-            
-            async checkCachedApiKey() {
-                // Check if API key exists in localStorage
-                const cachedApiKey = localStorage.getItem('nexus_ai_api_key');
-                if (cachedApiKey) {
-                    this.apiKey = cachedApiKey;
-                    
-                    try {
-                        // Test the cached API key with a simple request
-                        const response = await this.sendToAPI('System check - testing cached API key.');
-                        
-                        if (response.assistant_response) {
-                            // Cached key is valid, activate AI automatically
-                            this.isActive = true;
-                            this.companionButton.classList.add('active');
-                            this.showNotification('AI Companion activated with cached key!');
-                            
-                            // Create AI companion in the world
-                            this.createAICompanion();
-                            
-                            // Update companion list
-                            this.updateCompanionList();
-                            
-                            // Don't show the initial message for auto-activation
-                            console.log('AI Companion auto-activated with cached API key');
-                        }
-                    } catch (error) {
-                        // Cached key is invalid, clear it
-                        console.error('Cached API key is invalid:', error);
-                        localStorage.removeItem('nexus_ai_api_key');
-                        this.apiKey = null;
-                        this.showNotification('Cached API key expired. Please enter a new one.');
-                    }
-                }
             }
             
             setupEventListeners() {
@@ -2425,9 +1390,6 @@
                         this.aiModal.classList.remove('show');
                         this.showNotification('AI Companion activated!');
                         
-                        // Save API key to localStorage for future sessions
-                        localStorage.setItem('nexus_ai_api_key', apiKey);
-                        
                         // Create AI companion in the world
                         this.createAICompanion();
                         
@@ -2436,9 +1398,6 @@
                         
                         // Show initial message
                         this.addMessage(response.assistant_response, 'ai');
-                        
-                        // Display text in 3D world
-                        this.animateTextResponse(response.assistant_response);
                         
                         // Clear the API key input for security
                         apiKeyInput.value = '';
@@ -2501,11 +1460,6 @@
                 const particles = new THREE.Points(particleGeometry, particleMaterial);
                 companionGroup.add(particles);
                 
-                // Create text display group
-                this.textGroup = new THREE.Group();
-                this.textGroup.position.y = 4; // Position above the orb
-                companionGroup.add(this.textGroup);
-                
                 // Position near the player
                 companionGroup.position.set(3, 0, 3);
                 
@@ -2520,180 +1474,8 @@
                     light: glowLight
                 });
                 
-                // Load font for 3D text
-                this.loadFont();
-                
                 // Animate the companion
                 this.animateCompanion();
-            }
-            
-            loadFont() {
-                const loader = new THREE.FontLoader();
-                loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
-                    this.font = font;
-                });
-            }
-            
-            create3DText(text, position = new THREE.Vector3(0, 0, 0)) {
-                if (!this.font) {
-                    console.warn('Font not loaded yet');
-                    return null;
-                }
-                
-                const textGeometry = new THREE.TextGeometry(text, {
-                    font: this.font,
-                    size: 0.3,
-                    height: 0.05,
-                    curveSegments: 12,
-                    bevelEnabled: true,
-                    bevelThickness: 0.01,
-                    bevelSize: 0.01,
-                    bevelSegments: 8
-                });
-                
-                textGeometry.center();
-                
-                const textMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x06ffa5,
-                    emissive: 0x06ffa5,
-                    emissiveIntensity: 0.3,
-                    metalness: 0.5,
-                    roughness: 0.3,
-                    transparent: true,
-                    opacity: 0
-                });
-                
-                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-                textMesh.position.copy(position);
-                
-                return textMesh;
-            }
-            
-            async animateTextResponse(fullText) {
-                // Clear previous text meshes
-                this.clearTextMeshes();
-                
-                // Cancel any ongoing animation
-                if (this.currentTextAnimation) {
-                    clearInterval(this.currentTextAnimation);
-                }
-                
-                // Split text into lines (max ~40 chars per line)
-                const words = fullText.split(' ');
-                const lines = [];
-                let currentLine = '';
-                
-                for (const word of words) {
-                    if ((currentLine + word).length > 40) {
-                        lines.push(currentLine.trim());
-                        currentLine = word + ' ';
-                    } else {
-                        currentLine += word + ' ';
-                    }
-                }
-                if (currentLine.trim()) {
-                    lines.push(currentLine.trim());
-                }
-                
-                // Animate each line
-                let lineIndex = 0;
-                let charIndex = 0;
-                let currentLineMesh = null;
-                
-                this.currentTextAnimation = setInterval(() => {
-                    if (lineIndex >= lines.length) {
-                        clearInterval(this.currentTextAnimation);
-                        this.currentTextAnimation = null;
-                        
-                        // Fade out text after 5 seconds
-                        setTimeout(() => this.fadeOutText(), 5000);
-                        return;
-                    }
-                    
-                    const currentLineText = lines[lineIndex];
-                    
-                    // Create new line mesh if needed
-                    if (charIndex === 0) {
-                        if (currentLineMesh) {
-                            // Finish previous line
-                            currentLineMesh.material.opacity = 1;
-                        }
-                        
-                        const yOffset = -lineIndex * 0.5;
-                        currentLineMesh = this.create3DText('', new THREE.Vector3(0, yOffset, 0));
-                        
-                        if (currentLineMesh) {
-                            this.textGroup.add(currentLineMesh);
-                            this.textMeshes.push(currentLineMesh);
-                        }
-                    }
-                    
-                    // Update text character by character
-                    if (currentLineMesh && this.font) {
-                        charIndex++;
-                        const displayText = currentLineText.substring(0, charIndex);
-                        
-                        // Update geometry with new text
-                        const newGeometry = new THREE.TextGeometry(displayText, {
-                            font: this.font,
-                            size: 0.3,
-                            height: 0.05,
-                            curveSegments: 12,
-                            bevelEnabled: true,
-                            bevelThickness: 0.01,
-                            bevelSize: 0.01,
-                            bevelSegments: 8
-                        });
-                        newGeometry.center();
-                        
-                        currentLineMesh.geometry.dispose();
-                        currentLineMesh.geometry = newGeometry;
-                        
-                        // Fade in
-                        currentLineMesh.material.opacity = Math.min(1, currentLineMesh.material.opacity + 0.1);
-                        
-                        // Flash effect on new character
-                        currentLineMesh.material.emissiveIntensity = 0.8;
-                        setTimeout(() => {
-                            if (currentLineMesh) {
-                                currentLineMesh.material.emissiveIntensity = 0.3;
-                            }
-                        }, 50);
-                    }
-                    
-                    // Move to next line
-                    if (charIndex >= currentLineText.length) {
-                        lineIndex++;
-                        charIndex = 0;
-                    }
-                }, 50); // 50ms per character for readable speed
-            }
-            
-            clearTextMeshes() {
-                this.textMeshes.forEach(mesh => {
-                    if (mesh.geometry) mesh.geometry.dispose();
-                    if (mesh.material) mesh.material.dispose();
-                    this.textGroup.remove(mesh);
-                });
-                this.textMeshes = [];
-            }
-            
-            fadeOutText() {
-                const fadeInterval = setInterval(() => {
-                    let allFaded = true;
-                    
-                    this.textMeshes.forEach(mesh => {
-                        if (mesh.material.opacity > 0) {
-                            mesh.material.opacity -= 0.02;
-                            allFaded = false;
-                        }
-                    });
-                    
-                    if (allFaded) {
-                        clearInterval(fadeInterval);
-                        this.clearTextMeshes();
-                    }
-                }, 50);
             }
             
             animateCompanion() {
@@ -2721,11 +1503,6 @@
                     targetPos.z += 3;
                     
                     companion.object.position.lerp(targetPos, 0.05);
-                    
-                    // Make text face the camera
-                    if (this.textGroup) {
-                        this.textGroup.lookAt(this.world.camera.position);
-                    }
                     
                     requestAnimationFrame(animate);
                 };
@@ -2762,18 +1539,9 @@
                 const message = this.chatInput.value.trim();
                 if (!message || !this.isActive) return;
                 
-                // Check if currently replaying a task
-                if (this.world.taskManager && this.world.taskManager.isReplaying) {
-                    this.showNotification('Cannot send messages during task replay');
-                    return;
-                }
-                
                 // Add user message to chat
                 this.addMessage(message, 'user');
                 this.chatInput.value = '';
-                
-                // Show typing indicator
-                this.showTypingIndicator();
                 
                 // Add to conversation history
                 this.conversationHistory.push({
@@ -2781,19 +1549,9 @@
                     content: message
                 });
                 
-                // Add to current chat history for task saving
-                this.currentChatHistory.push({
-                    text: message,
-                    sender: 'user',
-                    timestamp: Date.now()
-                });
-                
                 try {
                     // Send to API
                     const response = await this.sendToAPI(message);
-                    
-                    // Remove typing indicator
-                    this.hideTypingIndicator();
                     
                     if (response.assistant_response) {
                         // Add AI response to chat
@@ -2805,44 +1563,12 @@
                             content: response.assistant_response
                         });
                         
-                        // Add to current chat history for task saving
-                        this.currentChatHistory.push({
-                            text: response.assistant_response,
-                            sender: 'ai',
-                            timestamp: Date.now()
-                        });
-                        
                         // Animate companion when speaking
                         this.animateCompanionSpeaking();
-                        
-                        // Display text in 3D world
-                        this.animateTextResponse(response.assistant_response);
                     }
                 } catch (error) {
                     console.error('Failed to send message:', error);
-                    this.hideTypingIndicator();
                     this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
-                }
-            }
-            
-            showTypingIndicator() {
-                const typingDiv = document.createElement('div');
-                typingDiv.className = 'ai-message ai-typing';
-                typingDiv.id = 'ai-typing-indicator';
-                typingDiv.innerHTML = `
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                `;
-                
-                this.chatMessages.appendChild(typingDiv);
-                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-            }
-            
-            hideTypingIndicator() {
-                const typingIndicator = document.getElementById('ai-typing-indicator');
-                if (typingIndicator) {
-                    typingIndicator.remove();
                 }
             }
             
@@ -2869,10 +1595,6 @@
                         
                         const scale = originalScale + Math.sin(progress * Math.PI) * 0.3;
                         companion.orb.scale.setScalar(scale);
-                        
-                        // Increase glow while speaking
-                        companion.light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 1;
-                        companion.orb.material.emissiveIntensity = 0.5 + Math.sin(progress * Math.PI) * 0.3;
                         
                         requestAnimationFrame(animate);
                     };
@@ -3814,8 +2536,6 @@
                 this.mapManager = null;
                 this.multiplayer = null;
                 this.aiManager = null;
-                this.worldCreator = null;
-                this.taskManager = null;
                 
                 // World locations cache
                 this.worldLocations = new Map();
@@ -3830,10 +2550,7 @@
             }
             
             async init() {
-                // Initialize map manager early
-                this.mapManager = new MapManager(this);
-                
-                // Initialize GPS
+                // Initialize GPS first
                 this.gpsManager = new GPSManager(this);
                 const hasPermission = await this.gpsManager.requestPermission();
                 
@@ -3867,17 +2584,14 @@
                 this.setupEventListeners();
                 this.setupQRCode();
                 
+                // Initialize map manager
+                this.mapManager = new MapManager(this);
+                
                 // Initialize multiplayer
                 this.multiplayer = new MultiplayerManager(this);
                 
                 // Initialize AI manager
                 this.aiManager = new AIManager(this);
-                
-                // Initialize World Creator
-                this.worldCreator = new WorldCreator(this);
-                
-                // Initialize Task Manager
-                this.taskManager = new TaskManager(this);
                 
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
@@ -3893,24 +2607,6 @@
                 window.worldNavigator = this;
                 
                 this.animate();
-            }
-            
-            saveCurrentChatAsTask() {
-                if (!this.aiManager || !this.aiManager.isActive) {
-                    this.showNotification('Please activate AI companion first');
-                    return;
-                }
-                
-                if (this.aiManager.currentChatHistory.length === 0) {
-                    this.showNotification('No messages to save as task');
-                    return;
-                }
-                
-                // Pass current chat history to task manager
-                this.taskManager.saveCurrentChat(this.aiManager.currentChatHistory);
-                
-                // Clear current chat history for new conversations
-                this.aiManager.currentChatHistory = [];
             }
             
             getCurrentWorldData() {
