@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Trash Compactor 3263827</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #8B4513, #CD853F, #D2691E, #DEB887);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rust-shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(139, 69, 19, 0.5);
+        }
+
+        @keyframes rust-shimmer {
+            0%, 100% { 
+                background-position: 0% 50%; 
+                filter: hue-rotate(0deg);
+            }
+            50% { 
+                background-position: 100% 50%;
+                filter: hue-rotate(-10deg);
+            }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .world-origin {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(139, 69, 19, 0.3);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #DEB887;
+            font-weight: 500;
+        }
+
+        .warning-display {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            background: rgba(255, 0, 0, 0.1);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            color: #ff0000;
+            text-transform: uppercase;
+            animation: warning-blink 2s infinite;
+            z-index: 1001;
+        }
+
+        @keyframes warning-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid transparent;
+            border-image: linear-gradient(45deg, #8B4513, #CD853F, #D2691E) 1;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #CD853F, #8B4513);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #DEB887;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(139, 69, 19, 0.1);
+            border: 2px solid rgba(205, 133, 63, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(139, 69, 19, 0.5);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #CD853F, #8B4513);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(205, 133, 63, 0.8);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #DEB887, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+
+            .warning-display {
+                font-size: 0.8em;
+                top: 100px;
+            }
+        }
+
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">TRASH COMPACTOR 3263827</h1>
+        <p class="world-description" id="world-description">Death Star detention level garbage masher - "What an incredible smell you've discovered!"</p>
+    </div>
+
+    <div class="warning-display" id="warning-display">
+        WARNING: COMPACTOR ACTIVE
+    </div>
+    
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+    
+    <div class="loading" id="loading">Initializing detention level systems...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration - Update these with your GitHub details
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
+        const BRANCH = 'main';
+        
+        // Default world attributes
+        const DEFAULT_WORLD_ATTRIBUTES = {
+            name: "Trash Compactor 3263827",
+            description: "Death Star detention level garbage masher",
+            ambientColor: 0x1a1a1a,
+            fogColor: 0x0a0a0a,
+            groundColor: 0x2a2a2a,
+            skyColor: 0x000000,
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0x00ffff,
+            portalColor2: 0xff00ff,
+            particleCount: 500,
+            cameraHeight: 2,
+            fogNear: 5,
+            fogFar: 50
+        };
+        
+        // Parse inherited attributes from URL
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+            
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+            
+            console.log('Parsed inherited attributes:', inherited);
+            return inherited;
+        }
+        
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        class TrashCompactorWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                
+                this.isMobile = isMobile;
+                this.isIOS = isIOS;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                this.touches = new Map();
+                this.lastTap = 0;
+                
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+                
+                this.inheritedAttributes = inheritedAttributes;
+                
+                // Trash compactor specific
+                this.walls = { left: null, right: null };
+                this.wallSpeed = 0.002;
+                this.wallsClosing = true;
+                this.minWallDistance = 8;
+                this.maxWallDistance = 30;
+                this.trash = [];
+                this.waterLevel = -3;
+                this.dianoga = null;
+                this.dianogaEye = null;
+                this.dianogaVisible = false;
+                this.nextDianogaAppearance = 5;
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+            
+            async init() {
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
+                }
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+                
+                document.getElementById('world-title').textContent = CURRENT_WORLD.name;
+                document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+                
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createTrashCompactor();
+                this.createTrash();
+                this.createWater();
+                this.createDianoga();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter';
+                    }
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 0);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.4);
+                this.scene.add(ambientLight);
+                
+                // Industrial ceiling lights
+                const lightPositions = [
+                    { x: 0, z: -10 },
+                    { x: 0, z: 0 },
+                    { x: 0, z: 10 }
+                ];
+                
+                lightPositions.forEach(pos => {
+                    const light = new THREE.PointLight(0xffd4a3, 0.8, 20);
+                    light.position.set(pos.x, 8, pos.z);
+                    light.castShadow = true;
+                    this.scene.add(light);
+                    
+                    // Light fixture
+                    const fixtureGeometry = new THREE.CylinderGeometry(0.5, 0.8, 0.3, 8);
+                    const fixtureMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x4a4a4a,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial);
+                    fixture.position.copy(light.position);
+                    fixture.position.y += 0.5;
+                    this.scene.add(fixture);
+                });
+                
+                // Emergency red lights
+                const redLight1 = new THREE.PointLight(0xff0000, 0.3, 15);
+                redLight1.position.set(-10, 5, 0);
+                this.scene.add(redLight1);
+                
+                const redLight2 = new THREE.PointLight(0xff0000, 0.3, 15);
+                redLight2.position.set(10, 5, 0);
+                this.scene.add(redLight2);
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('trash-compactor')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    // Always add Nexus Hub
+                    this.worlds.unshift({
+                        name: "Nexus Hub",
+                        description: "Return to the central hub",
+                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/index.html`
+                    });
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "A mystical underground realm" },
+                    { name: "Sky Islands", description: "Floating islands connected by bridges of light" },
+                    { name: "Neon City", description: "A cyberpunk metropolis" },
+                    { name: "Ancient Ruins", description: "Explore the remnants of a lost civilization" }
+                ];
+            }
+            
+            createTrashCompactor() {
+                const wallThickness = 2;
+                const wallHeight = 10;
+                const wallDepth = 40;
+                
+                // Metal wall material
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x4a4a4a,
+                    metalness: 0.7,
+                    roughness: 0.3,
+                    normalScale: new THREE.Vector2(1, 1)
+                });
+                
+                // Left wall
+                const leftWallGeometry = new THREE.BoxGeometry(wallThickness, wallHeight, wallDepth);
+                this.walls.left = new THREE.Mesh(leftWallGeometry, wallMaterial);
+                this.walls.left.position.set(-15, wallHeight / 2, 0);
+                this.walls.left.castShadow = true;
+                this.walls.left.receiveShadow = true;
+                this.scene.add(this.walls.left);
+                
+                // Right wall
+                const rightWallGeometry = new THREE.BoxGeometry(wallThickness, wallHeight, wallDepth);
+                this.walls.right = new THREE.Mesh(rightWallGeometry, wallMaterial);
+                this.walls.right.position.set(15, wallHeight / 2, 0);
+                this.walls.right.castShadow = true;
+                this.walls.right.receiveShadow = true;
+                this.scene.add(this.walls.right);
+                
+                // Add vertical beams and details to walls
+                for (let wall of [this.walls.left, this.walls.right]) {
+                    for (let i = -15; i <= 15; i += 5) {
+                        const beamGeometry = new THREE.BoxGeometry(0.5, wallHeight, 0.5);
+                        const beam = new THREE.Mesh(beamGeometry, wallMaterial);
+                        beam.position.z = i;
+                        beam.position.x = wall === this.walls.left ? 1 : -1;
+                        wall.add(beam);
+                    }
+                    
+                    // Hydraulic pistons
+                    for (let i = -10; i <= 10; i += 10) {
+                        const pistonGeometry = new THREE.CylinderGeometry(0.3, 0.3, 4, 8);
+                        const piston = new THREE.Mesh(pistonGeometry, wallMaterial);
+                        piston.position.z = i;
+                        piston.position.x = wall === this.walls.left ? 2 : -2;
+                        piston.position.y = 0;
+                        piston.rotation.z = Math.PI / 2;
+                        wall.add(piston);
+                    }
+                }
+                
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(50, wallDepth);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3a3a3a,
+                    metalness: 0.5,
+                    roughness: 0.7
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Ceiling
+                const ceilingGeometry = new THREE.PlaneGeometry(50, wallDepth);
+                const ceiling = new THREE.Mesh(ceilingGeometry, floorMaterial);
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = wallHeight;
+                ceiling.receiveShadow = true;
+                this.scene.add(ceiling);
+                
+                // Back and front walls
+                const endWallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3a3a3a,
+                    metalness: 0.6,
+                    roughness: 0.4
+                });
+                
+                const backWallGeometry = new THREE.PlaneGeometry(50, wallHeight);
+                const backWall = new THREE.Mesh(backWallGeometry, endWallMaterial);
+                backWall.position.z = -wallDepth / 2;
+                backWall.position.y = wallHeight / 2;
+                this.scene.add(backWall);
+                
+                const frontWallGeometry = new THREE.PlaneGeometry(50, wallHeight);
+                const frontWall = new THREE.Mesh(frontWallGeometry, endWallMaterial);
+                frontWall.position.z = wallDepth / 2;
+                frontWall.position.y = wallHeight / 2;
+                frontWall.rotation.y = Math.PI;
+                this.scene.add(frontWall);
+                
+                // Grating on floor
+                for (let i = -18; i <= 18; i += 3) {
+                    const grateGeometry = new THREE.BoxGeometry(0.2, 0.1, wallDepth - 2);
+                    const grate = new THREE.Mesh(grateGeometry, wallMaterial);
+                    grate.position.set(i, 0.05, 0);
+                    this.scene.add(grate);
+                }
+            }
+            
+            createTrash() {
+                const trashMaterials = [
+                    new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 }),
+                    new THREE.MeshStandardMaterial({ color: 0x696969, metalness: 0.8, roughness: 0.2 }),
+                    new THREE.MeshStandardMaterial({ color: 0x2F4F4F, roughness: 0.8 }),
+                    new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.6, roughness: 0.4 })
+                ];
+                
+                // Large metal beams
+                for (let i = 0; i < 5; i++) {
+                    const beamLength = Math.random() * 8 + 4;
+                    const beamGeometry = new THREE.BoxGeometry(0.5, 0.5, beamLength);
+                    const beam = new THREE.Mesh(beamGeometry, trashMaterials[1]);
+                    beam.position.set(
+                        (Math.random() - 0.5) * 20,
+                        Math.random() * 2 + 0.5,
+                        (Math.random() - 0.5) * 30
+                    );
+                    beam.rotation.set(
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI
+                    );
+                    beam.castShadow = true;
+                    beam.receiveShadow = true;
+                    this.trash.push(beam);
+                    this.scene.add(beam);
+                }
+                
+                // Pipes
+                for (let i = 0; i < 8; i++) {
+                    const pipeLength = Math.random() * 6 + 2;
+                    const pipeGeometry = new THREE.CylinderGeometry(0.3, 0.3, pipeLength, 8);
+                    const pipe = new THREE.Mesh(pipeGeometry, trashMaterials[Math.floor(Math.random() * trashMaterials.length)]);
+                    pipe.position.set(
+                        (Math.random() - 0.5) * 20,
+                        Math.random() * 2 + 0.5,
+                        (Math.random() - 0.5) * 30
+                    );
+                    pipe.rotation.set(
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI
+                    );
+                    pipe.castShadow = true;
+                    pipe.receiveShadow = true;
+                    this.trash.push(pipe);
+                    this.scene.add(pipe);
+                }
+                
+                // Metal panels
+                for (let i = 0; i < 10; i++) {
+                    const panelGeometry = new THREE.BoxGeometry(
+                        Math.random() * 3 + 1,
+                        0.1,
+                        Math.random() * 3 + 1
+                    );
+                    const panel = new THREE.Mesh(panelGeometry, trashMaterials[Math.floor(Math.random() * trashMaterials.length)]);
+                    panel.position.set(
+                        (Math.random() - 0.5) * 20,
+                        Math.random() * 3,
+                        (Math.random() - 0.5) * 30
+                    );
+                    panel.rotation.set(
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI
+                    );
+                    panel.castShadow = true;
+                    panel.receiveShadow = true;
+                    this.trash.push(panel);
+                    this.scene.add(panel);
+                }
+                
+                // Debris chunks
+                for (let i = 0; i < 20; i++) {
+                    const size = Math.random() * 0.8 + 0.2;
+                    const debrisGeometry = new THREE.DodecahedronGeometry(size, 0);
+                    const debris = new THREE.Mesh(debrisGeometry, trashMaterials[Math.floor(Math.random() * trashMaterials.length)]);
+                    debris.position.set(
+                        (Math.random() - 0.5) * 25,
+                        Math.random() * 2,
+                        (Math.random() - 0.5) * 35
+                    );
+                    debris.rotation.set(
+                        Math.random() * Math.PI * 2,
+                        Math.random() * Math.PI * 2,
+                        Math.random() * Math.PI * 2
+                    );
+                    debris.castShadow = true;
+                    debris.receiveShadow = true;
+                    this.trash.push(debris);
+                    this.scene.add(debris);
+                }
+            }
+            
+            createWater() {
+                const waterGeometry = new THREE.PlaneGeometry(50, 40);
+                const waterMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a3a1a,
+                    transparent: true,
+                    opacity: 0.8,
+                    roughness: 0.1,
+                    metalness: 0.3
+                });
+                
+                this.water = new THREE.Mesh(waterGeometry, waterMaterial);
+                this.water.rotation.x = -Math.PI / 2;
+                this.water.position.y = this.waterLevel;
+                this.scene.add(this.water);
+                
+                // Water ripples effect
+                this.waterTime = 0;
+            }
+            
+            createDianoga() {
+                // Dianoga eye stalk
+                const eyeStalkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 2, 8);
+                const eyeStalkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x4a5d4a,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                this.dianogaEye = new THREE.Mesh(eyeStalkGeometry, eyeStalkMaterial);
+                
+                // Eye
+                const eyeGeometry = new THREE.SphereGeometry(0.4, 16, 8);
+                const eyeMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xff0000,
+                    emissive: 0x440000,
+                    emissiveIntensity: 0.3,
+                    roughness: 0.2,
+                    metalness: 0.5
+                });
+                const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                eye.position.y = 1;
+                this.dianogaEye.add(eye);
+                
+                // Pupil
+                const pupilGeometry = new THREE.SphereGeometry(0.2, 8, 4);
+                const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+                pupil.position.z = 0.3;
+                eye.add(pupil);
+                
+                this.dianogaEye.position.y = this.waterLevel - 2;
+                this.dianogaEye.visible = false;
+                this.scene.add(this.dianogaEye);
+                
+                // Tentacles (simple representation)
+                this.tentacles = [];
+                for (let i = 0; i < 3; i++) {
+                    const tentacleGeometry = new THREE.CylinderGeometry(0.2, 0.3, 3, 6);
+                    const tentacle = new THREE.Mesh(tentacleGeometry, eyeStalkMaterial);
+                    tentacle.position.set(
+                        (Math.random() - 0.5) * 2,
+                        this.waterLevel - 1.5,
+                        (Math.random() - 0.5) * 2
+                    );
+                    tentacle.visible = false;
+                    this.tentacles.push(tentacle);
+                    this.scene.add(tentacle);
+                }
+            }
+            
+            animateDianoga(time) {
+                if (time > this.nextDianogaAppearance && !this.dianogaVisible) {
+                    // Make dianoga appear
+                    this.dianogaVisible = true;
+                    const x = (Math.random() - 0.5) * 20;
+                    const z = (Math.random() - 0.5) * 20;
+                    this.dianogaEye.position.x = x;
+                    this.dianogaEye.position.z = z;
+                    this.dianogaEye.visible = true;
+                    
+                    // Position tentacles nearby
+                    this.tentacles.forEach((tentacle, i) => {
+                        tentacle.position.x = x + (Math.random() - 0.5) * 4;
+                        tentacle.position.z = z + (Math.random() - 0.5) * 4;
+                        tentacle.visible = true;
+                    });
+                    
+                    // Schedule disappearance
+                    setTimeout(() => {
+                        this.dianogaVisible = false;
+                        this.dianogaEye.visible = false;
+                        this.tentacles.forEach(t => t.visible = false);
+                        this.nextDianogaAppearance = time + 5 + Math.random() * 10;
+                    }, 3000 + Math.random() * 3000);
+                }
+                
+                // Animate visible dianoga
+                if (this.dianogaVisible) {
+                    this.dianogaEye.position.y = this.waterLevel + Math.sin(time * 2) * 0.5 + 1;
+                    this.dianogaEye.rotation.y = Math.sin(time) * 0.5;
+                    
+                    // Look at camera
+                    const eye = this.dianogaEye.children[0];
+                    eye.lookAt(this.camera.position);
+                    
+                    // Animate tentacles
+                    this.tentacles.forEach((tentacle, i) => {
+                        tentacle.rotation.x = Math.sin(time * 2 + i) * 0.3;
+                        tentacle.rotation.z = Math.cos(time * 2 + i) * 0.3;
+                    });
+                }
+            }
+            
+            animateWalls() {
+                const currentDistance = Math.abs(this.walls.left.position.x) + Math.abs(this.walls.right.position.x);
+                
+                if (this.wallsClosing) {
+                    this.walls.left.position.x += this.wallSpeed;
+                    this.walls.right.position.x -= this.wallSpeed;
+                    
+                    if (currentDistance <= this.minWallDistance) {
+                        this.wallsClosing = false;
+                        // Add screen shake effect
+                        this.cameraShake = 10;
+                    }
+                } else {
+                    this.walls.left.position.x -= this.wallSpeed;
+                    this.walls.right.position.x += this.wallSpeed;
+                    
+                    if (currentDistance >= this.maxWallDistance) {
+                        this.wallsClosing = true;
+                    }
+                }
+                
+                // Update warning display
+                const warningDiv = document.getElementById('warning-display');
+                if (this.wallsClosing && currentDistance < 15) {
+                    warningDiv.style.display = 'block';
+                } else {
+                    warningDiv.style.display = 'none';
+                }
+            }
+            
+            animateTrash() {
+                // Make trash float and move with walls
+                this.trash.forEach((item, i) => {
+                    // Float in water
+                    if (item.position.y < this.waterLevel + 1) {
+                        item.position.y = this.waterLevel + Math.sin(this.clock.getElapsedTime() * 2 + i) * 0.2 + 0.5;
+                    }
+                    
+                    // Push trash with walls
+                    const leftWallX = this.walls.left.position.x + 1;
+                    const rightWallX = this.walls.right.position.x - 1;
+                    
+                    if (item.position.x < leftWallX) {
+                        item.position.x = leftWallX + Math.random() * 0.5;
+                    }
+                    if (item.position.x > rightWallX) {
+                        item.position.x = rightWallX - Math.random() * 0.5;
+                    }
+                    
+                    // Slow rotation
+                    item.rotation.x += 0.001;
+                    item.rotation.y += 0.002;
+                });
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 4);
+                const positions = [
+                    { x: 0, z: -18, rot: 0 },
+                    { x: 0, z: 18, rot: Math.PI },
+                    { x: -10, z: 0, rot: -Math.PI/2 },
+                    { x: 10, z: 0, rot: Math.PI/2 }
+                ];
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i] || this.getDemoWorlds()[i];
+                    const pos = positions[i];
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Industrial door frame
+                    const frameGeometry = new THREE.BoxGeometry(4, 6, 0.5);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B4513,
+                        metalness: 0.7,
+                        roughness: 0.3
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    // Portal surface
+                    const portalGeometry = new THREE.PlaneGeometry(3, 5);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, wave);
+                                float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.8);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.3;
+                    
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    portalGroup.position.x = pos.x;
+                    portalGroup.position.z = pos.z;
+                    portalGroup.position.y = 3;
+                    portalGroup.rotation.y = pos.rot;
+                    
+                    // Warning light above portal
+                    const warningLight = new THREE.PointLight(0xffaa00, 0.5, 10);
+                    warningLight.position.set(pos.x, 7, pos.z);
+                    this.scene.add(warningLight);
+                    
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: warningLight,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+            
+            buildInheritanceParams() {
+                const params = new URLSearchParams();
+                
+                params.set('from', window.location.pathname.split('/').pop() || 'trash-compactor.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+                
+                return params.toString();
+            }
+            
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+                
+                // Keep camera within walls
+                const leftLimit = this.walls.left.position.x + 2;
+                const rightLimit = this.walls.right.position.x - 2;
+                this.camera.position.x = Math.max(leftLimit, Math.min(rightLimit, this.camera.position.x));
+                this.camera.position.z = Math.max(-18, Math.min(18, this.camera.position.z));
+                
+                // Keep camera above water
+                this.camera.position.y = Math.max(this.waterLevel + 1.5, this.camera.position.y);
+                
+                // Camera shake when walls hit minimum distance
+                if (this.cameraShake > 0) {
+                    this.camera.position.x += (Math.random() - 0.5) * this.cameraShake * 0.01;
+                    this.camera.position.y += (Math.random() - 0.5) * this.cameraShake * 0.01;
+                    this.cameraShake *= 0.9;
+                }
+                
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Escaping trash compactor...';
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    const inheritanceParams = this.buildInheritanceParams();
+                    
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                this.updateMovement();
+                this.updateHover();
+                
+                // Animate walls
+                this.animateWalls();
+                
+                // Animate trash
+                this.animateTrash();
+                
+                // Animate water
+                if (this.water) {
+                    this.waterTime += 0.01;
+                    this.water.position.y = this.waterLevel + Math.sin(this.waterTime * 2) * 0.05;
+                    
+                    // Create ripple effect by slightly rotating the water plane
+                    this.water.rotation.z = Math.sin(this.waterTime * 3) * 0.002;
+                }
+                
+                // Animate dianoga
+                this.animateDianoga(time);
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        // Pulsing glow
+                        const intensity = 0.5 + Math.sin(time * 2 + index) * 0.3;
+                        portal.userData.light.intensity = intensity;
+                    }
+                    
+                    // Gentle rotation
+                    portal.rotation.z = Math.sin(time * 0.5 + index) * 0.05;
+                });
+                
+                // Steam/mist particles
+                if (!this.steamParticles) {
+                    this.createSteamParticles();
+                }
+                this.animateSteamParticles(time);
+                
+                // Sparks from grinding walls
+                if (this.wallsClosing && Math.abs(this.walls.left.position.x) + Math.abs(this.walls.right.position.x) < 20) {
+                    this.createSparks();
+                }
+                
+                // Emergency light flashing
+                const warningLights = this.scene.children.filter(child => child.isLight && child.color.getHex() === 0xff0000);
+                warningLights.forEach(light => {
+                    light.intensity = 0.3 + Math.sin(time * 10) * 0.2;
+                });
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            createSteamParticles() {
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 200;
+                const positions = new Float32Array(particleCount * 3);
+                const velocities = new Float32Array(particleCount * 3);
+                const lifetimes = new Float32Array(particleCount);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 30;
+                    positions[i + 1] = this.waterLevel;
+                    positions[i + 2] = (Math.random() - 0.5) * 30;
+                    
+                    velocities[i] = (Math.random() - 0.5) * 0.02;
+                    velocities[i + 1] = Math.random() * 0.05 + 0.02;
+                    velocities[i + 2] = (Math.random() - 0.5) * 0.02;
+                    
+                    lifetimes[i / 3] = Math.random();
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x888888,
+                    size: 0.3,
+                    transparent: true,
+                    opacity: 0.4,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.steamParticles = new THREE.Points(particleGeometry, particleMaterial);
+                this.steamParticles.userData = {
+                    velocities: velocities,
+                    lifetimes: lifetimes
+                };
+                this.scene.add(this.steamParticles);
+            }
+            
+            animateSteamParticles(time) {
+                if (!this.steamParticles) return;
+                
+                const positions = this.steamParticles.geometry.attributes.position.array;
+                const velocities = this.steamParticles.userData.velocities;
+                const lifetimes = this.steamParticles.userData.lifetimes;
+                
+                for (let i = 0; i < positions.length / 3; i++) {
+                    const i3 = i * 3;
+                    
+                    // Update position
+                    positions[i3] += velocities[i3];
+                    positions[i3 + 1] += velocities[i3 + 1];
+                    positions[i3 + 2] += velocities[i3 + 2];
+                    
+                    // Update lifetime
+                    lifetimes[i] -= 0.01;
+                    
+                    // Reset particle if lifetime expired or too high
+                    if (lifetimes[i] <= 0 || positions[i3 + 1] > 8) {
+                        positions[i3] = (Math.random() - 0.5) * 30;
+                        positions[i3 + 1] = this.waterLevel;
+                        positions[i3 + 2] = (Math.random() - 0.5) * 30;
+                        lifetimes[i] = 1;
+                    }
+                    
+                    // Keep particles within walls
+                    const leftLimit = this.walls.left.position.x + 1;
+                    const rightLimit = this.walls.right.position.x - 1;
+                    if (positions[i3] < leftLimit) positions[i3] = leftLimit;
+                    if (positions[i3] > rightLimit) positions[i3] = rightLimit;
+                }
+                
+                this.steamParticles.geometry.attributes.position.needsUpdate = true;
+                this.steamParticles.material.opacity = 0.4 + Math.sin(time) * 0.1;
+            }
+            
+            createSparks() {
+                if (Math.random() > 0.1) return; // Only create sparks occasionally
+                
+                const sparkCount = 10;
+                const sparkGeometry = new THREE.BufferGeometry();
+                const sparkPositions = new Float32Array(sparkCount * 3);
+                const sparkVelocities = new Float32Array(sparkCount * 3);
+                
+                for (let i = 0; i < sparkCount; i++) {
+                    const i3 = i * 3;
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const wallX = side > 0 ? this.walls.right.position.x - 1 : this.walls.left.position.x + 1;
+                    
+                    sparkPositions[i3] = wallX;
+                    sparkPositions[i3 + 1] = Math.random() * 8 + 1;
+                    sparkPositions[i3 + 2] = (Math.random() - 0.5) * 30;
+                    
+                    sparkVelocities[i3] = (Math.random() - 0.5) * 0.2 * -side;
+                    sparkVelocities[i3 + 1] = Math.random() * 0.1 - 0.05;
+                    sparkVelocities[i3 + 2] = (Math.random() - 0.5) * 0.1;
+                }
+                
+                sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+                
+                const sparkMaterial = new THREE.PointsMaterial({
+                    color: 0xffaa00,
+                    size: 0.2,
+                    transparent: true,
+                    opacity: 1,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const sparks = new THREE.Points(sparkGeometry, sparkMaterial);
+                sparks.userData = {
+                    velocities: sparkVelocities,
+                    lifetime: 30,
+                    age: 0
+                };
+                
+                this.scene.add(sparks);
+                
+                // Remove sparks after lifetime
+                setTimeout(() => {
+                    this.scene.remove(sparks);
+                }, 500);
+                
+                // Animate sparks
+                const animateSpark = () => {
+                    if (sparks.userData.age >= sparks.userData.lifetime) return;
+                    
+                    const positions = sparks.geometry.attributes.position.array;
+                    const velocities = sparks.userData.velocities;
+                    
+                    for (let i = 0; i < positions.length; i++) {
+                        positions[i] += velocities[i];
+                    }
+                    
+                    // Apply gravity to y velocity
+                    for (let i = 1; i < velocities.length; i += 3) {
+                        velocities[i] -= 0.01;
+                    }
+                    
+                    sparks.geometry.attributes.position.needsUpdate = true;
+                    sparks.material.opacity = 1 - (sparks.userData.age / sparks.userData.lifetime);
+                    
+                    sparks.userData.age++;
+                    
+                    if (sparks.userData.age < sparks.userData.lifetime) {
+                        requestAnimationFrame(animateSpark);
+                    }
+                };
+                
+                animateSpark();
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new TrashCompactorWorld();
+            world.init();
+        });
+        
+        // Prevent pull-to-refresh on mobile
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+    </script>
+</body>
+</html>
