@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Nexus Hub - GPS World Explorer</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <style>
         * {
             margin: 0;
@@ -76,7 +76,11 @@
             font-weight: 300;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             background-size: 400% 100%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -105,7 +109,9 @@
         }
 
         .location-setter button {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            background: linear-gradient(45deg, 
+#06ffa5, 
+#00ff88);
             color: #000;
             border: none;
             padding: 10px 20px;
@@ -170,14 +176,19 @@
         }
 
         .ai-modal-close:hover {
-            color: #ff006e;
+            color: 
+#ff006e;
             transform: rotate(90deg);
         }
 
         .ai-modal h3 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -199,7 +210,9 @@
         }
 
         .ai-activate-btn {
-            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            background: linear-gradient(45deg, 
+#8338ec, 
+#3a86ff);
             color: white;
             border: none;
             padding: 12px 30px;
@@ -235,7 +248,8 @@
 
         .ai-companion-name {
             font-weight: bold;
-            color: #06ffa5;
+            color: 
+#06ffa5;
         }
 
         .ai-companion-status {
@@ -273,7 +287,8 @@
 
         .ai-chat-title {
             font-weight: bold;
-            color: #06ffa5;
+            color: 
+#06ffa5;
         }
 
         .ai-chat-messages {
@@ -333,11 +348,13 @@
             padding: 10px;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
-            border-left: 3px solid #ff6a00;
+            border-left: 3px solid 
+#ff6a00;
         }
 
         .agent-log-header {
-            color: #ffa500;
+            color: 
+#ffa500;
             font-weight: bold;
             margin-bottom: 5px;
             font-size: 14px;
@@ -359,22 +376,26 @@
 
         .agent-status.thinking {
             background: rgba(58, 134, 255, 0.3);
-            color: #4DD0E1;
+            color: 
+#4DD0E1;
         }
 
         .agent-status.searching {
             background: rgba(255, 152, 0, 0.3);
-            color: #ffaa00;
+            color: 
+#ffaa00;
         }
 
         .agent-status.processing {
             background: rgba(156, 39, 176, 0.3);
-            color: #BA68C8;
+            color: 
+#BA68C8;
         }
 
         .agent-status.complete {
             background: rgba(76, 175, 80, 0.3);
-            color: #81C784;
+            color: 
+#81C784;
         }
 
         .agent-step {
@@ -387,11 +408,13 @@
             content: '▸';
             position: absolute;
             left: 5px;
-            color: #06ffa5;
+            color: 
+#06ffa5;
         }
 
         .agent-error {
-            color: #ff6b6b;
+            color: 
+#ff6b6b;
             background: rgba(255, 0, 0, 0.1);
             padding: 5px;
             border-radius: 5px;
@@ -399,7 +422,8 @@
         }
 
         .agent-success {
-            color: #51cf66;
+            color: 
+#51cf66;
             background: rgba(0, 255, 0, 0.1);
             padding: 5px;
             border-radius: 5px;
@@ -416,7 +440,8 @@
             max-width: 300px;
             font-family: monospace;
             font-size: 12px;
-            color: #ffa500;
+            color: 
+#ffa500;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -437,7 +462,7 @@
             align-items: center;
             gap: 5px;
         }
-        
+
         .typing-dot {
             width: 8px;
             height: 8px;
@@ -445,15 +470,15 @@
             border-radius: 50%;
             animation: typingPulse 1.4s infinite ease-in-out;
         }
-        
+
         .typing-dot:nth-child(1) {
             animation-delay: -0.32s;
         }
-        
+
         .typing-dot:nth-child(2) {
             animation-delay: -0.16s;
         }
-        
+
         @keyframes typingPulse {
             0%, 80%, 100% {
                 transform: scale(0.8);
@@ -483,7 +508,9 @@
         }
 
         .ai-chat-send {
-            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            background: linear-gradient(45deg, 
+#8338ec, 
+#3a86ff);
             color: white;
             border: none;
             padding: 10px 20px;
@@ -498,7 +525,9 @@
 
         /* Save as Task Button */
         .save-task-btn {
-            background: linear-gradient(45deg, #ff6a00, #ff8c00);
+            background: linear-gradient(45deg, 
+#ff6a00, 
+#ff8c00);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -561,19 +590,22 @@
             box-shadow: 0 0 30px rgba(255, 106, 0, 0.3);
             display: none;
         }
-        
+
         .task-panel.active {
             display: block;
         }
-        
+
         .task-panel h3 {
             margin: 0 0 15px 0;
             font-size: 20px;
-            background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
+            background: linear-gradient(45deg, 
+#ff6a00, 
+#ff8c00, 
+#ffa500);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        
+
         .task-item {
             background: rgba(255, 255, 255, 0.1);
             padding: 12px;
@@ -583,23 +615,24 @@
             transition: all 0.3s ease;
             border: 1px solid transparent;
         }
-        
+
         .task-item:hover {
             background: rgba(255, 255, 255, 0.2);
             border-color: rgba(255, 106, 0, 0.5);
             transform: translateX(5px);
         }
-        
+
         .task-item strong {
-            color: #ffa500;
+            color: 
+#ffa500;
         }
-        
+
         .task-item small {
             color: rgba(255, 255, 255, 0.6);
             display: block;
             margin-top: 5px;
         }
-        
+
         .task-replay-indicator {
             position: absolute;
             top: 10px;
@@ -610,7 +643,7 @@
             font-size: 12px;
             display: none;
         }
-        
+
         .task-replay-indicator.active {
             display: block;
             animation: pulse 1s infinite;
@@ -679,8 +712,10 @@
         }
 
         .gps-indicator.active {
-            background: #00ff00;
-            box-shadow: 0 0 10px #00ff00;
+            background: 
+#00ff00;
+            box-shadow: 0 0 10px 
+#00ff00;
             animation: pulse 2s infinite;
         }
 
@@ -696,7 +731,8 @@
         }
 
         .gps-accuracy {
-            color: #06ffa5;
+            color: 
+#06ffa5;
             font-size: 0.8em;
         }
 
@@ -762,7 +798,8 @@
             font-size: 1.2em;
             font-weight: bold;
             margin-bottom: 5px;
-            color: #8338ec;
+            color: 
+#8338ec;
         }
 
         .popup-description {
@@ -773,12 +810,15 @@
 
         .popup-distance {
             font-size: 0.8em;
-            color: #06ffa5;
+            color: 
+#06ffa5;
             margin-bottom: 10px;
         }
 
         .enter-world-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -838,7 +878,11 @@
         .permission-title {
             font-size: 24px;
             margin-bottom: 15px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -856,7 +900,9 @@
         }
 
         .permission-btn {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            background: linear-gradient(45deg, 
+#06ffa5, 
+#00ff88);
             color: #000;
             border: none;
             padding: 12px 30px;
@@ -875,7 +921,9 @@
         }
 
         .permission-btn.manual {
-            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            background: linear-gradient(45deg, 
+#8338ec, 
+#3a86ff);
             color: white;
         }
 
@@ -892,7 +940,11 @@
             font-weight: 100;
             letter-spacing: 0.2em;
             text-transform: uppercase;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             background-size: 400% 100%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -932,7 +984,8 @@
         }
 
         .origin-world {
-            color: #06ffa5;
+            color: 
+#06ffa5;
             font-weight: 500;
         }
 
@@ -961,13 +1014,17 @@
         }
 
         .status-indicator.connected {
-            background: #00ff00;
-            box-shadow: 0 0 10px #00ff00;
+            background: 
+#00ff00;
+            box-shadow: 0 0 10px 
+#00ff00;
         }
 
         .status-indicator.hosting {
-            background: #06ffa5;
-            box-shadow: 0 0 10px #06ffa5;
+            background: 
+#06ffa5;
+            box-shadow: 0 0 10px 
+#06ffa5;
         }
 
         .status-text {
@@ -976,7 +1033,8 @@
         }
 
         .player-count {
-            color: #06ffa5;
+            color: 
+#06ffa5;
             font-weight: bold;
         }
 
@@ -1054,7 +1112,8 @@
             font-size: 1.4em;
             font-weight: 300;
             margin-bottom: 10px;
-            color: #06ffa5;
+            color: 
+#06ffa5;
         }
 
         .tooltip-description {
@@ -1065,7 +1124,8 @@
 
         .tooltip-instruction {
             font-size: 0.85em;
-            color: #ff006e;
+            color: 
+#ff006e;
             text-align: center;
             margin-top: 15px;
             padding-top: 15px;
@@ -1245,7 +1305,11 @@
             left: -3px;
             right: -3px;
             bottom: -3px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             border-radius: 20px;
             opacity: 0.5;
             animation: pulse 2s infinite;
@@ -1273,7 +1337,9 @@
         }
 
         .capture-btn, .cancel-scan-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -1322,7 +1388,11 @@
         .form-container h2 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
@@ -1359,7 +1429,9 @@
 
         .create-world-btn {
             width: 100%;
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            background: linear-gradient(45deg, 
+#06ffa5, 
+#00ff88);
             color: #000;
             border: none;
             padding: 15px;
@@ -1391,12 +1463,15 @@
         }
 
         .form-close-btn:hover {
-            color: #ff006e;
+            color: 
+#ff006e;
             transform: rotate(90deg);
         }
 
         .download-json-btn {
-            background: linear-gradient(45deg, #3a86ff, #8338ec);
+            background: linear-gradient(45deg, 
+#3a86ff, 
+#8338ec);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -1497,14 +1572,19 @@
         }
 
         .qr-close:hover {
-            color: #ff006e;
+            color: 
+#ff006e;
             transform: rotate(90deg);
         }
 
         .qr-modal h3 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec, 
+#3a86ff, 
+#06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -1516,7 +1596,8 @@
             padding: 10px;
             margin: 15px 0;
             font-size: 0.9em;
-            color: #06ffa5;
+            color: 
+#06ffa5;
         }
 
         #qr-code-container {
@@ -1545,7 +1626,9 @@
         }
 
         .copy-url-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
+            background: linear-gradient(45deg, 
+#ff006e, 
+#8338ec);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -1563,14 +1646,16 @@
         }
 
         .copy-url-btn.copied {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            background: linear-gradient(45deg, 
+#06ffa5, 
+#00ff88);
         }
 
         @media (max-width: 768px) {
             .world-title {
                 font-size: 2em;
             }
-            
+
             .world-description {
                 font-size: 1em;
                 max-width: 300px;
@@ -1590,7 +1675,7 @@
                 height: 100vh;
                 height: -webkit-fill-available;
             }
-            
+
             #three-container {
                 height: 100vh;
                 height: -webkit-fill-available;
@@ -1600,7 +1685,7 @@
 </head>
 <body>
     <div id="three-container"></div>
-    
+
     <!-- Map Container -->
     <div id="map-container">
         <div id="map"></div>
@@ -1613,7 +1698,7 @@
             <button class="cancel" id="cancel-location">Cancel</button>
         </div>
     </div>
-    
+
     <!-- Location Permission Modal -->
     <div class="permission-modal" id="permission-modal">
         <div class="permission-content">
@@ -1639,9 +1724,10 @@
             </p>
             <input type="password" class="ai-api-key-input" id="ai-api-key" placeholder="Enter your API key to wake up AI companions">
             <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Companions</button>
-            
+
             <div class="ai-companion-list" id="ai-companion-list">
-                <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
+                <h4 style="color: 
+#06ffa5; margin-top: 20px;">Active Companions:</h4>
                 <div class="ai-companion-item">
                     <div>
                         <div class="ai-companion-name">No AI companions active</div>
@@ -1666,7 +1752,7 @@
             <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
         </div>
     </div>
-    
+
     <!-- Task Panel -->
     <div class="task-panel" id="task-panel">
         <h3>💬 Saved AI Tasks</h3>
@@ -1674,14 +1760,14 @@
             <!-- Tasks populated here -->
         </div>
     </div>
-    
+
     <div class="look-area" id="look-area"></div>
-    
+
     <div class="world-ui">
         <h1 class="world-title" id="world-title">NEXUS HUB</h1>
         <p class="world-description" id="world-description">The central hub connecting all worlds. Step through the portals to explore different dimensions.</p>
     </div>
-    
+
     <div class="world-origin" id="world-origin">
         <span class="origin-label">Arrived from:</span>
         <span class="origin-world" id="origin-world-name">Origin</span>
@@ -1702,7 +1788,7 @@
             <span id="player-count">1</span> players
         </div>
     </div>
-    
+
     <!-- View Toggle Button -->
     <div class="view-toggle" id="view-toggle">
         <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1717,7 +1803,7 @@
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
         </svg>
     </div>
-    
+
     <!-- Tasks Button -->
     <div class="tasks-button" id="tasks-button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1725,7 +1811,7 @@
             <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
         </svg>
     </div>
-    
+
     <!-- World Scanner Button -->
     <div class="scanner-button" id="scanner-button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1751,7 +1837,7 @@
     </div>
 
     <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
-    
+
     <div class="mobile-controls" id="mobile-controls">
         <div class="controls-container">
             <div class="joystick-container" id="movement-joystick">
@@ -1759,13 +1845,13 @@
             </div>
         </div>
     </div>
-    
+
     <div class="portal-tooltip" id="portal-tooltip">
         <h3 class="tooltip-title"></h3>
         <p class="tooltip-description"></p>
         <p class="tooltip-instruction">Tap to enter world</p>
     </div>
-    
+
     <div class="loading" id="loading">Initializing nexus...</div>
 
     <!-- QR Code Share Button -->
@@ -1800,7 +1886,7 @@
             constructor(manager) {
                 super(manager);
             }
-            
+
             load(url, onLoad, onProgress, onError) {
                 const scope = this;
                 const loader = new THREE.FileLoader(this.manager);
@@ -1818,69 +1904,69 @@
                     }
                 }, onProgress, onError);
             }
-            
+
             parse(json) {
                 return new THREE.Font(json);
             }
         };
-        
+
         // Add Font class
         THREE.Font = class Font {
             constructor(data) {
                 this.type = 'Font';
                 this.data = data;
             }
-            
+
             generateShapes(text, size = 100) {
                 const shapes = [];
                 const paths = createPaths(text, size, this.data);
-                
+
                 for (let p = 0, pl = paths.length; p < pl; p++) {
                     Array.prototype.push.apply(shapes, paths[p].toShapes());
                 }
-                
+
                 return shapes;
             }
         };
-        
+
         // Add TextGeometry
         THREE.TextGeometry = class TextGeometry extends THREE.ExtrudeGeometry {
             constructor(text, parameters = {}) {
                 const font = parameters.font;
-                
+
                 if (!font || !font.data) {
                     console.error('THREE.TextGeometry: font parameter is not an instance of THREE.Font.');
                     super();
                     return;
                 }
-                
+
                 const shapes = font.generateShapes(text, parameters.size);
-                
+
                 parameters.depth = parameters.height !== undefined ? parameters.height : 50;
-                
+
                 if (parameters.bevelThickness === undefined) parameters.bevelThickness = 10;
                 if (parameters.bevelSize === undefined) parameters.bevelSize = 8;
                 if (parameters.bevelEnabled === undefined) parameters.bevelEnabled = false;
-                
+
                 super(shapes, parameters);
-                
+
                 this.type = 'TextGeometry';
             }
         };
-        
+
         // Helper function for font paths
         function createPaths(text, size, data) {
             const chars = Array.from(text);
             const scale = size / data.resolution;
             const line_height = (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * scale;
-            
+
             const paths = [];
-            
+
             let offsetX = 0, offsetY = 0;
-            
+
             for (let i = 0; i < chars.length; i++) {
                 const char = chars[i];
-                
+
                 if (char === '\n') {
                     offsetX = 0;
                     offsetY -= line_height;
@@ -1892,41 +1978,41 @@
                     }
                 }
             }
-            
+
             return paths;
         }
-        
+
         function createPath(char, scale, offsetX, offsetY, data) {
             const glyph = data.glyphs[char] || data.glyphs['?'];
-            
+
             if (!glyph) {
                 console.error('THREE.Font: character "' + char + '" does not exists in font family ' + data.familyName + '.');
                 return;
             }
-            
+
             const path = new THREE.ShapePath();
-            
+
             let x, y, cpx, cpy, cpx1, cpy1, cpx2, cpy2;
-            
+
             if (glyph.o) {
                 const outline = glyph._cachedOutline || (glyph._cachedOutline = glyph.o.split(' '));
-                
+
                 for (let i = 0, l = outline.length; i < l;) {
                     const action = outline[i++];
-                    
+
                     switch (action) {
                         case 'm': // moveTo
                             x = outline[i++] * scale + offsetX;
                             y = outline[i++] * scale + offsetY;
                             path.moveTo(x, y);
                             break;
-                        
+
                         case 'l': // lineTo
                             x = outline[i++] * scale + offsetX;
                             y = outline[i++] * scale + offsetY;
                             path.lineTo(x, y);
                             break;
-                        
+
                         case 'q': // quadraticCurveTo
                             cpx = outline[i++] * scale + offsetX;
                             cpy = outline[i++] * scale + offsetY;
@@ -1934,7 +2020,7 @@
                             cpy1 = outline[i++] * scale + offsetY;
                             path.quadraticCurveTo(cpx1, cpy1, cpx, cpy);
                             break;
-                        
+
                         case 'b': // bezierCurveTo
                             cpx = outline[i++] * scale + offsetX;
                             cpy = outline[i++] * scale + offsetY;
@@ -1947,7 +2033,7 @@
                     }
                 }
             }
-            
+
             return { offsetX: glyph.ha * scale, path: path };
         }
 
@@ -1955,21 +2041,21 @@
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
-        
+
         // Default reference location (can be overridden by user)
         let REFERENCE_LOCATION = {
             lat: 33.8405,  // Default coordinates
             lng: -84.5140,
             name: "Custom Location"
         };
-        
+
         // World spawn configuration
         const WORLD_SPAWN_CONFIG = {
             minDistance: 50,    // Minimum distance in meters from reference point
             maxDistance: 500,   // Maximum distance in meters from reference point
             interactionRadius: 30  // How close you need to be to interact with a portal (meters)
         };
-        
+
         // Default world attributes
         const DEFAULT_WORLD_ATTRIBUTES = {
             name: "Nexus Hub",
@@ -1987,18 +2073,18 @@
             fogNear: 10,
             fogFar: 100
         };
-        
+
         // Parse inherited attributes from URL
         function parseInheritedAttributes() {
             let paramString = window.INJECTED_PARAMS || window.location.search;
-            
+
             if (window.location.protocol === 'blob:') {
                 const storedParams = sessionStorage.getItem('worldInheritanceParams');
                 if (storedParams) {
                     paramString = storedParams;
                 }
             }
-            
+
             if (!paramString || paramString === '?') {
                 const transitionData = localStorage.getItem('worldTransition');
                 if (transitionData) {
@@ -2013,13 +2099,13 @@
                     localStorage.removeItem('worldTransition');
                 }
             }
-            
+
             const params = new URLSearchParams(paramString);
             const inherited = {};
-            
+
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
-            
+
             // Check for location parameters
             if (params.has('lat') && params.has('lng')) {
                 REFERENCE_LOCATION.lat = parseFloat(params.get('lat'));
@@ -2028,7 +2114,7 @@
                     REFERENCE_LOCATION.name = params.get('locationName');
                 }
             }
-            
+
             // Visual attributes only (no moveSpeed)
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
             if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
@@ -2039,18 +2125,18 @@
             if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
             if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
             if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
-            
+
             console.log('Parsed inherited attributes:', inherited);
             return inherited;
         }
-        
+
         const inheritedAttributes = parseInheritedAttributes();
         const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
-        
+
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                         (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
                         (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-        
+
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
         // Task Manager for replayable chat sequences
@@ -2060,18 +2146,18 @@
                 this.tasks = new Map(); // Store tasks in memory
                 this.currentTaskReplay = null;
                 this.isReplaying = false;
-                
+
                 // Setup event listeners
                 this.setupEventListeners();
             }
-            
+
             setupEventListeners() {
                 // Tasks button
                 document.getElementById('tasks-button').addEventListener('click', () => {
                     this.toggleTaskPanel();
                 });
             }
-            
+
             toggleTaskPanel() {
                 const panel = document.getElementById('task-panel');
                 panel.classList.toggle('active');
@@ -2079,16 +2165,16 @@
                     this.updateTaskList();
                 }
             }
-            
+
             updateTaskList() {
                 const taskList = document.getElementById('task-list');
                 taskList.innerHTML = '';
-                
+
                 if (this.tasks.size === 0) {
                     taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No saved tasks yet. Have a conversation with the AI and save it as a task!</p>';
                     return;
                 }
-                
+
                 this.tasks.forEach((task, taskId) => {
                     const taskEl = document.createElement('div');
                     taskEl.className = 'task-item';
@@ -2101,12 +2187,12 @@
                     taskList.appendChild(taskEl);
                 });
             }
-            
+
             saveCurrentChat(chatMessages) {
                 // Prompt for task name
                 const taskName = prompt('Enter a name for this task:');
                 if (!taskName) return;
-                
+
                 const taskId = `task_${Date.now()}`;
                 const task = {
                     id: taskId,
@@ -2120,73 +2206,73 @@
                     },
                     world: CURRENT_WORLD.name
                 };
-                
+
                 this.tasks.set(taskId, task);
                 this.world.showNotification(`Task "${taskName}" saved!`);
-                
+
                 // Update task list if panel is open
                 if (document.getElementById('task-panel').classList.contains('active')) {
                     this.updateTaskList();
                 }
             }
-            
+
             async replayTask(taskId) {
                 const task = this.tasks.get(taskId);
                 if (!task) return;
-                
+
                 // Show notification
                 this.world.showNotification(`Replaying task: ${task.name}`);
-                
+
                 // Open chat interface
                 document.getElementById('ai-chat-interface').classList.add('active');
-                
+
                 // Show replay indicator
                 document.getElementById('task-replay-indicator').classList.add('active');
-                
+
                 // Clear current chat
                 const chatMessages = document.getElementById('ai-chat-messages');
                 chatMessages.innerHTML = '';
-                
+
                 // Set replaying flag
                 this.isReplaying = true;
                 this.currentTaskReplay = task;
-                
+
                 // Replay messages with delay
                 for (let i = 0; i < task.messages.length; i++) {
                     const message = task.messages[i];
-                    
+
                     // Add message with replay styling
                     this.addReplayMessage(message.text, message.sender);
-                    
+
                     // Wait between messages for realistic replay
                     if (i < task.messages.length - 1) {
                         await this.delay(1500); // 1.5 seconds between messages
                     }
                 }
-                
+
                 // Hide replay indicator
                 document.getElementById('task-replay-indicator').classList.remove('active');
                 this.isReplaying = false;
                 this.currentTaskReplay = null;
-                
+
                 this.world.showNotification('Task replay completed!');
             }
-            
+
             addReplayMessage(text, sender) {
                 const chatMessages = document.getElementById('ai-chat-messages');
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `ai-message ${sender} task-replay`;
                 messageDiv.textContent = text;
-                
+
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-                
+
                 // Animate companion if AI message
                 if (sender === 'ai' && this.world.aiManager) {
                     this.world.aiManager.animateCompanionSpeaking();
                 }
             }
-            
+
             delay(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
             }
@@ -2208,33 +2294,33 @@
                     timestamp: null,
                     id: null
                 };
-                
+
                 this.setupEventListeners();
             }
-            
+
             setupEventListeners() {
                 // Scanner button
                 document.getElementById('scanner-button').addEventListener('click', () => {
                     this.startScanning();
                 });
-                
+
                 // Capture button
                 document.getElementById('capture-btn').addEventListener('click', () => {
                     this.captureAnchor();
                 });
-                
+
                 // Cancel button
                 document.getElementById('cancel-scan-btn').addEventListener('click', () => {
                     this.stopScanning();
                 });
             }
-            
+
             async startScanning() {
                 try {
                     // Show scanner UI
                     document.getElementById('world-scanner').classList.add('active');
                     this.isScanning = true;
-                    
+
                     // Get camera stream
                     const video = document.getElementById('scanner-video');
                     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -2245,14 +2331,14 @@
                         }
                     });
                     video.srcObject = this.stream;
-                    
+
                 } catch (error) {
                     console.error('Error starting scanner:', error);
                     this.world.showNotification('Camera access denied or not available');
                     this.stopScanning();
                 }
             }
-            
+
             captureAnchor() {
                 const video = document.getElementById('scanner-video');
                 const canvas = document.createElement('canvas');
@@ -2260,38 +2346,38 @@
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0);
-                
+
                 // Store captured image
                 this.scannedImage = canvas.toDataURL('image/jpeg', 0.8);
-                
+
                 // Get current GPS location
                 this.newWorldData.location = {
                     lat: this.world.gpsManager.currentLocation.lat,
                     lng: this.world.gpsManager.currentLocation.lng,
                     accuracy: this.world.gpsManager.accuracy
                 };
-                
+
                 // Stop scanner
                 this.stopScanning();
-                
+
                 // Show world creation form
                 this.showWorldCreationForm();
             }
-            
+
             stopScanning() {
                 document.getElementById('world-scanner').classList.remove('active');
                 this.isScanning = false;
-                
+
                 // Stop camera stream
                 if (this.stream) {
                     this.stream.getTracks().forEach(track => track.stop());
                     this.stream = null;
                 }
-                
+
                 const video = document.getElementById('scanner-video');
                 video.srcObject = null;
             }
-            
+
             showWorldCreationForm() {
                 const formUI = document.createElement('div');
                 formUI.className = 'world-creation-form';
@@ -2322,22 +2408,22 @@
                 `;
                 document.body.appendChild(formUI);
             }
-            
+
             generateWorldID() {
                 return 'world_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             }
-            
+
             createWorld() {
                 const name = document.getElementById('world-name').value;
                 const description = document.getElementById('world-description').value;
                 const template = document.getElementById('world-template').value;
                 const emoji = document.getElementById('world-emoji').value || '🌀';
-                
+
                 if (!name) {
                     this.world.showNotification('Please enter a world name');
                     return;
                 }
-                
+
                 // Create comprehensive world data
                 this.newWorldData = {
                     id: this.generateWorldID(),
@@ -2357,16 +2443,16 @@
                     },
                     portalPosition: this.calculatePortalPosition()
                 };
-                
+
                 // Show success and download prompt
                 this.showCreationSuccess();
             }
-            
+
             calculatePortalPosition() {
                 // Calculate where this portal should appear in 3D space
                 const angle = Math.random() * Math.PI * 2;
                 const distance = 10 + Math.random() * 10; // 10-20 units from center
-                
+
                 return {
                     x: Math.cos(angle) * distance,
                     y: 3,
@@ -2374,18 +2460,18 @@
                     rotation: -angle + Math.PI
                 };
             }
-            
+
             downloadWorldJSON() {
                 if (!this.newWorldData.id) {
                     this.createWorld();
                     return;
                 }
-                
+
                 // Create downloadable JSON
                 const jsonData = JSON.stringify(this.newWorldData, null, 2);
                 const blob = new Blob([jsonData], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
-                
+
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = `${this.newWorldData.id}.json`;
@@ -2393,10 +2479,10 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
+
                 this.world.showNotification('World data downloaded! Use the World Builder tool to generate the HTML.');
             }
-            
+
             showCreationSuccess() {
                 const formContainer = document.querySelector('.form-container');
                 formContainer.innerHTML = `
@@ -2433,29 +2519,29 @@
                 this.currentChatHistory = []; // Track current chat for saving as task
                 this.isActive = false;
                 this.userGuid = this.generateUserGuid();
-                
+
                 // UI elements
                 this.chatInterface = document.getElementById('ai-chat-interface');
                 this.chatMessages = document.getElementById('ai-chat-messages');
                 this.chatInput = document.getElementById('ai-chat-input');
                 this.companionButton = document.getElementById('ai-companion-button');
                 this.aiModal = document.getElementById('ai-modal');
-                
+
                 // 3D Text display
                 this.textMeshes = [];
                 this.currentTextAnimation = null;
                 this.textGroup = null;
-                
+
                 // Agent log display
                 this.agentLogMeshes = [];
                 this.agentLogGroup = null;
-                
+
                 this.setupEventListeners();
-                
+
                 // Check for cached API key
                 this.checkCachedApiKey();
             }
-            
+
             generateUserGuid() {
                 return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                     const r = Math.random() * 16 | 0;
@@ -2463,29 +2549,29 @@
                     return v.toString(16);
                 });
             }
-            
+
             async checkCachedApiKey() {
                 // Check if API key exists in localStorage
                 const cachedApiKey = localStorage.getItem('nexus_ai_api_key');
                 if (cachedApiKey) {
                     this.apiKey = cachedApiKey;
-                    
+
                     try {
                         // Test the cached API key with a simple request
                         const response = await this.sendToAPI('System check - testing cached API key.');
-                        
+
                         if (response.assistant_response) {
                             // Cached key is valid, activate AI automatically
                             this.isActive = true;
                             this.companionButton.classList.add('active');
                             this.showNotification('AI Companion activated with cached key!');
-                            
+
                             // Create AI companion in the world
                             this.createAICompanion();
-                            
+
                             // Update companion list
                             this.updateCompanionList();
-                            
+
                             // Don't show the initial message for auto-activation
                             console.log('AI Companion auto-activated with cached API key');
                         }
@@ -2498,7 +2584,7 @@
                     }
                 }
             }
-            
+
             setupEventListeners() {
                 // AI Companion button
                 this.companionButton.addEventListener('click', () => {
@@ -2508,16 +2594,16 @@
                         this.aiModal.classList.add('show');
                     }
                 });
-                
+
                 // AI Modal events
                 document.getElementById('ai-close').addEventListener('click', () => {
                     this.aiModal.classList.remove('show');
                 });
-                
+
                 document.getElementById('ai-activate-btn').addEventListener('click', () => {
                     this.activateAI();
                 });
-                
+
                 // Close modal on outside click
                 this.aiModal.addEventListener('click', (e) => {
                     if (e.target === this.aiModal) {
@@ -2525,43 +2611,43 @@
                     }
                 });
             }
-            
+
             async activateAI() {
                 const apiKeyInput = document.getElementById('ai-api-key');
                 const apiKey = apiKeyInput.value.trim();
-                
+
                 if (!apiKey) {
                     this.showNotification('Please enter an API key');
                     return;
                 }
-                
+
                 this.apiKey = apiKey;
-                
+
                 try {
                     // Test the API key with an initial request
                     const response = await this.sendToAPI('Hello! I have joined the Nexus world.');
-                    
+
                     if (response.assistant_response) {
                         this.isActive = true;
                         this.companionButton.classList.add('active');
                         this.aiModal.classList.remove('show');
                         this.showNotification('AI Companion activated!');
-                        
+
                         // Save API key to localStorage for future sessions
                         localStorage.setItem('nexus_ai_api_key', apiKey);
-                        
+
                         // Create AI companion in the world
                         this.createAICompanion();
-                        
+
                         // Update companion list
                         this.updateCompanionList();
-                        
+
                         // Show initial message
                         this.addMessage(response.assistant_response, 'ai');
-                        
+
                         // Display text in 3D world
                         this.animateTextResponse(response.assistant_response);
-                        
+
                         // Clear the API key input for security
                         apiKeyInput.value = '';
                     }
@@ -2570,11 +2656,11 @@
                     this.showNotification('Failed to activate AI. Please check your API key.');
                 }
             }
-            
+
             createAICompanion() {
                 // Create a visual representation of the AI companion in the world
                 const companionGroup = new THREE.Group();
-                
+
                 // Create a glowing orb as the AI companion
                 const geometry = new THREE.SphereGeometry(0.8, 32, 32);
                 const material = new THREE.MeshStandardMaterial({
@@ -2586,59 +2672,59 @@
                     transparent: true,
                     opacity: 0.8
                 });
-                
+
                 const orb = new THREE.Mesh(geometry, material);
                 orb.position.y = 2;
                 companionGroup.add(orb);
-                
+
                 // Add glow effect
                 const glowLight = new THREE.PointLight(0x8338ec, 2, 10);
                 glowLight.position.y = 2;
                 companionGroup.add(glowLight);
-                
+
                 // Add particle effect around the orb
                 const particleGeometry = new THREE.BufferGeometry();
                 const particleCount = 100;
                 const positions = new Float32Array(particleCount * 3);
-                
+
                 for (let i = 0; i < particleCount * 3; i += 3) {
                     const theta = Math.random() * Math.PI * 2;
                     const phi = Math.random() * Math.PI;
                     const radius = 1.5 + Math.random() * 0.5;
-                    
+
                     positions[i] = radius * Math.sin(phi) * Math.cos(theta);
                     positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta) + 2;
                     positions[i + 2] = radius * Math.cos(phi);
                 }
-                
+
                 particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
+
                 const particleMaterial = new THREE.PointsMaterial({
                     color: 0x06ffa5,
                     size: 0.05,
                     transparent: true,
                     opacity: 0.6
                 });
-                
+
                 const particles = new THREE.Points(particleGeometry, particleMaterial);
                 companionGroup.add(particles);
-                
+
                 // Create text display group
                 this.textGroup = new THREE.Group();
                 this.textGroup.position.y = 4; // Position above the orb
                 companionGroup.add(this.textGroup);
-                
+
                 // Create agent log display group
                 this.agentLogGroup = new THREE.Group();
                 this.agentLogGroup.position.y = 1; // Position below the orb
                 companionGroup.add(this.agentLogGroup);
-                
-                // Position near the player
-                companionGroup.position.set(3, 0, 3);
-                
+
+                // Position near the player but further away
+                companionGroup.position.set(8, 0, 8); // Increased distance from player
+
                 // Add to scene
                 this.world.scene.add(companionGroup);
-                
+
                 // Store reference
                 this.companions.set('ai-assistant', {
                     object: companionGroup,
@@ -2646,27 +2732,27 @@
                     particles: particles,
                     light: glowLight
                 });
-                
+
                 // Load font for 3D text
                 this.loadFont();
-                
+
                 // Animate the companion
                 this.animateCompanion();
             }
-            
+
             loadFont() {
                 const loader = new THREE.FontLoader();
                 loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
                     this.font = font;
                 });
             }
-            
+
             create3DText(text, position = new THREE.Vector3(0, 0, 0), isAgentLog = false) {
                 if (!this.font) {
                     console.warn('Font not loaded yet');
                     return null;
                 }
-                
+
                 const textGeometry = new THREE.TextGeometry(text, {
                     font: this.font,
                     size: isAgentLog ? 0.2 : 0.3,
@@ -2677,9 +2763,9 @@
                     bevelSize: 0.01,
                     bevelSegments: 8
                 });
-                
+
                 textGeometry.center();
-                
+
                 const textMaterial = new THREE.MeshStandardMaterial({
                     color: isAgentLog ? 0xffa500 : 0x06ffa5,
                     emissive: isAgentLog ? 0xffa500 : 0x06ffa5,
@@ -2689,27 +2775,27 @@
                     transparent: true,
                     opacity: 0
                 });
-                
+
                 const textMesh = new THREE.Mesh(textGeometry, textMaterial);
                 textMesh.position.copy(position);
-                
+
                 return textMesh;
             }
-            
+
             async animateTextResponse(fullText) {
                 // Clear previous text meshes
                 this.clearTextMeshes();
-                
+
                 // Cancel any ongoing animation
                 if (this.currentTextAnimation) {
                     clearInterval(this.currentTextAnimation);
                 }
-                
+
                 // Split text into lines (max ~40 chars per line)
                 const words = fullText.split(' ');
                 const lines = [];
                 let currentLine = '';
-                
+
                 for (const word of words) {
                     if ((currentLine + word).length > 40) {
                         lines.push(currentLine.trim());
@@ -2721,96 +2807,70 @@
                 if (currentLine.trim()) {
                     lines.push(currentLine.trim());
                 }
-                
-                // Animate each line
-                let lineIndex = 0;
-                let charIndex = 0;
-                let currentLineMesh = null;
+
+                // Star Wars style animation
+                const textContainer = new THREE.Group();
+                this.textGroup.add(textContainer);
+
+                // Create all text lines at once
+                lines.forEach((line, index) => {
+                    const yOffset = -index * 0.6;
+                    const textMesh = this.create3DText(line, new THREE.Vector3(0, yOffset, 0));
+                    if (textMesh) {
+                        textMesh.material.opacity = 1;
+                        textContainer.add(textMesh);
+                        this.textMeshes.push(textMesh);
+                    }
+                });
+
+                // Animate text scrolling away like Star Wars
+                let scrollProgress = 0;
+                const scrollSpeed = 0.02;
                 
                 this.currentTextAnimation = setInterval(() => {
-                    if (lineIndex >= lines.length) {
+                    scrollProgress += scrollSpeed;
+                    
+                    // Move text up and away
+                    textContainer.position.y = scrollProgress * 2;
+                    textContainer.position.z = -scrollProgress * 3;
+                    
+                    // Rotate for perspective effect
+                    textContainer.rotation.x = -0.3 - (scrollProgress * 0.1);
+                    
+                    // Fade out
+                    const fadeStart = 2;
+                    const fadeEnd = 3;
+                    if (scrollProgress > fadeStart) {
+                        const fadeProgress = (scrollProgress - fadeStart) / (fadeEnd - fadeStart);
+                        this.textMeshes.forEach(mesh => {
+                            mesh.material.opacity = Math.max(0, 1 - fadeProgress);
+                        });
+                    }
+                    
+                    // Stop and clean up when fully faded
+                    if (scrollProgress > fadeEnd) {
                         clearInterval(this.currentTextAnimation);
                         this.currentTextAnimation = null;
-                        
-                        // Fade out text after 5 seconds
-                        setTimeout(() => this.fadeOutText(), 5000);
-                        return;
+                        this.clearTextMeshes();
                     }
-                    
-                    const currentLineText = lines[lineIndex];
-                    
-                    // Create new line mesh if needed
-                    if (charIndex === 0) {
-                        if (currentLineMesh) {
-                            // Finish previous line
-                            currentLineMesh.material.opacity = 1;
-                        }
-                        
-                        const yOffset = -lineIndex * 0.5;
-                        currentLineMesh = this.create3DText('', new THREE.Vector3(0, yOffset, 0));
-                        
-                        if (currentLineMesh) {
-                            this.textGroup.add(currentLineMesh);
-                            this.textMeshes.push(currentLineMesh);
-                        }
-                    }
-                    
-                    // Update text character by character
-                    if (currentLineMesh && this.font) {
-                        charIndex++;
-                        const displayText = currentLineText.substring(0, charIndex);
-                        
-                        // Update geometry with new text
-                        const newGeometry = new THREE.TextGeometry(displayText, {
-                            font: this.font,
-                            size: 0.3,
-                            height: 0.05,
-                            curveSegments: 12,
-                            bevelEnabled: true,
-                            bevelThickness: 0.01,
-                            bevelSize: 0.01,
-                            bevelSegments: 8
-                        });
-                        newGeometry.center();
-                        
-                        currentLineMesh.geometry.dispose();
-                        currentLineMesh.geometry = newGeometry;
-                        
-                        // Fade in
-                        currentLineMesh.material.opacity = Math.min(1, currentLineMesh.material.opacity + 0.1);
-                        
-                        // Flash effect on new character
-                        currentLineMesh.material.emissiveIntensity = 0.8;
-                        setTimeout(() => {
-                            if (currentLineMesh) {
-                                currentLineMesh.material.emissiveIntensity = 0.3;
-                            }
-                        }, 50);
-                    }
-                    
-                    // Move to next line
-                    if (charIndex >= currentLineText.length) {
-                        lineIndex++;
-                        charIndex = 0;
-                    }
-                }, 50); // 50ms per character for readable speed
+                }, 50);
             }
-            
+
             animateAgentLog(logText) {
                 // Clear previous agent log meshes
                 this.clearAgentLogs();
-                
+
                 const logMesh = this.create3DText(logText, new THREE.Vector3(0, 0, 0), true);
                 if (logMesh) {
                     this.agentLogGroup.add(logMesh);
                     this.agentLogMeshes.push(logMesh);
-                    
+
                     // Fade in animation
                     const fadeInInterval = setInterval(() => {
                         logMesh.material.opacity += 0.1;
                         if (logMesh.material.opacity >= 1) {
                             clearInterval(fadeInInterval);
-                            
+
                             // Fade out after 3 seconds
                             setTimeout(() => {
                                 const fadeOutInterval = setInterval(() => {
@@ -2825,16 +2885,21 @@
                     }, 50);
                 }
             }
-            
+
             clearTextMeshes() {
                 this.textMeshes.forEach(mesh => {
                     if (mesh.geometry) mesh.geometry.dispose();
                     if (mesh.material) mesh.material.dispose();
-                    this.textGroup.remove(mesh);
+                    mesh.parent?.remove(mesh);
                 });
                 this.textMeshes = [];
+                
+                // Clear any text containers
+                while (this.textGroup.children.length > 0) {
+                    this.textGroup.remove(this.textGroup.children[0]);
+                }
             }
-            
+
             clearAgentLogs() {
                 this.agentLogMeshes.forEach(mesh => {
                     if (mesh.geometry) mesh.geometry.dispose();
@@ -2843,164 +2908,146 @@
                 });
                 this.agentLogMeshes = [];
             }
-            
-            fadeOutText() {
-                const fadeInterval = setInterval(() => {
-                    let allFaded = true;
-                    
-                    this.textMeshes.forEach(mesh => {
-                        if (mesh.material.opacity > 0) {
-                            mesh.material.opacity -= 0.02;
-                            allFaded = false;
-                        }
-                    });
-                    
-                    if (allFaded) {
-                        clearInterval(fadeInterval);
-                        this.clearTextMeshes();
-                    }
-                }, 50);
-            }
-            
+
             animateCompanion() {
                 const companion = this.companions.get('ai-assistant');
                 if (!companion) return;
-                
+
                 const animate = () => {
                     if (!this.isActive) return;
-                    
+
                     const time = Date.now() * 0.001;
-                    
+
                     // Float animation
                     companion.orb.position.y = 2 + Math.sin(time * 2) * 0.2;
-                    
+
                     // Rotate particles
                     companion.particles.rotation.y = time * 0.5;
-                    
+
                     // Pulse glow
                     companion.light.intensity = 2 + Math.sin(time * 3) * 0.5;
-                    
-                    // Follow player at a distance
+
+                    // Follow player at a greater distance
                     const targetPos = new THREE.Vector3();
                     targetPos.copy(this.world.camera.position);
-                    targetPos.x += 3;
-                    targetPos.z += 3;
-                    
+                    targetPos.x += 8; // Increased distance
+                    targetPos.z += 8; // Increased distance
+
                     companion.object.position.lerp(targetPos, 0.05);
-                    
+
                     // Make text face the camera
                     if (this.textGroup) {
                         this.textGroup.lookAt(this.world.camera.position);
                     }
-                    
+
                     // Make agent logs face the camera
                     if (this.agentLogGroup) {
                         this.agentLogGroup.lookAt(this.world.camera.position);
                     }
-                    
+
                     requestAnimationFrame(animate);
                 };
-                
+
                 animate();
             }
-            
+
             async sendToAPI(message) {
                 const headers = {
                     'Content-Type': 'application/json',
                     'x-functions-key': this.apiKey
                 };
-                
+
                 const body = {
                     user_input: message,
                     conversation_history: this.conversationHistory,
                     user_guid: this.userGuid
                 };
-                
+
                 const response = await fetch(this.endpoint, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`API request failed: ${response.status}`);
                 }
-                
+
                 return await response.json();
             }
-            
+
             async sendMessage() {
                 const message = this.chatInput.value.trim();
                 if (!message || !this.isActive) return;
-                
+
                 // Check if currently replaying a task
                 if (this.world.taskManager && this.world.taskManager.isReplaying) {
                     this.showNotification('Cannot send messages during task replay');
                     return;
                 }
-                
+
                 // Add user message to chat
                 this.addMessage(message, 'user');
                 this.chatInput.value = '';
-                
+
                 // Show typing indicator
                 this.showTypingIndicator();
-                
+
                 // Add to conversation history
                 this.conversationHistory.push({
                     role: 'user',
                     content: message
                 });
-                
+
                 // Add to current chat history for task saving
                 this.currentChatHistory.push({
                     text: message,
                     sender: 'user',
                     timestamp: Date.now()
                 });
-                
+
                 try {
                     // Send to API
                     const response = await this.sendToAPI(message);
-                    
+
                     // Remove typing indicator
                     this.hideTypingIndicator();
-                    
+
                     if (response.assistant_response) {
                         // Add AI response to chat
                         this.addMessage(response.assistant_response, 'ai');
-                        
+
                         // Add to conversation history
                         this.conversationHistory.push({
                             role: 'assistant',
                             content: response.assistant_response
                         });
-                        
+
                         // Add to current chat history for task saving
                         this.currentChatHistory.push({
                             text: response.assistant_response,
                             sender: 'ai',
                             timestamp: Date.now()
                         });
-                        
+
                         // Animate companion when speaking
                         this.animateCompanionSpeaking();
-                        
+
                         // Display text in 3D world
                         this.animateTextResponse(response.assistant_response);
                     }
-                    
+
                     // Handle agent logs if present
                     if (response.agent_logs) {
                         this.addAgentLog(response.agent_logs);
-                        
+
                         // Add to current chat history
                         this.currentChatHistory.push({
                             text: response.agent_logs,
                             sender: 'system',
                             timestamp: Date.now()
                         });
-                        
+
                         // Show simplified log in 3D
                         const simplifiedLog = this.extractAgentStatus(response.agent_logs);
                         if (simplifiedLog) {
@@ -3013,7 +3060,7 @@
                     this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
                 }
             }
-            
+
             extractAgentStatus(agentLogs) {
                 // Extract key status from agent logs for 3D display
                 if (agentLogs.includes('thinking')) return '🤔 Thinking...';
@@ -3023,7 +3070,7 @@
                 if (agentLogs.includes('complete')) return '✅ Complete!';
                 return '💭 Working...';
             }
-            
+
             showTypingIndicator() {
                 const typingDiv = document.createElement('div');
                 typingDiv.className = 'ai-message ai-typing';
@@ -3033,58 +3080,58 @@
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                 `;
-                
+
                 this.chatMessages.appendChild(typingDiv);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
             }
-            
+
             hideTypingIndicator() {
                 const typingIndicator = document.getElementById('ai-typing-indicator');
                 if (typingIndicator) {
                     typingIndicator.remove();
                 }
             }
-            
+
             addMessage(text, sender) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `ai-message ${sender}`;
                 messageDiv.textContent = text;
-                
+
                 this.chatMessages.appendChild(messageDiv);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
             }
-            
+
             addAgentLog(logText) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'ai-message system';
-                
+
                 // Parse and format the agent logs
                 const formattedLog = this.formatAgentLog(logText);
                 messageDiv.innerHTML = formattedLog;
-                
+
                 this.chatMessages.appendChild(messageDiv);
                 this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
             }
-            
+
             formatAgentLog(logText) {
                 // Parse and format agent logs for better display
                 let formatted = logText;
-                
+
                 // Add status indicators
                 formatted = formatted.replace(/thinking/gi, '<span class="agent-status thinking">THINKING</span>');
                 formatted = formatted.replace(/searching/gi, '<span class="agent-status searching">SEARCHING</span>');
                 formatted = formatted.replace(/processing/gi, '<span class="agent-status processing">PROCESSING</span>');
                 formatted = formatted.replace(/complete/gi, '<span class="agent-status complete">COMPLETE</span>');
-                
+
                 // Format steps
                 formatted = formatted.replace(/Step \d+:/g, (match) => `<div class="agent-step">${match}</div>`);
-                
+
                 // Format errors
-                formatted = formatted.replace(/Error:([^\\n]*)/g, '<div class="agent-error">Error: $1</div>');
-                
+                formatted = formatted.replace(/Error:([^\n]*)/g, '<div class="agent-error">Error: $1</div>');
+
                 // Format success messages
-                formatted = formatted.replace(/Success:([^\\n]*)/g, '<div class="agent-success">Success: $1</div>');
-                
+                formatted = formatted.replace(/Success:([^\n]*)/g, '<div class="agent-success">Success: $1</div>');
+
                 // Wrap in container
                 return `
                     <div class="agent-log-section">
@@ -3093,11 +3140,11 @@
                     </div>
                 `;
             }
-            
+
             animateCompanionSpeaking() {
                 const companion = this.companions.get('ai-assistant');
                 if (!companion) return;
-                
+
                 // Quick pulse animation
                 const originalScale = companion.orb.scale.x;
                 const pulseAnimation = () => {
@@ -3105,22 +3152,22 @@
                     const animate = () => {
                         progress += 0.1;
                         if (progress > 1) return;
-                        
+
                         const scale = originalScale + Math.sin(progress * Math.PI) * 0.3;
                         companion.orb.scale.setScalar(scale);
-                        
+
                         // Increase glow while speaking
                         companion.light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 1;
                         companion.orb.material.emissiveIntensity = 0.5 + Math.sin(progress * Math.PI) * 0.3;
-                        
+
                         requestAnimationFrame(animate);
                     };
                     animate();
                 };
-                
+
                 pulseAnimation();
             }
-            
+
             updateCompanionList() {
                 const listContainer = document.getElementById('ai-companion-list');
                 listContainer.innerHTML = `
@@ -3133,20 +3180,20 @@
                     </div>
                 `;
             }
-            
+
             showNotification(message) {
                 const notification = document.createElement('div');
                 notification.className = 'multiplayer-notification';
                 notification.textContent = message;
-                
+
                 document.body.appendChild(notification);
-                
+
                 setTimeout(() => {
                     notification.style.animation = 'slideOut 0.3s ease';
                     setTimeout(() => notification.remove(), 300);
                 }, 3000);
             }
-            
+
             // Broadcast AI presence to multiplayer
             broadcastPresence() {
                 if (this.world.multiplayer) {
@@ -3169,33 +3216,33 @@
                 this.lastUpdate = 0;
                 this.updateInterval = 5000; // Update every 5 seconds
                 this.manualMode = false;
-                
+
                 this.gpsIndicator = document.getElementById('gps-indicator');
                 this.gpsText = document.getElementById('gps-text');
                 this.gpsAccuracy = document.getElementById('gps-accuracy');
-                
+
                 this.hasPermission = false;
             }
-            
+
             async requestPermission() {
                 const permissionModal = document.getElementById('permission-modal');
                 const enableBtn = document.getElementById('enable-location-btn');
                 const manualBtn = document.getElementById('manual-location-btn');
-                
+
                 return new Promise((resolve) => {
                     enableBtn.addEventListener('click', async () => {
                         permissionModal.classList.add('hidden');
-                        
+
                         try {
                             // Request location permission
                             const position = await this.getCurrentPosition();
                             this.hasPermission = true;
-                            
+
                             // Update reference location to current position
                             REFERENCE_LOCATION.lat = position.coords.latitude;
                             REFERENCE_LOCATION.lng = position.coords.longitude;
                             REFERENCE_LOCATION.name = "My Location";
-                            
+
                             resolve(true);
                         } catch (error) {
                             console.error('Location permission denied:', error);
@@ -3203,19 +3250,19 @@
                             resolve(false);
                         }
                     });
-                    
+
                     manualBtn.addEventListener('click', () => {
                         permissionModal.classList.add('hidden');
                         this.manualMode = true;
                         this.updateStatus('GPS: Manual Mode', true);
-                        
+
                         // Show map in location setting mode
                         this.world.mapManager.showMapForLocationSetting();
                         resolve(true);
                     });
                 });
             }
-            
+
             getCurrentPosition() {
                 return new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -3225,22 +3272,22 @@
                     });
                 });
             }
-            
+
             startTracking() {
                 if (this.manualMode) {
                     this.updateStatus('GPS: Manual Mode', true);
                     this.currentLocation = REFERENCE_LOCATION;
                     return;
                 }
-                
+
                 if (!navigator.geolocation) {
                     console.error('Geolocation not supported');
                     this.updateStatus('GPS: Not Supported', false);
                     return;
                 }
-                
+
                 this.updateStatus('GPS: Acquiring...', false);
-                
+
                 // Initial position
                 navigator.geolocation.getCurrentPosition(
                     (position) => this.handlePosition(position),
@@ -3251,7 +3298,7 @@
                         maximumAge: 0
                     }
                 );
-                
+
                 // Watch position
                 this.watchId = navigator.geolocation.watchPosition(
                     (position) => this.handlePosition(position),
@@ -3264,33 +3311,33 @@
                     }
                 );
             }
-            
+
             handlePosition(position) {
                 this.currentLocation = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
                 this.accuracy = position.coords.accuracy;
-                
+
                 this.updateStatus('GPS: Active', true);
                 this.gpsAccuracy.textContent = `±${Math.round(this.accuracy)}m`;
-                
+
                 // Update world portals based on location
                 if (this.world) {
                     this.world.updatePortalDistances(this.currentLocation);
-                    
+
                     // Update map if active
                     if (this.world.mapManager && this.world.mapManager.isActive) {
                         this.world.mapManager.updateUserLocation(this.currentLocation);
                     }
                 }
-                
+
                 this.lastUpdate = Date.now();
             }
-            
+
             handleError(error) {
                 console.error('GPS Error:', error);
-                
+
                 switch(error.code) {
                     case error.PERMISSION_DENIED:
                         this.updateStatus('GPS: Permission Denied', false);
@@ -3305,12 +3352,12 @@
                         this.updateStatus('GPS: Error', false);
                 }
             }
-            
+
             updateStatus(text, active) {
                 this.gpsText.textContent = text;
                 this.gpsIndicator.classList.toggle('active', active);
             }
-            
+
             getDistanceToReference() {
                 if (!this.currentLocation) return null;
                 return this.calculateDistance(
@@ -3320,22 +3367,22 @@
                     REFERENCE_LOCATION.lng
                 );
             }
-            
+
             calculateDistance(lat1, lon1, lat2, lon2) {
                 const R = 6371e3; // Earth radius in meters
                 const φ1 = lat1 * Math.PI / 180;
                 const φ2 = lat2 * Math.PI / 180;
                 const Δφ = (lat2 - lat1) * Math.PI / 180;
                 const Δλ = (lon2 - lon1) * Math.PI / 180;
-                
+
                 const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                           Math.cos(φ1) * Math.cos(φ2) *
                           Math.sin(Δλ/2) * Math.sin(Δλ/2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                
+
                 return R * c; // Distance in meters
             }
-            
+
             stopTracking() {
                 if (this.watchId) {
                     navigator.geolocation.clearWatch(this.watchId);
@@ -3357,11 +3404,11 @@
                 this.locationSetter = document.getElementById('location-setter');
                 this.isSettingLocation = false;
                 this.tempMarker = null;
-                
+
                 this.setupToggle();
                 this.setupLocationSetter();
             }
-            
+
             setupToggle() {
                 this.viewToggle.addEventListener('click', () => {
                     if (!this.isSettingLocation) {
@@ -3369,22 +3416,22 @@
                     }
                 });
             }
-            
+
             setupLocationSetter() {
                 document.getElementById('confirm-location').addEventListener('click', () => {
                     this.confirmLocation();
                 });
-                
+
                 document.getElementById('cancel-location').addEventListener('click', () => {
                     this.cancelLocationSetting();
                 });
             }
-            
+
             showMapForLocationSetting() {
                 this.isSettingLocation = true;
                 this.showMap();
                 this.locationSetter.classList.add('active');
-                
+
                 // Add click handler for setting location
                 this.map.on('click', (e) => {
                     if (this.isSettingLocation) {
@@ -3392,12 +3439,13 @@
                     }
                 });
             }
-            
+
             setTempLocation(latlng) {
                 // Remove existing temp marker
-                if (this.tempMarker) {this.map.removeLayer(this.tempMarker);
+                if (this.tempMarker) {
+                    this.map.removeLayer(this.tempMarker);
                 }
-                
+
                 // Create new temp marker
                 const tempIcon = L.divIcon({
                     className: 'custom-div-icon',
@@ -3416,46 +3464,46 @@
                     iconSize: [50, 50],
                     iconAnchor: [25, 25]
                 });
-                
+
                 this.tempMarker = L.marker([latlng.lat, latlng.lng], { icon: tempIcon })
                     .addTo(this.map);
-                
+
                 // Store temp location
                 this.tempLocation = latlng;
             }
-            
+
             confirmLocation() {
                 if (!this.tempLocation) return;
-                
+
                 // Update reference location
                 REFERENCE_LOCATION.lat = this.tempLocation.lat;
                 REFERENCE_LOCATION.lng = this.tempLocation.lng;
                 REFERENCE_LOCATION.name = "Custom Location";
-                
+
                 // Update GPS manager
                 if (this.world.gpsManager) {
                     this.world.gpsManager.currentLocation = REFERENCE_LOCATION;
                     this.world.gpsManager.updateStatus('GPS: Manual Location Set', true);
                 }
-                
+
                 // Regenerate world locations based on new reference
                 this.world.generateWorldLocations();
                 this.world.updatePortalDistances(REFERENCE_LOCATION);
-                
+
                 // Clean up
                 this.isSettingLocation = false;
                 this.locationSetter.classList.remove('active');
                 if (this.tempMarker) {
                     this.map.removeLayer(this.tempMarker);
                 }
-                
+
                 // Add permanent marker for reference location
                 this.addReferenceMarker();
-                
+
                 // Show notification
                 this.world.showNotification('Location set successfully!');
             }
-            
+
             cancelLocationSetting() {
                 this.isSettingLocation = false;
                 this.locationSetter.classList.remove('active');
@@ -3464,24 +3512,24 @@
                 }
                 this.hideMap();
             }
-            
+
             toggleView() {
                 this.isActive = !this.isActive;
-                
+
                 if (this.isActive) {
                     this.showMap();
                 } else {
                     this.hideMap();
                 }
             }
-            
+
             showMap() {
                 this.mapContainer.classList.add('active');
-                
+
                 if (!this.map) {
                     this.initializeMap();
                 }
-                
+
                 // Update view toggle icon
                 this.viewToggle.innerHTML = `
                     <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3491,10 +3539,10 @@
                     </svg>
                 `;
             }
-            
+
             hideMap() {
                 this.mapContainer.classList.remove('active');
-                
+
                 // Update view toggle icon
                 this.viewToggle.innerHTML = `
                     <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3503,22 +3551,22 @@
                     </svg>
                 `;
             }
-            
+
             initializeMap() {
                 // Initialize Leaflet map
                 this.map = L.map('map').setView([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], 16);
-                
+
                 // Add dark theme tile layer
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                     subdomains: 'abcd',
                     maxZoom: 19
                 }).addTo(this.map);
-                
+
                 // Add reference location marker
                 this.addReferenceMarker();
             }
-            
+
             addReferenceMarker() {
                 const referenceIcon = L.divIcon({
                     className: 'custom-div-icon',
@@ -3537,16 +3585,16 @@
                     iconSize: [50, 50],
                     iconAnchor: [25, 25]
                 });
-                
+
                 L.marker([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], { icon: referenceIcon })
                     .addTo(this.map)
                     .bindPopup(`<b>${REFERENCE_LOCATION.name}</b><br>The origin point of all worlds`)
                     .openPopup();
             }
-            
+
             updateUserLocation(location) {
                 if (!this.map) return;
-                
+
                 // Update or create user marker
                 if (this.userMarker) {
                     this.userMarker.setLatLng([location.lat, location.lng]);
@@ -3565,32 +3613,32 @@
                         iconSize: [30, 30],
                         iconAnchor: [15, 15]
                     });
-                    
+
                     this.userMarker = L.marker([location.lat, location.lng], { icon: userIcon })
                         .addTo(this.map)
                         .bindPopup('<b>You are here</b>');
                 }
-                
+
                 // Center map on user if first update
                 if (this.isActive && !this.hasCentered) {
                     this.map.setView([location.lat, location.lng], 17);
                     this.hasCentered = true;
                 }
             }
-            
+
             addWorldMarker(world, location) {
                 if (!this.map) return;
-                
+
                 const worldIcon = L.divIcon({
                     className: 'world-marker',
                     html: world.emoji || '🌀',
                     iconSize: [40, 40],
                     iconAnchor: [20, 20]
                 });
-                
+
                 const marker = L.marker([location.lat, location.lng], { icon: worldIcon })
                     .addTo(this.map);
-                
+
                 // Create popup content
                 const popupContent = `
                     <div class="world-marker-popup">
@@ -3600,16 +3648,16 @@
                         <button class="enter-world-btn" id="enter-${world.name.replace(/\s+/g, '-')}" disabled>Too far away</button>
                     </div>
                 `;
-                
+
                 marker.bindPopup(popupContent);
-                
+
                 // Store marker reference
                 this.worldMarkers.set(world.name, {
                     marker: marker,
                     world: world,
                     location: location
                 });
-                
+
                 // Handle popup events
                 marker.on('popupopen', () => {
                     const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
@@ -3622,14 +3670,14 @@
                     }
                 });
             }
-            
+
             updateWorldDistances(distances) {
                 distances.forEach(({ world, distance }) => {
                     const distanceEl = document.getElementById(`distance-${world.name.replace(/\s+/g, '-')}`);
                     if (distanceEl) {
                         distanceEl.textContent = `${Math.round(distance)}m away`;
                     }
-                    
+
                     const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
                     if (enterBtn) {
                         if (distance <= WORLD_SPAWN_CONFIG.interactionRadius) {
@@ -3653,25 +3701,25 @@
                 this.players = new Map();
                 this.isHost = false;
                 this.roomId = null;
-                
+
                 // Player update frequency (ms)
                 this.updateInterval = 50;
                 this.lastUpdate = 0;
-                
+
                 // Initialize peer connection
                 this.initializePeer();
             }
-            
+
             initializePeer() {
                 // Generate or get peer ID
                 const urlParams = new URLSearchParams(window.location.search);
                 const hostId = urlParams.get('host');
-                
+
                 if (hostId) {
                     // Joining someone's world
                     this.roomId = hostId;
                     this.peer = new Peer();
-                    
+
                     this.peer.on('open', (id) => {
                         console.log('Joining room:', this.roomId);
                         this.connectToHost(this.roomId);
@@ -3681,7 +3729,7 @@
                     // Creating a new room
                     this.isHost = true;
                     this.peer = new Peer();
-                    
+
                     this.peer.on('open', (id) => {
                         this.roomId = id;
                         console.log('Created room:', this.roomId);
@@ -3689,12 +3737,12 @@
                         this.updateStatus('Hosting', true);
                     });
                 }
-                
+
                 // Handle incoming connections
                 this.peer.on('connection', (conn) => {
                     this.handleNewConnection(conn);
                 });
-                
+
                 // Handle errors
                 this.peer.on('error', (err) => {
                     console.error('Peer error:', err);
@@ -3702,7 +3750,7 @@
                     this.updateStatus('Error', false);
                 });
             }
-            
+
             connectToHost(hostId) {
                 const conn = this.peer.connect(hostId, {
                     reliable: true,
@@ -3711,82 +3759,82 @@
                         worldData: this.world.getCurrentWorldData()
                     }
                 });
-                
+
                 this.handleNewConnection(conn);
             }
-            
+
             handleNewConnection(conn) {
                 const peerId = conn.peer;
-                
+
                 conn.on('open', () => {
                     console.log('Connected to peer:', peerId);
                     this.connections.set(peerId, conn);
-                    
+
                     // Send initial player data
                     this.sendPlayerData(conn);
-                    
+
                     // Create player avatar
                     this.createPlayerAvatar(peerId, conn.metadata);
-                    
+
                     // Show notification
                     this.showNotification(`Player joined: ${conn.metadata?.username || 'Anonymous'}`);
-                    
+
                     // Update player count
                     this.updatePlayerCount();
                 });
-                
+
                 conn.on('data', (data) => {
                     this.handlePeerData(peerId, data);
                 });
-                
+
                 conn.on('close', () => {
                     console.log('Peer disconnected:', peerId);
                     this.removePlayer(peerId);
                     this.connections.delete(peerId);
                     this.updatePlayerCount();
                 });
-                
+
                 conn.on('error', (err) => {
                     console.error('Connection error:', err);
                 });
             }
-            
+
             handlePeerData(peerId, data) {
                 switch (data.type) {
                     case 'playerUpdate':
                         this.updatePlayerPosition(peerId, data.position, data.rotation);
                         break;
-                    
+
                     case 'chat':
                         this.displayChat(peerId, data.message);
                         break;
-                    
+
                     case 'interaction':
                         this.showPlayerInteraction(peerId, data.target);
                         break;
-                    
+
                     case 'worldSync':
                         if (!this.isHost) {
                             this.syncWorldState(data.worldState);
                         }
                         break;
-                    
+
                     case 'ai_companion':
                         this.handleAICompanionData(peerId, data);
                         break;
                 }
             }
-            
+
             handleAICompanionData(peerId, data) {
                 // Handle AI companion presence from other players
                 console.log(`AI companion data from ${peerId}:`, data);
                 // Could show AI companions from other players here
             }
-            
+
             createPlayerAvatar(peerId, metadata) {
                 // Create a simple avatar for the player
                 const avatarGroup = new THREE.Group();
-                
+
                 // Body (capsule-like shape)
                 const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
                 const bodyMaterial = new THREE.MeshStandardMaterial({
@@ -3797,23 +3845,23 @@
                 const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
                 body.position.y = 1;
                 avatarGroup.add(body);
-                
+
                 // Head
                 const headGeometry = new THREE.SphereGeometry(0.3, 8, 6);
                 const head = new THREE.Mesh(headGeometry, bodyMaterial);
                 head.position.y = 2.3;
                 avatarGroup.add(head);
-                
+
                 // Name tag
                 const nameTag = this.createNameTag(peerId, metadata);
                 nameTag.position.y = 3;
                 avatarGroup.add(nameTag);
-                
+
                 // Glow effect
                 const light = new THREE.PointLight(this.getPlayerColor(peerId), 0.5, 5);
                 light.position.y = 1.5;
                 avatarGroup.add(light);
-                
+
                 // Add to scene
                 this.world.scene.add(avatarGroup);
                 this.players.set(peerId, {
@@ -3822,43 +3870,43 @@
                     username: metadata?.username || 'Anonymous'
                 });
             }
-            
+
             createNameTag(peerId, metadata) {
                 const canvas = document.createElement('canvas');
                 canvas.width = 256;
                 canvas.height = 64;
                 const ctx = canvas.getContext('2d');
-                
+
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(0, 0, 256, 64);
-                
+
                 ctx.font = '32px Arial';
                 ctx.fillStyle = 'white';
                 ctx.textAlign = 'center';
                 ctx.fillText(metadata?.username || this.getPlayerName(peerId), 128, 40);
-                
+
                 const texture = new THREE.CanvasTexture(canvas);
                 const material = new THREE.SpriteMaterial({ map: texture });
                 const sprite = new THREE.Sprite(material);
                 sprite.scale.set(2, 0.5, 1);
-                
+
                 return sprite;
             }
-            
+
             updatePlayerPosition(peerId, position, rotation) {
                 const player = this.players.get(peerId);
                 if (!player) return;
-                
+
                 // Smooth interpolation
                 const targetPos = new THREE.Vector3(position.x, position.y, position.z);
                 player.avatar.position.lerp(targetPos, 0.3);
-                
+
                 // Update rotation
                 player.avatar.rotation.y = rotation.y;
-                
+
                 player.lastUpdate = Date.now();
             }
-            
+
             sendPlayerData(conn) {
                 const data = {
                     type: 'playerUpdate',
@@ -3872,23 +3920,23 @@
                         y: this.world.camera.rotation.y
                     }
                 };
-                
+
                 if (conn && conn.open) {
                     conn.send(data);
                 }
             }
-            
+
             broadcastPlayerUpdate() {
                 const now = Date.now();
                 if (now - this.lastUpdate < this.updateInterval) return;
-                
+
                 this.connections.forEach((conn) => {
                     this.sendPlayerData(conn);
                 });
-                
+
                 this.lastUpdate = now;
             }
-            
+
             broadcastAIPresence(aiData) {
                 this.connections.forEach((conn) => {
                     if (conn && conn.open) {
@@ -3899,7 +3947,7 @@
                     }
                 });
             }
-            
+
             updateShareUrl() {
                 // Update QR code to include host parameter and location
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
@@ -3910,60 +3958,60 @@
                     locationName: REFERENCE_LOCATION.name
                 });
                 const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
-                
+
                 // Update QR code
                 const qrUrlElement = document.getElementById('qr-url');
                 if (qrUrlElement) {
                     qrUrlElement.textContent = shareUrl;
                 }
-                
+
                 // Regenerate QR code
                 if (this.world.generateQRCode) {
                     this.world.generateQRCode(shareUrl);
                 }
-                
+
                 // Update share button to show multiplayer status
                 const shareButton = document.getElementById('share-button');
                 if (shareButton) {
                     shareButton.classList.add('multiplayer');
                 }
-                
+
                 // Show multiplayer info in modal
                 const multiplayerInfo = document.getElementById('multiplayer-info');
                 if (multiplayerInfo) {
                     multiplayerInfo.style.display = 'block';
                 }
             }
-            
+
             updateStatus(status, connected) {
                 const statusText = document.getElementById('status-text');
                 const statusIndicator = document.getElementById('status-indicator');
-                
+
                 if (statusText) statusText.textContent = status;
                 if (statusIndicator) {
                     statusIndicator.classList.toggle('connected', connected);
                     statusIndicator.classList.toggle('hosting', this.isHost);
                 }
             }
-            
+
             updatePlayerCount() {
                 const count = this.connections.size + 1; // +1 for self
                 const playerCountEl = document.getElementById('player-count');
                 if (playerCountEl) playerCountEl.textContent = count;
             }
-            
+
             getPlayerColor(peerId) {
                 // Generate consistent color based on peer ID
                 const colors = [0xff006e, 0x06ffa5, 0x3a86ff, 0xffaa00, 0xff00ff];
                 const index = peerId.charCodeAt(0) % colors.length;
                 return colors[index];
             }
-            
+
             getPlayerName(peerId) {
                 const player = this.players.get(peerId);
                 return player?.username || 'Player ' + peerId.substr(0, 4);
             }
-            
+
             generateUsername() {
                 const adjectives = ['Swift', 'Neon', 'Cyber', 'Quantum', 'Digital'];
                 const nouns = ['Explorer', 'Wanderer', 'Voyager', 'Pilot', 'Navigator'];
@@ -3971,7 +4019,7 @@
                 const noun = nouns[Math.floor(Math.random() * nouns.length)];
                 return `${adj}${noun}${Math.floor(Math.random() * 100)}`;
             }
-            
+
             removePlayer(peerId) {
                 const player = this.players.get(peerId);
                 if (player) {
@@ -3980,30 +4028,30 @@
                     this.showNotification(`Player left: ${player.username}`);
                 }
             }
-            
+
             showNotification(message) {
                 // Create notification element
                 const notification = document.createElement('div');
                 notification.className = 'multiplayer-notification';
                 notification.textContent = message;
-                
+
                 document.body.appendChild(notification);
-                
+
                 setTimeout(() => {
                     notification.style.animation = 'slideOut 0.3s ease';
                     setTimeout(() => notification.remove(), 300);
                 }, 3000);
             }
-            
+
             showError(message) {
                 console.error(message);
                 this.showNotification('⚠️ ' + message);
             }
-            
+
             // Call this in the animation loop
             update() {
                 this.broadcastPlayerUpdate();
-                
+
                 // Remove inactive players
                 const now = Date.now();
                 this.players.forEach((player, peerId) => {
@@ -4013,7 +4061,7 @@
                 });
             }
         }
-        
+
         class WorldNavigator {
             constructor() {
                 this.scene = null;
@@ -4023,30 +4071,30 @@
                 this.worlds = [];
                 this.raycaster = new THREE.Raycaster();
                 this.clock = new THREE.Clock();
-                
+
                 this.moveSpeed = CURRENT_WORLD.moveSpeed;
                 this.lookSpeed = CURRENT_WORLD.lookSpeed;
                 this.keys = { w: false, a: false, s: false, d: false };
                 this.rotation = { x: 0, y: 0 };
-                
+
                 this.isMobile = isMobile;
                 this.isIOS = isIOS;
                 this.joystickActive = false;
                 this.joystickVector = new THREE.Vector2();
                 this.lookTouch = null;
                 this.joystickTouch = null;
-                
+
                 this.touches = new Map();
                 this.lastTap = 0;
-                
+
                 this.hoveredPortal = null;
                 this.tooltip = document.getElementById('portal-tooltip');
                 this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
                 this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
                 this.isPointerLocked = false;
-                
+
                 this.inheritedAttributes = inheritedAttributes;
-                
+
                 // Managers
                 this.gpsManager = null;
                 this.mapManager = null;
@@ -4054,10 +4102,10 @@
                 this.aiManager = null;
                 this.worldCreator = null;
                 this.taskManager = null;
-                
+
                 // World locations cache
                 this.worldLocations = new Map();
-                
+
                 if (this.isIOS) {
                     document.body.addEventListener('touchmove', (e) => {
                         if (e.target === document.body) {
@@ -4066,21 +4114,21 @@
                     }, { passive: false });
                 }
             }
-            
+
             async init() {
                 // Initialize map manager early
                 this.mapManager = new MapManager(this);
-                
+
                 // Initialize GPS
                 this.gpsManager = new GPSManager(this);
                 const hasPermission = await this.gpsManager.requestPermission();
-                
+
                 if (!hasPermission) {
                     console.warn('GPS permission denied, using default locations');
                 }
-                
+
                 this.gpsManager.startTracking();
-                
+
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
@@ -4088,14 +4136,14 @@
                     originDiv.classList.add('visible');
                     console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
                 }
-                
+
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
                 }, 1000);
-                
+
                 document.getElementById('world-title').textContent = CURRENT_WORLD.name;
                 document.getElementById('world-description').textContent = CURRENT_WORLD.description;
-                
+
                 this.setupScene();
                 this.setupLighting();
                 await this.loadWorlds();
@@ -4104,53 +4152,53 @@
                 this.createPortals();
                 this.setupEventListeners();
                 this.setupQRCode();
-                
+
                 // Initialize multiplayer
                 this.multiplayer = new MultiplayerManager(this);
-                
+
                 // Initialize AI manager
                 this.aiManager = new AIManager(this);
-                
+
                 // Initialize World Creator
                 this.worldCreator = new WorldCreator(this);
-                
+
                 // Initialize Task Manager
                 this.taskManager = new TaskManager(this);
-                
+
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
                     document.getElementById('mobile-controls').classList.add('show');
-                    
+
                     const instruction = this.tooltip.querySelector('.tooltip-instruction');
                     if (instruction) {
                         instruction.textContent = 'Tap to enter world';
                     }
                 }
-                
+
                 // Make WorldNavigator globally accessible for AI chat
                 window.worldNavigator = this;
-                
+
                 this.animate();
             }
-            
+
             saveCurrentChatAsTask() {
                 if (!this.aiManager || !this.aiManager.isActive) {
                     this.showNotification('Please activate AI companion first');
                     return;
                 }
-                
+
                 if (this.aiManager.currentChatHistory.length === 0) {
                     this.showNotification('No messages to save as task');
                     return;
                 }
-                
+
                 // Pass current chat history to task manager
                 this.taskManager.saveCurrentChat(this.aiManager.currentChatHistory);
-                
+
                 // Clear current chat history for new conversations
                 this.aiManager.currentChatHistory = [];
             }
-            
+
             getCurrentWorldData() {
                 return {
                     worldName: CURRENT_WORLD.name,
@@ -4159,14 +4207,14 @@
                     location: REFERENCE_LOCATION
                 };
             }
-            
+
             setupScene() {
                 this.scene = new THREE.Scene();
                 this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
-                
+
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
-                
+
                 this.renderer = new THREE.WebGLRenderer({ 
                     antialias: true, 
                     alpha: true,
@@ -4178,11 +4226,11 @@
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 document.getElementById('three-container').appendChild(this.renderer.domElement);
             }
-            
+
             setupLighting() {
                 const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.5);
                 this.scene.add(ambientLight);
-                
+
                 const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
                 dirLight.position.set(10, 20, 10);
                 dirLight.castShadow = true;
@@ -4194,18 +4242,18 @@
                 dirLight.shadow.camera.bottom = -50;
                 this.scene.add(dirLight);
             }
-            
+
             async loadWorlds() {
                 try {
                     const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
                     const response = await fetch(apiUrl);
-                    
+
                     if (!response.ok) {
                         throw new Error(`GitHub API error: ${response.status}`);
                     }
-                    
+
                     const data = await response.json();
-                    
+
                     this.worlds = data.tree
                         .filter(item => 
                             item.type === 'blob' && 
@@ -4221,22 +4269,22 @@
                             raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
                             emoji: this.getWorldEmoji(item.path)
                         }));
-                    
+
                     console.log(`Found ${this.worlds.length} worlds to connect`);
-                    
+
                 } catch (error) {
                     console.error("Error loading worlds:", error);
                     this.worlds = this.getDemoWorlds();
                 }
             }
-            
+
             formatWorldName(filename) {
                 return filename
                     .replace('.html', '')
                     .replace(/[-_]/g, ' ')
                     .replace(/\b\w/g, l => l.toUpperCase());
             }
-            
+
             getWorldEmoji(filename) {
                 // Assign emojis based on world names
                 const emojiMap = {
@@ -4256,14 +4304,14 @@
                     'cyber': '💻',
                     'magic': '✨'
                 };
-                
+
                 const lower = filename.toLowerCase();
                 for (const [key, emoji] of Object.entries(emojiMap)) {
                     if (lower.includes(key)) return emoji;
                 }
                 return '🌀'; // Default portal emoji
             }
-            
+
             getDemoWorlds() {
                 return [
                     { name: "Crystal Caves", description: "A world of glowing crystals and underground mysteries", emoji: "💎" },
@@ -4273,7 +4321,7 @@
                     { name: "Ocean Depths", description: "An underwater realm of bioluminescent wonders", emoji: "🌊" }
                 ];
             }
-            
+
             generateWorldLocations() {
                 // Clear existing markers
                 this.worldLocations.clear();
@@ -4285,37 +4333,37 @@
                     });
                     this.mapManager.worldMarkers.clear();
                 }
-                
+
                 const numWorlds = this.worlds.length;
-                
+
                 this.worlds.forEach((world, index) => {
                     // Generate locations in a spiral pattern around the reference point
                     const angle = (index / numWorlds) * Math.PI * 2;
                     const distance = WORLD_SPAWN_CONFIG.minDistance + 
                                    (WORLD_SPAWN_CONFIG.maxDistance - WORLD_SPAWN_CONFIG.minDistance) * 
                                    (index / numWorlds);
-                    
+
                     // Calculate offset in meters and convert to lat/lng
                     const offsetX = Math.cos(angle) * distance;
                     const offsetY = Math.sin(angle) * distance;
-                    
+
                     // Convert meters to degrees (approximate)
                     const metersPerDegreeLat = 111320;
                     const metersPerDegreeLng = metersPerDegreeLat * Math.cos(REFERENCE_LOCATION.lat * Math.PI / 180);
-                    
+
                     const lat = REFERENCE_LOCATION.lat + (offsetY / metersPerDegreeLat);
                     const lng = REFERENCE_LOCATION.lng + (offsetX / metersPerDegreeLng);
-                    
+
                     const location = { lat, lng };
                     this.worldLocations.set(world.name, location);
-                    
+
                     // Add marker to map
                     if (this.mapManager) {
                         this.mapManager.addWorldMarker(world, location);
                     }
                 });
             }
-            
+
             createEnvironment() {
                 const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
                 const groundMaterial = new THREE.MeshStandardMaterial({
@@ -4323,22 +4371,22 @@
                     roughness: 0.8,
                     metalness: 0.2
                 });
-                
+
                 const vertices = groundGeometry.attributes.position.array;
                 for (let i = 0; i < vertices.length; i += 3) {
                     vertices[i + 2] = Math.sin(vertices[i] * 0.1) * Math.cos(vertices[i + 1] * 0.1) * 0.5;
                 }
                 groundGeometry.computeVertexNormals();
-                
+
                 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
                 ground.rotation.x = -Math.PI / 2;
                 ground.receiveShadow = true;
                 this.scene.add(ground);
-                
+
                 const gridHelper = new THREE.GridHelper(200, 100, 0x444444, 0x222222);
                 gridHelper.position.y = 0.1;
                 this.scene.add(gridHelper);
-                
+
                 const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
                 const skyMaterial = new THREE.ShaderMaterial({
                     uniforms: {
@@ -4370,40 +4418,40 @@
                 });
                 const sky = new THREE.Mesh(skyGeometry, skyMaterial);
                 this.scene.add(sky);
-                
+
                 const particleGeometry = new THREE.BufferGeometry();
                 const particleCount = CURRENT_WORLD.particleCount;
                 const positions = new Float32Array(particleCount * 3);
-                
+
                 for (let i = 0; i < particleCount * 3; i += 3) {
                     positions[i] = (Math.random() - 0.5) * 100;
                     positions[i + 1] = Math.random() * 50;
                     positions[i + 2] = (Math.random() - 0.5) * 100;
                 }
-                
+
                 particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
+
                 const particleMaterial = new THREE.PointsMaterial({
                     color: 0xffffff,
                     size: 0.1,
                     transparent: true,
                     opacity: 0.6
                 });
-                
+
                 const particles = new THREE.Points(particleGeometry, particleMaterial);
                 this.scene.add(particles);
             }
-            
+
             createPortals() {
                 const numPortals = Math.min(this.worlds.length, 8);
                 const radius = 15;
-                
+
                 for (let i = 0; i < numPortals; i++) {
                     const world = this.worlds[i] || this.getDemoWorlds()[i];
                     const angle = (i / numPortals) * Math.PI * 2;
-                    
+
                     const portalGroup = new THREE.Group();
-                    
+
                     const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
                     const frameMaterial = new THREE.MeshStandardMaterial({
                         color: 0x8338ec,
@@ -4413,7 +4461,7 @@
                         roughness: 0.2
                     });
                     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-                    
+
                     const portalGeometry = new THREE.CircleGeometry(2.7, 32);
                     const portalMaterial = new THREE.ShaderMaterial({
                         uniforms: {
@@ -4435,7 +4483,7 @@
                             uniform vec3 color2;
                             uniform float accessible;
                             varying vec2 vUv;
-                            
+
                             void main() {
                                 vec2 center = vUv - 0.5;
                                 float dist = length(center);
@@ -4450,19 +4498,19 @@
                     });
                     const portal = new THREE.Mesh(portalGeometry, portalMaterial);
                     portal.position.z = 0.1;
-                    
+
                     portalGroup.add(frame);
                     portalGroup.add(portal);
-                    
+
                     portalGroup.position.x = Math.cos(angle) * radius;
                     portalGroup.position.z = Math.sin(angle) * radius;
                     portalGroup.position.y = 3;
                     portalGroup.rotation.y = -angle + Math.PI;
-                    
+
                     const light = new THREE.PointLight(0x8338ec, 1, 10);
                     light.position.copy(portalGroup.position);
                     this.scene.add(light);
-                    
+
                     portal.userData = {
                         world: world,
                         material: portalMaterial,
@@ -4474,10 +4522,10 @@
                         distance: 0,
                         accessible: true // Always accessible in teleport mode
                     };
-                    
+
                     this.portals.push(portal);
                     this.scene.add(portalGroup);
-                    
+
                     const platformGeometry = new THREE.CylinderGeometry(4, 4, 0.5, 32);
                     const platformMaterial = new THREE.MeshStandardMaterial({
                         color: 0x444444,
@@ -4492,57 +4540,57 @@
                     this.scene.add(platform);
                 }
             }
-            
+
             updatePortalDistances(userLocation) {
                 const distances = [];
-                
+
                 this.portals.forEach(portal => {
                     const worldLocation = portal.userData.location;
                     if (!worldLocation || !userLocation) return;
-                    
+
                     const distance = this.gpsManager.calculateDistance(
                         userLocation.lat,
                         userLocation.lng,
                         worldLocation.lat,
                         worldLocation.lng
                     );
-                    
+
                     portal.userData.distance = distance;
                     // In teleport mode, all portals are always accessible
                     portal.userData.accessible = true;
-                    
+
                     // Keep visual at full brightness
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.accessible.value = 0.8;
                     }
-                    
+
                     if (portal.userData.light) {
                         portal.userData.light.intensity = 1;
                     }
-                    
+
                     distances.push({
                         world: portal.userData.world,
                         distance: distance
                     });
                 });
-                
+
                 // Update map markers
                 if (this.mapManager) {
                     this.mapManager.updateWorldDistances(distances);
                 }
             }
-            
+
             buildInheritanceParams() {
                 const params = new URLSearchParams();
-                
+
                 params.set('from', window.location.pathname.split('/').pop() || 'index.html');
                 params.set('fromName', CURRENT_WORLD.name);
-                
+
                 // Include location parameters
                 params.set('lat', REFERENCE_LOCATION.lat.toString());
                 params.set('lng', REFERENCE_LOCATION.lng.toString());
                 params.set('locationName', REFERENCE_LOCATION.name);
-                
+
                 // Visual attributes
                 params.set('lookSpeed', this.lookSpeed.toString());
                 params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
@@ -4553,22 +4601,22 @@
                 params.set('cameraHeight', this.camera.position.y.toString());
                 params.set('fogNear', CURRENT_WORLD.fogNear.toString());
                 params.set('fogFar', CURRENT_WORLD.fogFar.toString());
-                
+
                 return params.toString();
             }
-            
+
             setupQRCode() {
                 const shareButton = document.getElementById('share-button');
                 const qrModal = document.getElementById('qr-modal');
                 const qrClose = document.getElementById('qr-close');
                 const copyButton = document.getElementById('copy-url-btn');
                 const qrUrlElement = document.getElementById('qr-url');
-                
+
                 // Check if we're in multiplayer mode
                 const urlParams = new URLSearchParams(window.location.search);
                 const hostId = urlParams.get('host');
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
-                
+
                 let worldUrl;
                 if (this.multiplayer && this.multiplayer.isHost) {
                     // Host URL includes room ID and location
@@ -4591,9 +4639,9 @@
                     });
                     worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                 }
-                
+
                 qrUrlElement.textContent = worldUrl;
-                
+
                 shareButton.addEventListener('click', () => {
                     qrModal.classList.add('show');
                     // Update URL if multiplayer is active
@@ -4611,24 +4659,24 @@
                         this.generateQRCode(worldUrl);
                     }
                 });
-                
+
                 qrClose.addEventListener('click', () => {
                     qrModal.classList.remove('show');
                 });
-                
+
                 qrModal.addEventListener('click', (e) => {
                     if (e.target === qrModal) {
                         qrModal.classList.remove('show');
                     }
                 });
-                
+
                 copyButton.addEventListener('click', async () => {
                     try {
                         const urlToCopy = qrUrlElement.textContent;
                         await navigator.clipboard.writeText(urlToCopy);
                         copyButton.textContent = 'Copied!';
                         copyButton.classList.add('copied');
-                        
+
                         setTimeout(() => {
                             copyButton.textContent = 'Copy URL';
                             copyButton.classList.remove('copied');
@@ -4642,7 +4690,7 @@
             generateQRCode(url) {
                 const container = document.getElementById('qr-code-container');
                 container.innerHTML = '';
-                
+
                 const loadQRious = () => {
                     return new Promise((resolve, reject) => {
                         if (window.QRious) {
@@ -4656,11 +4704,11 @@
                         }
                     });
                 };
-                
+
                 loadQRious().then(() => {
                     const canvas = document.createElement('canvas');
                     container.appendChild(canvas);
-                    
+
                     new window.QRious({
                         element: canvas,
                         value: url,
@@ -4676,41 +4724,41 @@
                     container.appendChild(img);
                 });
             }
-            
+
             setupEventListeners() {
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
                 });
-                
+
                 if (this.isMobile) {
                     this.setupMobileControls();
                 } else {
                     this.setupDesktopControls();
                 }
             }
-            
+
             setupDesktopControls() {
                 window.addEventListener('keydown', (e) => {
                     if (e.key.toLowerCase() in this.keys) {
                         this.keys[e.key.toLowerCase()] = true;
                     }
                 });
-                
+
                 window.addEventListener('keyup', (e) => {
                     if (e.key.toLowerCase() in this.keys) {
                         this.keys[e.key.toLowerCase()] = false;
                     }
                 });
-                
+
                 this.renderer.domElement.addEventListener('click', (e) => {
                     if (!this.isPointerLocked) {
                         this.renderer.domElement.requestPointerLock();
                     } else {
                         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                         const intersects = this.raycaster.intersectObjects(this.portals);
-                        
+
                         if (intersects.length > 0) {
                             const portal = intersects[0].object;
                             // Always allow entering worlds in teleport mode
@@ -4720,11 +4768,11 @@
                         }
                     }
                 });
-                
+
                 document.addEventListener('pointerlockchange', () => {
                     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
                 });
-                
+
                 document.addEventListener('mousemove', (e) => {
                     if (this.isPointerLocked) {
                         this.rotation.y -= e.movementX * this.lookSpeed;
@@ -4733,20 +4781,20 @@
                     }
                 });
             }
-            
+
             setupMobileControls() {
                 const lookArea = document.getElementById('look-area');
-                
+
                 lookArea.addEventListener('touchstart', (e) => {
                     const touch = e.touches[0];
-                    
+
                     const rect = this.renderer.domElement.getBoundingClientRect();
                     const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
                     const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-                    
+
                     this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
                     const intersects = this.raycaster.intersectObjects(this.portals);
-                    
+
                     if (intersects.length > 0) {
                         const portal = intersects[0].object;
                         // Always allow entering worlds in teleport mode
@@ -4756,7 +4804,7 @@
                             return;
                         }
                     }
-                    
+
                     this.lookTouch = {
                         id: touch.identifier,
                         startX: touch.clientX,
@@ -4765,29 +4813,29 @@
                         currentY: touch.clientY
                     };
                 }, { passive: true });
-                
+
                 lookArea.addEventListener('touchmove', (e) => {
                     if (!this.lookTouch) return;
-                    
+
                     for (let i = 0; i < e.touches.length; i++) {
                         const touch = e.touches[i];
                         if (touch.identifier === this.lookTouch.id) {
                             const deltaX = touch.clientX - this.lookTouch.currentX;
                             const deltaY = touch.clientY - this.lookTouch.currentY;
-                            
+
                             this.rotation.y -= deltaX * this.lookSpeed * 2;
                             this.rotation.x -= deltaY * this.lookSpeed * 2;
                             this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-                            
+
                             this.lookTouch.currentX = touch.clientX;
                             this.lookTouch.currentY = touch.clientY;
-                            
+
                             e.preventDefault();
                             break;
                         }
                     }
                 }, { passive: false });
-                
+
                 lookArea.addEventListener('touchend', (e) => {
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const touch = e.changedTouches[i];
@@ -4800,26 +4848,26 @@
 
                 const joystick = document.getElementById('movement-joystick');
                 const handle = document.getElementById('movement-handle');
-                
+
                 joystick.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    
+
                     const touch = e.touches[0];
                     this.joystickTouch = {
                         id: touch.identifier
                     };
-                    
+
                     this.joystickActive = true;
                     this.updateJoystick(touch, joystick, handle);
                 }, { passive: false });
-                
+
                 joystick.addEventListener('touchmove', (e) => {
                     if (!this.joystickActive || !this.joystickTouch) return;
-                    
+
                     e.preventDefault();
                     e.stopPropagation();
-                    
+
                     for (let i = 0; i < e.touches.length; i++) {
                         const touch = e.touches[i];
                         if (touch.identifier === this.joystickTouch.id) {
@@ -4828,7 +4876,7 @@
                         }
                     }
                 }, { passive: false });
-                
+
                 joystick.addEventListener('touchend', (e) => {
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const touch = e.changedTouches[i];
@@ -4837,52 +4885,52 @@
                             this.joystickTouch = null;
                             this.joystickVector.set(0, 0);
                             handle.style.transform = 'translate(-50%, -50%)';
-                            
+
                             e.preventDefault();
                             e.stopPropagation();
                             break;
                         }
                     }
                 }, { passive: false });
-                
+
                 window.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     return false;
                 });
             }
-            
+
             updateJoystick(touch, joystick, handle) {
                 const rect = joystick.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
-                
+
                 let deltaX = touch.clientX - centerX;
                 let deltaY = touch.clientY - centerY;
-                
+
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 const maxDistance = rect.width / 2 - 25;
-                
+
                 if (distance > maxDistance) {
                     deltaX = (deltaX / distance) * maxDistance;
                     deltaY = (deltaY / distance) * maxDistance;
                 }
-                
+
                 handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
-                
+
                 this.joystickVector.x = deltaX / maxDistance;
                 this.joystickVector.y = -deltaY / maxDistance;
             }
-            
+
             updateMovement() {
                 const forward = new THREE.Vector3();
                 const right = new THREE.Vector3();
-                
+
                 this.camera.getWorldDirection(forward);
                 forward.y = 0;
                 forward.normalize();
-                
+
                 right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-                
+
                 if (this.isMobile) {
                     if (this.joystickActive) {
                         const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
@@ -4896,38 +4944,38 @@
                     if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
                     if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
                 }
-                
+
                 this.camera.rotation.order = 'YXZ';
                 this.camera.rotation.y = this.rotation.y;
                 this.camera.rotation.x = this.rotation.x;
             }
-            
+
             updateHover() {
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const intersects = this.raycaster.intersectObjects(this.portals);
-                
+
                 if (intersects.length > 0) {
                     const portal = intersects[0].object;
-                    
+
                     if (portal !== this.hoveredPortal) {
                         this.hoveredPortal = portal;
-                        
+
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
-                        
+
                         // Show distance but don't restrict access
                         if (portal.userData.distance > 0) {
                             this.tooltipDescription.textContent += ` (${Math.round(portal.userData.distance)}m away - Teleport Enabled)`;
                         }
-                        
+
                         this.tooltip.classList.add('visible');
-                        
+
                         const vector = new THREE.Vector3();
                         portal.getWorldPosition(vector);
                         vector.project(this.camera);
                         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                         const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
-                        
+
                         this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
                         this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
                     }
@@ -4938,62 +4986,62 @@
                     }
                 }
             }
-            
+
             showNotification(message) {
                 const notification = document.createElement('div');
                 notification.className = 'multiplayer-notification';
                 notification.textContent = message;
-                
+
                 document.body.appendChild(notification);
-                
+
                 setTimeout(() => {
                     notification.style.animation = 'slideOut 0.3s ease';
                     setTimeout(() => notification.remove(), 300);
                 }, 3000);
             }
-            
+
             async enterWorld(url) {
                 try {
                     document.getElementById('loading').style.display = 'block';
                     document.getElementById('loading').innerHTML = 'Entering new world...';
-                    
+
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`Failed to load world (${response.status})`);
                     }
-                    
+
                     let htmlContent = await response.text();
-                    
+
                     const inheritanceParams = this.buildInheritanceParams();
-                    
+
                     // If in multiplayer, preserve the host parameter
                     const urlParams = new URLSearchParams(window.location.search);
                     const hostId = urlParams.get('host');
                     if (hostId) {
                         inheritanceParams += `&host=${hostId}`;
                     }
-                    
+
                     sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
-                    
+
                     const inheritanceData = {
                         params: inheritanceParams,
                         timestamp: Date.now()
                     };
                     localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
-                    
+
                     const paramScript = `<script>
                         window.INJECTED_PARAMS = '?${inheritanceParams}';
                         sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
                         console.log('Injected params:', window.INJECTED_PARAMS);
                     <\/script>`;
-                    
+
                     htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
-                    
+
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
-                    
+
                     window.location.href = blobUrl;
-                    
+
                 } catch (error) {
                     console.error('Error entering world:', error);
                     document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
@@ -5002,57 +5050,57 @@
                     }, 3000);
                 }
             }
-            
+
             animate() {
                 requestAnimationFrame(() => this.animate());
-                
+
                 const time = this.clock.getElapsedTime();
-                
+
                 this.updateMovement();
                 this.updateHover();
-                
+
                 // Update multiplayer
                 if (this.multiplayer) {
                     this.multiplayer.update();
                 }
-                
+
                 this.portals.forEach((portal, index) => {
                     if (portal.userData.material) {
                         portal.userData.material.uniforms.time.value = time;
-                        
+
                         const baseIntensity = 0.8; // Always bright in teleport mode
                         const intensity = baseIntensity + Math.sin(time * 2 + index) * 0.2;
                         portal.userData.light.intensity = intensity;
                     }
-                    
+
                     portal.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
                 });
-                
+
                 const particles = this.scene.getObjectByProperty('type', 'Points');
                 if (particles) {
                     particles.rotation.y = time * 0.05;
                     particles.position.y = Math.sin(time * 0.2) * 2;
                 }
-                
+
                 this.renderer.render(this.scene, this.camera);
             }
         }
-        
+
         window.addEventListener('DOMContentLoaded', () => {
             const navigator = new WorldNavigator();
             navigator.init();
         });
-        
+
         let lastY = 0;
         window.addEventListener('touchstart', (e) => {
             lastY = e.touches[0].clientY;
         }, { passive: true });
-        
+
         window.addEventListener('touchmove', (e) => {
             const y = e.touches[0].clientY;
             const scrollingUp = y > lastY;
             const atTop = window.pageYOffset === 0;
-            
+
             if (scrollingUp && atTop) {
                 e.preventDefault();
             }
