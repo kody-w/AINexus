@@ -132,6 +132,189 @@
             color: #fff;
         }
 
+        /* Portal Import/Export UI */
+        .portal-manager {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 430px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .portal-manager:hover {
+            background: rgba(0, 255, 255, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+        }
+
+        .portal-manager svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        .portal-manager-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3002;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .portal-manager-modal.show {
+            display: flex;
+        }
+
+        .portal-manager-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.3);
+        }
+
+        .portal-manager-content h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #00ffff, #0088ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .portal-list {
+            margin: 20px 0;
+        }
+
+        .portal-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .portal-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+
+        .portal-item-info {
+            flex: 1;
+        }
+
+        .portal-item-name {
+            font-weight: bold;
+            color: #06ffa5;
+            margin-bottom: 5px;
+        }
+
+        .portal-item-location {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .portal-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .portal-action-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .portal-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .portal-action-btn.delete {
+            background: rgba(255, 0, 0, 0.3);
+        }
+
+        .portal-action-btn.delete:hover {
+            background: rgba(255, 0, 0, 0.5);
+        }
+
+        .portal-import-export {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .import-export-btn {
+            background: linear-gradient(45deg, #00ffff, #0088ff);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .import-export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4);
+        }
+
+        .import-file-input {
+            display: none;
+        }
+
+        .portal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .portal-close-btn:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
         /* AI Companion Modal */
         .ai-modal {
             display: none;
@@ -257,20 +440,21 @@
             color: rgba(255, 255, 255, 0.6);
         }
 
-        /* AI Chat Interface */
+        /* AI Chat Interface - Modified for better visibility */
         .ai-chat-interface {
             position: fixed;
             bottom: calc(env(safe-area-inset-bottom, 20px) + 100px);
             right: calc(env(safe-area-inset-right, 20px));
             width: 350px;
             height: 450px;
-            background: rgba(20, 20, 40, 0.95);
+            background: rgba(20, 20, 40, 0.85); /* More transparent */
             border: 2px solid rgba(138, 56, 236, 0.5);
             border-radius: 20px;
             display: none;
             flex-direction: column;
             z-index: 1003;
             box-shadow: 0 0 30px rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(5px); /* Less blur for better transparency */
         }
 
         .ai-chat-interface.active {
@@ -1714,6 +1898,41 @@
         </div>
     </div>
 
+    <!-- Portal Manager Button -->
+    <div class="portal-manager" id="portal-manager-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2v20M2 12h20"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </div>
+
+    <!-- Portal Manager Modal -->
+    <div class="portal-manager-modal" id="portal-manager-modal">
+        <div class="portal-manager-content">
+            <button class="portal-close-btn" id="portal-close">&times;</button>
+            <h3>Portal Manager</h3>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px; text-align: center;">
+                Import and export portal configurations to quickly add worlds to your Nexus.
+            </p>
+            
+            <div class="portal-list" id="portal-list">
+                <h4 style="color: #06ffa5; margin-bottom: 10px;">Active Portals:</h4>
+                <!-- Portal items will be populated here -->
+            </div>
+            
+            <div class="portal-import-export">
+                <button class="import-export-btn" onclick="window.worldNavigator.portalManager.exportPortals()">
+                    📤 Export Portals
+                </button>
+                <button class="import-export-btn" onclick="document.getElementById('import-file').click()">
+                    📥 Import Portals
+                </button>
+                <input type="file" id="import-file" class="import-file-input" accept=".json" onchange="window.worldNavigator.portalManager.importPortals(event)">
+            </div>
+        </div>
+    </div>
+
     <!-- AI Companion Modal -->
     <div class="ai-modal" id="ai-modal">
         <div class="ai-modal-content">
@@ -2139,6 +2358,207 @@
 
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
+        // Portal Manager Class
+        class PortalManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.customPortals = new Map(); // Store custom imported portals
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                // Portal manager button
+                document.getElementById('portal-manager-btn').addEventListener('click', () => {
+                    this.showModal();
+                });
+
+                // Close button
+                document.getElementById('portal-close').addEventListener('click', () => {
+                    this.hideModal();
+                });
+
+                // Close on outside click
+                document.getElementById('portal-manager-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'portal-manager-modal') {
+                        this.hideModal();
+                    }
+                });
+            }
+
+            showModal() {
+                document.getElementById('portal-manager-modal').classList.add('show');
+                this.updatePortalList();
+            }
+
+            hideModal() {
+                document.getElementById('portal-manager-modal').classList.remove('show');
+            }
+
+            updatePortalList() {
+                const portalList = document.getElementById('portal-list');
+                portalList.innerHTML = '<h4 style="color: #06ffa5; margin-bottom: 10px;">Active Portals:</h4>';
+
+                // Combine default worlds and custom portals
+                const allPortals = [...this.world.worlds];
+                this.customPortals.forEach((portal, id) => {
+                    allPortals.push(portal);
+                });
+
+                if (allPortals.length === 0) {
+                    portalList.innerHTML += '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No portals active. Import portals to add worlds!</p>';
+                    return;
+                }
+
+                allPortals.forEach((portal, index) => {
+                    const portalItem = document.createElement('div');
+                    portalItem.className = 'portal-item';
+                    
+                    const location = portal.location || this.world.worldLocations.get(portal.name);
+                    const locationText = location ? 
+                        `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : 
+                        'Dynamic location';
+
+                    portalItem.innerHTML = `
+                        <div class="portal-item-info">
+                            <div class="portal-item-name">${portal.emoji || '🌀'} ${portal.name}</div>
+                            <div class="portal-item-location">${locationText}</div>
+                        </div>
+                        <div class="portal-item-actions">
+                            ${portal.isCustom ? `<button class="portal-action-btn delete" onclick="window.worldNavigator.portalManager.removePortal('${portal.id}')">Remove</button>` : ''}
+                        </div>
+                    `;
+                    
+                    portalList.appendChild(portalItem);
+                });
+            }
+
+            exportPortals() {
+                // Prepare portal data for export
+                const exportData = {
+                    version: "1.0",
+                    exportDate: new Date().toISOString(),
+                    referenceLocation: REFERENCE_LOCATION,
+                    portals: []
+                };
+
+                // Export all current portals (including custom ones)
+                this.world.portals.forEach(portal => {
+                    const portalData = {
+                        name: portal.userData.name,
+                        description: portal.userData.description,
+                        emoji: portal.userData.world.emoji || '🌀',
+                        location: portal.userData.location,
+                        url: portal.userData.url,
+                        // Include visual properties from the captured world
+                        worldAttributes: {
+                            ambientColor: CURRENT_WORLD.ambientColor,
+                            fogColor: CURRENT_WORLD.fogColor,
+                            portalColor1: CURRENT_WORLD.portalColor1,
+                            portalColor2: CURRENT_WORLD.portalColor2
+                        }
+                    };
+
+                    // If this was a scanned world, include the anchor image
+                    if (portal.userData.anchorImage) {
+                        portalData.anchorImage = portal.userData.anchorImage;
+                    }
+
+                    exportData.portals.push(portalData);
+                });
+
+                // Create and download JSON file
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nexus_portals_${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                this.world.showNotification('Portals exported successfully!');
+            }
+
+            async importPortals(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    const importData = JSON.parse(text);
+
+                    // Validate import data
+                    if (!importData.version || !importData.portals) {
+                        throw new Error('Invalid portal file format');
+                    }
+
+                    // Import each portal
+                    importData.portals.forEach(portalData => {
+                        const portalId = `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                        
+                        const portal = {
+                            id: portalId,
+                            name: portalData.name,
+                            description: portalData.description,
+                            emoji: portalData.emoji || '🌀',
+                            location: portalData.location,
+                            url: portalData.url || '#', // Placeholder URL if not provided
+                            isCustom: true,
+                            anchorImage: portalData.anchorImage,
+                            worldAttributes: portalData.worldAttributes
+                        };
+
+                        this.customPortals.set(portalId, portal);
+                    });
+
+                    // Recreate portals in the 3D world
+                    this.world.recreatePortals();
+
+                    this.world.showNotification(`Imported ${importData.portals.length} portals successfully!`);
+                    this.updatePortalList();
+
+                } catch (error) {
+                    console.error('Error importing portals:', error);
+                    this.world.showNotification('Failed to import portals. Check file format.');
+                }
+
+                // Reset file input
+                event.target.value = '';
+            }
+
+            removePortal(portalId) {
+                this.customPortals.delete(portalId);
+                this.world.recreatePortals();
+                this.updatePortalList();
+                this.world.showNotification('Portal removed');
+            }
+
+            // Add a portal from the world scanner
+            addScannedPortal(worldData) {
+                const portalId = worldData.id;
+                
+                const portal = {
+                    id: portalId,
+                    name: worldData.name,
+                    description: worldData.description,
+                    emoji: worldData.emoji || '🌀',
+                    location: worldData.location,
+                    url: worldData.url || '#',
+                    isCustom: true,
+                    anchorImage: worldData.anchorImage,
+                    worldAttributes: worldData.worldAttributes,
+                    portalPosition: worldData.portalPosition
+                };
+
+                this.customPortals.set(portalId, portal);
+                this.world.recreatePortals();
+                this.world.showNotification(`Portal "${portal.name}" added to world!`);
+            }
+        }
+
         // Task Manager for replayable chat sequences
         class TaskManager {
             constructor(worldInstance) {
@@ -2444,6 +2864,9 @@
                     portalPosition: this.calculatePortalPosition()
                 };
 
+                // Add portal to the world immediately
+                this.world.portalManager.addScannedPortal(this.newWorldData);
+
                 // Show success and download prompt
                 this.showCreationSuccess();
             }
@@ -2499,7 +2922,7 @@
                         💾 Download World Data (JSON)
                     </button>
                     <p style="color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 20px; font-size: 14px;">
-                        Use the World Builder tool to convert this JSON into a full HTML world file.
+                        The portal has been added to your world! You can also download the JSON to create a full HTML world file.
                     </p>
                     <button class="create-world-btn" onclick="document.getElementById('world-creation-form').remove()">
                         Close
@@ -2508,7 +2931,7 @@
             }
         }
 
-        // AI Manager Class (Modified to track conversation history and show agent logs)
+        // AI Manager Class (Modified with fixes)
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -2535,6 +2958,10 @@
                 // Agent log display
                 this.agentLogMeshes = [];
                 this.agentLogGroup = null;
+
+                // Orbiting letters
+                this.orbitingLetters = [];
+                this.orbitGroup = null;
 
                 this.setupEventListeners();
 
@@ -2719,6 +3146,11 @@
                 this.agentLogGroup.position.y = 1; // Position below the orb
                 companionGroup.add(this.agentLogGroup);
 
+                // Create orbiting letters group
+                this.orbitGroup = new THREE.Group();
+                this.orbitGroup.position.y = 2; // Same height as orb
+                companionGroup.add(this.orbitGroup);
+
                 // Position near the player but further away
                 companionGroup.position.set(8, 0, 8); // Increased distance from player
 
@@ -2767,8 +3199,8 @@
                 textGeometry.center();
 
                 const textMaterial = new THREE.MeshStandardMaterial({
-                    color: isAgentLog ? 0xffa500 : 0x06ffa5,
-                    emissive: isAgentLog ? 0xffa500 : 0x06ffa5,
+                    color: isAgentLog ? 0xffa500 : 0xffeb3b, // Yellow like Star Wars
+                    emissive: isAgentLog ? 0xffa500 : 0xffeb3b,
                     emissiveIntensity: 0.3,
                     metalness: 0.5,
                     roughness: 0.3,
@@ -2780,6 +3212,46 @@
                 textMesh.position.copy(position);
 
                 return textMesh;
+            }
+
+            createLetterMesh(letter, index) {
+                if (!this.font) return null;
+
+                const geometry = new THREE.TextGeometry(letter, {
+                    font: this.font,
+                    size: 0.2,
+                    height: 0.02,
+                    curveSegments: 8,
+                    bevelEnabled: true,
+                    bevelThickness: 0.005,
+                    bevelSize: 0.005,
+                    bevelSegments: 4
+                });
+
+                geometry.center();
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0xffeb3b,
+                    emissive: 0xffeb3b,
+                    emissiveIntensity: 0.2,
+                    metalness: 0.7,
+                    roughness: 0.3,
+                    transparent: true,
+                    opacity: 0.8
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // Random orbit parameters
+                mesh.userData = {
+                    radius: 3 + Math.random() * 2,
+                    speed: 0.5 + Math.random() * 0.5,
+                    offset: Math.random() * Math.PI * 2,
+                    yOffset: (Math.random() - 0.5) * 2,
+                    rotationSpeed: Math.random() * 0.02
+                };
+
+                return mesh;
             }
 
             async animateTextResponse(fullText) {
@@ -2808,8 +3280,9 @@
                     lines.push(currentLine.trim());
                 }
 
-                // Star Wars style animation
+                // Star Wars style animation starting from much lower
                 const textContainer = new THREE.Group();
+                textContainer.position.y = -5; // Start below the camera view
                 this.textGroup.add(textContainer);
 
                 // Create all text lines at once
@@ -2826,12 +3299,13 @@
                 // Animate text scrolling away like Star Wars
                 let scrollProgress = 0;
                 const scrollSpeed = 0.02;
+                const lettersToOrbit = [];
                 
                 this.currentTextAnimation = setInterval(() => {
                     scrollProgress += scrollSpeed;
                     
                     // Move text up and away
-                    textContainer.position.y = scrollProgress * 2;
+                    textContainer.position.y = -5 + (scrollProgress * 3);
                     textContainer.position.z = -scrollProgress * 3;
                     
                     // Rotate for perspective effect
@@ -2844,6 +3318,29 @@
                         const fadeProgress = (scrollProgress - fadeStart) / (fadeEnd - fadeStart);
                         this.textMeshes.forEach(mesh => {
                             mesh.material.opacity = Math.max(0, 1 - fadeProgress);
+                        });
+                    }
+                    
+                    // Add letters to orbit as text fades
+                    if (scrollProgress > fadeStart && lettersToOrbit.length === 0) {
+                        // Extract some letters from the text to orbit
+                        const allText = lines.join(' ');
+                        const letterCount = Math.min(allText.length, 20); // Limit to 20 letters
+                        for (let i = 0; i < letterCount; i++) {
+                            const charIndex = Math.floor(Math.random() * allText.length);
+                            const letter = allText[charIndex];
+                            if (letter !== ' ') {
+                                lettersToOrbit.push(letter);
+                            }
+                        }
+                        
+                        // Create orbiting letter meshes
+                        lettersToOrbit.forEach((letter, index) => {
+                            const letterMesh = this.createLetterMesh(letter, index);
+                            if (letterMesh) {
+                                this.orbitGroup.add(letterMesh);
+                                this.orbitingLetters.push(letterMesh);
+                            }
                         });
                     }
                     
@@ -2944,6 +3441,19 @@
                     if (this.agentLogGroup) {
                         this.agentLogGroup.lookAt(this.world.camera.position);
                     }
+
+                    // Animate orbiting letters
+                    this.orbitingLetters.forEach((letter, index) => {
+                        const userData = letter.userData;
+                        const angle = time * userData.speed + userData.offset;
+                        
+                        letter.position.x = Math.cos(angle) * userData.radius;
+                        letter.position.z = Math.sin(angle) * userData.radius;
+                        letter.position.y = userData.yOffset + Math.sin(time * 2 + index) * 0.2;
+                        
+                        letter.rotation.y += userData.rotationSpeed;
+                        letter.rotation.x = Math.sin(time + index) * 0.2;
+                    });
 
                     requestAnimationFrame(animate);
                 };
@@ -3692,7 +4202,7 @@
             }
         }
 
-        // Multiplayer Manager Class
+        // Multiplayer Manager Class (Fixed)
         class MultiplayerManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3715,59 +4225,118 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 const hostId = urlParams.get('host');
 
-                if (hostId) {
-                    // Joining someone's world
-                    this.roomId = hostId;
-                    this.peer = new Peer();
+                try {
+                    if (hostId) {
+                        // Joining someone's world
+                        this.roomId = hostId;
+                        this.peer = new Peer();
 
-                    this.peer.on('open', (id) => {
-                        console.log('Joining room:', this.roomId);
-                        this.connectToHost(this.roomId);
-                        this.updateStatus('Connected', true);
-                    });
-                } else {
-                    // Creating a new room
-                    this.isHost = true;
-                    this.peer = new Peer();
+                        this.peer.on('open', (id) => {
+                            console.log('My peer ID:', id);
+                            console.log('Attempting to join room:', this.roomId);
+                            
+                            // Delay connection attempt to ensure host is ready
+                            setTimeout(() => {
+                                this.connectToHost(this.roomId);
+                            }, 1000);
+                            
+                            this.updateStatus('Connecting...', false);
+                        });
+                    } else {
+                        // Creating a new room
+                        this.isHost = true;
+                        this.peer = new Peer();
 
-                    this.peer.on('open', (id) => {
-                        this.roomId = id;
-                        console.log('Created room:', this.roomId);
-                        this.updateShareUrl();
-                        this.updateStatus('Hosting', true);
+                        this.peer.on('open', (id) => {
+                            this.roomId = id;
+                            console.log('Created room with ID:', this.roomId);
+                            this.updateShareUrl();
+                            this.updateStatus('Hosting', true);
+                        });
+                    }
+
+                    // Handle incoming connections
+                    this.peer.on('connection', (conn) => {
+                        console.log('Incoming connection from:', conn.peer);
+                        this.handleNewConnection(conn);
                     });
+
+                    // Handle errors
+                    this.peer.on('error', (err) => {
+                        console.error('Peer error:', err);
+                        
+                        // Handle specific error types
+                        if (err.type === 'peer-unavailable') {
+                            this.showError('Host not found. Make sure the host is online.');
+                        } else if (err.type === 'network') {
+                            this.showError('Network error. Check your connection.');
+                        } else {
+                            this.showError('Connection error: ' + err.message);
+                        }
+                        
+                        this.updateStatus('Error', false);
+                    });
+
+                    // Handle disconnection
+                    this.peer.on('disconnected', () => {
+                        console.log('Disconnected from peer server');
+                        this.updateStatus('Disconnected', false);
+                        
+                        // Try to reconnect
+                        setTimeout(() => {
+                            if (!this.peer.destroyed) {
+                                console.log('Attempting to reconnect...');
+                                this.peer.reconnect();
+                            }
+                        }, 3000);
+                    });
+
+                } catch (error) {
+                    console.error('Failed to initialize peer:', error);
+                    this.showError('Failed to initialize multiplayer');
                 }
-
-                // Handle incoming connections
-                this.peer.on('connection', (conn) => {
-                    this.handleNewConnection(conn);
-                });
-
-                // Handle errors
-                this.peer.on('error', (err) => {
-                    console.error('Peer error:', err);
-                    this.showError('Connection error: ' + err.message);
-                    this.updateStatus('Error', false);
-                });
             }
 
             connectToHost(hostId) {
-                const conn = this.peer.connect(hostId, {
-                    reliable: true,
-                    metadata: {
-                        username: this.generateUsername(),
-                        worldData: this.world.getCurrentWorldData()
-                    }
-                });
+                try {
+                    console.log('Connecting to host:', hostId);
+                    
+                    const conn = this.peer.connect(hostId, {
+                        reliable: true,
+                        serialization: 'json',
+                        metadata: {
+                            username: this.generateUsername(),
+                            worldData: this.world.getCurrentWorldData()
+                        }
+                    });
 
-                this.handleNewConnection(conn);
+                    // Set connection timeout
+                    const connectionTimeout = setTimeout(() => {
+                        if (conn.open === false) {
+                            console.error('Connection timeout');
+                            this.showError('Connection timeout. Host may be offline.');
+                            conn.close();
+                        }
+                    }, 10000);
+
+                    conn.on('open', () => {
+                        clearTimeout(connectionTimeout);
+                        console.log('Connected to host successfully');
+                        this.updateStatus('Connected', true);
+                    });
+
+                    this.handleNewConnection(conn);
+                } catch (error) {
+                    console.error('Failed to connect to host:', error);
+                    this.showError('Failed to connect to host');
+                }
             }
 
             handleNewConnection(conn) {
                 const peerId = conn.peer;
 
                 conn.on('open', () => {
-                    console.log('Connected to peer:', peerId);
+                    console.log('Connection opened with peer:', peerId);
                     this.connections.set(peerId, conn);
 
                     // Send initial player data
@@ -3781,10 +4350,19 @@
 
                     // Update player count
                     this.updatePlayerCount();
+
+                    // If we're the host, send world state to new player
+                    if (this.isHost) {
+                        this.sendWorldState(conn);
+                    }
                 });
 
                 conn.on('data', (data) => {
-                    this.handlePeerData(peerId, data);
+                    try {
+                        this.handlePeerData(peerId, data);
+                    } catch (error) {
+                        console.error('Error handling peer data:', error);
+                    }
                 });
 
                 conn.on('close', () => {
@@ -3795,7 +4373,7 @@
                 });
 
                 conn.on('error', (err) => {
-                    console.error('Connection error:', err);
+                    console.error('Connection error with peer', peerId, ':', err);
                 });
             }
 
@@ -3823,6 +4401,30 @@
                         this.handleAICompanionData(peerId, data);
                         break;
                 }
+            }
+
+            sendWorldState(conn) {
+                // Send current world state to new player
+                const worldState = {
+                    type: 'worldSync',
+                    worldState: {
+                        worlds: this.world.worlds,
+                        portals: this.world.portals.map(portal => ({
+                            position: portal.position,
+                            userData: portal.userData
+                        }))
+                    }
+                };
+
+                if (conn && conn.open) {
+                    conn.send(worldState);
+                }
+            }
+
+            syncWorldState(worldState) {
+                // Sync world state from host
+                console.log('Syncing world state from host');
+                // Implementation depends on your world structure
             }
 
             handleAICompanionData(peerId, data) {
@@ -3922,7 +4524,11 @@
                 };
 
                 if (conn && conn.open) {
-                    conn.send(data);
+                    try {
+                        conn.send(data);
+                    } catch (error) {
+                        console.error('Failed to send player data:', error);
+                    }
                 }
             }
 
@@ -3940,10 +4546,14 @@
             broadcastAIPresence(aiData) {
                 this.connections.forEach((conn) => {
                     if (conn && conn.open) {
-                        conn.send({
-                            type: 'ai_companion',
-                            ...aiData
-                        });
+                        try {
+                            conn.send({
+                                type: 'ai_companion',
+                                ...aiData
+                            });
+                        } catch (error) {
+                            console.error('Failed to broadcast AI presence:', error);
+                        }
                     }
                 });
             }
@@ -4102,6 +4712,7 @@
                 this.aiManager = null;
                 this.worldCreator = null;
                 this.taskManager = null;
+                this.portalManager = null;
 
                 // World locations cache
                 this.worldLocations = new Map();
@@ -4164,6 +4775,9 @@
 
                 // Initialize Task Manager
                 this.taskManager = new TaskManager(this);
+
+                // Initialize Portal Manager
+                this.portalManager = new PortalManager(this);
 
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
@@ -4442,13 +5056,49 @@
                 this.scene.add(particles);
             }
 
+            recreatePortals() {
+                // Clear existing portals
+                this.portals.forEach(portal => {
+                    if (portal.parent) {
+                        portal.parent.parent?.remove(portal.parent);
+                    }
+                });
+                this.portals = [];
+
+                // Create portals again with updated world list
+                this.createPortals();
+            }
+
             createPortals() {
-                const numPortals = Math.min(this.worlds.length, 8);
+                // Combine default worlds with custom imported portals
+                const allWorlds = [...this.worlds];
+                if (this.portalManager) {
+                    this.portalManager.customPortals.forEach((portal) => {
+                        allWorlds.push(portal);
+                    });
+                }
+
+                const numPortals = Math.min(allWorlds.length, 16); // Increased max portals
                 const radius = 15;
 
                 for (let i = 0; i < numPortals; i++) {
-                    const world = this.worlds[i] || this.getDemoWorlds()[i];
-                    const angle = (i / numPortals) * Math.PI * 2;
+                    const world = allWorlds[i];
+                    
+                    // Use custom position if available
+                    let position, rotation;
+                    if (world.portalPosition) {
+                        position = world.portalPosition;
+                        rotation = { y: world.portalPosition.rotation || 0 };
+                    } else {
+                        // Default circular arrangement
+                        const angle = (i / numPortals) * Math.PI * 2;
+                        position = {
+                            x: Math.cos(angle) * radius,
+                            y: 3,
+                            z: Math.sin(angle) * radius
+                        };
+                        rotation = { y: -angle + Math.PI };
+                    }
 
                     const portalGroup = new THREE.Group();
 
@@ -4502,10 +5152,8 @@
                     portalGroup.add(frame);
                     portalGroup.add(portal);
 
-                    portalGroup.position.x = Math.cos(angle) * radius;
-                    portalGroup.position.z = Math.sin(angle) * radius;
-                    portalGroup.position.y = 3;
-                    portalGroup.rotation.y = -angle + Math.PI;
+                    portalGroup.position.set(position.x, position.y, position.z);
+                    portalGroup.rotation.y = rotation.y;
 
                     const light = new THREE.PointLight(0x8338ec, 1, 10);
                     light.position.copy(portalGroup.position);
@@ -4515,10 +5163,10 @@
                         world: world,
                         material: portalMaterial,
                         light: light,
-                        url: world.url || world.raw_url,
+                        url: world.url || world.raw_url || '#',
                         name: world.name,
                         description: world.description || `Enter the ${world.name} world`,
-                        location: this.worldLocations.get(world.name),
+                        location: world.location || this.worldLocations.get(world.name),
                         distance: 0,
                         accessible: true // Always accessible in teleport mode
                     };
