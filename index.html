@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+[<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -720,6 +720,7 @@
             font-size: 12px;
             margin-left: 10px;
             transition: all 0.3s ease;
+            display: none; /* Hidden since we're using conversation replay */
         }
 
         .save-task-btn:hover {
@@ -758,7 +759,7 @@
             border-color: rgba(6, 255, 165, 0.5);
         }
 
-        /* Task List Panel */
+        /* Task List Panel - Updated for conversation replay */
         .task-panel {
             position: fixed;
             bottom: calc(env(safe-area-inset-bottom, 100px));
@@ -809,12 +810,22 @@
         .task-item strong {
             color: 
 #ffa500;
+            display: block;
+            margin-bottom: 5px;
         }
 
         .task-item small {
             color: rgba(255, 255, 255, 0.6);
             display: block;
             margin-top: 5px;
+        }
+
+        .task-item .conversation-info {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .task-replay-indicator {
@@ -863,6 +874,33 @@
             width: 28px;
             height: 28px;
             color: white;
+        }
+
+        /* Upload conversation button styles */
+        .upload-conversation-btn {
+            background: linear-gradient(45deg, #742774, #4a90e2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 0;
+            width: 100%;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .upload-conversation-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(116, 39, 116, 0.4);
+        }
+
+        .conversation-upload-input {
+            display: none;
         }
 
         @keyframes shimmer {
@@ -1961,10 +1999,9 @@
     <div class="ai-chat-interface" id="ai-chat-interface">
         <div class="ai-chat-header">
             <div class="ai-chat-title">AI Companion Chat</div>
-            <button class="save-task-btn" onclick="window.worldNavigator.saveCurrentChatAsTask()">💾 Save as Task</button>
             <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
         </div>
-        <div class="task-replay-indicator" id="task-replay-indicator">🔄 Replaying Task...</div>
+        <div class="task-replay-indicator" id="task-replay-indicator">🔄 Replaying Conversation...</div>
         <div class="ai-chat-messages" id="ai-chat-messages"></div>
         <div class="ai-chat-input-container">
             <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
@@ -1974,7 +2011,16 @@
 
     <!-- Task Panel -->
     <div class="task-panel" id="task-panel">
-        <h3>💬 Saved AI Tasks</h3>
+        <h3>📚 Saved Conversations</h3>
+        <button class="upload-conversation-btn" onclick="document.getElementById('conversation-upload-input').click()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Upload Conversation JSON
+        </button>
+        <input type="file" id="conversation-upload-input" class="conversation-upload-input" accept=".json" onchange="window.worldNavigator.taskManager.uploadConversation(event)">
         <div id="task-list">
             <!-- Tasks populated here -->
         </div>
@@ -2400,7 +2446,7 @@
 
                 // Combine default worlds and custom portals
                 const allPortals = [...this.world.worlds];
-                this.customPortals.forEach((portal, id) => {
+                this.customPortals.forEach((portal) => {
                     allPortals.push(portal);
                 });
 
@@ -2559,15 +2605,14 @@
             }
         }
 
-        // Task Manager for replayable chat sequences
+        // Updated Task Manager for conversation replay
         class TaskManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
-                this.tasks = new Map(); // Store tasks in memory
-                this.currentTaskReplay = null;
+                this.conversations = new Map(); // Store imported conversations
+                this.currentReplay = null;
                 this.isReplaying = false;
 
-                // Setup event listeners
                 this.setupEventListeners();
             }
 
@@ -2590,58 +2635,71 @@
                 const taskList = document.getElementById('task-list');
                 taskList.innerHTML = '';
 
-                if (this.tasks.size === 0) {
-                    taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No saved tasks yet. Have a conversation with the AI and save it as a task!</p>';
+                if (this.conversations.size === 0) {
+                    taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 20px;">No conversations loaded yet. Upload a Teacher-Learner conversation JSON to replay it in 3D space!</p>';
                     return;
                 }
 
-                this.tasks.forEach((task, taskId) => {
+                this.conversations.forEach((conversation, conversationId) => {
                     const taskEl = document.createElement('div');
                     taskEl.className = 'task-item';
+                    
+                    // Extract conversation info
+                    const messageCount = conversation.conversation ? conversation.conversation.length : 0;
+                    const timestamp = conversation.timestamp ? new Date(conversation.timestamp).toLocaleString() : 'Unknown';
+                    const appName = conversation.appName || 'Unnamed Conversation';
+                    
                     taskEl.innerHTML = `
-                        <strong>${task.name}</strong>
-                        <small>Created: ${new Date(task.created).toLocaleString()}</small>
-                        <small>${task.messages.length} messages</small>
+                        <strong>${appName}</strong>
+                        <small>Saved: ${timestamp}</small>
+                        <div class="conversation-info">
+                            ${messageCount} messages • 
+                            ${conversation.guid ? 'User ID: ' + conversation.guid.slice(0, 8) + '...' : 'No user ID'}
+                        </div>
                     `;
-                    taskEl.onclick = () => this.replayTask(taskId);
+                    taskEl.onclick = () => this.replayConversation(conversationId);
                     taskList.appendChild(taskEl);
                 });
             }
 
-            saveCurrentChat(chatMessages) {
-                // Prompt for task name
-                const taskName = prompt('Enter a name for this task:');
-                if (!taskName) return;
+            async uploadConversation(event) {
+                const file = event.target.files[0];
+                if (!file) return;
 
-                const taskId = `task_${Date.now()}`;
-                const task = {
-                    id: taskId,
-                    name: taskName,
-                    created: new Date().toISOString(),
-                    messages: chatMessages,
-                    location: {
-                        lat: REFERENCE_LOCATION.lat,
-                        lng: REFERENCE_LOCATION.lng,
-                        name: REFERENCE_LOCATION.name
-                    },
-                    world: CURRENT_WORLD.name
-                };
+                try {
+                    const text = await file.text();
+                    const conversationData = JSON.parse(text);
 
-                this.tasks.set(taskId, task);
-                this.world.showNotification(`Task "${taskName}" saved!`);
+                    // Validate conversation format
+                    if (!conversationData.conversation || !Array.isArray(conversationData.conversation)) {
+                        throw new Error('Invalid conversation format');
+                    }
 
-                // Update task list if panel is open
-                if (document.getElementById('task-panel').classList.contains('active')) {
+                    // Generate unique ID for this conversation
+                    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    // Store conversation
+                    this.conversations.set(conversationId, conversationData);
+
+                    // Update UI
                     this.updateTaskList();
+                    this.world.showNotification('Conversation uploaded successfully!');
+
+                } catch (error) {
+                    console.error('Error uploading conversation:', error);
+                    this.world.showNotification('Failed to upload conversation. Check file format.');
                 }
+
+                // Reset file input
+                event.target.value = '';
             }
 
-            async replayTask(taskId) {
-                const task = this.tasks.get(taskId);
-                if (!task) return;
+            async replayConversation(conversationId) {
+                const conversation = this.conversations.get(conversationId);
+                if (!conversation) return;
 
                 // Show notification
-                this.world.showNotification(`Replaying task: ${task.name}`);
+                this.world.showNotification(`Starting conversation replay...`);
 
                 // Open chat interface
                 document.getElementById('ai-chat-interface').classList.add('active');
@@ -2655,42 +2713,106 @@
 
                 // Set replaying flag
                 this.isReplaying = true;
-                this.currentTaskReplay = task;
+                this.currentReplay = {
+                    conversation: conversation,
+                    currentIndex: 0
+                };
 
-                // Replay messages with delay
-                for (let i = 0; i < task.messages.length; i++) {
-                    const message = task.messages[i];
+                // Start replay
+                await this.replayNextMessage();
+            }
 
-                    // Add message with replay styling
-                    this.addReplayMessage(message.text, message.sender);
+            async replayNextMessage() {
+                if (!this.isReplaying || !this.currentReplay) return;
 
-                    // Wait between messages for realistic replay
-                    if (i < task.messages.length - 1) {
-                        await this.delay(1500); // 1.5 seconds between messages
+                const { conversation, currentIndex } = this.currentReplay;
+                
+                if (currentIndex >= conversation.conversation.length) {
+                    // Replay complete
+                    this.endReplay();
+                    return;
+                }
+
+                const message = conversation.conversation[currentIndex];
+                
+                // Add message to chat
+                if (message.role === 'user') {
+                    this.addReplayMessage(message.content, 'user');
+                } else if (message.role === 'assistant') {
+                    // Show typing indicator for assistant
+                    this.world.aiManager.showTypingIndicator();
+                    
+                    // Wait a bit for realism
+                    await this.delay(1500);
+                    
+                    this.world.aiManager.hideTypingIndicator();
+                    this.addReplayMessage(message.content, 'ai');
+                    
+                    // Animate 3D text if AI manager is active
+                    if (this.world.aiManager && this.world.aiManager.isActive) {
+                        this.world.aiManager.animateTextResponse(message.content);
+                    }
+                } else if (message.role === 'system') {
+                    // Show system messages differently
+                    this.addReplayMessage(message.content, 'system');
+                    
+                    // Show simplified log in 3D if it contains agent logs
+                    if (message.content.includes('Performed') || message.content.includes('Stage')) {
+                        const simplifiedLog = this.extractWorkshopStatus(message.content);
+                        if (simplifiedLog && this.world.aiManager && this.world.aiManager.isActive) {
+                            this.world.aiManager.animateAgentLog(simplifiedLog);
+                        }
                     }
                 }
 
-                // Hide replay indicator
-                document.getElementById('task-replay-indicator').classList.remove('active');
-                this.isReplaying = false;
-                this.currentTaskReplay = null;
+                // Move to next message
+                this.currentReplay.currentIndex++;
 
-                this.world.showNotification('Task replay completed!');
+                // Continue replay after delay
+                const nextDelay = message.role === 'system' ? 500 : 2000;
+                setTimeout(() => this.replayNextMessage(), nextDelay);
+            }
+
+            extractWorkshopStatus(systemMessage) {
+                // Extract key status from workshop system messages
+                if (systemMessage.includes('Workshop Initialized')) return '🚀 Workshop Started';
+                if (systemMessage.includes('Stage 1 Complete')) return '✅ Pain Points Captured';
+                if (systemMessage.includes('Stage 2 Complete')) return '📝 Stories Generated';
+                if (systemMessage.includes('Stage 3 Complete')) return '🎯 Stories Refined';
+                if (systemMessage.includes('Stage 4 Complete')) return '🏆 Priorities Set';
+                if (systemMessage.includes('Stage 5')) return '🔍 Analyzing Current State';
+                return null;
             }
 
             addReplayMessage(text, sender) {
                 const chatMessages = document.getElementById('ai-chat-messages');
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `ai-message ${sender} task-replay`;
-                messageDiv.textContent = text;
+                
+                if (sender === 'system') {
+                    // Format system messages
+                    messageDiv.innerHTML = this.world.aiManager.formatAgentLog(text);
+                } else {
+                    messageDiv.textContent = text;
+                }
 
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
 
                 // Animate companion if AI message
-                if (sender === 'ai' && this.world.aiManager) {
+                if (sender === 'ai' && this.world.aiManager && this.world.aiManager.isActive) {
                     this.world.aiManager.animateCompanionSpeaking();
                 }
+            }
+
+            endReplay() {
+                this.isReplaying = false;
+                this.currentReplay = null;
+                
+                // Hide replay indicator
+                document.getElementById('task-replay-indicator').classList.remove('active');
+                
+                this.world.showNotification('Conversation replay completed!');
             }
 
             delay(ms) {
@@ -2931,7 +3053,7 @@
             }
         }
 
-        // AI Manager Class (Modified with fixes)
+        // AI Manager Class (Modified to work with conversation replay)
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -2939,7 +3061,6 @@
                 this.endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
                 this.companions = new Map();
                 this.conversationHistory = [];
-                this.currentChatHistory = []; // Track current chat for saving as task
                 this.isActive = false;
                 this.userGuid = this.generateUserGuid();
 
@@ -3353,7 +3474,7 @@
                 }, 50);
             }
 
-            animateAgentLog(logText) {
+            animateAgentLog(logText){
                 // Clear previous agent log meshes
                 this.clearAgentLogs();
 
@@ -3490,9 +3611,9 @@
                 const message = this.chatInput.value.trim();
                 if (!message || !this.isActive) return;
 
-                // Check if currently replaying a task
+                // Check if currently replaying a conversation
                 if (this.world.taskManager && this.world.taskManager.isReplaying) {
-                    this.showNotification('Cannot send messages during task replay');
+                    this.showNotification('Cannot send messages during conversation replay');
                     return;
                 }
 
@@ -3507,13 +3628,6 @@
                 this.conversationHistory.push({
                     role: 'user',
                     content: message
-                });
-
-                // Add to current chat history for task saving
-                this.currentChatHistory.push({
-                    text: message,
-                    sender: 'user',
-                    timestamp: Date.now()
                 });
 
                 try {
@@ -3533,13 +3647,6 @@
                             content: response.assistant_response
                         });
 
-                        // Add to current chat history for task saving
-                        this.currentChatHistory.push({
-                            text: response.assistant_response,
-                            sender: 'ai',
-                            timestamp: Date.now()
-                        });
-
                         // Animate companion when speaking
                         this.animateCompanionSpeaking();
 
@@ -3550,13 +3657,6 @@
                     // Handle agent logs if present
                     if (response.agent_logs) {
                         this.addAgentLog(response.agent_logs);
-
-                        // Add to current chat history
-                        this.currentChatHistory.push({
-                            text: response.agent_logs,
-                            sender: 'system',
-                            timestamp: Date.now()
-                        });
 
                         // Show simplified log in 3D
                         const simplifiedLog = this.extractAgentStatus(response.agent_logs);
@@ -4795,24 +4895,6 @@
                 this.animate();
             }
 
-            saveCurrentChatAsTask() {
-                if (!this.aiManager || !this.aiManager.isActive) {
-                    this.showNotification('Please activate AI companion first');
-                    return;
-                }
-
-                if (this.aiManager.currentChatHistory.length === 0) {
-                    this.showNotification('No messages to save as task');
-                    return;
-                }
-
-                // Pass current chat history to task manager
-                this.taskManager.saveCurrentChat(this.aiManager.currentChatHistory);
-
-                // Clear current chat history for new conversations
-                this.aiManager.currentChatHistory = [];
-            }
-
             getCurrentWorldData() {
                 return {
                     worldName: CURRENT_WORLD.name,
@@ -5092,8 +5174,7 @@
                     } else {
                         // Default circular arrangement
                         const angle = (i / numPortals) * Math.PI * 2;
-                        position = {
-                            x: Math.cos(angle) * radius,
+                        position = {x: Math.cos(angle) * radius,
                             y: 3,
                             z: Math.sin(angle) * radius
                         };
@@ -5756,4 +5837,4 @@
         }, { passive: false });
     </script>
 </body>
-</html>
+</html>]
