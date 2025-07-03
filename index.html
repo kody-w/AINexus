@@ -1,4 +1,4 @@
-[<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -42,6 +42,326 @@
             user-select: none;
         }
 
+        /* Gamepad Indicator */
+        #gamepad-indicator {
+            position: fixed;
+            top: 140px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: #06ffa5;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #gamepad-indicator.active {
+            opacity: 1;
+        }
+
+        /* Scene Recorder Button */
+        .scene-recorder-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 500px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+        }
+
+        .scene-recorder-button:hover {
+            background: rgba(255, 0, 0, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+        }
+
+        .scene-recorder-button.recording {
+            animation: recordPulse 1s infinite;
+        }
+
+        @keyframes recordPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+        }
+
+        .scene-recorder-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* Scene Recorder Modal */
+        .scene-recorder-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3002;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .scene-recorder-modal.show {
+            display: flex;
+        }
+
+        .scene-recorder-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.3);
+        }
+
+        .scene-recorder-content h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff0000, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .recording-status {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .recording-status.active {
+            animation: pulse 2s infinite;
+        }
+
+        .recording-timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin: 10px 0;
+        }
+
+        .recording-info {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .scene-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .scene-control-btn {
+            background: linear-gradient(45deg, #ff0000, #ff6b6b);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scene-control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 0, 0, 0.4);
+        }
+
+        .scene-control-btn.stop {
+            background: linear-gradient(45deg, #666, #999);
+        }
+
+        .scene-control-btn.play {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+        }
+
+        .scene-control-btn.export {
+            background: linear-gradient(45deg, #3a86ff, #8338ec);
+        }
+
+        .scene-list {
+            margin: 20px 0;
+        }
+
+        .scene-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .scene-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+
+        .scene-item-info {
+            flex: 1;
+        }
+
+        .scene-item-name {
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 5px;
+        }
+
+        .scene-item-details {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .scene-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .scene-action-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .scene-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .scene-action-btn.delete {
+            background: rgba(255, 0, 0, 0.3);
+        }
+
+        .scene-action-btn.delete:hover {
+            background: rgba(255, 0, 0, 0.5);
+        }
+
+        .scene-timeline {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .timeline-progress {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .timeline-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #ff6b6b);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .timeline-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .timeline-time {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .playback-speed {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .speed-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .speed-btn.active {
+            background: rgba(255, 0, 0, 0.5);
+        }
+
+        .scene-import-input {
+            display: none;
+        }
+
+        .replay-overlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+        }
+
+        .replay-overlay.active {
+            display: block;
+        }
+
+        .replay-text {
+            color: #ff6b6b;
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
         /* Map View */
         #map-container {
             position: fixed;
@@ -76,11 +396,7 @@
             font-weight: 300;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             background-size: 400% 100%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -109,9 +425,7 @@
         }
 
         .location-setter button {
-            background: linear-gradient(45deg, 
-#06ffa5, 
-#00ff88);
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
             color: #000;
             border: none;
             padding: 10px 20px;
@@ -208,7 +522,7 @@
         }
 
         .portal-item {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 10px;
             padding: 15px;
@@ -359,19 +673,14 @@
         }
 
         .ai-modal-close:hover {
-            color: 
-#ff006e;
+            color: #ff006e;
             transform: rotate(90deg);
         }
 
         .ai-modal h3 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -393,9 +702,7 @@
         }
 
         .ai-activate-btn {
-            background: linear-gradient(45deg, 
-#8338ec, 
-#3a86ff);
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
             color: white;
             border: none;
             padding: 12px 30px;
@@ -431,8 +738,7 @@
 
         .ai-companion-name {
             font-weight: bold;
-            color: 
-#06ffa5;
+            color: #06ffa5;
         }
 
         .ai-companion-status {
@@ -471,8 +777,7 @@
 
         .ai-chat-title {
             font-weight: bold;
-            color: 
-#06ffa5;
+            color: #06ffa5;
         }
 
         .ai-chat-messages {
@@ -532,13 +837,11 @@
             padding: 10px;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
-            border-left: 3px solid 
-#ff6a00;
+            border-left: 3px solid #ff6a00;
         }
 
         .agent-log-header {
-            color: 
-#ffa500;
+            color: #ffa500;
             font-weight: bold;
             margin-bottom: 5px;
             font-size: 14px;
@@ -560,26 +863,22 @@
 
         .agent-status.thinking {
             background: rgba(58, 134, 255, 0.3);
-            color: 
-#4DD0E1;
+            color: #4DD0E1;
         }
 
         .agent-status.searching {
             background: rgba(255, 152, 0, 0.3);
-            color: 
-#ffaa00;
+            color: #ffaa00;
         }
 
         .agent-status.processing {
             background: rgba(156, 39, 176, 0.3);
-            color: 
-#BA68C8;
+            color: #BA68C8;
         }
 
         .agent-status.complete {
             background: rgba(76, 175, 80, 0.3);
-            color: 
-#81C784;
+            color: #81C784;
         }
 
         .agent-step {
@@ -592,13 +891,11 @@
             content: '▸';
             position: absolute;
             left: 5px;
-            color: 
-#06ffa5;
+            color: #06ffa5;
         }
 
         .agent-error {
-            color: 
-#ff6b6b;
+            color: #ff6b6b;
             background: rgba(255, 0, 0, 0.1);
             padding: 5px;
             border-radius: 5px;
@@ -606,8 +903,7 @@
         }
 
         .agent-success {
-            color: 
-#51cf66;
+            color: #51cf66;
             background: rgba(0, 255, 0, 0.1);
             padding: 5px;
             border-radius: 5px;
@@ -624,8 +920,7 @@
             max-width: 300px;
             font-family: monospace;
             font-size: 12px;
-            color: 
-#ffa500;
+            color: #ffa500;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -692,9 +987,7 @@
         }
 
         .ai-chat-send {
-            background: linear-gradient(45deg, 
-#8338ec, 
-#3a86ff);
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
             color: white;
             border: none;
             padding: 10px 20px;
@@ -709,9 +1002,7 @@
 
         /* Save as Task Button */
         .save-task-btn {
-            background: linear-gradient(45deg, 
-#ff6a00, 
-#ff8c00);
+            background: linear-gradient(45deg, #ff6a00, #ff8c00);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -783,10 +1074,7 @@
         .task-panel h3 {
             margin: 0 0 15px 0;
             font-size: 20px;
-            background: linear-gradient(45deg, 
-#ff6a00, 
-#ff8c00, 
-#ffa500);
+            background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -808,8 +1096,7 @@
         }
 
         .task-item strong {
-            color: 
-#ffa500;
+            color: #ffa500;
             display: block;
             margin-bottom: 5px;
         }
@@ -934,10 +1221,8 @@
         }
 
         .gps-indicator.active {
-            background: 
-#00ff00;
-            box-shadow: 0 0 10px 
-#00ff00;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
             animation: pulse 2s infinite;
         }
 
@@ -953,8 +1238,7 @@
         }
 
         .gps-accuracy {
-            color: 
-#06ffa5;
+            color: #06ffa5;
             font-size: 0.8em;
         }
 
@@ -1020,8 +1304,7 @@
             font-size: 1.2em;
             font-weight: bold;
             margin-bottom: 5px;
-            color: 
-#8338ec;
+            color: #8338ec;
         }
 
         .popup-description {
@@ -1032,15 +1315,12 @@
 
         .popup-distance {
             font-size: 0.8em;
-            color: 
-#06ffa5;
+            color: #06ffa5;
             margin-bottom: 10px;
         }
 
         .enter-world-btn {
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec);
+            background: linear-gradient(45deg, #ff006e, #8338ec);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -1100,11 +1380,7 @@
         .permission-title {
             font-size: 24px;
             margin-bottom: 15px;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -1122,9 +1398,7 @@
         }
 
         .permission-btn {
-            background: linear-gradient(45deg, 
-#06ffa5, 
-#00ff88);
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
             color: #000;
             border: none;
             padding: 12px 30px;
@@ -1143,9 +1417,7 @@
         }
 
         .permission-btn.manual {
-            background: linear-gradient(45deg, 
-#8338ec, 
-#3a86ff);
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
             color: white;
         }
 
@@ -1162,11 +1434,7 @@
             font-weight: 100;
             letter-spacing: 0.2em;
             text-transform: uppercase;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             background-size: 400% 100%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -1206,8 +1474,7 @@
         }
 
         .origin-world {
-            color: 
-#06ffa5;
+            color: #06ffa5;
             font-weight: 500;
         }
 
@@ -1236,17 +1503,13 @@
         }
 
         .status-indicator.connected {
-            background: 
-#00ff00;
-            box-shadow: 0 0 10px 
-#00ff00;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
         }
 
         .status-indicator.hosting {
-            background: 
-#06ffa5;
-            box-shadow: 0 0 10px 
-#06ffa5;
+            background: #06ffa5;
+            box-shadow: 0 0 10px #06ffa5;
         }
 
         .status-text {
@@ -1255,8 +1518,7 @@
         }
 
         .player-count {
-            color: 
-#06ffa5;
+            color: #06ffa5;
             font-weight: bold;
         }
 
@@ -1334,8 +1596,7 @@
             font-size: 1.4em;
             font-weight: 300;
             margin-bottom: 10px;
-            color: 
-#06ffa5;
+            color: #06ffa5;
         }
 
         .tooltip-description {
@@ -1346,8 +1607,7 @@
 
         .tooltip-instruction {
             font-size: 0.85em;
-            color: 
-#ff006e;
+            color: #ff006e;
             text-align: center;
             margin-top: 15px;
             padding-top: 15px;
@@ -1527,11 +1787,7 @@
             left: -3px;
             right: -3px;
             bottom: -3px;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             border-radius: 20px;
             opacity: 0.5;
             animation: pulse 2s infinite;
@@ -1559,9 +1815,7 @@
         }
 
         .capture-btn, .cancel-scan-btn {
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec);
+            background: linear-gradient(45deg, #ff006e, #8338ec);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -1610,12 +1864,8 @@
         .form-container h2 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
-            -webkit-background-clip: text;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip:text;
             -webkit-text-fill-color: transparent;
             text-align: center;
         }
@@ -1651,9 +1901,7 @@
 
         .create-world-btn {
             width: 100%;
-            background: linear-gradient(45deg, 
-#06ffa5, 
-#00ff88);
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
             color: #000;
             border: none;
             padding: 15px;
@@ -1685,15 +1933,12 @@
         }
 
         .form-close-btn:hover {
-            color: 
-#ff006e;
+            color: #ff006e;
             transform: rotate(90deg);
         }
 
         .download-json-btn {
-            background: linear-gradient(45deg, 
-#3a86ff, 
-#8338ec);
+            background: linear-gradient(45deg, #3a86ff, #8338ec);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -1794,19 +2039,14 @@
         }
 
         .qr-close:hover {
-            color: 
-#ff006e;
+            color: #ff006e;
             transform: rotate(90deg);
         }
 
         .qr-modal h3 {
             margin: 0 0 20px 0;
             font-size: 24px;
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec, 
-#3a86ff, 
-#06ffa5);
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -1818,8 +2058,7 @@
             padding: 10px;
             margin: 15px 0;
             font-size: 0.9em;
-            color: 
-#06ffa5;
+            color: #06ffa5;
         }
 
         #qr-code-container {
@@ -1848,9 +2087,7 @@
         }
 
         .copy-url-btn {
-            background: linear-gradient(45deg, 
-#ff006e, 
-#8338ec);
+            background: linear-gradient(45deg, #ff006e, #8338ec);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -1868,9 +2105,7 @@
         }
 
         .copy-url-btn.copied {
-            background: linear-gradient(45deg, 
-#06ffa5, 
-#00ff88);
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
         }
 
         @media (max-width: 768px) {
@@ -1908,6 +2143,14 @@
 <body>
     <div id="three-container"></div>
 
+    <!-- Gamepad Indicator -->
+    <div id="gamepad-indicator">
+        🎮 Gamepad Mode
+        <span style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-left: 10px;">
+            LS: Move | RS: Look | A: Enter Portal
+        </span>
+    </div>
+
     <!-- Map Container -->
     <div id="map-container">
         <div id="map"></div>
@@ -1934,6 +2177,69 @@
                 <button class="permission-btn manual" id="manual-location-btn">Choose on Map</button>
             </div>
         </div>
+    </div>
+
+    <!-- Scene Recorder Button -->
+    <div class="scene-recorder-button" id="scene-recorder-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="11"/>
+            <circle cx="12" cy="12" r="5" fill="currentColor"/>
+        </svg>
+    </div>
+
+    <!-- Scene Recorder Modal -->
+    <div class="scene-recorder-modal" id="scene-recorder-modal">
+        <div class="scene-recorder-content">
+            <button class="portal-close-btn" id="scene-recorder-close">&times;</button>
+            <h3>Scene Recorder & Player</h3>
+            
+            <div class="recording-status" id="recording-status">
+                <div class="recording-timer" id="recording-timer">00:00</div>
+                <div class="recording-info" id="recording-info">Ready to record</div>
+            </div>
+
+            <div class="scene-controls">
+                <button class="scene-control-btn" id="start-recording-btn">
+                    ▶️ Start Recording
+                </button>
+                <button class="scene-control-btn stop" id="stop-recording-btn" style="display:none;">
+                    ⏹️ Stop Recording
+                </button>
+                <button class="scene-control-btn export" id="export-scene-btn">
+                    📤 Export Scene
+                </button>
+                <button class="scene-control-btn" onclick="document.getElementById('scene-import-input').click()">
+                    📥 Import Scene
+                </button>
+                <input type="file" id="scene-import-input" class="scene-import-input" accept=".json" onchange="window.worldNavigator.sceneRecorder.importScene(event)">
+            </div>
+
+            <div class="scene-timeline" id="scene-timeline" style="display:none;">
+                <div class="timeline-progress">
+                    <div class="timeline-bar" id="timeline-bar"></div>
+                </div>
+                <div class="timeline-controls">
+                    <div class="timeline-time">
+                        <span id="current-time">00:00</span> / <span id="total-time">00:00</span>
+                    </div>
+                    <div class="playback-speed">
+                        <button class="speed-btn" data-speed="0.5">0.5x</button>
+                        <button class="speed-btn active" data-speed="1">1x</button>
+                        <button class="speed-btn" data-speed="2">2x</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scene-list" id="scene-list">
+                <h4 style="color: #ff6b6b; margin-bottom: 10px;">Recorded Scenes:</h4>
+                <!-- Scene items will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Replay Overlay -->
+    <div class="replay-overlay" id="replay-overlay">
+        <div class="replay-text">▶️ REPLAYING SCENE</div>
     </div>
 
     <!-- Portal Manager Button -->
@@ -1983,8 +2289,7 @@
             <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Companions</button>
 
             <div class="ai-companion-list" id="ai-companion-list">
-                <h4 style="color: 
-#06ffa5; margin-top: 20px;">Active Companions:</h4>
+                <h4 style="color: #06ffa5; margin-top: 20px;">Active Companions:</h4>
                 <div class="ai-companion-item">
                     <div>
                         <div class="ai-companion-name">No AI companions active</div>
@@ -2404,6 +2709,449 @@
 
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
+        // Scene Recorder Class
+        class SceneRecorder {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.isRecording = false;
+                this.isPlaying = false;
+                this.recordedActions = [];
+                this.recordStartTime = 0;
+                this.playbackStartTime = 0;
+                this.playbackIndex = 0;
+                this.playbackSpeed = 1;
+                this.recordingTimer = null;
+                this.playbackTimer = null;
+                this.savedScenes = new Map();
+
+                this.setupEventListeners();
+                this.loadSavedScenes();
+            }
+
+            setupEventListeners() {
+                // Scene recorder button
+                document.getElementById('scene-recorder-button').addEventListener('click', () => {
+                    this.showModal();
+                });
+
+                // Close button
+                document.getElementById('scene-recorder-close').addEventListener('click', () => {
+                    this.hideModal();
+                });
+
+                // Control buttons
+                document.getElementById('start-recording-btn').addEventListener('click', () => {
+                    this.startRecording();
+                });
+
+                document.getElementById('stop-recording-btn').addEventListener('click', () => {
+                    this.stopRecording();
+                });
+
+                document.getElementById('export-scene-btn').addEventListener('click', () => {
+                    this.exportScene();
+                });
+
+                // Speed buttons
+                document.querySelectorAll('.speed-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        this.setPlaybackSpeed(parseFloat(e.target.dataset.speed));
+                        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                    });
+                });
+
+                // Close on outside click
+                document.getElementById('scene-recorder-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'scene-recorder-modal') {
+                        this.hideModal();
+                    }
+                });
+            }
+
+            showModal() {
+                document.getElementById('scene-recorder-modal').classList.add('show');
+                this.updateSceneList();
+            }
+
+            hideModal() {
+                document.getElementById('scene-recorder-modal').classList.remove('show');
+            }
+
+            startRecording() {
+                if (this.isRecording) return;
+
+                this.isRecording = true;
+                this.recordedActions = [];
+                this.recordStartTime = Date.now();
+
+                // Update UI
+                document.getElementById('scene-recorder-button').classList.add('recording');
+                document.getElementById('start-recording-btn').style.display = 'none';
+                document.getElementById('stop-recording-btn').style.display = 'inline-block';
+                document.getElementById('recording-status').classList.add('active');
+                document.getElementById('recording-info').textContent = 'Recording in progress...';
+
+                // Start recording timer
+                this.updateRecordingTimer();
+
+                // Record initial state
+                this.recordAction({
+                    type: 'init',
+                    data: {
+                        cameraPosition: this.world.camera.position.clone(),
+                        cameraRotation: {
+                            x: this.world.rotation.x,
+                            y: this.world.rotation.y
+                        },
+                        location: REFERENCE_LOCATION,
+                        worldAttributes: CURRENT_WORLD
+                    }
+                });
+
+                this.world.showNotification('Recording started!');
+            }
+
+            stopRecording() {
+                if (!this.isRecording) return;
+
+                this.isRecording = false;
+                clearInterval(this.recordingTimer);
+
+                // Update UI
+                document.getElementById('scene-recorder-button').classList.remove('recording');
+                document.getElementById('start-recording-btn').style.display = 'inline-block';
+                document.getElementById('stop-recording-btn').style.display = 'none';
+                document.getElementById('recording-status').classList.remove('active');
+                document.getElementById('recording-info').textContent = 'Recording complete';
+
+                // Save the recording
+                const sceneId = `scene_${Date.now()}`;
+                const sceneData = {
+                    id: sceneId,
+                    name: `Scene ${new Date().toLocaleString()}`,
+                    duration: Date.now() - this.recordStartTime,
+                    actions: this.recordedActions,
+                    timestamp: new Date().toISOString()
+                };
+
+                this.savedScenes.set(sceneId, sceneData);
+                this.saveToLocalStorage();
+                this.updateSceneList();
+
+                this.world.showNotification('Recording saved!');
+            }
+
+            recordAction(action) {
+                if (!this.isRecording) return;
+
+                action.timestamp = Date.now() - this.recordStartTime;
+                this.recordedActions.push(action);
+            }
+
+            // Called from world's update loop
+            recordFrame() {
+                if (!this.isRecording) return;
+
+                // Record camera movement
+                this.recordAction({
+                    type: 'camera',
+                    data: {
+                        position: this.world.camera.position.clone(),
+                        rotation: {
+                            x: this.world.rotation.x,
+                            y: this.world.rotation.y
+                        }
+                    }
+                });
+
+                // Record player movement if multiplayer is active
+                if (this.world.multiplayer && this.world.multiplayer.connections.size > 0) {
+                    const players = [];
+                    this.world.multiplayer.players.forEach((player, peerId) => {
+                        players.push({
+                            id: peerId,
+                            position: player.avatar.position.clone(),
+                            username: player.username
+                        });
+                    });
+
+                    if (players.length > 0) {
+                        this.recordAction({
+                            type: 'players',
+                            data: players
+                        });
+                    }
+                }
+
+                // Record AI companion state
+                if (this.world.aiManager && this.world.aiManager.isActive) {
+                    const companion = this.world.aiManager.companions.get('ai-assistant');
+                    if (companion) {
+                        this.recordAction({
+                            type: 'ai_companion',
+                            data: {
+                                position: companion.object.position.clone(),
+                                active: true
+                            }
+                        });
+                    }
+                }
+            }
+
+            recordPortalInteraction(portalName, url) {
+                this.recordAction({
+                    type: 'portal_interaction',
+                    data: {
+                        portalName: portalName,
+                        url: url
+                    }
+                });
+            }
+
+            recordChatMessage(message, sender) {
+                this.recordAction({
+                    type: 'chat',
+                    data: {
+                        message: message,
+                        sender: sender
+                    }
+                });
+            }
+
+            playScene(sceneId) {
+                const scene = this.savedScenes.get(sceneId);
+                if (!scene) return;
+
+                this.isPlaying = true;
+                this.playbackIndex = 0;
+                this.playbackStartTime = Date.now();
+
+                // Show replay overlay
+                document.getElementById('replay-overlay').classList.add('active');
+                document.getElementById('scene-timeline').style.display = 'block';
+                document.getElementById('total-time').textContent = this.formatTime(scene.duration);
+
+                // Initialize scene state
+                const initAction = scene.actions.find(a => a.type === 'init');
+                if (initAction) {
+                    this.world.camera.position.copy(initAction.data.cameraPosition);
+                    this.world.rotation.x = initAction.data.cameraRotation.x;
+                    this.world.rotation.y = initAction.data.cameraRotation.y;
+                }
+
+                this.world.showNotification('Starting scene replay...');
+
+                // Start playback
+                this.playNextAction(scene);
+            }
+
+            playNextAction(scene) {
+                if (!this.isPlaying || this.playbackIndex >= scene.actions.length) {
+                    this.stopPlayback();
+                    return;
+                }
+
+                const currentTime = (Date.now() - this.playbackStartTime) * this.playbackSpeed;
+                const action = scene.actions[this.playbackIndex];
+
+                // Update timeline
+                const progress = (currentTime / scene.duration) * 100;
+                document.getElementById('timeline-bar').style.width = `${progress}%`;
+                document.getElementById('current-time').textContent = this.formatTime(currentTime);
+
+                // Execute actions that should have happened by now
+                while (this.playbackIndex < scene.actions.length && 
+                       scene.actions[this.playbackIndex].timestamp <= currentTime) {
+                    
+                    const action = scene.actions[this.playbackIndex];
+                    this.executeAction(action);
+                    this.playbackIndex++;
+                }
+
+                // Continue playback
+                requestAnimationFrame(() => this.playNextAction(scene));
+            }
+
+            executeAction(action) {
+                switch (action.type) {
+                    case 'camera':
+                        this.world.camera.position.lerp(action.data.position, 0.1);
+                        this.world.rotation.x = action.data.rotation.x;
+                        this.world.rotation.y = action.data.rotation.y;
+                        break;
+
+                    case 'portal_interaction':
+                        this.world.showNotification(`Portal interaction: ${action.data.portalName}`);
+                        break;
+
+                    case 'chat':
+                        if (this.world.aiManager && this.world.aiManager.chatInterface.classList.contains('active')) {
+                            this.world.aiManager.addMessage(action.data.message, action.data.sender);
+                        }
+                        break;
+
+                    case 'players':
+                        // Show player movements (simplified)
+                        action.data.forEach(playerData => {
+                            // Could create ghost players here
+                        });
+                        break;
+
+                    case 'ai_companion':
+                        if (this.world.aiManager && action.data.active) {
+                            const companion = this.world.aiManager.companions.get('ai-assistant');
+                            if (companion) {
+                                companion.object.position.copy(action.data.position);
+                            }
+                        }
+                        break;
+                }
+            }
+
+            stopPlayback() {
+                this.isPlaying = false;
+                document.getElementById('replay-overlay').classList.remove('active');
+                document.getElementById('scene-timeline').style.display = 'none';
+                this.world.showNotification('Playback complete!');
+            }
+
+            setPlaybackSpeed(speed) {
+                this.playbackSpeed = speed;
+            }
+
+            updateRecordingTimer() {
+                this.recordingTimer = setInterval(() => {
+                    const elapsed = Date.now() - this.recordStartTime;
+                    document.getElementById('recording-timer').textContent = this.formatTime(elapsed);
+                }, 100);
+            }
+
+            formatTime(ms) {
+                const seconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            exportScene() {
+                if (this.savedScenes.size === 0) {
+                    this.world.showNotification('No scenes to export!');
+                    return;
+                }
+
+                const exportData = {
+                    version: '1.0',
+                    exportDate: new Date().toISOString(),
+                    location: REFERENCE_LOCATION,
+                    scenes: Array.from(this.savedScenes.values())
+                };
+
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nexus_scenes_${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                this.world.showNotification('Scenes exported successfully!');
+            }
+
+            async importScene(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    const importData = JSON.parse(text);
+
+                    if (!importData.version || !importData.scenes) {
+                        throw new Error('Invalid scene file format');
+                    }
+
+                    // Import each scene
+                    importData.scenes.forEach(scene => {
+                        this.savedScenes.set(scene.id, scene);
+                    });
+
+                    this.saveToLocalStorage();
+                    this.updateSceneList();
+
+                    this.world.showNotification(`Imported ${importData.scenes.length} scenes successfully!`);
+
+                } catch (error) {
+                    console.error('Error importing scenes:', error);
+                    this.world.showNotification('Failed to import scenes. Check file format.');
+                }
+
+                // Reset file input
+                event.target.value = '';
+            }
+
+            updateSceneList() {
+                const sceneList = document.getElementById('scene-list');
+                sceneList.innerHTML = '<h4 style="color: #ff6b6b; margin-bottom: 10px;">Recorded Scenes:</h4>';
+
+                if (this.savedScenes.size === 0) {
+                    sceneList.innerHTML += '<p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No recorded scenes yet. Click "Start Recording" to create your first scene!</p>';
+                    return;
+                }
+
+                this.savedScenes.forEach((scene, sceneId) => {
+                    const sceneItem = document.createElement('div');
+                    sceneItem.className = 'scene-item';
+                    
+                    sceneItem.innerHTML = `
+                        <div class="scene-item-info">
+                            <div class="scene-item-name">${scene.name}</div>
+                            <div class="scene-item-details">
+                                Duration: ${this.formatTime(scene.duration)} • 
+                                Actions: ${scene.actions.length} • 
+                                ${new Date(scene.timestamp).toLocaleDateString()}
+                            </div>
+                        </div>
+                        <div class="scene-item-actions">
+                            <button class="scene-action-btn play" onclick="window.worldNavigator.sceneRecorder.playScene('${sceneId}')">▶️ Play</button>
+                            <button class="scene-action-btn delete" onclick="window.worldNavigator.sceneRecorder.deleteScene('${sceneId}')">Delete</button>
+                        </div>
+                    `;
+                    
+                    sceneList.appendChild(sceneItem);
+                });
+            }
+
+            deleteScene(sceneId) {
+                this.savedScenes.delete(sceneId);
+                this.saveToLocalStorage();
+                this.updateSceneList();
+                this.world.showNotification('Scene deleted');
+            }
+
+            saveToLocalStorage() {
+                const scenesArray = Array.from(this.savedScenes.values());
+                localStorage.setItem('nexus_recorded_scenes', JSON.stringify(scenesArray));
+            }
+
+            loadSavedScenes() {
+                try {
+                    const saved = localStorage.getItem('nexus_recorded_scenes');
+                    if (saved) {
+                        const scenes = JSON.parse(saved);
+                        scenes.forEach(scene => {
+                            this.savedScenes.set(scene.id, scene);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading saved scenes:', error);
+                }
+            }
+        }
+
         // Portal Manager Class
         class PortalManager {
             constructor(worldInstance) {
@@ -2734,10 +3482,14 @@
                 }
 
                 const message = conversation.conversation[currentIndex];
-                
+
                 // Add message to chat
                 if (message.role === 'user') {
                     this.addReplayMessage(message.content, 'user');
+                    // Record in scene recorder if active
+                    if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                        this.world.sceneRecorder.recordChatMessage(message.content, 'user');
+                    }
                 } else if (message.role === 'assistant') {
                     // Show typing indicator for assistant
                     this.world.aiManager.showTypingIndicator();
@@ -2751,6 +3503,11 @@
                     // Animate 3D text if AI manager is active
                     if (this.world.aiManager && this.world.aiManager.isActive) {
                         this.world.aiManager.animateTextResponse(message.content);
+                    }
+                    
+                    // Record in scene recorder if active
+                    if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                        this.world.sceneRecorder.recordChatMessage(message.content, 'ai');
                     }
                 } else if (message.role === 'system') {
                     // Show system messages differently
@@ -3053,7 +3810,7 @@
             }
         }
 
-        // AI Manager Class (Modified to work with conversation replay)
+        // AI Manager Class (Modified to work with scene recording)
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3195,6 +3952,11 @@
 
                         // Display text in 3D world
                         this.animateTextResponse(response.assistant_response);
+
+                        // Record in scene if recording
+                        if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                            this.world.sceneRecorder.recordChatMessage(response.assistant_response, 'ai');
+                        }
 
                         // Clear the API key input for security
                         apiKeyInput.value = '';
@@ -3621,6 +4383,11 @@
                 this.addMessage(message, 'user');
                 this.chatInput.value = '';
 
+                // Record in scene if recording
+                if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                    this.world.sceneRecorder.recordChatMessage(message, 'user');
+                }
+
                 // Show typing indicator
                 this.showTypingIndicator();
 
@@ -3652,6 +4419,11 @@
 
                         // Display text in 3D world
                         this.animateTextResponse(response.assistant_response);
+
+                        // Record in scene if recording
+                        if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                            this.world.sceneRecorder.recordChatMessage(response.assistant_response, 'ai');
+                        }
                     }
 
                     // Handle agent logs if present
@@ -4805,6 +5577,11 @@
 
                 this.inheritedAttributes = inheritedAttributes;
 
+                // Gamepad support
+                this.gamepad = null;
+                this.gamepadDeadzone = 0.15;
+                this.gamepadButtonStates = {};
+
                 // Managers
                 this.gpsManager = null;
                 this.mapManager = null;
@@ -4813,6 +5590,7 @@
                 this.worldCreator = null;
                 this.taskManager = null;
                 this.portalManager = null;
+                this.sceneRecorder = null;
 
                 // World locations cache
                 this.worldLocations = new Map();
@@ -4878,6 +5656,9 @@
 
                 // Initialize Portal Manager
                 this.portalManager = new PortalManager(this);
+
+                // Initialize Scene Recorder
+                this.sceneRecorder = new SceneRecorder(this);
 
                 if (this.isMobile) {
                     document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
@@ -5174,7 +5955,8 @@
                     } else {
                         // Default circular arrangement
                         const angle = (i / numPortals) * Math.PI * 2;
-                        position = {x: Math.cos(angle) * radius,
+                        position = {
+                            x: Math.cos(angle) * radius,
                             y: 3,
                             z: Math.sin(angle) * radius
                         };
@@ -5466,6 +6248,171 @@
                 } else {
                     this.setupDesktopControls();
                 }
+
+                // Setup gamepad controls
+                this.setupGamepadControls();
+            }
+
+            setupGamepadControls() {
+                // Check for gamepad support
+                if (!('getGamepads' in navigator)) {
+                    console.log('Gamepad API not supported');
+                    return;
+                }
+
+                // Listen for gamepad connection
+                window.addEventListener('gamepadconnected', (e) => {
+                    console.log('Gamepad connected:', e.gamepad.id);
+                    this.gamepad = e.gamepad.index;
+                    this.showNotification('🎮 Gamepad connected! Use left stick to move, right stick to look');
+                    
+                    // Show gamepad indicator
+                    const indicator = document.getElementById('gamepad-indicator');
+                    if (indicator) {
+                        indicator.classList.add('active');
+                    } else {
+                        // Create indicator if it doesn't exist
+                        this.createGamepadIndicator();
+                    }
+                });
+
+                window.addEventListener('gamepaddisconnected', (e) => {
+                    console.log('Gamepad disconnected');
+                    if (this.gamepad === e.gamepad.index) {
+                        this.gamepad = null;
+                        
+                        // Hide gamepad indicator
+                        const indicator = document.getElementById('gamepad-indicator');
+                        if (indicator) {
+                            indicator.classList.remove('active');
+                        }
+                    }
+                });
+            }
+
+            createGamepadIndicator() {
+                const indicator = document.createElement('div');
+                indicator.id = 'gamepad-indicator';
+                indicator.className = 'active';
+                indicator.innerHTML = `
+                    🎮 Gamepad Mode
+                    <span style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-left: 10px;">
+                        LS: Move | RS: Look | A: Enter Portal
+                    </span>
+                `;
+                document.body.appendChild(indicator);
+            }
+
+            updateGamepadInput() {
+                if (this.gamepad === null) return;
+
+                const gamepads = navigator.getGamepads();
+                const gp = gamepads[this.gamepad];
+                
+                if (!gp || !gp.connected) return;
+
+                // Left stick for movement (axes 0 and 1)
+                const leftX = this.applyDeadzone(gp.axes[0]);
+                const leftY = this.applyDeadzone(gp.axes[1]);
+
+                // Right stick for camera look (axes 2 and 3)
+                const rightX = this.applyDeadzone(gp.axes[2]);
+                const rightY = this.applyDeadzone(gp.axes[3]);
+
+                // Movement
+                if (Math.abs(leftX) > 0 || Math.abs(leftY) > 0) {
+                    const forward = new THREE.Vector3();
+                    const right = new THREE.Vector3();
+
+                    this.camera.getWorldDirection(forward);
+                    forward.y = 0;
+                    forward.normalize();
+
+                    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                    // Move based on left stick
+                    const moveForward = forward.multiplyScalar(-leftY * this.moveSpeed);
+                    const moveRight = right.multiplyScalar(leftX * this.moveSpeed);
+                    
+                    this.camera.position.add(moveForward);
+                    this.camera.position.add(moveRight);
+                }
+
+                // Camera look with right stick
+                if (Math.abs(rightX) > 0 || Math.abs(rightY) > 0) {
+                    this.rotation.y -= rightX * this.lookSpeed * 2;
+                    this.rotation.x -= rightY * this.lookSpeed * 2;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                }
+
+                // A button (button 0) for interact/enter portal
+                if (gp.buttons[0].pressed) {
+                    this.handleGamepadInteraction();
+                }
+
+                // B button (button 1) for toggle map view
+                if (gp.buttons[1].pressed && !this.gamepadButtonStates.b) {
+                    this.mapManager.toggleView();
+                }
+
+                // X button (button 2) for AI companion
+                if (gp.buttons[2].pressed && !this.gamepadButtonStates.x) {
+                    this.aiCompanionButton.click();
+                }
+
+                // Y button (button 3) for toggle share/QR
+                if (gp.buttons[3].pressed && !this.gamepadButtonStates.y) {
+                    document.getElementById('share-button').click();
+                }
+
+                // Left trigger (button 6) for slower movement
+                if (gp.buttons[6].pressed) {
+                    this.moveSpeed = CURRENT_WORLD.moveSpeed * 0.3;
+                } else {
+                    this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                }
+
+                // Right trigger (button 7) for sprint
+                if (gp.buttons[7].pressed) {
+                    this.moveSpeed = CURRENT_WORLD.moveSpeed * 2;
+                }
+
+                // Update button states to detect single presses
+                this.updateGamepadButtonStates(gp);
+            }
+
+            applyDeadzone(value) {
+                if (Math.abs(value) < this.gamepadDeadzone) {
+                    return 0;
+                }
+                return value;
+            }
+
+            updateGamepadButtonStates(gp) {
+                if (!this.gamepadButtonStates) {
+                    this.gamepadButtonStates = {};
+                }
+                
+                this.gamepadButtonStates.a = gp.buttons[0].pressed;
+                this.gamepadButtonStates.b = gp.buttons[1].pressed;
+                this.gamepadButtonStates.x = gp.buttons[2].pressed;
+                this.gamepadButtonStates.y = gp.buttons[3].pressed;
+            }
+
+            handleGamepadInteraction() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    if (portal.userData.url) {
+                        // Record portal interaction if recording
+                        if (this.sceneRecorder && this.sceneRecorder.isRecording) {
+                            this.sceneRecorder.recordPortalInteraction(portal.userData.name, portal.userData.url);
+                        }
+                        this.enterWorld(portal.userData.url);
+                    }
+                }
             }
 
             setupDesktopControls() {
@@ -5492,6 +6439,10 @@
                             const portal = intersects[0].object;
                             // Always allow entering worlds in teleport mode
                             if (portal.userData.url) {
+                                // Record portal interaction if recording
+                                if (this.sceneRecorder && this.sceneRecorder.isRecording) {
+                                    this.sceneRecorder.recordPortalInteraction(portal.userData.name, portal.userData.url);
+                                }
                                 this.enterWorld(portal.userData.url);
                             }
                         }
@@ -5529,6 +6480,10 @@
                         // Always allow entering worlds in teleport mode
                         if (portal.userData.url) {
                             e.preventDefault();
+                            // Record portal interaction if recording
+                            if (this.sceneRecorder && this.sceneRecorder.isRecording) {
+                                this.sceneRecorder.recordPortalInteraction(portal.userData.name, portal.userData.url);
+                            }
                             this.enterWorld(portal.userData.url);
                             return;
                         }
@@ -5785,12 +6740,20 @@
 
                 const time = this.clock.getElapsedTime();
 
+                // Update gamepad input
+                this.updateGamepadInput();
+
                 this.updateMovement();
                 this.updateHover();
 
                 // Update multiplayer
                 if (this.multiplayer) {
                     this.multiplayer.update();
+                }
+
+                // Record frame if scene recorder is active
+                if (this.sceneRecorder && this.sceneRecorder.isRecording) {
+                    this.sceneRecorder.recordFrame();
                 }
 
                 this.portals.forEach((portal, index) => {
@@ -5837,4 +6800,4 @@
         }, { passive: false });
     </script>
 </body>
-</html>]
+</html>
