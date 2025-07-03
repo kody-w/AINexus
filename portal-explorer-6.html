@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #scene-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            z-index: 100;
+        }
+
+        .title {
+            font-size: 2em;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.9em;
+        }
+
+        /* Portal Info */
+        .portal-info {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px 40px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+        }
+
+        .portal-info.visible {
+            opacity: 1;
+        }
+
+        .portal-name {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+            color: #06ffa5;
+        }
+
+        .portal-description {
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 10px;
+        }
+
+        .portal-action {
+            color: #ff006e;
+            font-weight: bold;
+        }
+
+        /* AI Companion */
+        .ai-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: rgba(131, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(131, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 101;
+        }
+
+        .ai-button:hover {
+            background: rgba(131, 56, 236, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.5);
+        }
+
+        .ai-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            border-color: rgba(6, 255, 165, 0.5);
+        }
+
+        .ai-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* AI Chat */
+        .ai-chat {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 350px;
+            height: 450px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            z-index: 102;
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.3);
+        }
+
+        .ai-chat.active {
+            display: flex;
+        }
+
+        .ai-chat-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-title {
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .ai-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .ai-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .ai-message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+        }
+
+        .ai-message.user {
+            background: rgba(131, 56, 236, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .ai-message.ai {
+            background: rgba(6, 255, 165, 0.2);
+            margin-right: auto;
+        }
+
+        .ai-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            gap: 10px;
+        }
+
+        .ai-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            color: white;
+        }
+
+        .ai-send {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* AI Setup Modal */
+        .ai-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ai-modal.show {
+            display: flex;
+        }
+
+        .ai-modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .ai-modal h3 {
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .ai-modal input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: white;
+        }
+
+        .ai-modal button {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        /* Controls hint */
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px 25px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.8);
+            z-index: 100;
+        }
+
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255,255,255,0.8);
+            z-index: 300;
+        }
+
+        /* Mobile controls */
+        @media (max-width: 768px) {
+            .title {
+                font-size: 1.5em;
+            }
+            
+            .ai-chat {
+                width: calc(100% - 20px);
+                left: 10px;
+                right: 10px;
+            }
+            
+            .controls {
+                font-size: 0.8em;
+                padding: 10px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+
+    <div class="header">
+        <h1 class="title">PORTAL EXPLORER</h1>
+        <p class="subtitle">Click on portals to explore new worlds</p>
+    </div>
+
+    <div class="portal-info" id="portal-info">
+        <div class="portal-name" id="portal-name"></div>
+        <div class="portal-description" id="portal-description"></div>
+        <div class="portal-action">Click to enter</div>
+    </div>
+
+    <!-- AI Companion Button -->
+    <div class="ai-button" id="ai-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+        </svg>
+    </div>
+
+    <!-- AI Chat Interface -->
+    <div class="ai-chat" id="ai-chat">
+        <div class="ai-chat-header">
+            <div class="ai-chat-title">AI Companion</div>
+            <button class="ai-close" onclick="portalExplorer.toggleAIChat()">×</button>
+        </div>
+        <div class="ai-messages" id="ai-messages"></div>
+        <div class="ai-input-container">
+            <input type="text" class="ai-input" id="ai-input" placeholder="Ask me anything..." onkeypress="if(event.key==='Enter') portalExplorer.sendMessage()">
+            <button class="ai-send" onclick="portalExplorer.sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- AI Setup Modal -->
+    <div class="ai-modal" id="ai-modal">
+        <div class="ai-modal-content">
+            <h3>Activate AI Companion</h3>
+            <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                Enter your API key to activate the AI companion
+            </p>
+            <input type="password" id="ai-api-key" placeholder="Enter API key">
+            <button onclick="portalExplorer.activateAI()">Activate</button>
+            <button onclick="document.getElementById('ai-modal').classList.remove('show')" style="background: rgba(255,255,255,0.2); margin-top: 10px;">Cancel</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <strong>Controls:</strong> WASD to move, Mouse to look, Click portals to travel
+    </div>
+
+    <div class="loading" id="loading">Loading portals...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // GitHub Configuration
+        const GITHUB_CONFIG = {
+            owner: 'kody-w',
+            repo: 'AINexus',
+            branch: 'main'
+        };
+
+        class PortalExplorer {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.clock = new THREE.Clock();
+
+                // Movement
+                this.moveSpeed = 0.15;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                this.isPointerLocked = false;
+
+                // AI
+                this.aiActive = false;
+                this.aiApiKey = null;
+                this.conversationHistory = [];
+                this.aiEndpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.userGuid = this.generateUserGuid();
+
+                // Portal hover
+                this.hoveredPortal = null;
+            }
+
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createEnvironment();
+                this.createPortals();
+                this.setupEventListeners();
+                this.animate();
+
+                // Check for cached API key
+                const cachedKey = localStorage.getItem('portal_explorer_api_key');
+                if (cachedKey) {
+                    this.aiApiKey = cachedKey;
+                    this.aiActive = true;
+                    document.getElementById('ai-button').classList.add('active');
+                }
+
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000033, 10, 100);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 2, 10);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.getElementById('scene-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(10, 20, 10);
+                this.scene.add(directionalLight);
+            }
+
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents?ref=${GITHUB_CONFIG.branch}`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+
+                    const files = await response.json();
+                    
+                    this.worlds = files
+                        .filter(file => 
+                            file.type === 'file' && 
+                            file.name.endsWith('.html') && 
+                            !file.name.toLowerCase().includes('index') &&
+                            !file.name.toLowerCase().includes('readme')
+                        )
+                        .map(file => ({
+                            name: this.formatWorldName(file.name),
+                            url: file.download_url,
+                            description: this.getWorldDescription(file.name)
+                        }));
+
+                    console.log(`Found ${this.worlds.length} portal worlds`);
+
+                } catch (error) {
+                    console.error('Error loading worlds:', error);
+                    // Fallback to demo worlds
+                    this.worlds = [
+                        { name: "Crystal Cave", description: "A mystical cave filled with glowing crystals" },
+                        { name: "Sky Islands", description: "Floating islands in an endless sky" },
+                        { name: "Neon City", description: "A futuristic city bathed in neon lights" }
+                    ];
+                }
+            }
+
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+
+            getWorldDescription(filename) {
+                const name = filename.toLowerCase();
+                if (name.includes('crystal')) return "A mystical cave filled with glowing crystals";
+                if (name.includes('sky')) return "Floating islands in an endless sky";
+                if (name.includes('neon')) return "A futuristic city bathed in neon lights";
+                if (name.includes('ocean')) return "Deep underwater mysteries await";
+                if (name.includes('forest')) return "An enchanted forest full of magic";
+                return "A mysterious world waiting to be explored";
+            }
+
+            createEnvironment() {
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(100, 100);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a2e,
+                    roughness: 0.8
+                });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                this.scene.add(ground);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+
+                // Particles
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 500;
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 50;
+                    positions[i + 1] = Math.random() * 20;
+                    positions[i + 2] = (Math.random() - 0.5) * 50;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(particles);
+            }
+
+            createPortals() {
+                const radius = 15;
+                const numPortals = Math.min(this.worlds.length, 8);
+
+                for (let i = 0; i < numPortals; i++) {
+                    const angle = (i / numPortals) * Math.PI * 2;
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+
+                    const portalGroup = new THREE.Group();
+
+                    // Portal frame
+                    const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8338ec,
+                        emissive: 0x8338ec,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(2.7, 32);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(0x00ffff) },
+                            color2: { value: new THREE.Color(0xff00ff) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, wave);
+                                float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.8);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    portalGroup.position.set(x, 3, z);
+                    portalGroup.rotation.y = -angle + Math.PI;
+
+                    // Add light
+                    const light = new THREE.PointLight(0x8338ec, 1, 10);
+                    light.position.set(x, 3, z);
+                    this.scene.add(light);
+
+                    // Store portal data
+                    portal.userData = {
+                        world: this.worlds[i],
+                        material: portalMaterial,
+                        light: light
+                    };
+
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                // Mouse controls
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.checkPortalClick();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+
+                // AI button
+                document.getElementById('ai-button').addEventListener('click', () => {
+                    if (this.aiActive) {
+                        this.toggleAIChat();
+                    } else {
+                        document.getElementById('ai-modal').classList.add('show');
+                    }
+                });
+            }
+
+            checkPortalClick() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    if (portal.userData.world.url) {
+                        this.enterWorld(portal.userData.world.url);
+                    }
+                }
+            }
+
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').textContent = 'Entering portal...';
+
+                    // For GitHub pages, just redirect to the URL
+                    window.location.href = url;
+
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').textContent = 'Failed to enter portal';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 2000);
+                }
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            updatePortalHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        const info = document.getElementById('portal-info');
+                        document.getElementById('portal-name').textContent = portal.userData.world.name;
+                        document.getElementById('portal-description').textContent = portal.userData.world.description;
+                        info.classList.add('visible');
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        document.getElementById('portal-info').classList.remove('visible');
+                    }
+                }
+            }
+
+            // AI Methods
+            generateUserGuid() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            toggleAIChat() {
+                const chat = document.getElementById('ai-chat');
+                chat.classList.toggle('active');
+            }
+
+            async activateAI() {
+                const apiKey = document.getElementById('ai-api-key').value.trim();
+                if (!apiKey) {
+                    alert('Please enter an API key');
+                    return;
+                }
+
+                try {
+                    // Test the API key
+                    const response = await this.sendToAPI('Hello!', apiKey);
+                    
+                    if (response.assistant_response) {
+                        this.aiApiKey = apiKey;
+                        this.aiActive = true;
+                        localStorage.setItem('portal_explorer_api_key', apiKey);
+                        
+                        document.getElementById('ai-button').classList.add('active');
+                        document.getElementById('ai-modal').classList.remove('show');
+                        document.getElementById('ai-api-key').value = '';
+                        
+                        this.addAIMessage(response.assistant_response);
+                        this.toggleAIChat();
+                    }
+                } catch (error) {
+                    alert('Invalid API key. Please check and try again.');
+                }
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('ai-input');
+                const message = input.value.trim();
+                
+                if (!message || !this.aiActive) return;
+
+                this.addUserMessage(message);
+                input.value = '';
+
+                this.conversationHistory.push({ role: 'user', content: message });
+
+                try {
+                    const response = await this.sendToAPI(message, this.aiApiKey);
+                    
+                    if (response.assistant_response) {
+                        this.addAIMessage(response.assistant_response);
+                        this.conversationHistory.push({ 
+                            role: 'assistant', 
+                            content: response.assistant_response 
+                        });
+                    }
+                } catch (error) {
+                    this.addAIMessage('Sorry, I encountered an error. Please try again.');
+                }
+            }
+
+            async sendToAPI(message, apiKey) {
+                const response = await fetch(this.aiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: message,
+                        conversation_history: this.conversationHistory,
+                        user_guid: this.userGuid
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                return await response.json();
+            }
+
+            addUserMessage(text) {
+                const messages = document.getElementById('ai-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'ai-message user';
+                messageDiv.textContent = text;
+                messages.appendChild(messageDiv);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            addAIMessage(text) {
+                const messages = document.getElementById('ai-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'ai-message ai';
+                messageDiv.textContent = text;
+                messages.appendChild(messageDiv);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+
+                this.updateMovement();
+                this.updatePortalHover();
+
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        portal.userData.light.intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
+                    }
+                    portal.rotation.z = Math.sin(time * 0.5 + index) * 0.05;
+                });
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize the app
+        const portalExplorer = new PortalExplorer();
+        window.addEventListener('DOMContentLoaded', () => {
+            portalExplorer.init();
+        });
+
+        // Make portalExplorer globally accessible for onclick handlers
+        window.portalExplorer = portalExplorer;
+    </script>
+</body>
+</html>
