@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>E-Bike Adventure World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .hud {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .speed-display {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(0, 255, 100, 0.5);
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+        }
+
+        .speed-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ff64;
+            text-shadow: 0 0 10px rgba(0, 255, 100, 0.5);
+        }
+
+        .speed-label {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .battery-display {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+        }
+
+        .battery-bar {
+            width: 200px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .battery-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd700, #ffed4e);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .battery-percent {
+            font-size: 1.2em;
+            color: #ffd700;
+            margin-bottom: 5px;
+        }
+
+        .controls-info {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .terrain-info {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .terrain-type {
+            color: #00ff64;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .coordinates {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8em;
+        }
+
+        .boost-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3em;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .boost-indicator.active {
+            opacity: 1;
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .control-button {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 100, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            touch-action: none;
+            font-size: 1.5em;
+            color: #00ff64;
+            transition: all 0.2s;
+        }
+
+        .control-button:active {
+            background: rgba(0, 255, 100, 0.2);
+            transform: scale(0.95);
+        }
+
+        .control-button.boost {
+            border-color: rgba(0, 255, 255, 0.5);
+            color: #00ffff;
+        }
+
+        .control-button.boost:active {
+            background: rgba(0, 255, 255, 0.2);
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 100, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #00ff64, #00cc50);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 255, 100, 0.8);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 80px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #00ff64;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="hud">
+        <div class="speed-display">
+            <div class="speed-value" id="speed">0</div>
+            <div class="speed-label">km/h</div>
+        </div>
+        <div class="battery-display">
+            <div class="battery-percent" id="battery-percent">100%</div>
+            <div class="battery-bar">
+                <div class="battery-fill" id="battery-fill" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="terrain-info">
+        <div class="terrain-type" id="terrain-type">Hills</div>
+        <div class="coordinates" id="coordinates">0, 0</div>
+    </div>
+    
+    <div class="controls-info" id="controls-hint">
+        W/↑: Accelerate • S/↓: Brake • A/D or ←/→: Steer • Space: Boost • Mouse: Look around
+    </div>
+    
+    <div class="boost-indicator" id="boost-indicator">BOOST!</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="steering-joystick">
+                <div class="joystick-handle" id="steering-handle"></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="control-button" id="accelerate-btn">↑</button>
+                <button class="control-button boost" id="boost-btn">⚡</button>
+                <button class="control-button" id="brake-btn">↓</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">Generating infinite terrain...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Noise functions for terrain generation
+        class PerlinNoise {
+            constructor(seed = Math.random()) {
+                this.seed = seed;
+                this.permutation = [];
+                for (let i = 0; i < 256; i++) {
+                    this.permutation[i] = i;
+                }
+                
+                // Shuffle
+                for (let i = 255; i > 0; i--) {
+                    const j = Math.floor(this.random() * (i + 1));
+                    [this.permutation[i], this.permutation[j]] = [this.permutation[j], this.permutation[i]];
+                }
+                
+                // Duplicate
+                for (let i = 0; i < 256; i++) {
+                    this.permutation[i + 256] = this.permutation[i];
+                }
+            }
+            
+            random() {
+                this.seed = (this.seed * 16807) % 2147483647;
+                return this.seed / 2147483647;
+            }
+            
+            fade(t) {
+                return t * t * t * (t * (t * 6 - 15) + 10);
+            }
+            
+            lerp(t, a, b) {
+                return a + t * (b - a);
+            }
+            
+            grad(hash, x, y) {
+                const h = hash & 3;
+                const u = h < 2 ? x : y;
+                const v = h < 2 ? y : x;
+                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+            }
+            
+            noise(x, y) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                
+                const u = this.fade(x);
+                const v = this.fade(y);
+                
+                const A = this.permutation[X] + Y;
+                const AA = this.permutation[A];
+                const AB = this.permutation[A + 1];
+                const B = this.permutation[X + 1] + Y;
+                const BA = this.permutation[B];
+                const BB = this.permutation[B + 1];
+                
+                return this.lerp(v, 
+                    this.lerp(u, this.grad(this.permutation[AA], x, y),
+                               this.grad(this.permutation[BA], x - 1, y)),
+                    this.lerp(u, this.grad(this.permutation[AB], x, y - 1),
+                               this.grad(this.permutation[BB], x - 1, y - 1))
+                );
+            }
+            
+            octaveNoise(x, y, octaves, persistence) {
+                let total = 0;
+                let frequency = 1;
+                let amplitude = 1;
+                let maxValue = 0;
+                
+                for (let i = 0; i < octaves; i++) {
+                    total += this.noise(x * frequency, y * frequency) * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= 2;
+                }
+                
+                return total / maxValue;
+            }
+        }
+
+        class EBikeWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.bike = null;
+                this.clock = new THREE.Clock();
+                
+                // Physics
+                this.velocity = 0;
+                this.maxSpeed = 50;
+                this.acceleration = 0.3;
+                this.deceleration = 0.2;
+                this.brakeForce = 0.5;
+                this.turnSpeed = 0.03;
+                this.boostMultiplier = 2;
+                this.isBoostActive = false;
+                this.boostDuration = 2;
+                this.boostCooldown = 5;
+                this.lastBoostTime = 0;
+                
+                // Battery
+                this.battery = 100;
+                this.batteryDrainRate = 0.01;
+                this.boostBatteryDrain = 2;
+                
+                // Controls
+                this.keys = { w: false, a: false, s: false, d: false, ' ': false };
+                this.mouseX = 0;
+                this.mouseY = 0;
+                
+                // Mobile controls
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                               (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+                this.touchControls = { accelerate: false, brake: false, steering: 0 };
+                
+                // Terrain
+                this.terrain = new Map();
+                this.chunkSize = 100;
+                this.renderDistance = 3;
+                this.noise = new PerlinNoise();
+                this.currentChunk = { x: 0, z: 0 };
+                
+                // Decorations
+                this.decorations = new Map();
+                
+                this.init();
+            }
+            
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createBike();
+                this.setupCamera();
+                this.generateInitialTerrain();
+                this.setupEventListeners();
+                
+                if (this.isMobile) {
+                    document.getElementById('mobile-controls').classList.add('show');
+                    document.getElementById('controls-hint').textContent = 'Use on-screen controls to ride';
+                }
+                
+                // Hide loading
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x87CEEB, 50, 500);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+                
+                // Sky
+                const skyGeometry = new THREE.SphereGeometry(1000, 32, 32);
+                const skyMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x87CEEB,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+            }
+            
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Directional light (sun)
+                this.sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                this.sunLight.position.set(50, 100, 50);
+                this.sunLight.castShadow = true;
+                this.sunLight.shadow.camera.near = 0.1;
+                this.sunLight.shadow.camera.far = 200;
+                this.sunLight.shadow.camera.left = -50;
+                this.sunLight.shadow.camera.right = 50;
+                this.sunLight.shadow.camera.top = 50;
+                this.sunLight.shadow.camera.bottom = -50;
+                this.sunLight.shadow.mapSize.width = 2048;
+                this.sunLight.shadow.mapSize.height = 2048;
+                this.scene.add(this.sunLight);
+                
+                // Hemisphere light for better outdoor lighting
+                const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x545454, 0.4);
+                this.scene.add(hemiLight);
+            }
+            
+            createBike() {
+                this.bike = new THREE.Group();
+                
+                // Frame
+                const frameGeometry = new THREE.BoxGeometry(0.1, 0.6, 2);
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                frame.position.y = 0.5;
+                frame.castShadow = true;
+                this.bike.add(frame);
+                
+                // Create wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
+                const wheelMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                
+                // Front wheel
+                this.frontWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                this.frontWheel.rotation.z = Math.PI / 2;
+                this.frontWheel.position.set(0, 0.4, 0.8);
+                this.frontWheel.castShadow = true;
+                this.bike.add(this.frontWheel);
+                
+                // Rear wheel
+                this.rearWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                this.rearWheel.rotation.z = Math.PI / 2;
+                this.rearWheel.position.set(0, 0.4, -0.8);
+                this.rearWheel.castShadow = true;
+                this.bike.add(this.rearWheel);
+                
+                // Handlebars
+                const handlebarGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.6);
+                const handlebarMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const handlebars = new THREE.Mesh(handlebarGeometry, handlebarMaterial);
+                handlebars.rotation.z = Math.PI / 2;
+                handlebars.position.set(0, 0.9, 0.7);
+                this.bike.add(handlebars);
+                
+                // Seat
+                const seatGeometry = new THREE.BoxGeometry(0.3, 0.1, 0.4);
+                const seatMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.8
+                });
+                const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                seat.position.set(0, 0.8, -0.3);
+                this.bike.add(seat);
+                
+                // Battery/motor
+                const batteryGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.5);
+                const batteryMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x00ff64,
+                    metalness: 0.5,
+                    roughness: 0.3,
+                    emissive: 0x00ff64,
+                    emissiveIntensity: 0.2
+                });
+                const battery = new THREE.Mesh(batteryGeometry, batteryMaterial);
+                battery.position.set(0, 0.3, 0);
+                this.bike.add(battery);
+                
+                // Headlight
+                const headlightGeometry = new THREE.ConeGeometry(0.1, 0.2, 8);
+                const headlightMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffff00,
+                    emissive: 0xffff00,
+                    emissiveIntensity: 0.5
+                });
+                const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+                headlight.rotation.x = -Math.PI / 2;
+                headlight.position.set(0, 0.6, 1);
+                this.bike.add(headlight);
+                
+                // Add headlight beam
+                this.headlightBeam = new THREE.SpotLight(0xffff00, 1, 20, Math.PI / 6, 0.5, 1);
+                this.headlightBeam.position.set(0, 0.6, 1);
+                this.headlightBeam.target.position.set(0, 0, 5);
+                this.bike.add(this.headlightBeam);
+                this.bike.add(this.headlightBeam.target);
+                
+                this.bike.position.y = 1;
+                this.scene.add(this.bike);
+            }
+            
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                
+                // Third person camera
+                this.cameraOffset = new THREE.Vector3(0, 3, -6);
+                this.cameraLookOffset = new THREE.Vector3(0, 0, 5);
+            }
+            
+            generateInitialTerrain() {
+                for (let dx = -this.renderDistance; dx <= this.renderDistance; dx++) {
+                    for (let dz = -this.renderDistance; dz <= this.renderDistance; dz++) {
+                        this.generateChunk(dx, dz);
+                    }
+                }
+            }
+            
+            generateChunk(chunkX, chunkZ) {
+                const key = `${chunkX},${chunkZ}`;
+                if (this.terrain.has(key)) return;
+                
+                const geometry = new THREE.PlaneGeometry(
+                    this.chunkSize, 
+                    this.chunkSize, 
+                    32, 
+                    32
+                );
+                
+                // Generate height map
+                const vertices = geometry.attributes.position;
+                for (let i = 0; i < vertices.count; i++) {
+                    const x = vertices.getX(i) + chunkX * this.chunkSize;
+                    const y = vertices.getY(i) + chunkZ * this.chunkSize;
+                    
+                    // Multi-octave noise for varied terrain
+                    let height = 0;
+                    
+                    // Large features (mountains/valleys)
+                    height += this.noise.octaveNoise(x * 0.005, y * 0.005, 4, 0.5) * 20;
+                    
+                    // Medium features (hills)
+                    height += this.noise.octaveNoise(x * 0.02, y * 0.02, 3, 0.5) * 5;
+                    
+                    // Small features (bumps)
+                    height += this.noise.octaveNoise(x * 0.1, y * 0.1, 2, 0.5) * 1;
+                    
+                    // Create paths/roads
+                    const pathX = Math.sin(y * 0.01) * 30;
+                    const distanceToPath = Math.abs(x - pathX);
+                    if (distanceToPath < 5) {
+                        height *= Math.pow(distanceToPath / 5, 2);
+                    }
+                    
+                    vertices.setZ(i, height);
+                }
+                
+                geometry.computeVertexNormals();
+                
+                // Determine terrain type based on position
+                const terrainType = this.getTerrainType(chunkX, chunkZ);
+                const material = this.getTerrainMaterial(terrainType);
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(
+                    chunkX * this.chunkSize,
+                    0,
+                    chunkZ * this.chunkSize
+                );
+                mesh.receiveShadow = true;
+                mesh.userData = { chunkX, chunkZ, terrainType };
+                
+                this.scene.add(mesh);
+                this.terrain.set(key, mesh);
+                
+                // Add decorations
+                this.addDecorations(chunkX, chunkZ, terrainType);
+            }
+            
+            getTerrainType(chunkX, chunkZ) {
+                const biomeNoise = this.noise.noise(chunkX * 0.1, chunkZ * 0.1);
+                
+                if (biomeNoise < -0.3) return 'desert';
+                if (biomeNoise < 0) return 'plains';
+                if (biomeNoise < 0.3) return 'hills';
+                return 'mountains';
+            }
+            
+            getTerrainMaterial(type) {
+                const materials = {
+                    desert: new THREE.MeshStandardMaterial({
+                        color: 0xC19A6B,
+                        roughness: 0.9
+                    }),
+                    plains: new THREE.MeshStandardMaterial({
+                        color: 0x7CFC00,
+                        roughness: 0.8
+                    }),
+                    hills: new THREE.MeshStandardMaterial({
+                        color: 0x228B22,
+                        roughness: 0.85
+                    }),
+                    mountains: new THREE.MeshStandardMaterial({
+                        color: 0x696969,
+                        roughness: 0.95
+                    })
+                };
+                
+                return materials[type] || materials.plains;
+            }
+            
+            addDecorations(chunkX, chunkZ, terrainType) {
+                const decorationGroup = new THREE.Group();
+                const worldX = chunkX * this.chunkSize;
+                const worldZ = chunkZ * this.chunkSize;
+                
+                // Trees for hills and plains
+                if (terrainType === 'hills' || terrainType === 'plains') {
+                    const treeCount = Math.floor(Math.random() * 10 + 5);
+                    for (let i = 0; i < treeCount; i++) {
+                        const tree = this.createTree();
+                        const x = worldX + (Math.random() - 0.5) * this.chunkSize;
+                        const z = worldZ + (Math.random() - 0.5) * this.chunkSize;
+                        const y = this.getHeightAtPosition(x, z);
+                        tree.position.set(x, y, z);
+                        decorationGroup.add(tree);
+                    }
+                }
+                
+                // Rocks for mountains and desert
+                if (terrainType === 'mountains' || terrainType === 'desert') {
+                    const rockCount = Math.floor(Math.random() * 15 + 10);
+                    for (let i = 0; i < rockCount; i++) {
+                        const rock = this.createRock();
+                        const x = worldX + (Math.random() - 0.5) * this.chunkSize;
+                        const z = worldZ + (Math.random() - 0.5) * this.chunkSize;
+                        const y = this.getHeightAtPosition(x, z);
+                        rock.position.set(x, y, z);
+                        decorationGroup.add(rock);
+                    }
+                }
+                
+                // Cacti for desert
+                if (terrainType === 'desert') {
+                    const cactusCount = Math.floor(Math.random() * 5 + 3);
+                    for (let i = 0; i < cactusCount; i++) {
+                        const cactus = this.createCactus();
+                        const x = worldX + (Math.random() - 0.5) * this.chunkSize;
+                        const z = worldZ + (Math.random() - 0.5) * this.chunkSize;
+                        const y = this.getHeightAtPosition(x, z);
+                        cactus.position.set(x, y, z);
+                        decorationGroup.add(cactus);
+                    }
+                }
+                
+                this.scene.add(decorationGroup);
+                this.decorations.set(`${chunkX},${chunkZ}`, decorationGroup);
+            }
+            
+            createTree() {
+                const tree = new THREE.Group();
+                
+                // Trunk
+                const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 5);
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = 2.5;
+                trunk.castShadow = true;
+                tree.add(trunk);
+                
+                // Leaves
+                const leavesGeometry = new THREE.SphereGeometry(3, 8, 6);
+                const leavesMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.8
+                });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = 6;
+                leaves.castShadow = true;
+                tree.add(leaves);
+                
+                return tree;
+            }
+            
+            createRock() {
+                const rockGeometry = new THREE.DodecahedronGeometry(
+                    Math.random() * 2 + 1
+                );
+                const rockMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x808080,
+                    roughness: 0.9
+                });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.rotation.set(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI
+                );
+                rock.castShadow = true;
+                
+                return rock;
+            }
+            
+            createCactus() {
+                const cactus = new THREE.Group();
+                
+                // Main stem
+                const stemGeometry = new THREE.CylinderGeometry(0.3, 0.4, 3);
+                const cactusMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2F4F2F,
+                    roughness: 0.7
+                });
+                const stem = new THREE.Mesh(stemGeometry, cactusMaterial);
+                stem.position.y = 1.5;
+                stem.castShadow = true;
+                cactus.add(stem);
+                
+                // Arms
+                if (Math.random() > 0.5) {
+                    const armGeometry = new THREE.CylinderGeometry(0.2, 0.25, 1.5);
+                    const leftArm = new THREE.Mesh(armGeometry, cactusMaterial);
+                    leftArm.position.set(-0.5, 2, 0);
+                    leftArm.rotation.z = -Math.PI / 4;
+                    cactus.add(leftArm);
+                    
+                    const rightArm = new THREE.Mesh(armGeometry, cactusMaterial);
+                    rightArm.position.set(0.5, 1.5, 0);
+                    rightArm.rotation.z = Math.PI / 4;
+                    cactus.add(rightArm);
+                }
+                
+                return cactus;
+            }
+            
+            getHeightAtPosition(x, z) {
+                // Multi-octave noise for height
+                let height = 0;
+                height += this.noise.octaveNoise(x * 0.005, z * 0.005, 4, 0.5) * 20;
+                height += this.noise.octaveNoise(x * 0.02, z * 0.02, 3, 0.5) * 5;
+                height += this.noise.octaveNoise(x * 0.1, z * 0.1, 2, 0.5) * 1;
+                
+                // Path smoothing
+                const pathX = Math.sin(z * 0.01) * 30;
+                const distanceToPath = Math.abs(x - pathX);
+                if (distanceToPath < 5) {
+                    height *= Math.pow(distanceToPath / 5, 2);
+                }
+                
+                return height;
+            }
+            
+            updateTerrain() {
+                const bikeChunkX = Math.floor(this.bike.position.x / this.chunkSize);
+                const bikeChunkZ = Math.floor(this.bike.position.z / this.chunkSize);
+                
+                // Generate new chunks
+                for (let dx = -this.renderDistance; dx <= this.renderDistance; dx++) {
+                    for (let dz = -this.renderDistance; dz <= this.renderDistance; dz++) {
+                        this.generateChunk(bikeChunkX + dx, bikeChunkZ + dz);
+                    }
+                }
+                
+                // Remove far chunks
+                const maxDistance = this.renderDistance + 1;
+                this.terrain.forEach((mesh, key) => {
+                    const [chunkX, chunkZ] = key.split(',').map(Number);
+                    const distance = Math.max(
+                        Math.abs(chunkX - bikeChunkX),
+                        Math.abs(chunkZ - bikeChunkZ)
+                    );
+                    
+                    if (distance > maxDistance) {
+                        this.scene.remove(mesh);
+                        this.terrain.delete(key);
+                        
+                        // Remove decorations
+                        const decorations = this.decorations.get(key);
+                        if (decorations) {
+                            this.scene.remove(decorations);
+                            this.decorations.delete(key);
+                        }
+                    }
+                });
+                
+                // Update current chunk
+                if (bikeChunkX !== this.currentChunk.x || bikeChunkZ !== this.currentChunk.z) {
+                    this.currentChunk = { x: bikeChunkX, z: bikeChunkZ };
+                    this.updateTerrainInfo();
+                }
+            }
+            
+            updateTerrainInfo() {
+                const terrainType = this.getTerrainType(this.currentChunk.x, this.currentChunk.z);
+                const terrainNames = {
+                    desert: 'Desert',
+                    plains: 'Plains',
+                    hills: 'Hills',
+                    mountains: 'Mountains'
+                };
+                
+                document.getElementById('terrain-type').textContent = terrainNames[terrainType];
+                document.getElementById('coordinates').textContent = 
+                    `${Math.floor(this.bike.position.x)}, ${Math.floor(this.bike.position.z)}`;
+            }
+            
+            setupEventListeners() {
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                    if (e.key === 'ArrowUp') this.keys.w = true;
+                    if (e.key === 'ArrowDown') this.keys.s = true;
+                    if (e.key === 'ArrowLeft') this.keys.a = true;
+                    if (e.key === 'ArrowRight') this.keys.d = true;
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                    if (e.key === 'ArrowUp') this.keys.w = false;
+                    if (e.key === 'ArrowDown') this.keys.s = false;
+                    if (e.key === 'ArrowLeft') this.keys.a = false;
+                    if (e.key === 'ArrowRight') this.keys.d = false;
+                });
+                
+                // Mouse controls
+                window.addEventListener('mousemove', (e) => {
+                    this.mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+                });
+                
+                // Mobile controls
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                }
+                
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+            
+            setupMobileControls() {
+                // Accelerate button
+                const accelerateBtn = document.getElementById('accelerate-btn');
+                accelerateBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.touchControls.accelerate = true;
+                });
+                accelerateBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.touchControls.accelerate = false;
+                });
+                
+                // Brake button
+                const brakeBtn = document.getElementById('brake-btn');
+                brakeBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.touchControls.brake = true;
+                });
+                brakeBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.touchControls.brake = false;
+                });
+                
+                // Boost button
+                const boostBtn = document.getElementById('boost-btn');
+                boostBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.activateBoost();
+                });
+                
+                // Steering joystick
+                const joystick = document.getElementById('steering-joystick');
+                const handle = document.getElementById('steering-handle');
+                let joystickActive = false;
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    joystickActive = true;
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!joystickActive) return;
+                    e.preventDefault();
+                    
+                    const touch = e.touches[0];
+                    const rect = joystick.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    let deltaX = touch.clientX - centerX;
+                    let deltaY = touch.clientY - centerY;
+                    
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    const maxDistance = rect.width / 2 - 25;
+                    
+                    if (distance > maxDistance) {
+                        deltaX = (deltaX / distance) * maxDistance;
+                        deltaY = (deltaY / distance) * maxDistance;
+                    }
+                    
+                    handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    
+                    this.touchControls.steering = deltaX / maxDistance;
+                });
+                
+                const resetJoystick = () => {
+                    joystickActive = false;
+                    handle.style.transform = 'translate(0, 0)';
+                    this.touchControls.steering = 0;
+                };
+                
+                joystick.addEventListener('touchend', resetJoystick);
+                joystick.addEventListener('touchcancel', resetJoystick);
+            }
+            
+            activateBoost() {
+                const currentTime = Date.now() / 1000;
+                if (currentTime - this.lastBoostTime > this.boostCooldown && this.battery >= this.boostBatteryDrain) {
+                    this.isBoostActive = true;
+                    this.lastBoostTime = currentTime;
+                    this.battery -= this.boostBatteryDrain;
+                    
+                    // Show boost indicator
+                    const indicator = document.getElementById('boost-indicator');
+                    indicator.classList.add('active');
+                    
+                    setTimeout(() => {
+                        this.isBoostActive = false;
+                        indicator.classList.remove('active');
+                    }, this.boostDuration * 1000);
+                }
+            }
+            
+            updatePhysics(deltaTime) {
+                // Get controls input
+                let accelerating = this.keys.w || this.touchControls.accelerate;
+                let braking = this.keys.s || this.touchControls.brake;
+                let steeringInput = 0;
+                
+                if (this.keys.a) steeringInput -= 1;
+                if (this.keys.d) steeringInput += 1;
+                if (this.touchControls.steering) steeringInput = this.touchControls.steering;
+                
+                // Check for boost
+                if (this.keys[' '] && !this.isBoostActive) {
+                    this.activateBoost();
+                }
+                
+                // Update velocity
+                if (accelerating) {
+                    const accel = this.isBoostActive ? this.acceleration * this.boostMultiplier : this.acceleration;
+                    this.velocity += accel;
+                } else if (braking) {
+                    this.velocity -= this.brakeForce;
+                } else {
+                    // Natural deceleration
+                    if (this.velocity > 0) {
+                        this.velocity -= this.deceleration;
+                        if (this.velocity < 0) this.velocity = 0;
+                    } else if (this.velocity < 0) {
+                        this.velocity += this.deceleration;
+                        if (this.velocity > 0) this.velocity = 0;
+                    }
+                }
+                
+                // Clamp velocity
+                const maxVel = this.isBoostActive ? this.maxSpeed * this.boostMultiplier : this.maxSpeed;
+                this.velocity = Math.max(-this.maxSpeed/2, Math.min(this.velocity, maxVel));
+                
+                // Apply steering
+                if (Math.abs(this.velocity) > 0.1) {
+                    const turnAmount = steeringInput * this.turnSpeed * (this.velocity / this.maxSpeed);
+                    this.bike.rotation.y -= turnAmount;
+                }
+                
+                // Move bike
+                const moveDistance = this.velocity * deltaTime;
+                this.bike.position.x += Math.sin(this.bike.rotation.y) * moveDistance;
+                this.bike.position.z += Math.cos(this.bike.rotation.y) * moveDistance;
+                
+                // Align bike to terrain
+                const terrainHeight = this.getHeightAtPosition(
+                    this.bike.position.x,
+                    this.bike.position.z
+                );
+                this.bike.position.y = terrainHeight + 1;
+                
+                // Rotate wheels
+                const wheelRotation = moveDistance * 2;
+                this.frontWheel.rotation.x += wheelRotation;
+                this.rearWheel.rotation.x += wheelRotation;
+                
+                // Update battery
+                if (this.velocity > 0) {
+                    this.battery -= this.batteryDrainRate * deltaTime;
+                    if (this.isBoostActive) {
+                        this.battery -= this.batteryDrainRate * 2 * deltaTime;
+                    }
+                    this.battery = Math.max(0, Math.min(100, this.battery));
+                }
+                
+                // Update camera
+                this.updateCamera();
+                
+                // Update sun position
+                this.sunLight.position.x = this.bike.position.x + 50;
+                this.sunLight.position.z = this.bike.position.z + 50;
+                this.sunLight.target.position.copy(this.bike.position);
+            }
+            
+            updateCamera() {
+                // Smooth camera follow
+                const idealOffset = this.cameraOffset.clone();
+                idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.bike.rotation.y);
+                idealOffset.add(this.bike.position);
+                
+                // Add mouse look
+                idealOffset.x += this.mouseX * 2;
+                idealOffset.y += this.mouseY * 2;
+                
+                this.camera.position.lerp(idealOffset, 0.1);
+                
+                // Look at bike with offset
+                const lookTarget = this.bike.position.clone();
+                lookTarget.add(this.cameraLookOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.bike.rotation.y));
+                this.camera.lookAt(lookTarget);
+            }
+            
+            updateHUD() {
+                // Update speed
+                const speedKmh = Math.abs(this.velocity * 3.6).toFixed(0);
+                document.getElementById('speed').textContent = speedKmh;
+                
+                // Update battery
+                document.getElementById('battery-percent').textContent = Math.floor(this.battery) + '%';
+                document.getElementById('battery-fill').style.width = this.battery + '%';
+                
+                // Change battery color based on level
+                const batteryFill = document.getElementById('battery-fill');
+                if (this.battery < 20) {
+                    batteryFill.style.background = 'linear-gradient(90deg, #ff0000, #ff4444)';
+                } else if (this.battery < 50) {
+                    batteryFill.style.background = 'linear-gradient(90deg, #ff8800, #ffaa00)';
+                } else {
+                    batteryFill.style.background = 'linear-gradient(90deg, #ffd700, #ffed4e)';
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const deltaTime = Math.min(this.clock.getDelta(), 0.1);
+                
+                this.updatePhysics(deltaTime);
+                this.updateTerrain();
+                this.updateHUD();
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new EBikeWorld();
+        });
+    </script>
+</body>
+</html>

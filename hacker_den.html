@@ -774,9 +774,9 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Configuration
-        const REPO_OWNER = 'yourusername';
-        const REPO_NAME = 'nexus-worlds';
+        // Configuration - Update these with your GitHub details
+        const REPO_OWNER = 'kody-w';  // Replace with your GitHub username
+        const REPO_NAME = 'AINexus';  // Replace with your repository name
         const BRANCH = 'main';
         
         // Parse inherited attributes
@@ -972,11 +972,11 @@
             
             getDemoWorlds() {
                 return [
-                    { name: "Nexus Hub", description: "Return to the central hub" },
-                    { name: "Crystal Caves", description: "Mystical underground realm" },
-                    { name: "Sky Islands", description: "Floating islands in the clouds" },
-                    { name: "Ancient Ruins", description: "Lost civilization remnants" },
-                    { name: "Quantum Realm", description: "Where physics breaks down" }
+                    { name: "Nexus Hub", description: "Return to the central hub", url: "index.html" },
+                    { name: "Crystal Caves", description: "Mystical underground realm", url: "#" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds", url: "#" },
+                    { name: "Ancient Ruins", description: "Lost civilization remnants", url: "#" },
+                    { name: "Quantum Realm", description: "Where physics breaks down", url: "#" }
                 ];
             }
             
@@ -1036,7 +1036,7 @@
                     // Add blinking lights
                     for (let i = 0; i < 10; i++) {
                         const lightGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                        const lightMaterial = new THREE.MeshBasicMaterial({
+                        const lightMaterial = new THREE.MeshStandardMaterial({
                             color: Math.random() > 0.5 ? 0x00ff00 : 0xff0000,
                             emissive: Math.random() > 0.5 ? 0x00ff00 : 0xff0000,
                             emissiveIntensity: 1
@@ -1050,7 +1050,7 @@
                         light.userData = { 
                             blink: true, 
                             blinkSpeed: Math.random() * 2 + 0.5,
-                            originalEmissive: lightMaterial.emissive.clone()
+                            originalEmissive: lightMaterial.emissive.getHex()
                         };
                         this.scene.add(light);
                     }
@@ -1079,8 +1079,10 @@
                     
                     // Hologram
                     const holoGeometry = new THREE.ConeGeometry(1, 2, 4);
-                    const holoMaterial = new THREE.MeshBasicMaterial({
+                    const holoMaterial = new THREE.MeshStandardMaterial({
                         color: 0x00ffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.3,
                         transparent: true,
                         opacity: 0.3,
                         wireframe: true
@@ -2257,7 +2259,7 @@
                     // Blink server lights
                     if (child.userData && child.userData.blink) {
                         const blink = Math.sin(time * child.userData.blinkSpeed) > 0;
-                        if (child.material) {
+                        if (child.material && child.material.emissive) {
                             child.material.emissiveIntensity = blink ? 1 : 0.1;
                         }
                     }

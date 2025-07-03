@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dejarik - Complete Star Wars Holochess</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Orbitron', monospace;
+            color: #00ffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        .game-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .game-title {
+            font-size: 3em;
+            font-weight: 900;
+            text-shadow: 0 0 20px #00ffff;
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ffff; }
+            to { text-shadow: 0 0 30px #00ffff, 0 0 40px #0080ff; }
+        }
+        
+        .game-subtitle {
+            font-size: 1.2em;
+            color: #ff6b35;
+            opacity: 0.8;
+        }
+        
+        .game-container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1600px;
+        }
+        
+        .board-container {
+            position: relative;
+        }
+        
+        .board {
+            width: 500px;
+            height: 500px;
+            position: relative;
+            background: radial-gradient(circle, #001a2e 0%, #000614 70%);
+            border-radius: 50%;
+            border: 3px solid #00ffff;
+            box-shadow: 
+                0 0 30px #00ffff,
+                inset 0 0 30px rgba(0, 255, 255, 0.1);
+        }
+        
+        .board::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border-radius: 50%;
+            background: conic-gradient(#00ffff, #0080ff, #00ffff);
+            z-index: -1;
+            animation: rotate 10s linear infinite;
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .space {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 255, 255, 0.1) 0%, transparent 70%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            transform: translate(-50%, -50%);
+        }
+        
+        .space:hover {
+            border-color: #00ffff;
+            background: radial-gradient(circle, rgba(0, 255, 255, 0.2) 0%, transparent 70%);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+        
+        .space.valid-move {
+            border-color: #00ff00;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 5px #00ff00; }
+            50% { box-shadow: 0 0 20px #00ff00; }
+        }
+        
+        .space.selected {
+            border-color: #ffff00;
+            background: radial-gradient(circle, rgba(255, 255, 0, 0.2) 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.7);
+        }
+        
+        .space.attack-range {
+            border-color: #ff6b35;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.2) 0%, transparent 70%);
+        }
+        
+        .space.center-bonus {
+            border-color: #ffd700;
+            box-shadow: 0 0 15px #ffd700;
+        }
+        
+        /* Center space */
+        .space[data-index="0"] {
+            top: 50%;
+            left: 50%;
+        }
+        
+        /* Inner ring spaces */
+        .space[data-index="1"] { top: 30%; left: 50%; }
+        .space[data-index="2"] { top: 35%; left: 65%; }
+        .space[data-index="3"] { top: 50%; left: 70%; }
+        .space[data-index="4"] { top: 65%; left: 65%; }
+        .space[data-index="5"] { top: 70%; left: 50%; }
+        .space[data-index="6"] { top: 65%; left: 35%; }
+        .space[data-index="7"] { top: 50%; left: 30%; }
+        .space[data-index="8"] { top: 35%; left: 35%; }
+        
+        /* Outer ring spaces */
+        .space[data-index="9"] { top: 20%; left: 50%; }
+        .space[data-index="10"] { top: 22%; left: 60%; }
+        .space[data-index="11"] { top: 28%; left: 68%; }
+        .space[data-index="12"] { top: 38%; left: 72%; }
+        .space[data-index="13"] { top: 50%; left: 80%; }
+        .space[data-index="14"] { top: 62%; left: 72%; }
+        .space[data-index="15"] { top: 72%; left: 68%; }
+        .space[data-index="16"] { top: 78%; left: 60%; }
+        .space[data-index="17"] { top: 80%; left: 50%; }
+        .space[data-index="18"] { top: 78%; left: 40%; }
+        .space[data-index="19"] { top: 72%; left: 32%; }
+        .space[data-index="20"] { top: 62%; left: 28%; }
+        .space[data-index="21"] { top: 50%; left: 20%; }
+        .space[data-index="22"] { top: 38%; left: 28%; }
+        .space[data-index="23"] { top: 28%; left: 32%; }
+        .space[data-index="24"] { top: 22%; left: 40%; }
+        
+        .piece {
+            font-size: 1.8em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+            filter: drop-shadow(0 0 10px currentColor);
+            animation: hologram 3s ease-in-out infinite;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        @keyframes hologram {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+        
+        .piece:hover {
+            transform: scale(1.2);
+            filter: drop-shadow(0 0 20px currentColor);
+        }
+        
+        .piece.blue {
+            color: #00ccff;
+        }
+        
+        .piece.red {
+            color: #ff3366;
+        }
+        
+        .piece.stunned {
+            opacity: 0.5;
+            transform: rotate(45deg);
+        }
+        
+        .piece.pushed {
+            animation: push-effect 0.5s;
+        }
+        
+        @keyframes push-effect {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.8); }
+        }
+        
+        .health-bar {
+            font-size: 0.5em;
+            color: #ff6b35;
+            margin-top: 2px;
+        }
+        
+        .game-info {
+            background: rgba(0, 26, 46, 0.8);
+            border: 2px solid #00ffff;
+            border-radius: 15px;
+            padding: 25px;
+            min-width: 400px;
+            backdrop-filter: blur(10px);
+            max-height: 700px;
+            overflow-y: auto;
+        }
+        
+        .current-player {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+        }
+        
+        .player-blue {
+            color: #00ccff;
+            text-shadow: 0 0 10px #00ccff;
+        }
+        
+        .player-red {
+            color: #ff3366;
+            text-shadow: 0 0 10px #ff3366;
+        }
+        
+        .score-display {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        
+        .score-item {
+            text-align: center;
+        }
+        
+        .score-label {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+        
+        .score-value {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .creature-roster {
+            margin-bottom: 20px;
+        }
+        
+        .creature-roster h3 {
+            color: #ff6b35;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .creature-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .creature-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .creature-card.blue {
+            border-left-color: #00ccff;
+        }
+        
+        .creature-card.red {
+            border-left-color: #ff3366;
+        }
+        
+        .creature-card.deployed {
+            opacity: 0.6;
+        }
+        
+        .creature-name {
+            font-weight: 700;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .creature-stats {
+            font-size: 0.85em;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+        }
+        
+        .stat {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .special-ability {
+            font-size: 0.75em;
+            color: #ffd700;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #ff3366, #ff6b35);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 51, 102, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .game-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .win-message {
+            background: rgba(0, 255, 0, 0.2);
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            animation: celebration 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes celebration {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+        
+        .instructions {
+            background: rgba(0, 26, 46, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        
+        .instructions h4 {
+            color: #ff6b35;
+            margin-bottom: 8px;
+        }
+        
+        .phase-indicator {
+            background: rgba(255, 107, 53, 0.2);
+            border: 1px solid #ff6b35;
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .dice-display {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .dice-result {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .battle-log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.8em;
+            line-height: 1.3;
+        }
+        
+        .battle-log-entry {
+            margin-bottom: 5px;
+            padding: 3px;
+            border-left: 3px solid #00ffff;
+            padding-left: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .board {
+                width: 400px;
+                height: 400px;
+            }
+            
+            .game-title {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+    
+    <div class="game-header">
+        <h1 class="game-title">DEJARIK</h1>
+        <p class="game-subtitle">Complete Holographic Chess with Full Battle Rules</p>
+    </div>
+    
+    <div class="game-container">
+        <div class="board-container">
+            <div class="board" id="board"></div>
+        </div>
+        
+        <div class="game-info">
+            <div class="current-player" id="currentPlayer">
+                Blue Player's Turn
+            </div>
+            
+            <div class="score-display">
+                <div class="score-item">
+                    <div class="score-label">Blue Score</div>
+                    <div class="score-value blue" id="blueScore">0</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Center Bonus</div>
+                    <div class="score-value" id="centerBonus">+1</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Red Score</div>
+                    <div class="score-value red" id="redScore">0</div>
+                </div>
+            </div>
+            
+            <div class="phase-indicator" id="phaseIndicator">
+                Setup Phase: Deploy your creatures
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn" id="moveBtn" onclick="selectAction('move')" disabled>Move</button>
+                <button class="btn" id="attackBtn" onclick="selectAction('attack')" disabled>Attack</button>
+                <button class="btn" id="unstunBtn" onclick="selectAction('unstun')" disabled>Unstun</button>
+                <button class="btn" id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
+            </div>
+            
+            <div class="creature-roster">
+                <h3>Available Creatures</h3>
+                <div id="creatureRoster"></div>
+            </div>
+            
+            <div id="diceDisplay" class="dice-display" style="display: none;">
+                <div>Battle Results:</div>
+                <div id="diceResults"></div>
+            </div>
+            
+            <div class="battle-log">
+                <h4>Battle Log</h4>
+                <div id="battleLog"></div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn" onclick="resetGame()">New Game</button>
+            </div>
+            
+            <div class="instructions">
+                <h4>Complete Dejarik Rules:</h4>
+                <p><strong>Setup:</strong> Deploy 4 creatures on outer ring</p>
+                <p><strong>Actions:</strong> Move, Attack, or Unstun each turn</p>
+                <p><strong>Battle:</strong> Roll dice when attacking adjacent enemies</p>
+                <p><strong>Effects:</strong> Defeat, Push, Stun, or No Effect</p>
+                <p><strong>Center:</strong> +1 point for holding center at round end</p>
+                <p><strong>Victory:</strong> First to defeat all enemies or reach target score wins</p>
+            </div>
+            
+            <div class="game-status" id="gameStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let currentPlayer = 'blue';
+        let selectedPiece = null;
+        let gameBoard = Array(25).fill(null);
+        let gamePhase = 'setup'; // setup, play
+        let gameOver = false;
+        let deployedCount = { blue: 0, red: 0 };
+        let selectedAction = null;
+        let scores = { blue: 0, red: 0 };
+        let roundCount = 1;
+        let targetScore = 10; // First to 10 points wins
+        let actionUsed = false;
+        
+        // Complete Dejarik creatures with dice and abilities
+        const creatures = {
+            // Team Blue
+            grimtaash: { 
+                name: 'Grimtaash', 
+                icon: '🦅', 
+                defeatValue: 4,
+                attackDie: 6,
+                defendDie: 6,
+                stunnedDie: 4,
+                actionsPerTurn: 2,
+                specialAbility: 'Can perform 2 actions per turn'
+            },
+            kintan: { 
+                name: 'Kintan Strider', 
+                icon: '🦁', 
+                defeatValue: 8,
+                attackDie: 12,
+                defendDie: 12,
+                stunnedDie: 8,
+                actionsPerTurn: 1,
+                specialAbility: 'Powerful but slow - only 1 action per turn'
+            },
+            ghhhk: { 
+                name: 'Ghhhk', 
+                icon: '🦉', 
+                defeatValue: 6,
+                attackDie: 8,
+                defendDie: 8,
+                stunnedDie: 6,
+                actionsPerTurn: 2,
+                specialAbility: 'Can perform 2 actions per turn'
+            },
+            houjix: { 
+                name: 'Houjix', 
+                icon: '🐺', 
+                defeatValue: 2,
+                attackDie: 4,
+                defendDie: 4,
+                stunnedDie: 1, // Static defend value when stunned
+                actionsPerTurn: 3,
+                specialAbility: 'Fast and agile - 3 actions per turn but weak'
+            },
+            
+            // Team Red
+            monnok: { 
+                name: 'Monnok', 
+                icon: '🐢', 
+                defeatValue: 4,
+                attackDie: 6,
+                defendDie: 6,
+                stunnedDie: 4,
+                actionsPerTurn: 2,
+                specialAbility: 'Can perform 2 actions per turn'
+            },
+            savrip: { 
+                name: 'Mantellian Savrip', 
+                icon: '🦍', 
+                defeatValue: 8,
+                attackDie: 12,
+                defendDie: 12,
+                stunnedDie: 8,
+                actionsPerTurn: 1,
+                specialAbility: 'Powerful but slow - only 1 action per turn'
+            },
+            klorslug: { 
+                name: "K'lor Slug", 
+                icon: '🐛', 
+                defeatValue: 6,
+                attackDie: 8,
+                defendDie: 8,
+                stunnedDie: 6,
+                actionsPerTurn: 2,
+                specialAbility: 'Can perform 2 actions per turn'
+            },
+            ngok: { 
+                name: "Ng'ok", 
+                icon: '🦒', 
+                defeatValue: 2,
+                attackDie: 4,
+                defendDie: 4,
+                stunnedDie: 1, // Static defend value when stunned
+                actionsPerTurn: 3,
+                specialAbility: 'Fast and agile - 3 actions per turn but weak'
+            }
+        };
+        
+        // Available creatures for each player
+        const playerCreatures = {
+            blue: ['grimtaash', 'kintan', 'ghhhk', 'houjix'],
+            red: ['monnok', 'savrip', 'klorslug', 'ngok']
+        };
+        
+        // Initialize the game
+        function initGame() {
+            createStars();
+            setupBoard();
+            resetGame();
+        }
+        
+        function createStars() {
+            const starsContainer = document.getElementById('stars');
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = star.style.height = Math.random() * 3 + 1 + 'px';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                starsContainer.appendChild(star);
+            }
+        }
+        
+        function setupBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            
+            // Create 25 spaces (1 center + 8 inner ring + 16 outer ring)
+            for (let i = 0; i < 25; i++) {
+                const space = document.createElement('div');
+                space.className = 'space';
+                space.setAttribute('data-index', i);
+                space.addEventListener('click', () => handleSpaceClick(i));
+                if (i === 0) {
+                    space.classList.add('center-bonus');
+                }
+                board.appendChild(space);
+            }
+        }
+        
+        function resetGame() {
+            gameOver = false;
+            currentPlayer = 'blue';
+            selectedPiece = null;
+            gamePhase = 'setup';
+            deployedCount = { blue: 0, red: 0 };
+            selectedAction = null;
+            scores = { blue: 0, red: 0 };
+            roundCount = 1;
+            actionUsed = false;
+            
+            // Clear board
+            gameBoard = Array(25).fill(null);
+            
+            // Clear battle log
+            document.getElementById('battleLog').innerHTML = '';
+            document.getElementById('diceDisplay').style.display = 'none';
+            
+            updateDisplay();
+            updateCreatureRoster();
+            updateActionButtons();
+        }
+        
+        function updateCreatureRoster() {
+            const roster = document.getElementById('creatureRoster');
+            roster.innerHTML = '';
+            
+            playerCreatures[currentPlayer].forEach(creatureId => {
+                const creature = creatures[creatureId];
+                const isDeployed = gameBoard.some(space => 
+                    space && space.creatureId === creatureId && space.player === currentPlayer
+                );
+                
+                const card = document.createElement('div');
+                card.className = `creature-card ${currentPlayer} ${isDeployed ? 'deployed' : ''}`;
+                card.onclick = () => selectCreatureForDeployment(creatureId);
+                
+                card.innerHTML = `
+                    <div class="creature-name">
+                        <span>${creature.icon}</span>
+                        <span>${creature.name}</span>
+                    </div>
+                    <div class="creature-stats">
+                        <div class="stat"><span>Value:</span><span>${creature.defeatValue}</span></div>
+                        <div class="stat"><span>ATK:</span><span>D${creature.attackDie}</span></div>
+                        <div class="stat"><span>DEF:</span><span>D${creature.defendDie}</span></div>
+                        <div class="stat"><span>Actions:</span><span>${creature.actionsPerTurn}</span></div>
+                    </div>
+                    <div class="special-ability">${creature.specialAbility}</div>
+                `;
+                
+                roster.appendChild(card);
+            });
+        }
+        
+        function selectCreatureForDeployment(creatureId) {
+            if (gamePhase !== 'setup') return;
+            if (deployedCount[currentPlayer] >= 4) return;
+            
+            const isDeployed = gameBoard.some(space => 
+                space && space.creatureId === creatureId && space.player === currentPlayer
+            );
+            
+            if (!isDeployed) {
+                selectedPiece = creatureId;
+                highlightValidDeploymentSpaces();
+            }
+        }
+        
+        function highlightValidDeploymentSpaces() {
+            clearHighlights();
+            
+            // Outer ring spaces for deployment (9-24)
+            const outerRingSpaces = currentPlayer === 'blue' ? 
+                [9, 10, 11, 12, 24, 23, 22, 21] : 
+                [13, 14, 15, 16, 17, 18, 19, 20];
+            
+            outerRingSpaces.forEach(index => {
+                if (!gameBoard[index]) {
+                    const spaceElement = document.querySelector(`[data-index="${index}"]`);
+                    spaceElement.classList.add('valid-move');
+                }
+            });
+        }
+        
+        function handleSpaceClick(index) {
+            if (gameOver) return;
+            
+            if (gamePhase === 'setup') {
+                handleSetupClick(index);
+            } else {
+                handleGameplayClick(index);
+            }
+        }
+        
+        function handleSetupClick(index) {
+            if (!selectedPiece) return;
+            
+            const isValidDeployment = isValidDeploymentSpace(index);
+            if (isValidDeployment && !gameBoard[index]) {
+                deployCreature(selectedPiece, index);
+                selectedPiece = null;
+                clearHighlights();
+                updateDisplay();
+                updateCreatureRoster();
+                
+                deployedCount[currentPlayer]++;
+                
+                if (deployedCount[currentPlayer] >= 4) {
+                    if (currentPlayer === 'blue' && deployedCount.red < 4) {
+                        switchPlayer();
+                        updateCreatureRoster();
+                    } else if (deployedCount.blue >= 4 && deployedCount.red >= 4) {
+                        startGameplay();
+                    }
+                }
+            }
+        }
+        
+        function handleGameplayClick(index) {
+            const clickedSpace = gameBoard[index];
+            
+            if (selectedPiece !== null && selectedAction) {
+                executeAction(index);
+            } else if (clickedSpace && clickedSpace.player === currentPlayer) {
+                selectPieceForAction(index);
+            } else {
+                selectedPiece = null;
+                selectedAction = null;
+                clearHighlights();
+                updateActionButtons();
+            }
+            
+            updateDisplay();
+        }
+        
+        function selectAction(action) {
+            if (!selectedPiece) {
+                addBattleLog("Select a creature first!");
+                return;
+            }
+            
+            const piece = gameBoard[selectedPiece];
+            if (!piece || piece.player !== currentPlayer) {
+                addBattleLog("Invalid creature selected!");
+                return;
+            }
+            
+            selectedAction = action;
+            clearHighlights();
+            
+            if (action === 'move') {
+                highlightValidMoves();
+            } else if (action === 'attack') {
+                highlightValidAttacks();
+            } else if (action === 'unstun') {
+                if (piece.stunned) {
+                    executeUnstun();
+                } else {
+                    addBattleLog("Creature is not stunned!");
+                    selectedAction = null;
+                }
+            }
+            
+            updateActionButtons();
+        }
+        
+        function selectPieceForAction(index) {
+            selectedPiece = index;
+            selectedAction = null;
+            clearHighlights();
+            
+            const selectedSpaceElement = document.querySelector(`[data-index="${index}"]`);
+            selectedSpaceElement.classList.add('selected');
+            
+            updateActionButtons();
+        }
+        
+        function executeAction(targetIndex) {
+            const piece = gameBoard[selectedPiece];
+            
+            if (selectedAction === 'move') {
+                if (isValidMove(selectedPiece, targetIndex)) {
+                    movePiece(selectedPiece, targetIndex);
+                    if (targetIndex === 0) { // Center space
+                        addBattleLog(`${piece.creatureId} moves to center space!`);
+                    }
+                    actionUsed = true;
+                    piece.actionsThisTurn = (piece.actionsThisTurn || 0) + 1;
+                } else {
+                    addBattleLog("Invalid move!");
+                    return;
+                }
+            } else if (selectedAction === 'attack') {
+                if (isValidAttack(selectedPiece, targetIndex)) {
+                    attackTarget(selectedPiece, targetIndex);
+                    actionUsed = true;
+                    piece.actionsThisTurn = (piece.actionsThisTurn || 0) + 1;
+                } else {
+                    addBattleLog("Invalid attack!");
+                    return;
+                }
+            }
+            
+            const creature = creatures[piece.creatureId];
+            if (piece.actionsThisTurn >= creature.actionsPerTurn) {
+                endTurn();
+            } else {
+                selectedAction = null;
+                updateActionButtons();
+            }
+            
+            clearHighlights();
+            selectPieceForAction(selectedPiece);
+        }
+        
+        function executeUnstun() {
+            const piece = gameBoard[selectedPiece];
+            piece.stunned = false;
+            piece.actionsThisTurn = (piece.actionsThisTurn || 0) + 1;
+            
+            addBattleLog(`${creatures[piece.creatureId].name} is no longer stunned!`);
+            
+            const creature = creatures[piece.creatureId];
+            if (piece.actionsThisTurn >= creature.actionsPerTurn) {
+                endTurn();
+            } else {
+                selectedAction = null;
+                updateActionButtons();
+            }
+        }
+        
+        function isValidDeploymentSpace(index) {
+            const outerRingSpaces = currentPlayer === 'blue' ? 
+                [9, 10, 11, 12, 24, 23, 22, 21] : 
+                [13, 14, 15, 16, 17, 18, 19, 20];
+            return outerRingSpaces.includes(index);
+        }
+        
+        function isValidMove(fromIndex, toIndex) {
+            if (gameBoard[toIndex] !== null) return false;
+            return isAdjacent(fromIndex, toIndex);
+        }
+        
+        function isValidAttack(fromIndex, toIndex) {
+            const fromSpace = gameBoard[fromIndex];
+            const toSpace = gameBoard[toIndex];
+            
+            if (!fromSpace || !toSpace) return false;
+            if (fromSpace.player === toSpace.player) return false;
+            
+            return isAdjacent(fromIndex, toIndex);
+        }
+        
+        function isAdjacent(from, to) {
+            // Define adjacency for the circular board
+            const adjacencyMap = {
+                0: [1, 2, 3, 4, 5, 6, 7, 8], // Center connects to all inner ring
+                1: [0, 2, 8, 9, 10, 24],
+                2: [0, 1, 3, 10, 11, 12],
+                3: [0, 2, 4, 12, 13, 14],
+                4: [0, 3, 5, 14, 15, 16],
+                5: [0, 4, 6, 16, 17, 18],
+                6: [0, 5, 7, 18, 19, 20],
+                7: [0, 6, 8, 20, 21, 22],
+                8: [0, 7, 1, 22, 23, 24],
+                9: [1, 10, 24],
+                10: [1, 2, 9, 11],
+                11: [2, 10, 12],
+                12: [2, 3, 11, 13],
+                13: [3, 12, 14],
+                14: [3, 4, 13, 15],
+                15: [4, 14, 16],
+                16: [4, 5, 15, 17],
+                17: [5, 16, 18],
+                18: [5, 6, 17, 19],
+                19: [6, 18, 20],
+                20: [6, 7, 19, 21],
+                21: [7, 20, 22],
+                22: [7, 8, 21, 23],
+                23: [8, 22, 24],
+                24: [8, 9, 23, 1]
+            };
+            
+            return adjacencyMap[from] && adjacencyMap[from].includes(to);
+        }
+        
+        function highlightValidMoves() {
+            for (let i = 0; i < 25; i++) {
+                if (isValidMove(selectedPiece, i)) {
+                    const spaceElement = document.querySelector(`[data-index="${i}"]`);
+                    spaceElement.classList.add('valid-move');
+                }
+            }
+        }
+        
+        function highlightValidAttacks() {
+            for (let i = 0; i < 25; i++) {
+                if (isValidAttack(selectedPiece, i)) {
+                    const spaceElement = document.querySelector(`[data-index="${i}"]`);
+                    spaceElement.classList.add('attack-range');
+                }
+            }
+        }
+        
+        function deployCreature(creatureId, index) {
+            const creature = creatures[creatureId];
+            gameBoard[index] = {
+                player: currentPlayer,
+                creatureId: creatureId,
+                stunned: false,
+                actionsThisTurn: 0
+            };
+        }
+        
+        function movePiece(fromIndex, toIndex) {
+            gameBoard[toIndex] = gameBoard[fromIndex];
+            gameBoard[fromIndex] = null;
+            selectedPiece = toIndex;
+            
+            addBattleLog(`${creatures[gameBoard[toIndex].creatureId].name} moves.`);
+        }
+        
+        function attackTarget(fromIndex, toIndex) {
+            const attacker = gameBoard[fromIndex];
+            const defender = gameBoard[toIndex];
+            
+            const attackerCreature = creatures[attacker.creatureId];
+            const defenderCreature = creatures[defender.creatureId];
+            
+            // Roll dice
+            const attackRoll = rollDie(attacker.stunned ? attackerCreature.stunnedDie : attackerCreature.attackDie);
+            const defendRoll = defender.stunned && defenderCreature.stunnedDie === 1 ? 1 : 
+                              rollDie(defender.stunned ? defenderCreature.stunnedDie : defenderCreature.defendDie);
+            
+            // Display dice results
+            displayDiceResults(attackerCreature.name, attackRoll, defenderCreature.name, defendRoll);
+            
+            // Determine battle outcome
+            let result = '';
+            if (attackRoll >= defendRoll * 2) {
+                // Defender defeated
+                scores[currentPlayer] += defenderCreature.defeatValue;
+                gameBoard[toIndex] = null;
+                result = `${defenderCreature.name} is defeated! +${defenderCreature.defeatValue} points`;
+            } else if (attackRoll > defendRoll) {
+                // Defender pushed
+                pushCreature(toIndex);
+                result = `${defenderCreature.name} is pushed!`;
+            } else if (attackRoll === defendRoll) {
+                // Defender pushed (tie)
+                pushCreature(toIndex);
+                result = `${defenderCreature.name} is pushed! (tie)`;
+            } else if (defendRoll >= attackRoll * 2) {
+                // Attacker stunned
+                attacker.stunned = true;
+                result = `${attackerCreature.name} is stunned!`;
+            } else {
+                // No effect
+                result = 'No effect!';
+            }
+            
+            addBattleLog(`Battle: ${attackerCreature.name} (${attackRoll}) vs ${defenderCreature.name} (${defendRoll}) - ${result}`);
+            
+            if (checkWinCondition()) {
+                return;
+            }
+        }
+        
+        function rollDie(sides) {
+            return Math.floor(Math.random() * sides) + 1;
+        }
+        
+        function displayDiceResults(attackerName, attackRoll, defenderName, defendRoll) {
+            const display = document.getElementById('diceDisplay');
+            const results = document.getElementById('diceResults');
+            
+            results.innerHTML = `
+                <div class="dice-result blue">${attackerName}: ${attackRoll}</div>
+                <div class="dice-result red">${defenderName}: ${defendRoll}</div>
+            `;
+            
+            display.style.display = 'block';
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                display.style.display = 'none';
+            }, 3000);
+        }
+        
+        function pushCreature(index) {
+            const piece = gameBoard[index];
+            const adjacentSpaces = getAdjacentSpaces(index);
+            
+            // Find empty adjacent space
+            for (let adjIndex of adjacentSpaces) {
+                if (!gameBoard[adjIndex]) {
+                    gameBoard[adjIndex] = piece;
+                    gameBoard[index] = null;
+                    
+                    // Add push animation
+                    setTimeout(() => {
+                        const pushedElement = document.querySelector(`[data-index="${adjIndex}"] .piece`);
+                        if (pushedElement) {
+                            pushedElement.classList.add('pushed');
+                            setTimeout(() => pushedElement.classList.remove('pushed'), 500);
+                        }
+                    }, 100);
+                    
+                    return;
+                }
+            }
+            
+            // No empty space - creature is pushed off board and defeated
+            const creature = creatures[piece.creatureId];
+            scores[currentPlayer] += creature.defeatValue;
+            gameBoard[index] = null;
+            addBattleLog(`${creature.name} is pushed off the board! +${creature.defeatValue} points`);
+        }
+        
+        function getAdjacentSpaces(index) {
+            const adjacencyMap = {
+                0: [1, 2, 3, 4, 5, 6, 7, 8],
+                1: [0, 2, 8, 9, 10, 24],
+                2: [0, 1, 3, 10, 11, 12],
+                3: [0, 2, 4, 12, 13, 14],
+                4: [0, 3, 5, 14, 15, 16],
+                5: [0, 4, 6, 16, 17, 18],
+                6: [0, 5, 7, 18, 19, 20],
+                7: [0, 6, 8, 20, 21, 22],
+                8: [0, 7, 1, 22, 23, 24],
+                9: [1, 10, 24],
+                10: [1, 2, 9, 11],
+                11: [2, 10, 12],
+                12: [2, 3, 11, 13],
+                13: [3, 12, 14],
+                14: [3, 4, 13, 15],
+                15: [4, 14, 16],
+                16: [4, 5, 15, 17],
+                17: [5, 16, 18],
+                18: [5, 6, 17, 19],
+                19: [6, 18, 20],
+                20: [6, 7, 19, 21],
+                21: [7, 20, 22],
+                22: [7, 8, 21, 23],
+                23: [8, 22, 24],
+                24: [8, 9, 23, 1]
+            };
+            
+            return adjacencyMap[index] || [];
+        }
+        
+        function clearHighlights() {
+            document.querySelectorAll('.space').forEach(space => {
+                space.classList.remove('valid-move', 'selected', 'attack-range');
+            });
+        }
+        
+        function endTurn() {
+            // Check for center bonus
+            if (gameBoard[0] && gameBoard[0].player === currentPlayer) {
+                scores[currentPlayer] += 1;
+                addBattleLog(`${currentPlayer} holds the center! +1 point`);
+            }
+            
+            // Reset all pieces' actions for current player
+            gameBoard.forEach(piece => {
+                if (piece && piece.player === currentPlayer) {
+                    piece.actionsThisTurn = 0;
+                }
+            });
+            
+            selectedPiece = null;
+            selectedAction = null;
+            actionUsed = false;
+            clearHighlights();
+            switchPlayer();
+            updateDisplay();
+            updateActionButtons();
+            
+            if (checkWinCondition()) {
+                return;
+            }
+        }
+        
+        function switchPlayer() {
+            currentPlayer = currentPlayer === 'blue' ? 'red' : 'blue';
+            if (gamePhase === 'play') {
+                updateCreatureRoster();
+            }
+        }
+        
+        function startGameplay() {
+            gamePhase = 'play';
+            currentPlayer = 'blue'; // Blue goes first
+            addBattleLog("Game begins! Blue team goes first.");
+            updateDisplay();
+            updateCreatureRoster();
+            updateActionButtons();
+        }
+        
+        function checkWinCondition() {
+            const bluePieces = gameBoard.filter(space => space && space.player === 'blue').length;
+            const redPieces = gameBoard.filter(space => space && space.player === 'red').length;
+            
+            if (bluePieces === 0) {
+                showWinner('red', 'All Blue creatures defeated!');
+                return true;
+            } else if (redPieces === 0) {
+                showWinner('blue', 'All Red creatures defeated!');
+                return true;
+            } else if (scores.blue >= targetScore) {
+                showWinner('blue', `Reached ${targetScore} points!`);
+                return true;
+            } else if (scores.red >= targetScore) {
+                showWinner('red', `Reached ${targetScore} points!`);
+                return true;
+            }
+            
+            return false;
+        }
+        
+        function showWinner(winner, reason) {
+            gameOver = true;
+            const statusElement = document.getElementById('gameStatus');
+            statusElement.innerHTML = `🏆 ${winner.toUpperCase()} EMPIRE WINS! 🏆<br>${reason}`;
+            statusElement.className = 'game-status win-message';
+            addBattleLog(`GAME OVER: ${winner.toUpperCase()} wins! ${reason}`);
+        }
+        
+        function updateActionButtons() {
+            const piece = selectedPiece ? gameBoard[selectedPiece] : null;
+            const creature = piece ? creatures[piece.creatureId] : null;
+            
+            const moveBtn = document.getElementById('moveBtn');
+            const attackBtn = document.getElementById('attackBtn');
+            const unstunBtn = document.getElementById('unstunBtn');
+            const endTurnBtn = document.getElementById('endTurnBtn');
+            
+            const canAct = gamePhase === 'play' && piece && piece.player === currentPlayer && 
+                          (piece.actionsThisTurn || 0) < creature?.actionsPerTurn;
+            
+            moveBtn.disabled = !canAct || piece?.stunned;
+            attackBtn.disabled = !canAct || piece?.stunned;
+            unstunBtn.disabled = !canAct || !piece?.stunned;
+            endTurnBtn.disabled = gamePhase !== 'play';
+            
+            // Update button states
+            document.querySelectorAll('.action-buttons .btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            if (selectedAction) {
+                document.getElementById(selectedAction + 'Btn').classList.add('selected');
+            }
+        }
+        
+        function addBattleLog(message) {
+            const log = document.getElementById('battleLog');
+            const entry = document.createElement('div');
+            entry.className = 'battle-log-entry';
+            entry.textContent = message;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function updateDisplay() {
+            // Update board
+            const spaces = document.querySelectorAll('.space');
+            spaces.forEach((space, index) => {
+                const piece = gameBoard[index];
+                if (piece) {
+                    const creature = creatures[piece.creatureId];
+                    const stunnedClass = piece.stunned ? ' stunned' : '';
+                    space.innerHTML = `
+                        <div class="piece ${piece.player}${stunnedClass}">
+                            ${creature.icon}
+                        </div>
+                    `;
+                } else {
+                    space.innerHTML = '';
+                }
+            });
+            
+            // Update current player display
+            const playerDisplay = document.getElementById('currentPlayer');
+            if (!gameOver) {
+                playerDisplay.innerHTML = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} Player's Turn`;
+                playerDisplay.className = `current-player player-${currentPlayer}`;
+            }
+            
+            // Update scores
+            document.getElementById('blueScore').textContent = scores.blue;
+            document.getElementById('redScore').textContent = scores.red;
+            
+            // Update phase indicator
+            const phaseIndicator = document.getElementById('phaseIndicator');
+            if (gamePhase === 'setup') {
+                phaseIndicator.innerHTML = `Setup Phase: Deploy ${4 - deployedCount[currentPlayer]} more creatures`;
+            } else {
+                const piece = selectedPiece ? gameBoard[selectedPiece] : null;
+                const creature = piece ? creatures[piece.creatureId] : null;
+                const actionsLeft = piece ? creature.actionsPerTurn - (piece.actionsThisTurn || 0) : 0;
+                phaseIndicator.innerHTML = `Combat Phase - Round ${roundCount} | Actions left: ${actionsLeft}`;
+            }
+            
+            // Clear status if game is ongoing
+            if (!gameOver) {
+                const statusElement = document.getElementById('gameStatus');
+                statusElement.innerHTML = '';
+                statusElement.className = 'game-status';
+            }
+        }
+        
+        // Initialize the game when the page loads
+        initGame();
+    </script>
+</body>
+</html>
