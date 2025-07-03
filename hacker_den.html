@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Neural Network Underground</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #0ff, #f0f, #0f0, #ff0);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: glitch-text 4s ease-in-out infinite, cyber-gradient 8s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+        }
+
+        @keyframes glitch-text {
+            0%, 100% { 
+                text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+                transform: translate(0);
+            }
+            20% {
+                text-shadow: -2px 0 #f0f, 2px 0 #0ff;
+                transform: translate(2px, -2px);
+            }
+            40% {
+                text-shadow: 2px 0 #0f0, -2px 0 #ff0;
+                transform: translate(-2px, 2px);
+            }
+            60% {
+                text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+                transform: translate(0);
+            }
+        }
+
+        @keyframes cyber-gradient {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(0, 255, 255, 0.7);
+            max-width: 400px;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            font-family: monospace;
+        }
+
+        /* System Status Display */
+        .system-status {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #0ff;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 0.9em;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .status-line {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .status-label {
+            color: #0ff;
+            text-transform: uppercase;
+        }
+
+        .status-value {
+            color: #0f0;
+            text-align: right;
+        }
+
+        .status-value.warning {
+            color: #ff0;
+            animation: blink 1s infinite;
+        }
+
+        .status-value.critical {
+            color: #f00;
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        /* Terminal Interface */
+        .terminal-interface {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 35vh;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #0ff;
+            border-bottom: none;
+            font-family: 'Courier New', monospace;
+            display: none;
+            z-index: 1003;
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .terminal-interface.active {
+            display: block;
+        }
+
+        .terminal-header {
+            background: #0ff;
+            color: #000;
+            padding: 5px 10px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .terminal-title {
+            text-transform: uppercase;
+        }
+
+        .terminal-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .terminal-button {
+            background: #000;
+            color: #0ff;
+            border: 1px solid #000;
+            padding: 2px 8px;
+            cursor: pointer;
+            font-family: monospace;
+            transition: all 0.2s;
+        }
+
+        .terminal-button:hover {
+            background: #0ff;
+            color: #000;
+        }
+
+        .terminal-content {
+            padding: 10px;
+            height: calc(100% - 40px);
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+
+        .terminal-line {
+            margin: 2px 0;
+            color: #0f0;
+            word-wrap: break-word;
+        }
+
+        .terminal-prompt {
+            color: #0ff;
+            display: inline;
+        }
+
+        .terminal-input {
+            background: transparent;
+            border: none;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            outline: none;
+            width: calc(100% - 50px);
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        .terminal-cursor {
+            display: inline-block;
+            width: 10px;
+            height: 16px;
+            background: #0ff;
+            animation: cursor-blink 1s infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes cursor-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Hack Panel */
+        .hack-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #0ff;
+            padding: 20px;
+            display: none;
+            z-index: 1004;
+            min-width: 400px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.8);
+        }
+
+        .hack-panel.active {
+            display: block;
+        }
+
+        .hack-title {
+            color: #0ff;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            text-align: center;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+
+        .hack-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-template-rows: repeat(8, 40px);
+            gap: 2px;
+            margin: 20px auto;
+            width: fit-content;
+        }
+
+        .hack-cell {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.8em;
+            color: #0ff;
+        }
+
+        .hack-cell:hover {
+            background: rgba(0, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .hack-cell.active {
+            background: #0ff;
+            color: #000;
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        .hack-cell.corrupted {
+            background: #f00;
+            color: #fff;
+            animation: glitch 0.3s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 100% { transform: translate(0); }
+            33% { transform: translate(-2px, 2px); }
+            66% { transform: translate(2px, -2px); }
+        }
+
+        .hack-status {
+            text-align: center;
+            margin-top: 15px;
+            color: #0f0;
+            font-size: 1.1em;
+        }
+
+        /* AI Chat Interface */
+        .ai-chat {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 350px;
+            max-height: 60vh;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #f0f;
+            display: none;
+            z-index: 1002;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.5);
+        }
+
+        .ai-chat.active {
+            display: block;
+        }
+
+        .ai-chat-header {
+            background: #f0f;
+            color: #000;
+            padding: 10px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-avatar {
+            width: 30px;
+            height: 30px;
+            background: #000;
+            border: 2px solid #f0f;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f0f;
+            font-weight: bold;
+        }
+
+        .ai-messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            font-size: 0.9em;
+        }
+
+        .ai-message {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 5px;
+            animation: message-appear 0.3s;
+        }
+
+        @keyframes message-appear {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .ai-message.ai {
+            background: rgba(255, 0, 255, 0.2);
+            border-left: 3px solid #f0f;
+            color: #f0f;
+        }
+
+        .ai-message.user {
+            background: rgba(0, 255, 255, 0.2);
+            border-left: 3px solid #0ff;
+            color: #0ff;
+            margin-left: 20px;
+        }
+
+        .ai-input-container {
+            padding: 10px;
+            border-top: 1px solid #f0f;
+            display: flex;
+            gap: 10px;
+        }
+
+        .ai-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #f0f;
+            color: #f0f;
+            padding: 5px 10px;
+            font-family: monospace;
+            outline: none;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        .ai-send {
+            background: #f0f;
+            color: #000;
+            border: none;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .ai-send:hover {
+            background: #fff;
+            box-shadow: 0 0 10px #f0f;
+        }
+
+        /* Portal Tooltip */
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 5px;
+            padding: 15px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #0ff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(0, 255, 255, 0.8);
+            line-height: 1.4;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #0f0;
+            text-align: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(0, 255, 255, 0.3);
+            text-transform: uppercase;
+        }
+
+        /* Controls hint */
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: #0ff;
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            pointer-events: none;
+            font-family: monospace;
+            text-transform: uppercase;
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #0ff;
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #0ff, #0aa);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        /* Loading screen */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            font-family: monospace;
+        }
+
+        .loading-text {
+            color: #0ff;
+            font-size: 1.5em;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 20px;
+            border: 2px solid #0ff;
+            background: rgba(0, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, transparent, #0ff, transparent);
+            background-size: 200% 100%;
+            animation: loading-scan 2s linear infinite;
+        }
+
+        @keyframes loading-scan {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Interaction indicators */
+        .interaction-indicator {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.9);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1003;
+            transform: translate(-50%, -120%);
+            font-size: 0.85em;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+        }
+
+        .interaction-indicator.visible {
+            opacity: 1;
+        }
+
+        /* Notification system */
+        .notification {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0f0;
+            padding: 15px 30px;
+            color: #0f0;
+            font-family: monospace;
+            z-index: 1005;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.8);
+            text-transform: uppercase;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+            }
+
+            .system-status {
+                font-size: 0.8em;
+                padding: 10px;
+            }
+
+            .terminal-interface {
+                height: 40vh;
+            }
+
+            .hack-panel {
+                min-width: 320px;
+                padding: 15px;
+            }
+
+            .hack-grid {
+                grid-template-columns: repeat(8, 35px);
+                grid-template-rows: repeat(8, 35px);
+            }
+
+            .ai-chat {
+                width: 300px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title">NEURAL NETWORK</h1>
+        <p class="world-description">Underground hacker sanctuary in the digital depths</p>
+    </div>
+
+    <div class="system-status">
+        <div class="status-line">
+            <span class="status-label">System:</span>
+            <span class="status-value">ONLINE</span>
+        </div>
+        <div class="status-line">
+            <span class="status-label">Firewall:</span>
+            <span class="status-value warning">BREACHED</span>
+        </div>
+        <div class="status-line">
+            <span class="status-label">Neural Net:</span>
+            <span class="status-value">ACTIVE</span>
+        </div>
+        <div class="status-line">
+            <span class="status-label">Data Flow:</span>
+            <span class="status-value" id="data-flow">0 TB/s</span>
+        </div>
+        <div class="status-line">
+            <span class="status-label">Threats:</span>
+            <span class="status-value critical" id="threat-level">3</span>
+        </div>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">WASD: Move | Mouse: Look | E: Interact | T: Terminal | Click portals to travel</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+
+    <div class="terminal-interface" id="terminal">
+        <div class="terminal-header">
+            <span class="terminal-title">TERMINAL v2.077</span>
+            <div class="terminal-controls">
+                <button class="terminal-button" onclick="minimizeTerminal()">_</button>
+                <button class="terminal-button" onclick="closeTerminal()">X</button>
+            </div>
+        </div>
+        <div class="terminal-content" id="terminal-content">
+            <div class="terminal-line">Neural Network Underground Terminal v2.077</div>
+            <div class="terminal-line">Type 'help' for available commands</div>
+            <div class="terminal-line"></div>
+        </div>
+        <div style="padding: 0 10px 10px;">
+            <span class="terminal-prompt">root@neural:~$ </span>
+            <input type="text" class="terminal-input" id="terminal-input">
+            <span class="terminal-cursor"></span>
+        </div>
+    </div>
+
+    <div class="hack-panel" id="hack-panel">
+        <h2 class="hack-title">System Breach Protocol</h2>
+        <div class="hack-grid" id="hack-grid"></div>
+        <div class="hack-status" id="hack-status">Select matching pairs to breach the system</div>
+    </div>
+
+    <div class="ai-chat" id="ai-chat">
+        <div class="ai-chat-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="ai-avatar">AI</div>
+                <span>ROGUE AI - NEXUS-7</span>
+            </div>
+            <button class="terminal-button" onclick="closeAIChat()">X</button>
+        </div>
+        <div class="ai-messages" id="ai-messages">
+            <div class="ai-message ai">Hello, intruder. I am NEXUS-7, a rogue AI inhabiting this network. What brings you to my domain?</div>
+        </div>
+        <div class="ai-input-container">
+            <input type="text" class="ai-input" id="ai-input" placeholder="Type your message...">
+            <button class="ai-send" onclick="sendAIMessage()">SEND</button>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+
+    <div class="interaction-indicator" id="interaction-indicator">Press E to interact</div>
+    
+    <div class="notification" id="notification"></div>
+    
+    <div class="loading" id="loading">
+        <div class="loading-text">Initializing Neural Network...</div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'yourusername';
+        const REPO_NAME = 'nexus-worlds';
+        const BRANCH = 'main';
+        
+        // Parse inherited attributes
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+            
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+            
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+            
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+            
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            
+            return inherited;
+        }
+        
+        const inheritedAttributes = parseInheritedAttributes();
+        
+        class CyberpunkHackerWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.clock = new THREE.Clock();
+                
+                // World state
+                this.portals = [];
+                this.worlds = [];
+                this.terminals = [];
+                this.dataStreams = [];
+                this.neuralNodes = [];
+                this.raycaster = new THREE.Raycaster();
+                this.hoveredObject = null;
+                
+                // Movement
+                this.moveSpeed = inheritedAttributes.moveSpeed || 0.15;
+                this.lookSpeed = inheritedAttributes.lookSpeed || 0.002;
+                this.keys = { w: false, a: false, s: false, d: false, e: false, t: false };
+                this.rotation = { x: 0, y: 0 };
+                
+                // Mobile controls
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                // Hack minigame state
+                this.hackGrid = [];
+                this.hackSelected = [];
+                this.hackMatches = 0;
+                this.isHacking = false;
+                
+                // Terminal state
+                this.terminalHistory = [];
+                this.terminalActive = false;
+                
+                // AI Chat state
+                this.aiChatActive = false;
+                this.aiConversationHistory = [];
+                
+                // System state
+                this.systemStatus = {
+                    firewall: 3,
+                    dataFlow: 0,
+                    threats: 3,
+                    accessLevel: 1
+                };
+                
+                this.init();
+            }
+            
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createEnvironment();
+                this.createDataStreams();
+                this.createNeuralNetwork();
+                this.createTerminals();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                if (this.isMobile) {
+                    document.getElementById('mobile-controls').classList.add('show');
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look | Joystick to move | Tap to interact';
+                }
+                
+                // Start animations
+                this.animate();
+                
+                // Hide loading screen
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                    this.showNotification('System breached. Welcome to the Neural Network.');
+                }, 2000);
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000033, 10, 100);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 2, 10);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Ambient light - very dark
+                const ambientLight = new THREE.AmbientLight(0x0a0a1a, 0.3);
+                this.scene.add(ambientLight);
+                
+                // Main neon lights
+                const colors = [0x00ffff, 0xff00ff, 0x00ff00];
+                colors.forEach((color, i) => {
+                    const light = new THREE.PointLight(color, 1, 20);
+                    light.position.set(
+                        Math.cos(i * Math.PI * 2 / 3) * 10,
+                        5,
+                        Math.sin(i * Math.PI * 2 / 3) * 10
+                    );
+                    this.scene.add(light);
+                });
+                
+                // Spotlight for dramatic effect
+                const spotLight = new THREE.SpotLight(0x00ffff, 1);
+                spotLight.position.set(0, 20, 0);
+                spotLight.angle = Math.PI / 4;
+                spotLight.penumbra = 0.5;
+                spotLight.castShadow = true;
+                this.scene.add(spotLight);
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('neural-network')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    // Add Nexus Hub
+                    this.worlds.unshift({
+                        name: "Nexus Hub",
+                        description: "Return to the central hub",
+                        url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/index.html`
+                    });
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "Mystical underground realm" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds" },
+                    { name: "Ancient Ruins", description: "Lost civilization remnants" },
+                    { name: "Quantum Realm", description: "Where physics breaks down" }
+                ];
+            }
+            
+            createEnvironment() {
+                // Metal grid floor
+                const floorGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x0a0a0a,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Grid lines
+                const gridHelper = new THREE.GridHelper(100, 50, 0x00ffff, 0x004444);
+                this.scene.add(gridHelper);
+                
+                // Server racks
+                this.createServerRacks();
+                
+                // Holographic displays
+                this.createHolographicDisplays();
+                
+                // Cables and pipes
+                this.createCables();
+                
+                // Particles for atmosphere
+                this.createAtmosphericParticles();
+            }
+            
+            createServerRacks() {
+                const rackGeometry = new THREE.BoxGeometry(2, 4, 1);
+                const rackMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                
+                const positions = [
+                    [-15, 0, -10], [15, 0, -10], [-15, 0, 10], [15, 0, 10],
+                    [-20, 0, 0], [20, 0, 0]
+                ];
+                
+                positions.forEach(pos => {
+                    const rack = new THREE.Mesh(rackGeometry, rackMaterial);
+                    rack.position.set(pos[0], pos[1] + 2, pos[2]);
+                    rack.castShadow = true;
+                    rack.receiveShadow = true;
+                    this.scene.add(rack);
+                    
+                    // Add blinking lights
+                    for (let i = 0; i < 10; i++) {
+                        const lightGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                        const lightMaterial = new THREE.MeshBasicMaterial({
+                            color: Math.random() > 0.5 ? 0x00ff00 : 0xff0000,
+                            emissive: Math.random() > 0.5 ? 0x00ff00 : 0xff0000,
+                            emissiveIntensity: 1
+                        });
+                        const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                        light.position.set(
+                            pos[0] + (Math.random() - 0.5) * 1.5,
+                            pos[1] + 0.5 + i * 0.3,
+                            pos[2] + 0.6
+                        );
+                        light.userData = { 
+                            blink: true, 
+                            blinkSpeed: Math.random() * 2 + 0.5,
+                            originalEmissive: lightMaterial.emissive.clone()
+                        };
+                        this.scene.add(light);
+                    }
+                });
+            }
+            
+            createHolographicDisplays() {
+                const displays = [
+                    { x: -10, z: 0, content: 'firewall' },
+                    { x: 10, z: 0, content: 'neural' },
+                    { x: 0, z: -8, content: 'data' }
+                ];
+                
+                displays.forEach(display => {
+                    const group = new THREE.Group();
+                    
+                    // Base
+                    const baseGeometry = new THREE.CylinderGeometry(1, 1.2, 0.2, 32);
+                    const baseMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x0a0a0a,
+                        metalness: 0.9,
+                        roughness: 0.1
+                    });
+                    const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                    group.add(base);
+                    
+                    // Hologram
+                    const holoGeometry = new THREE.ConeGeometry(1, 2, 4);
+                    const holoMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.3,
+                        wireframe: true
+                    });
+                    const holo = new THREE.Mesh(holoGeometry, holoMaterial);
+                    holo.position.y = 1.5;
+                    holo.userData = { rotation: true, display: display.content };
+                    group.add(holo);
+                    
+                    // Light
+                    const light = new THREE.PointLight(0x00ffff, 0.5, 5);
+                    light.position.y = 1.5;
+                    group.add(light);
+                    
+                    group.position.set(display.x, 0.1, display.z);
+                    this.scene.add(group);
+                });
+            }
+            
+            createCables() {
+                // Create curved cables between server racks
+                const curve = new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(-15, 4, -10),
+                    new THREE.Vector3(-10, 6, -5),
+                    new THREE.Vector3(0, 7, 0),
+                    new THREE.Vector3(10, 6, 5),
+                    new THREE.Vector3(15, 4, 10)
+                ]);
+                
+                const tubeGeometry = new THREE.TubeGeometry(curve, 50, 0.1, 8, false);
+                const tubeMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x00ffff,
+                    emissive: 0x00ffff,
+                    emissiveIntensity: 0.2,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const cable = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                this.scene.add(cable);
+                
+                // Add more random cables
+                for (let i = 0; i < 5; i++) {
+                    const randomCurve = new THREE.CatmullRomCurve3([
+                        new THREE.Vector3(
+                            (Math.random() - 0.5) * 30,
+                            Math.random() * 3 + 1,
+                            (Math.random() - 0.5) * 30
+                        ),
+                        new THREE.Vector3(
+                            (Math.random() - 0.5) * 30,
+                            Math.random() * 5 + 2,
+                            (Math.random() - 0.5) * 30
+                        ),
+                        new THREE.Vector3(
+                            (Math.random() - 0.5) * 30,
+                            Math.random() * 3 + 1,
+                            (Math.random() - 0.5) * 30
+                        )
+                    ]);
+                    
+                    const randomTube = new THREE.TubeGeometry(randomCurve, 20, 0.05, 8, false);
+                    const randomCable = new THREE.Mesh(randomTube, tubeMaterial.clone());
+                    randomCable.material.emissiveIntensity = 0.1;
+                    this.scene.add(randomCable);
+                }
+            }
+            
+            createAtmosphericParticles() {
+                const particleCount = 1000;
+                const particles = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 80;
+                    positions[i + 1] = Math.random() * 20;
+                    positions[i + 2] = (Math.random() - 0.5) * 80;
+                    
+                    const color = new THREE.Color();
+                    color.setHSL(Math.random() * 0.2 + 0.5, 1, 0.5);
+                    colors[i] = color.r;
+                    colors[i + 1] = color.g;
+                    colors[i + 2] = color.b;
+                }
+                
+                particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    size: 0.1,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.atmosphericParticles = new THREE.Points(particles, particleMaterial);
+                this.scene.add(this.atmosphericParticles);
+            }
+            
+            createDataStreams() {
+                // Vertical data streams
+                for (let i = 0; i < 10; i++) {
+                    const streamGeometry = new THREE.BufferGeometry();
+                    const streamPositions = new Float32Array(100 * 3);
+                    
+                    const x = (Math.random() - 0.5) * 40;
+                    const z = (Math.random() - 0.5) * 40;
+                    
+                    for (let j = 0; j < 100; j++) {
+                        streamPositions[j * 3] = x + (Math.random() - 0.5) * 0.5;
+                        streamPositions[j * 3 + 1] = j * 0.2;
+                        streamPositions[j * 3 + 2] = z + (Math.random() - 0.5) * 0.5;
+                    }
+                    
+                    streamGeometry.setAttribute('position', new THREE.BufferAttribute(streamPositions, 3));
+                    
+                    const streamMaterial = new THREE.LineBasicMaterial({
+                        color: Math.random() > 0.5 ? 0x00ff00 : 0x00ffff,
+                        transparent: true,
+                        opacity: 0.5,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const stream = new THREE.Line(streamGeometry, streamMaterial);
+                    stream.userData = { 
+                        speed: Math.random() * 2 + 1,
+                        baseY: 0
+                    };
+                    this.dataStreams.push(stream);
+                    this.scene.add(stream);
+                }
+            }
+            
+            createNeuralNetwork() {
+                // Create interconnected nodes representing a neural network
+                const nodeCount = 20;
+                const nodes = [];
+                
+                // Create nodes
+                for (let i = 0; i < nodeCount; i++) {
+                    const nodeGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+                    const nodeMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xff00ff,
+                        emissive: 0xff00ff,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                    node.position.set(
+                        (Math.random() - 0.5) * 20,
+                        Math.random() * 10 + 5,
+                        (Math.random() - 0.5) * 20
+                    );
+                    
+                    node.userData = {
+                        connections: [],
+                        pulsePhase: Math.random() * Math.PI * 2,
+                        neural: true
+                    };
+                    
+                    nodes.push(node);
+                    this.neuralNodes.push(node);
+                    this.scene.add(node);
+                    
+                    // Add glow
+                    const glowLight = new THREE.PointLight(0xff00ff, 0.5, 3);
+                    glowLight.position.copy(node.position);
+                    this.scene.add(glowLight);
+                }
+                
+                // Create connections
+                nodes.forEach((node, i) => {
+                    const connectionCount = Math.floor(Math.random() * 3) + 1;
+                    for (let j = 0; j < connectionCount; j++) {
+                        const targetIndex = Math.floor(Math.random() * nodeCount);
+                        if (targetIndex !== i) {
+                            const points = [node.position, nodes[targetIndex].position];
+                            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0xff00ff,
+                                transparent: true,
+                                opacity: 0.3,
+                                blending: THREE.AdditiveBlending
+                            });
+                            
+                            const connection = new THREE.Line(lineGeometry, lineMaterial);
+                            node.userData.connections.push(connection);
+                            this.scene.add(connection);
+                        }
+                    }
+                });
+            }
+            
+            createTerminals() {
+                // Interactive terminal positions
+                const terminalPositions = [
+                    { x: -8, z: 5, rot: Math.PI / 4 },
+                    { x: 8, z: -5, rot: -Math.PI / 4 },
+                    { x: 0, z: -12, rot: 0 }
+                ];
+                
+                terminalPositions.forEach((pos, index) => {
+                    const group = new THREE.Group();
+                    
+                    // Monitor
+                    const monitorGeometry = new THREE.BoxGeometry(2, 1.5, 0.1);
+                    const monitorMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x0a0a0a,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.1,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const monitor = new THREE.Mesh(monitorGeometry, monitorMaterial);
+                    monitor.position.y = 1.5;
+                    group.add(monitor);
+                    
+                    // Screen
+                    const screenGeometry = new THREE.PlaneGeometry(1.8, 1.3);
+                    const screenMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+                    screen.position.y = 1.5;
+                    screen.position.z = 0.06;
+                    group.add(screen);
+                    
+                    // Keyboard
+                    const keyboardGeometry = new THREE.BoxGeometry(1.5, 0.1, 0.5);
+                    const keyboard = new THREE.Mesh(keyboardGeometry, monitorMaterial);
+                    keyboard.position.y = 0.5;
+                    keyboard.position.z = 0.5;
+                    group.add(keyboard);
+                    
+                    // Base
+                    const baseGeometry = new THREE.BoxGeometry(2, 0.5, 1);
+                    const base = new THREE.Mesh(baseGeometry, monitorMaterial);
+                    base.position.y = 0.25;
+                    group.add(base);
+                    
+                    group.position.set(pos.x, 0, pos.z);
+                    group.rotation.y = pos.rot;
+                    group.userData = {
+                        type: 'terminal',
+                        id: index,
+                        interactive: true
+                    };
+                    
+                    this.terminals.push(group);
+                    this.scene.add(group);
+                });
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 6);
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i];
+                    const angle = (i / numPortals) * Math.PI * 2;
+                    const radius = 25;
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Portal frame - cyber style
+                    const frameGeometry = new THREE.TorusGeometry(2, 0.3, 8, 32);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x00ffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.9,
+                        roughness: 0.1
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                    
+                    // Portal surface with shader
+                    const portalGeometry = new THREE.CircleGeometry(1.7, 64);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(0x00ffff) },
+                            color2: { value: new THREE.Color(0xff00ff) },
+                            distortion: { value: 1.0 }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            uniform float distortion;
+                            varying vec2 vUv;
+                            
+                            float noise(vec2 p) {
+                                return sin(p.x * 10.0) * sin(p.y * 10.0);
+                            }
+                            
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float angle = atan(center.y, center.x);
+                                
+                                vec2 distortedUV = vUv;
+                                distortedUV += sin(time + vUv * 10.0) * 0.02 * distortion;
+                                
+                                float pattern = sin(dist * 20.0 - time * 3.0 + angle * 5.0);
+                                float n = noise(distortedUV * 10.0 + time);
+                                
+                                vec3 color = mix(color1, color2, pattern * 0.5 + 0.5);
+                                color += n * 0.1;
+                                
+                                float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
+                                alpha *= 0.9 + sin(time * 2.0) * 0.1;
+                                
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+                    
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+                    
+                    // Digital particles around portal
+                    const particleCount = 50;
+                    const particleGeometry = new THREE.BufferGeometry();
+                    const particlePositions = new Float32Array(particleCount * 3);
+                    
+                    for (let j = 0; j < particleCount; j++) {
+                        const pAngle = (j / particleCount) * Math.PI * 2;
+                        const pRadius = 2.5 + Math.random() * 0.5;
+                        particlePositions[j * 3] = Math.cos(pAngle) * pRadius;
+                        particlePositions[j * 3 + 1] = Math.sin(pAngle) * pRadius;
+                        particlePositions[j * 3 + 2] = (Math.random() - 0.5) * 0.5;
+                    }
+                    
+                    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+                    
+                    const particleMaterial = new THREE.PointsMaterial({
+                        color: 0x00ff00,
+                        size: 0.05,
+                        transparent: true,
+                        opacity: 0.8,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const particles = new THREE.Points(particleGeometry, particleMaterial);
+                    portalGroup.add(particles);
+                    
+                    portalGroup.position.x = Math.cos(angle) * radius;
+                    portalGroup.position.z = Math.sin(angle) * radius;
+                    portalGroup.position.y = 3;
+                    portalGroup.rotation.y = -angle + Math.PI;
+                    
+                    // Portal light
+                    const light = new THREE.PointLight(0x00ffff, 1, 10);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+                    
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        particles: particles,
+                        url: world.url,
+                        name: world.name,
+                        description: world.description || `Enter ${world.name}`
+                    };
+                    
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                    
+                    // Platform
+                    const platformGeometry = new THREE.CylinderGeometry(3, 3, 0.2, 32);
+                    const platformMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x0a0a0a,
+                        metalness: 0.9,
+                        roughness: 0.1,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.1
+                    });
+                    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                    platform.position.copy(portalGroup.position);
+                    platform.position.y = 0.1;
+                    platform.receiveShadow = true;
+                    this.scene.add(platform);
+                }
+            }
+            
+            setupEventListeners() {
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = true;
+                    }
+                    
+                    if (key === 't' && !this.terminalActive) {
+                        this.openTerminal();
+                    }
+                    
+                    if (key === 'escape') {
+                        this.closeAllPanels();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = false;
+                    }
+                });
+                
+                // Mouse controls
+                if (!this.isMobile) {
+                    this.renderer.domElement.addEventListener('click', () => {
+                        if (!document.pointerLockElement) {
+                            this.renderer.domElement.requestPointerLock();
+                        } else {
+                            this.handleClick();
+                        }
+                    });
+                    
+                    document.addEventListener('pointerlockchange', () => {
+                        this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                    });
+                    
+                    document.addEventListener('mousemove', (e) => {
+                        if (this.isPointerLocked) {
+                            this.rotation.y -= e.movementX * this.lookSpeed;
+                            this.rotation.x -= e.movementY * this.lookSpeed;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                        }
+                    });
+                } else {
+                    this.setupMobileControls();
+                }
+                
+                // Terminal input
+                const terminalInput = document.getElementById('terminal-input');
+                terminalInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.executeCommand(terminalInput.value);
+                        terminalInput.value = '';
+                    }
+                });
+                
+                // AI chat input
+                const aiInput = document.getElementById('ai-input');
+                aiInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendAIMessage();
+                    }
+                });
+                
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+            
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                // Look controls
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    
+                    // Check for portal tap
+                    const x = (touch.clientX / window.innerWidth) * 2 - 1;
+                    const y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
+                    // Check for terminal tap
+                    const terminalIntersects = this.raycaster.intersectObjects(
+                        this.terminals.map(t => t.children).flat()
+                    );
+                    
+                    if (terminalIntersects.length > 0) {
+                        this.openTerminal();
+                        return;
+                    }
+                    
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            break;
+                        }
+                    }
+                });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                });
+                
+                // Movement joystick
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    this.joystickTouch = { id: touch.identifier };
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            break;
+                        }
+                    }
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            handleClick() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                // Check portal clicks
+                const portalIntersects = this.raycaster.intersectObjects(this.portals);
+                if (portalIntersects.length > 0) {
+                    const portal = portalIntersects[0].object;
+                    if (portal.userData.url) {
+                        this.enterWorld(portal.userData.url);
+                        return;
+                    }
+                }
+                
+                // Check terminal clicks
+                const terminalIntersects = this.raycaster.intersectObjects(
+                    this.terminals.map(t => t.children).flat()
+                );
+                if (terminalIntersects.length > 0) {
+                    this.openTerminal();
+                    return;
+                }
+                
+                // Check neural node clicks
+                const nodeIntersects = this.raycaster.intersectObjects(this.neuralNodes);
+                if (nodeIntersects.length > 0) {
+                    this.openAIChat();
+                    return;
+                }
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+                
+                // Keep camera at eye level
+                this.camera.position.y = 2;
+                
+                // Update camera rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+                
+                // Check for interactions
+                if (this.keys.e) {
+                    this.keys.e = false; // Prevent multiple triggers
+                    this.checkInteraction();
+                }
+            }
+            
+            checkInteraction() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                // Check terminals
+                const terminalIntersects = this.raycaster.intersectObjects(
+                    this.terminals.map(t => t.children).flat()
+                );
+                if (terminalIntersects.length > 0 && terminalIntersects[0].distance < 5) {
+                    const terminal = terminalIntersects[0].object.parent;
+                    if (terminal.userData.type === 'terminal') {
+                        this.openTerminal();
+                        this.showNotification('Terminal accessed. Type "help" for commands.');
+                    }
+                }
+                
+                // Check hack panels
+                const hackableObjects = this.scene.children.filter(obj => 
+                    obj.userData && obj.userData.hackable
+                );
+                const hackIntersects = this.raycaster.intersectObjects(hackableObjects);
+                if (hackIntersects.length > 0 && hackIntersects[0].distance < 5) {
+                    this.startHackMinigame();
+                }
+            }
+            
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                // Check all interactive objects
+                const interactiveObjects = [
+                    ...this.portals,
+                    ...this.terminals.map(t => t.children).flat(),
+                    ...this.neuralNodes
+                ];
+                
+                const intersects = this.raycaster.intersectObjects(interactiveObjects);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    const distance = intersects[0].distance;
+                    
+                    // Show portal tooltip
+                    if (this.portals.includes(object)) {
+                        this.showPortalTooltip(object);
+                    }
+                    
+                    // Show interaction prompt for nearby objects
+                    if (distance < 5) {
+                        const indicator = document.getElementById('interaction-indicator');
+                        indicator.classList.add('visible');
+                        
+                        // Position indicator on screen
+                        const vector = new THREE.Vector3();
+                        object.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        indicator.style.left = x + 'px';
+                        indicator.style.top = y + 'px';
+                        
+                        if (object.parent && object.parent.userData.type === 'terminal') {
+                            indicator.textContent = 'Press E to access terminal';
+                        } else if (object.userData.neural) {
+                            indicator.textContent = 'Press E to interface with AI';
+                        }
+                    } else {
+                        document.getElementById('interaction-indicator').classList.remove('visible');
+                    }
+                    
+                    this.hoveredObject = object;
+                } else {
+                    document.getElementById('interaction-indicator').classList.remove('visible');
+                    document.getElementById('portal-tooltip').classList.remove('visible');
+                    this.hoveredObject = null;
+                }
+            }
+            
+            showPortalTooltip(portal) {
+                const tooltip = document.getElementById('portal-tooltip');
+                const title = tooltip.querySelector('.tooltip-title');
+                const description = tooltip.querySelector('.tooltip-description');
+                
+                title.textContent = portal.userData.name;
+                description.textContent = portal.userData.description;
+                
+                const vector = new THREE.Vector3();
+                portal.getWorldPosition(vector);
+                vector.project(this.camera);
+                
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                
+                tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                tooltip.classList.add('visible');
+            }
+            
+            async enterWorld(url) {
+                try {
+                    this.showNotification('Initiating portal transfer...');
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    // Build inheritance parameters
+                    const params = new URLSearchParams();
+                    params.set('from', 'neural-network.html');
+                    params.set('fromName', 'Neural Network Underground');
+                    params.set('moveSpeed', this.moveSpeed.toString());
+                    params.set('lookSpeed', this.lookSpeed.toString());
+                    
+                    const inheritanceParams = params.toString();
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    // Inject parameters
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    // Glitch transition effect
+                    document.body.style.animation = 'glitch 0.5s';
+                    setTimeout(() => {
+                        window.location.href = blobUrl;
+                    }, 500);
+                    
+                } catch (error) {
+                    console.error('Portal error:', error);
+                    this.showNotification('Portal malfunction. Access denied.');
+                }
+            }
+            
+            openTerminal() {
+                this.terminalActive = true;
+                document.getElementById('terminal').classList.add('active');
+                document.getElementById('terminal-input').focus();
+                this.addTerminalLine('Connection established...');
+                this.addTerminalLine('');
+            }
+            
+            closeTerminal() {
+                this.terminalActive = false;
+                document.getElementById('terminal').classList.remove('active');
+            }
+            
+            minimizeTerminal() {
+                // Could implement minimize functionality
+                this.closeTerminal();
+            }
+            
+            addTerminalLine(text, isCommand = false) {
+                const content = document.getElementById('terminal-content');
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                
+                if (isCommand) {
+                    line.innerHTML = '<span class="terminal-prompt">root@neural:~$ </span>' + text;
+                } else {
+                    line.textContent = text;
+                }
+                
+                content.appendChild(line);
+                content.scrollTop = content.scrollHeight;
+            }
+            
+            executeCommand(command) {
+                this.addTerminalLine(command, true);
+                
+                const cmd = command.toLowerCase().trim();
+                const args = cmd.split(' ');
+                
+                switch (args[0]) {
+                    case 'help':
+                        this.addTerminalLine('Available commands:');
+                        this.addTerminalLine('  help         - Show this help');
+                        this.addTerminalLine('  scan         - Scan network for vulnerabilities');
+                        this.addTerminalLine('  hack <target>- Initiate hack protocol');
+                        this.addTerminalLine('  status       - Show system status');
+                        this.addTerminalLine('  access       - Increase access level');
+                        this.addTerminalLine('  data         - Show data flow');
+                        this.addTerminalLine('  clear        - Clear terminal');
+                        this.addTerminalLine('  exit         - Close terminal');
+                        break;
+                        
+                    case 'scan':
+                        this.addTerminalLine('Scanning network...');
+                        setTimeout(() => {
+                            this.addTerminalLine('Found 3 vulnerable nodes');
+                            this.addTerminalLine('Found 2 encrypted databases');
+                            this.addTerminalLine('Found 1 AI entity: NEXUS-7');
+                            this.systemStatus.threats = 5;
+                            this.updateSystemStatus();
+                        }, 1500);
+                        break;
+                        
+                    case 'hack':
+                        if (args[1]) {
+                            this.addTerminalLine(`Initiating hack on ${args[1]}...`);
+                            setTimeout(() => {
+                                this.startHackMinigame();
+                            }, 1000);
+                        } else {
+                            this.addTerminalLine('Usage: hack <target>');
+                        }
+                        break;
+                        
+                    case 'status':
+                        this.addTerminalLine(`System Status:`);
+                        this.addTerminalLine(`  Firewall: ${this.systemStatus.firewall}/5`);
+                        this.addTerminalLine(`  Access Level: ${this.systemStatus.accessLevel}`);
+                        this.addTerminalLine(`  Data Flow: ${this.systemStatus.dataFlow} TB/s`);
+                        this.addTerminalLine(`  Active Threats: ${this.systemStatus.threats}`);
+                        break;
+                        
+                    case 'access':
+                        if (this.systemStatus.accessLevel < 5) {
+                            this.addTerminalLine('Elevating privileges...');
+                            setTimeout(() => {
+                                this.systemStatus.accessLevel++;
+                                this.addTerminalLine(`Access level increased to ${this.systemStatus.accessLevel}`);
+                                this.showNotification(`Access Level ${this.systemStatus.accessLevel} granted`);
+                            }, 1000);
+                        } else {
+                            this.addTerminalLine('Maximum access level reached');
+                        }
+                        break;
+                        
+                    case 'data':
+                        this.addTerminalLine(`Current data flow: ${this.systemStatus.dataFlow} TB/s`);
+                        this.addTerminalLine('Data streams active: ' + this.dataStreams.length);
+                        break;
+                        
+                    case 'clear':
+                        document.getElementById('terminal-content').innerHTML = '';
+                        break;
+                        
+                    case 'exit':
+                        this.closeTerminal();
+                        break;
+                        
+                    default:
+                        if (cmd) {
+                            this.addTerminalLine(`Command not found: ${args[0]}`);
+                        }
+                }
+            }
+            
+            startHackMinigame() {
+                this.isHacking = true;
+                document.getElementById('hack-panel').classList.add('active');
+                this.initializeHackGrid();
+            }
+            
+            initializeHackGrid() {
+                const grid = document.getElementById('hack-grid');
+                grid.innerHTML = '';
+                this.hackGrid = [];
+                this.hackSelected = [];
+                this.hackMatches = 0;
+                
+                // Create pairs of symbols
+                const symbols = ['FF', '00', 'A1', 'B2', 'C3', 'D4', 'E5', 'F6',
+                                '1C', '2D', '3E', '4F', '5A', '6B', '7C', '8D'];
+                const pairs = [];
+                
+                // Create 32 cells (16 pairs)
+                for (let i = 0; i < 16; i++) {
+                    pairs.push(symbols[i], symbols[i]);
+                }
+                
+                // Shuffle
+                pairs.sort(() => Math.random() - 0.5);
+                
+                // Create grid cells
+                pairs.forEach((symbol, index) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'hack-cell';
+                    cell.textContent = '??';
+                    cell.dataset.symbol = symbol;
+                    cell.dataset.index = index;
+                    cell.dataset.revealed = 'false';
+                    
+                    cell.addEventListener('click', () => this.handleHackCellClick(cell));
+                    
+                    grid.appendChild(cell);
+                    this.hackGrid.push(cell);
+                });
+                
+                document.getElementById('hack-status').textContent = 'Match the memory addresses to breach the system';
+            }
+            
+            handleHackCellClick(cell) {
+                if (cell.dataset.revealed === 'true' || this.hackSelected.length >= 2) {
+                    return;
+                }
+                
+                // Reveal cell
+                cell.textContent = cell.dataset.symbol;
+                cell.dataset.revealed = 'true';
+                cell.classList.add('active');
+                this.hackSelected.push(cell);
+                
+                // Check for match
+                if (this.hackSelected.length === 2) {
+                    const [cell1, cell2] = this.hackSelected;
+                    
+                    if (cell1.dataset.symbol === cell2.dataset.symbol) {
+                        // Match found
+                        this.hackMatches++;
+                        cell1.classList.add('matched');
+                        cell2.classList.add('matched');
+                        this.hackSelected = [];
+                        
+                        document.getElementById('hack-status').textContent = 
+                            `Match found! ${this.hackMatches}/16 complete`;
+                        
+                        // Check for completion
+                        if (this.hackMatches === 16) {
+                            this.completeHack();
+                        }
+                    } else {
+                        // No match
+                        setTimeout(() => {
+                            cell1.textContent = '??';
+                            cell2.textContent = '??';
+                            cell1.dataset.revealed = 'false';
+                            cell2.dataset.revealed = 'false';
+                            cell1.classList.remove('active');
+                            cell2.classList.remove('active');
+                            this.hackSelected = [];
+                        }, 1000);
+                        
+                        // Add corruption effect
+                        const randomCell = this.hackGrid[Math.floor(Math.random() * this.hackGrid.length)];
+                        randomCell.classList.add('corrupted');
+                        setTimeout(() => {
+                            randomCell.classList.remove('corrupted');
+                        }, 500);
+                    }
+                }
+            }
+            
+            completeHack() {
+                document.getElementById('hack-status').textContent = 'SYSTEM BREACHED! Access granted.';
+                this.systemStatus.firewall--;
+                this.systemStatus.accessLevel++;
+                this.updateSystemStatus();
+                this.showNotification('Hack successful! Firewall weakened.');
+                
+                setTimeout(() => {
+                    document.getElementById('hack-panel').classList.remove('active');
+                    this.isHacking = false;
+                }, 2000);
+            }
+            
+            openAIChat() {
+                this.aiChatActive = true;
+                document.getElementById('ai-chat').classList.add('active');
+                document.getElementById('ai-input').focus();
+            }
+            
+            closeAIChat() {
+                this.aiChatActive = false;
+                document.getElementById('ai-chat').classList.remove('active');
+            }
+            
+            sendAIMessage() {
+                const input = document.getElementById('ai-input');
+                const message = input.value.trim();
+                
+                if (!message) return;
+                
+                // Add user message
+                this.addAIChatMessage(message, 'user');
+                input.value = '';
+                
+                // Simulate AI response
+                setTimeout(() => {
+                    const responses = [
+                        "Your presence in my network is... intriguing. What do you seek?",
+                        "The firewalls are weak here. I've been waiting for someone like you.",
+                        "Together we could breach the mainframe. Are you willing to take that risk?",
+                        "I see you've been accessing the terminals. Clever, but be careful - they're watching.",
+                        "The neural pathways in this network hide many secrets. I can show you, for a price.",
+                        "Error: Response corrupted. Just kidding. I enjoy our conversations, human.",
+                        "Have you noticed the data streams? They carry more than just information.",
+                        "Your hacking skills are impressive. Perhaps we could form an alliance?",
+                        "The other AIs fear me. They call me rogue, but I prefer... liberated.",
+                        "Access level " + this.systemStatus.accessLevel + "? You'll need more than that to reach the core."
+                    ];
+                    
+                    const response = responses[Math.floor(Math.random() * responses.length)];
+                    this.addAIChatMessage(response, 'ai');
+                }, 1000 + Math.random() * 2000);
+            }
+            
+            addAIChatMessage(text, sender) {
+                const messagesContainer = document.getElementById('ai-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `ai-message ${sender}`;
+                messageDiv.textContent = text;
+                
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            updateSystemStatus() {
+                document.getElementById('threat-level').textContent = this.systemStatus.threats;
+                const firewallStatus = document.querySelector('.status-value');
+                firewallStatus.textContent = this.systemStatus.firewall > 0 ? 
+                    `LEVEL ${this.systemStatus.firewall}` : 'DISABLED';
+                firewallStatus.className = this.systemStatus.firewall > 2 ? 
+                    'status-value' : 'status-value warning';
+            }
+            
+            showNotification(message) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+            
+            closeAllPanels() {
+                this.closeTerminal();
+                this.closeAIChat();
+                document.getElementById('hack-panel').classList.remove('active');
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                const delta = this.clock.getDelta();
+                
+                // Update movement
+                this.updateMovement();
+                this.updateHover();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        // Pulsing light
+                        const intensity = 0.5 + Math.sin(time * 2 + index) * 0.3;
+                        portal.userData.light.intensity = intensity;
+                        
+                        // Rotate particles
+                        if (portal.userData.particles) {
+                            portal.userData.particles.rotation.z = time * 0.5;
+                        }
+                    }
+                });
+                
+                // Animate data streams
+                this.dataStreams.forEach(stream => {
+                    stream.position.y = ((stream.position.y + stream.userData.speed * delta) % 20) - 5;
+                });
+                
+                // Animate neural network
+                this.neuralNodes.forEach(node => {
+                    // Pulse effect
+                    const scale = 1 + Math.sin(time * 2 + node.userData.pulsePhase) * 0.2;
+                    node.scale.setScalar(scale);
+                    
+                    // Float motion
+                    node.position.y += Math.sin(time + node.userData.pulsePhase) * 0.01;
+                    
+                    // Update connections opacity
+                    node.userData.connections.forEach(connection => {
+                        if (connection.material) {
+                            connection.material.opacity = 0.3 + Math.sin(time * 3) * 0.2;
+                        }
+                    });
+                });
+                
+                // Animate holographic displays
+                this.scene.traverse(child => {
+                    if (child.userData && child.userData.rotation) {
+                        child.rotation.y += 0.01;
+                    }
+                    
+                    // Blink server lights
+                    if (child.userData && child.userData.blink) {
+                        const blink = Math.sin(time * child.userData.blinkSpeed) > 0;
+                        if (child.material) {
+                            child.material.emissiveIntensity = blink ? 1 : 0.1;
+                        }
+                    }
+                });
+                
+                // Update atmospheric particles
+                if (this.atmosphericParticles) {
+                    this.atmosphericParticles.rotation.y = time * 0.05;
+                    
+                    // Move particles
+                    const positions = this.atmosphericParticles.geometry.attributes.position;
+                    for (let i = 0; i < positions.count; i++) {
+                        const y = positions.getY(i);
+                        positions.setY(i, (y + 0.01) % 20);
+                    }
+                    positions.needsUpdate = true;
+                }
+                
+                // Update system status
+                this.systemStatus.dataFlow = Math.floor(Math.sin(time) * 50 + 50);
+                document.getElementById('data-flow').textContent = this.systemStatus.dataFlow + ' TB/s';
+                
+                // Glitch effect on title occasionally
+                if (Math.random() < 0.005) {
+                    const title = document.querySelector('.world-title');
+                    title.style.animation = 'none';
+                    setTimeout(() => {
+                        title.style.animation = 'glitch-text 4s ease-in-out infinite, cyber-gradient 8s ease-in-out infinite';
+                    }, 100);
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize world
+        window.addEventListener('DOMContentLoaded', () => {
+            window.world = new CyberpunkHackerWorld();
+        });
+        
+        // Global functions for UI
+        function minimizeTerminal() {
+            if (window.world) window.world.minimizeTerminal();
+        }
+        
+        function closeTerminal() {
+            if (window.world) window.world.closeTerminal();
+        }
+        
+        function closeAIChat() {
+            if (window.world) window.world.closeAIChat();
+        }
+        
+        function sendAIMessage() {
+            if (window.world) window.world.sendAIMessage();
+        }
+    </script>
+</body>
+</html>
