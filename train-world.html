@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Train Conductor World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .hud {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .speed-gauge {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(139, 69, 19, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 10px;
+            min-width: 200px;
+        }
+
+        .gauge-title {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+        }
+
+        .speed-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            font-family: 'Courier New', monospace;
+        }
+
+        .speed-unit {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-left: 5px;
+        }
+
+        .throttle-display {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(139, 69, 19, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 10px;
+        }
+
+        .throttle-bar {
+            width: 200px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        .throttle-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+            transition: width 0.3s ease;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        .throttle-center-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.5);
+            transform: translateX(-50%);
+        }
+
+        .throttle-label {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .controls-panel {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(139, 69, 19, 0.8);
+            border-radius: 20px;
+            padding: 20px 30px;
+            z-index: 1001;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .control-lever {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lever-track {
+            width: 40px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(139, 69, 19, 0.5);
+            border-radius: 20px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .lever-handle {
+            width: 60px;
+            height: 30px;
+            background: linear-gradient(180deg, #8b4513, #654321);
+            border: 2px solid #333;
+            border-radius: 15px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: grab;
+            transition: top 0.1s ease;
+        }
+
+        .lever-handle:active {
+            cursor: grabbing;
+        }
+
+        .lever-label {
+            font-size: 0.9em;
+            color: #ffd700;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .brake-button {
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, #ff0000, #8b0000);
+            border: 3px solid #333;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .brake-button:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            background: radial-gradient(circle, #cc0000, #660000);
+        }
+
+        .horn-button {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #ffd700, #b8860b);
+            border: 3px solid #333;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            transition: all 0.2s;
+        }
+
+        .horn-button:active {
+            transform: scale(0.9);
+            background: radial-gradient(circle, #ffed4e, #cdaa3d);
+        }
+
+        .camera-controls {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+
+        .camera-button {
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            transition: all 0.2s;
+        }
+
+        .camera-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .camera-button.active {
+            background: rgba(139, 69, 19, 0.8);
+            border-color: #ffd700;
+        }
+
+        .station-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 3px solid #ffd700;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s;
+            z-index: 1002;
+        }
+
+        .station-indicator.visible {
+            opacity: 1;
+        }
+
+        .station-name {
+            font-size: 2em;
+            color: #ffd700;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .station-distance {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 200px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .mobile-lever {
+            width: 100%;
+            max-width: 300px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(139, 69, 19, 0.8);
+            border-radius: 25px;
+            margin: 0 auto 20px;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .mobile-lever-handle {
+            width: 80px;
+            height: 46px;
+            background: linear-gradient(180deg, #8b4513, #654321);
+            border: 2px solid #333;
+            border-radius: 23px;
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .mobile-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '🚂';
+            display: block;
+            font-size: 4em;
+            margin: 20px auto;
+            animation: chug 1s ease-in-out infinite;
+        }
+
+        @keyframes chug {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .smoke-effect {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.8), transparent);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: smoke-rise 2s ease-out forwards;
+        }
+
+        @keyframes smoke-rise {
+            0% {
+                opacity: 0.8;
+                transform: scale(0.5) translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(2) translateY(-100px);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .controls-panel {
+                padding: 15px 20px;
+                gap: 15px;
+            }
+            
+            .lever-track {
+                height: 100px;
+            }
+            
+            .brake-button {
+                width: 60px;
+                height: 60px;
+                font-size: 0.8em;
+            }
+            
+            .horn-button {
+                width: 50px;
+                height: 50px;
+            }
+            
+            .mobile-controls.show ~ .controls-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="hud">
+        <div class="speed-gauge">
+            <div class="gauge-title">SPEED</div>
+            <div>
+                <span class="speed-value" id="speed">0</span>
+                <span class="speed-unit">km/h</span>
+            </div>
+        </div>
+        <div class="throttle-display">
+            <div class="gauge-title">THROTTLE</div>
+            <div class="throttle-bar">
+                <div class="throttle-fill" id="throttle-fill"></div>
+                <div class="throttle-center-line"></div>
+            </div>
+            <div class="throttle-label">
+                <span>REV</span>
+                <span>STOP</span>
+                <span>FWD</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="camera-controls">
+        <button class="camera-button active" id="cam-chase" title="Chase View">🎥</button>
+        <button class="camera-button" id="cam-cab" title="Cab View">🚂</button>
+        <button class="camera-button" id="cam-side" title="Side View">📹</button>
+        <button class="camera-button" id="cam-free" title="Free Camera">🎬</button>
+    </div>
+    
+    <div class="controls-panel" id="desktop-controls">
+        <div class="control-lever">
+            <div class="lever-label">THROTTLE</div>
+            <div class="lever-track" id="throttle-track">
+                <div class="lever-handle" id="throttle-handle" style="top: 60px;"></div>
+            </div>
+        </div>
+        <button class="brake-button" id="brake-btn">BRAKE</button>
+        <button class="horn-button" id="horn-btn">📯</button>
+    </div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="mobile-lever" id="mobile-throttle">
+            <div class="mobile-lever-handle" id="mobile-throttle-handle"></div>
+        </div>
+        <div class="mobile-buttons">
+            <button class="brake-button" id="mobile-brake">BRAKE</button>
+            <button class="horn-button" id="mobile-horn">📯</button>
+        </div>
+    </div>
+    
+    <div class="station-indicator" id="station-indicator">
+        <div class="station-name" id="station-name">Central Station</div>
+        <div class="station-distance" id="station-distance">500m ahead</div>
+    </div>
+    
+    <div class="loading" id="loading">Laying down the tracks...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Curve generation for tracks
+        class TrackCurve {
+            constructor(seed = Math.random()) {
+                this.seed = seed;
+                this.points = [];
+                this.generatePath();
+            }
+            
+            random() {
+                this.seed = (this.seed * 16807) % 2147483647;
+                return this.seed / 2147483647;
+            }
+            
+            generatePath() {
+                let x = 0, z = 0;
+                let direction = 0;
+                
+                for (let i = 0; i < 1000; i++) {
+                    this.points.push(new THREE.Vector3(x, 0, z));
+                    
+                    // Change direction smoothly
+                    direction += (this.random() - 0.5) * 0.3;
+                    direction = Math.max(-Math.PI/3, Math.min(Math.PI/3, direction));
+                    
+                    // Move forward
+                    const stepSize = 50;
+                    x += Math.sin(direction) * stepSize;
+                    z += Math.cos(direction) * stepSize;
+                    
+                    // Add some elevation changes
+                    const y = Math.sin(i * 0.02) * 10 + Math.sin(i * 0.05) * 5;
+                    this.points[i].y = y;
+                }
+                
+                // Create smooth curve
+                this.curve = new THREE.CatmullRomCurve3(this.points);
+                this.curve.tension = 0.5;
+            }
+            
+            getPointAt(distance) {
+                const normalizedDistance = (distance % this.getTotalLength()) / this.getTotalLength();
+                return this.curve.getPointAt(normalizedDistance);
+            }
+            
+            getTangentAt(distance) {
+                const normalizedDistance = (distance % this.getTotalLength()) / this.getTotalLength();
+                return this.curve.getTangentAt(normalizedDistance);
+            }
+            
+            getTotalLength() {
+                return this.curve.getLength();
+            }
+        }
+
+        class TrainWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.train = null;
+                this.clock = new THREE.Clock();
+                
+                // Train physics
+                this.throttle = 0; // -1 to 1
+                this.speed = 0;
+                this.maxSpeed = 120; // km/h
+                this.acceleration = 0.5;
+                this.brakeForce = 2;
+                this.naturalDeceleration = 0.1;
+                this.distanceTraveled = 0;
+                this.isBraking = false;
+                
+                // Camera settings
+                this.cameraMode = 'chase';
+                this.cameraOffset = new THREE.Vector3(0, 8, -15);
+                this.freeCameraPosition = new THREE.Vector3(0, 10, -20);
+                this.freeCameraRotation = new THREE.Euler(0, 0, 0);
+                
+                // Track system
+                this.trackCurve = new TrackCurve();
+                this.trackSegments = [];
+                this.currentTrackIndex = 0;
+                
+                // Environment
+                this.stations = [];
+                this.terrain = [];
+                this.decorations = [];
+                
+                // Controls
+                this.isDraggingThrottle = false;
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                               (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+                
+                // Audio context for horn
+                this.audioContext = null;
+                
+                this.init();
+            }
+            
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createTrain();
+                this.generateInitialTrack();
+                this.generateEnvironment();
+                this.setupCamera();
+                this.setupControls();
+                
+                if (this.isMobile) {
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+                
+                // Hide loading
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1500);
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x87CEEB, 100, 1000);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+                
+                // Sky dome
+                const skyGeometry = new THREE.SphereGeometry(2000, 32, 32);
+                const skyMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x87CEEB,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+            }
+            
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Sun light
+                this.sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                this.sunLight.position.set(100, 200, 100);
+                this.sunLight.castShadow = true;
+                this.sunLight.shadow.camera.near = 0.1;
+                this.sunLight.shadow.camera.far = 500;
+                this.sunLight.shadow.camera.left = -100;
+                this.sunLight.shadow.camera.right = 100;
+                this.sunLight.shadow.camera.top = 100;
+                this.sunLight.shadow.camera.bottom = -100;
+                this.sunLight.shadow.mapSize.width = 2048;
+                this.sunLight.shadow.mapSize.height = 2048;
+                this.scene.add(this.sunLight);
+                
+                // Hemisphere light
+                const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x545454, 0.4);
+                this.scene.add(hemiLight);
+            }
+            
+            createTrain() {
+                this.train = new THREE.Group();
+                
+                // Locomotive
+                const locomotive = new THREE.Group();
+                
+                // Main body
+                const bodyGeometry = new THREE.BoxGeometry(3, 4, 10);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 2.5;
+                body.castShadow = true;
+                locomotive.add(body);
+                
+                // Cabin
+                const cabinGeometry = new THREE.BoxGeometry(3, 3, 3);
+                const cabinMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a,
+                    metalness: 0.5,
+                    roughness: 0.4
+                });
+                const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+                cabin.position.set(0, 4, -3);
+                cabin.castShadow = true;
+                locomotive.add(cabin);
+                
+                // Smokestack
+                const smokestackGeometry = new THREE.CylinderGeometry(0.5, 0.7, 3);
+                const smokestackMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                this.smokestack = new THREE.Mesh(smokestackGeometry, smokestackMaterial);
+                this.smokestack.position.set(0, 4, 3);
+                this.smokestack.castShadow = true;
+                locomotive.add(this.smokestack);
+                
+                // Cowcatcher
+                const cowcatcherGeometry = new THREE.BoxGeometry(4, 1, 2);
+                const cowcatcher = new THREE.Mesh(cowcatcherGeometry, bodyMaterial);
+                cowcatcher.position.set(0, 0.5, 6);
+                cowcatcher.rotation.x = -0.3;
+                locomotive.add(cowcatcher);
+                
+                // Wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16);
+                const wheelMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    metalness: 0.6,
+                    roughness: 0.3
+                });
+                
+                this.wheels = [];
+                const wheelPositions = [
+                    { x: -1.8, z: 3 },
+                    { x: 1.8, z: 3 },
+                    { x: -1.8, z: 0 },
+                    { x: 1.8, z: 0 },
+                    { x: -1.8, z: -3 },
+                    { x: 1.8, z: -3 }
+                ];
+                
+                wheelPositions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(pos.x, 0.8, pos.z);
+                    wheel.castShadow = true;
+                    this.wheels.push(wheel);
+                    locomotive.add(wheel);
+                });
+                
+                // Connecting rods
+                const rodGeometry = new THREE.BoxGeometry(0.2, 0.1, 6);
+                const rodMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x666666,
+                    metalness: 0.8
+                });
+                
+                const leftRod = new THREE.Mesh(rodGeometry, rodMaterial);
+                leftRod.position.set(-1.8, 0.8, 0);
+                locomotive.add(leftRod);
+                
+                const rightRod = new THREE.Mesh(rodGeometry, rodMaterial);
+                rightRod.position.set(1.8, 0.8, 0);
+                locomotive.add(rightRod);
+                
+                // Headlight
+                const headlightGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.5);
+                const headlightMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffff00,
+                    emissive: 0xffff00,
+                    emissiveIntensity: 0.5
+                });
+                const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+                headlight.rotation.x = Math.PI / 2;
+                headlight.position.set(0, 3, 5.5);
+                locomotive.add(headlight);
+                
+                // Add headlight beam
+                this.headlight = new THREE.SpotLight(0xffffff, 2, 100, Math.PI / 6, 0.5, 1);
+                this.headlight.position.set(0, 3, 5.5);
+                this.headlight.target.position.set(0, 0, 20);
+                this.headlight.castShadow = true;
+                locomotive.add(this.headlight);
+                locomotive.add(this.headlight.target);
+                
+                this.train.add(locomotive);
+                
+                // Add cars
+                this.cars = [];
+                for (let i = 0; i < 3; i++) {
+                    const car = this.createTrainCar(i);
+                    car.position.z = -(i + 1) * 12;
+                    this.cars.push(car);
+                    this.train.add(car);
+                }
+                
+                this.scene.add(this.train);
+            }
+            
+            createTrainCar(index) {
+                const car = new THREE.Group();
+                
+                // Car body
+                const carColors = [0x8B4513, 0x2F4F4F, 0x483D8B];
+                const carGeometry = new THREE.BoxGeometry(3, 3.5, 10);
+                const carMaterial = new THREE.MeshStandardMaterial({
+                    color: carColors[index % carColors.length],
+                    metalness: 0.3,
+                    roughness: 0.6
+                });
+                const carBody = new THREE.Mesh(carGeometry, carMaterial);
+                carBody.position.y = 2.5;
+                carBody.castShadow = true;
+                car.add(carBody);
+                
+                // Car wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 16);
+                const wheelMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    metalness: 0.6
+                });
+                
+                const wheelPositions = [
+                    { x: -1.8, z: 3 },
+                    { x: 1.8, z: 3 },
+                    { x: -1.8, z: -3 },
+                    { x: 1.8, z: -3 }
+                ];
+                
+                wheelPositions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(pos.x, 0.6, pos.z);
+                    wheel.castShadow = true;
+                    car.add(wheel);
+                });
+                
+                // Windows
+                const windowGeometry = new THREE.PlaneGeometry(0.8, 1);
+                const windowMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x87CEEB,
+                    emissive: 0x87CEEB,
+                    emissiveIntensity: 0.2
+                });
+                
+                for (let i = -3; i <= 3; i += 2) {
+                    // Left windows
+                    const leftWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    leftWindow.position.set(-1.51, 2.5, i);
+                    leftWindow.rotation.y = Math.PI / 2;
+                    car.add(leftWindow);
+                    
+                    // Right windows
+                    const rightWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    rightWindow.position.set(1.51, 2.5, i);
+                    rightWindow.rotation.y = -Math.PI / 2;
+                    car.add(rightWindow);
+                }
+                
+                return car;
+            }
+            
+            generateInitialTrack() {
+                const segmentLength = 10;
+                const visibleSegments = 200;
+                
+                for (let i = 0; i < visibleSegments; i++) {
+                    const distance = i * segmentLength;
+                    this.createTrackSegment(distance);
+                }
+            }
+            
+            createTrackSegment(distance) {
+                const segment = new THREE.Group();
+                
+                const position = this.trackCurve.getPointAt(distance);
+                const tangent = this.trackCurve.getTangentAt(distance);
+                
+                // Rails
+                const railGeometry = new THREE.BoxGeometry(0.2, 0.2, 10);
+                const railMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x666666,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                
+                const leftRail = new THREE.Mesh(railGeometry, railMaterial);
+                leftRail.position.x = -1.5;
+                segment.add(leftRail);
+                
+                const rightRail = new THREE.Mesh(railGeometry, railMaterial);
+                rightRail.position.x = 1.5;
+                segment.add(rightRail);
+                
+                // Sleepers
+                const sleeperGeometry = new THREE.BoxGeometry(4, 0.3, 0.5);
+                const sleeperMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x4a3426,
+                    roughness: 0.9
+                });
+                
+                for (let i = -4; i <= 4; i += 2) {
+                    const sleeper = new THREE.Mesh(sleeperGeometry, sleeperMaterial);
+                    sleeper.position.z = i;
+                    sleeper.position.y = -0.1;
+                    segment.add(sleeper);
+                }
+                
+                // Position and orient segment
+                segment.position.copy(position);
+                segment.lookAt(position.clone().add(tangent));
+                
+                segment.userData = { distance };
+                this.trackSegments.push(segment);
+                this.scene.add(segment);
+            }
+            
+            generateEnvironment() {
+                // Ground plane
+                const groundGeometry = new THREE.PlaneGeometry(2000, 2000, 50, 50);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3a5f3a,
+                    roughness: 0.9
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = -1;
+                ground.receiveShadow = true;
+                
+                // Add some height variation
+                const vertices = ground.geometry.attributes.position;
+                for (let i = 0; i < vertices.count; i++) {
+                    const x = vertices.getX(i);
+                    const y = vertices.getY(i);
+                    const distance = Math.sqrt(x * x + y * y);
+                    vertices.setZ(i, Math.sin(distance * 0.01) * 2 + Math.random() * 0.5);
+                }
+                ground.geometry.computeVertexNormals();
+                
+                this.scene.add(ground);
+                
+                // Generate stations along the track
+                this.generateStations();
+                
+                // Generate scenery
+                this.generateScenery();
+            }
+            
+            generateStations() {
+                const stationInterval = 5000; // Every 5km
+                
+                for (let i = 1; i <= 10; i++) {
+                    const distance = i * stationInterval;
+                    const position = this.trackCurve.getPointAt(distance);
+                    const tangent = this.trackCurve.getTangentAt(distance);
+                    
+                    const station = this.createStation(`Station ${i}`);
+                    station.position.copy(position);
+                    station.position.x += tangent.z * 20; // Offset to the side
+                    station.position.z -= tangent.x * 20;
+                    station.lookAt(position);
+                    
+                    station.userData = { distance, name: `Station ${i}` };
+                    this.stations.push(station);
+                    this.scene.add(station);
+                }
+            }
+            
+            createStation(name) {
+                const station = new THREE.Group();
+                
+                // Platform
+                const platformGeometry = new THREE.BoxGeometry(10, 1, 30);
+                const platformMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x808080,
+                    roughness: 0.8
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.y = 0.5;
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                station.add(platform);
+                
+                // Station building
+                const buildingGeometry = new THREE.BoxGeometry(8, 6, 15);
+                const buildingMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.7
+                });
+                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                building.position.set(5, 3, 0);
+                building.castShadow = true;
+                station.add(building);
+                
+                // Roof
+                const roofGeometry = new THREE.BoxGeometry(10, 0.5, 17);
+                const roofMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x654321,
+                    roughness: 0.8
+                });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.set(5, 6.5, 0);
+                roof.rotation.z = 0.1;
+                roof.castShadow = true;
+                station.add(roof);
+                
+                // Sign
+                const signGeometry = new THREE.BoxGeometry(6, 2, 0.2);
+                const signMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.1
+                });
+                const sign = new THREE.Mesh(signGeometry, signMaterial);
+                sign.position.set(0, 4, 8);
+                station.add(sign);
+                
+                return station;
+            }
+            
+            generateScenery() {
+                // Trees along the track
+                const treeInterval = 50;
+                const treeCount = 500;
+                
+                for (let i = 0; i < treeCount; i++) {
+                    const distance = i * treeInterval;
+                    const position = this.trackCurve.getPointAt(distance);
+                    const tangent = this.trackCurve.getTangentAt(distance);
+                    
+                    // Place trees on both sides
+                    for (let side = -1; side <= 1; side += 2) {
+                        if (Math.random() > 0.3) {
+                            const tree = this.createTree();
+                            const offset = (Math.random() * 30 + 20) * side;
+                            tree.position.copy(position);
+                            tree.position.x += tangent.z * offset + (Math.random() - 0.5) * 10;
+                            tree.position.z -= tangent.x * offset + (Math.random() - 0.5) * 10;
+                            tree.userData = { distance };
+                            this.decorations.push(tree);
+                            this.scene.add(tree);
+                        }
+                    }
+                }
+                
+                // Add some buildings
+                for (let i = 0; i < 50; i++) {
+                    const distance = Math.random() * 10000;
+                    const position = this.trackCurve.getPointAt(distance);
+                    const tangent = this.trackCurve.getTangentAt(distance);
+                    
+                    const building = this.createBuilding();
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const offset = (Math.random() * 50 + 50) * side;
+                    building.position.copy(position);
+                    building.position.x += tangent.z * offset;
+                    building.position.z -= tangent.x * offset;
+                    building.rotation.y = Math.random() * Math.PI * 2;
+                    building.userData = { distance };
+                    this.decorations.push(building);
+                    this.scene.add(building);
+                }
+            }
+            
+            createTree() {
+                const tree = new THREE.Group();
+                
+                const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, 6);
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x4a3426,
+                    roughness: 0.9
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = 3;
+                trunk.castShadow = true;
+                tree.add(trunk);
+                
+                const foliageGeometry = new THREE.SphereGeometry(3 + Math.random() * 2, 8, 6);
+                const foliageMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2d5a2d,
+                    roughness: 0.8
+                });
+                const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+                foliage.position.y = 7;
+                foliage.castShadow = true;
+                tree.add(foliage);
+                
+                const scale = 0.8 + Math.random() * 0.4;
+                tree.scale.set(scale, scale, scale);
+                
+                return tree;
+            }
+            
+            createBuilding() {
+                const building = new THREE.Group();
+                
+                const width = 10 + Math.random() * 10;
+                const height = 10 + Math.random() * 20;
+                const depth = 10 + Math.random() * 10;
+                
+                const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                const buildingMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(Math.random() * 0.1, 0.3, 0.4 + Math.random() * 0.2),
+                    roughness: 0.8
+                });
+                const buildingMesh = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                buildingMesh.position.y = height / 2;
+                buildingMesh.castShadow = true;
+                building.add(buildingMesh);
+                
+                // Windows
+                const windowMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x87CEEB,
+                    emissive: 0x87CEEB,
+                    emissiveIntensity: 0.3
+                });
+                
+                const windowSize = 1.5;
+                const windowSpacing = 3;
+                
+                for (let floor = 1; floor < height / 3; floor++) {
+                    for (let w = 0; w < width / windowSpacing - 1; w++) {
+                        const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
+                        
+                        // Front windows
+                        const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        frontWindow.position.set(
+                            -width/2 + windowSpacing + w * windowSpacing,
+                            floor * 3,
+                            depth/2 + 0.01
+                        );
+                        building.add(frontWindow);
+                        
+                        // Back windows
+                        const backWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        backWindow.position.set(
+                            -width/2 + windowSpacing + w * windowSpacing,
+                            floor * 3,
+                            -depth/2 - 0.01
+                        );
+                        backWindow.rotation.y = Math.PI;
+                        building.add(backWindow);
+                    }
+                }
+                
+                return building;
+            }
+            
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    2000
+                );
+                
+                this.updateCameraPosition();
+            }
+            
+            updateCameraPosition() {
+                const trainPosition = this.train.position.clone();
+                const trainRotation = this.train.rotation.y;
+                
+                switch (this.cameraMode) {
+                    case 'chase':
+                        const offset = new THREE.Vector3(0, 8, -20);
+                        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), trainRotation);
+                        this.camera.position.copy(trainPosition).add(offset);
+                        this.camera.lookAt(trainPosition);
+                        break;
+                        
+                    case 'cab':
+                        this.camera.position.copy(trainPosition);
+                        this.camera.position.y = 4;
+                        this.camera.position.z += 3;
+                        const lookTarget = trainPosition.clone();
+                        lookTarget.z += 20;
+                        lookTarget.applyAxisAngle(new THREE.Vector3(0, 1, 0), trainRotation);
+                        this.camera.lookAt(lookTarget);
+                        break;
+                        
+                    case 'side':
+                        const sideOffset = new THREE.Vector3(-30, 10, 0);
+                        sideOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), trainRotation);
+                        this.camera.position.copy(trainPosition).add(sideOffset);
+                        this.camera.lookAt(trainPosition);
+                        break;
+                        
+                    case 'free':
+                        this.camera.position.copy(this.freeCameraPosition);
+                        this.camera.rotation.copy(this.freeCameraRotation);
+                        break;
+                }
+            }
+            
+            setupControls() {
+                // Camera buttons
+                document.getElementById('cam-chase').addEventListener('click', () => this.setCameraMode('chase'));
+                document.getElementById('cam-cab').addEventListener('click', () => this.setCameraMode('cab'));
+                document.getElementById('cam-side').addEventListener('click', () => this.setCameraMode('side'));
+                document.getElementById('cam-free').addEventListener('click', () => this.setCameraMode('free'));
+                
+                // Desktop controls
+                if (!this.isMobile) {
+                    this.setupDesktopControls();
+                } else {
+                    this.setupMobileControls();
+                }
+                
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    switch(e.key.toLowerCase()) {
+                        case 'w':
+                        case 'arrowup':
+                            this.adjustThrottle(0.1);
+                            break;
+                        case 's':
+                        case 'arrowdown':
+                            this.adjustThrottle(-0.1);
+                            break;
+                        case ' ':
+                            this.isBraking = true;
+                            break;
+                        case 'h':
+                            this.playHorn();
+                            break;
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    if (e.key === ' ') {
+                        this.isBraking = false;
+                    }
+                });
+                
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+            
+            setupDesktopControls() {
+                const throttleTrack = document.getElementById('throttle-track');
+                const throttleHandle = document.getElementById('throttle-handle');
+                const brakeBtn = document.getElementById('brake-btn');
+                const hornBtn = document.getElementById('horn-btn');
+                
+                // Throttle lever
+                const handleMouseMove = (e) => {
+                    if (!this.isDraggingThrottle) return;
+                    
+                    const rect = throttleTrack.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const percentage = Math.max(0, Math.min(1, y / rect.height));
+                    
+                    throttleHandle.style.top = (percentage * (rect.height - 30)) + 'px';
+                    this.throttle = 1 - (percentage * 2); // Convert to -1 to 1
+                };
+                
+                throttleHandle.addEventListener('mousedown', () => {
+                    this.isDraggingThrottle = true;
+                });
+                
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('mouseup', () => {
+                    this.isDraggingThrottle = false;
+                });
+                
+                // Brake
+                brakeBtn.addEventListener('mousedown', () => {
+                    this.isBraking = true;
+                });
+                brakeBtn.addEventListener('mouseup', () => {
+                    this.isBraking = false;
+                });
+                
+                // Horn
+                hornBtn.addEventListener('click', () => {
+                    this.playHorn();
+                });
+            }
+            
+            setupMobileControls() {
+                const mobileThrottle = document.getElementById('mobile-throttle');
+                const mobileHandle = document.getElementById('mobile-throttle-handle');
+                const mobileBrake = document.getElementById('mobile-brake');
+                const mobileHorn = document.getElementById('mobile-horn');
+                
+                // Throttle slider
+                let isDragging = false;
+                
+                const handleTouch = (e) => {
+                    if (!isDragging) return;
+                    e.preventDefault();
+                    
+                    const touch = e.touches[0];
+                    const rect = mobileThrottle.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const percentage = Math.max(0, Math.min(1, x / rect.width));
+                    
+                    mobileHandle.style.left = (percentage * 100) + '%';
+                    this.throttle = (percentage * 2) - 1; // Convert to -1 to 1
+                };
+                
+                mobileThrottle.addEventListener('touchstart', (e) => {
+                    isDragging = true;
+                    handleTouch(e);
+                });
+                
+                window.addEventListener('touchmove', handleTouch);
+                window.addEventListener('touchend', () => {
+                    isDragging = false;
+                });
+                
+                // Brake
+                mobileBrake.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.isBraking = true;
+                });
+                mobileBrake.addEventListener('touchend', () => {
+                    this.isBraking = false;
+                });
+                
+                // Horn
+                mobileHorn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.playHorn();
+                });
+            }
+            
+            setCameraMode(mode) {
+                this.cameraMode = mode;
+                
+                // Update button states
+                document.querySelectorAll('.camera-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.getElementById(`cam-${mode}`).classList.add('active');
+                
+                // Save free camera position when switching away
+                if (this.cameraMode !== 'free') {
+                    this.freeCameraPosition.copy(this.camera.position);
+                    this.freeCameraRotation.copy(this.camera.rotation);
+                }
+            }
+            
+            adjustThrottle(delta) {
+                this.throttle = Math.max(-1, Math.min(1, this.throttle + delta));
+                this.updateThrottleUI();
+            }
+            
+            updateThrottleUI() {
+                const percentage = (this.throttle + 1) / 2; // Convert -1 to 1 to 0 to 1
+                
+                // Desktop
+                const throttleHandle = document.getElementById('throttle-handle');
+                const trackHeight = 150; // Height of lever track
+                if (throttleHandle) {
+                    throttleHandle.style.top = ((1 - percentage) * (trackHeight - 30)) + 'px';
+                }
+                
+                // Mobile
+                const mobileHandle = document.getElementById('mobile-throttle-handle');
+                if (mobileHandle) {
+                    mobileHandle.style.left = (percentage * 100) + '%';
+                }
+                
+                // Throttle bar
+                const throttleFill = document.getElementById('throttle-fill');
+                throttleFill.style.width = (Math.abs(this.throttle) * 50) + '%';
+                throttleFill.style.left = this.throttle < 0 ? '0' : '50%';
+                throttleFill.style.transform = this.throttle < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+            }
+            
+            playHorn() {
+                // Simple horn sound using Web Audio API
+                if (!this.audioContext) {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                const oscillator1 = this.audioContext.createOscillator();
+                const oscillator2 = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator1.connect(gainNode);
+                oscillator2.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator1.frequency.value = 300;
+                oscillator2.frequency.value = 450;
+                
+                gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+                
+                oscillator1.start();
+                oscillator2.start();
+                oscillator1.stop(this.audioContext.currentTime + 0.5);
+                oscillator2.stop(this.audioContext.currentTime + 0.5);
+            }
+            
+            updatePhysics(deltaTime) {
+                // Update speed based on throttle
+                if (this.isBraking) {
+                    this.speed -= this.brakeForce;
+                } else if (this.throttle !== 0) {
+                    const targetSpeed = this.throttle * this.maxSpeed;
+                    const speedDiff = targetSpeed - this.speed;
+                    this.speed += speedDiff * this.acceleration * deltaTime;
+                } else {
+                    // Natural deceleration
+                    if (Math.abs(this.speed) > 0.1) {
+                        this.speed -= Math.sign(this.speed) * this.naturalDeceleration;
+                    } else {
+                        this.speed = 0;
+                    }
+                }
+                
+                // Clamp speed
+                this.speed = Math.max(-this.maxSpeed * 0.3, Math.min(this.maxSpeed, this.speed));
+                
+                // Update distance traveled
+                const speedMs = this.speed / 3.6; // Convert km/h to m/s
+                this.distanceTraveled += speedMs * deltaTime;
+                
+                // Update train position along track
+                const trainPosition = this.trackCurve.getPointAt(this.distanceTraveled);
+                const trainTangent = this.trackCurve.getTangentAt(this.distanceTraveled);
+                
+                this.train.position.copy(trainPosition);
+                this.train.position.y += 0.8; // Raise train above track
+                
+                // Orient train along track
+                const lookTarget = trainPosition.clone().add(trainTangent);
+                this.train.lookAt(lookTarget);
+                
+                // Update cars to follow
+                this.cars.forEach((car, index) => {
+                    const carDistance = this.distanceTraveled - (index + 1) * 12;
+                    const carPosition = this.trackCurve.getPointAt(carDistance);
+                    const carTangent = this.trackCurve.getTangentAt(carDistance);
+                    
+                    car.position.copy(carPosition);
+                    car.position.y += 0.8;
+                    
+                    const carLookTarget = carPosition.clone().add(carTangent);
+                    car.lookAt(carLookTarget);
+                });
+                
+                // Rotate wheels
+                const wheelRotation = speedMs * deltaTime * 2;
+                this.wheels.forEach(wheel => {
+                    wheel.rotation.x += wheelRotation;
+                });
+                
+                // Update sun position to follow train
+                this.sunLight.position.x = this.train.position.x + 100;
+                this.sunLight.position.z = this.train.position.z + 100;
+                this.sunLight.target.position.copy(this.train.position);
+                
+                // Generate smoke when moving
+                if (Math.abs(this.speed) > 5 && Math.random() > 0.7) {
+                    this.generateSmoke();
+                }
+            }
+            
+            generateSmoke() {
+                const smokeElement = document.createElement('div');
+                smokeElement.className = 'smoke-effect';
+                
+                // Convert 3D position to screen coordinates
+                const smokePosition = new THREE.Vector3();
+                this.smokestack.getWorldPosition(smokePosition);
+                smokePosition.y += 1;
+                
+                const vector = smokePosition.project(this.camera);
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                
+                smokeElement.style.left = x + 'px';
+                smokeElement.style.top = y + 'px';
+                
+                document.body.appendChild(smokeElement);
+                
+                setTimeout(() => {
+                    smokeElement.remove();
+                }, 2000);
+            }
+            
+            updateEnvironment() {
+                // Update track segments
+                const segmentLength = 10;
+                const maxDistance = this.distanceTraveled + 1000;
+                const minDistance = this.distanceTraveled - 200;
+                
+                // Remove old segments
+                this.trackSegments = this.trackSegments.filter(segment => {
+                    if (segment.userData.distance < minDistance) {
+                        this.scene.remove(segment);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Add new segments
+                const lastSegmentDistance = this.trackSegments.length > 0 
+                    ? Math.max(...this.trackSegments.map(s => s.userData.distance))
+                    : 0;
+                
+                for (let distance = lastSegmentDistance + segmentLength; distance < maxDistance; distance += segmentLength) {
+                    this.createTrackSegment(distance);
+                }
+                
+                // Update decorations visibility
+                this.decorations.forEach(decoration => {
+                    const distance = decoration.userData.distance;
+                    decoration.visible = distance > minDistance && distance < maxDistance;
+                });
+                
+                // Check for nearby stations
+                this.checkStations();
+            }
+            
+            checkStations() {
+                const stationIndicator = document.getElementById('station-indicator');
+                const stationName = document.getElementById('station-name');
+                const stationDistance = document.getElementById('station-distance');
+                
+                let nearestStation = null;
+                let nearestDistance = Infinity;
+                
+                this.stations.forEach(station => {
+                    const distance = station.userData.distance - this.distanceTraveled;
+                    if (distance > -100 && distance < 1000 && Math.abs(distance) < Math.abs(nearestDistance)) {
+                        nearestStation = station;
+                        nearestDistance = distance;
+                    }
+                });
+                
+                if (nearestStation && Math.abs(nearestDistance) < 500) {
+                    stationIndicator.classList.add('visible');
+                    stationName.textContent = nearestStation.userData.name;
+                    
+                    if (nearestDistance > 0) {
+                        stationDistance.textContent = `${Math.floor(nearestDistance)}m ahead`;
+                    } else {
+                        stationDistance.textContent = `${Math.floor(-nearestDistance)}m behind`;
+                    }
+                } else {
+                    stationIndicator.classList.remove('visible');
+                }
+            }
+            
+            updateHUD() {
+                // Update speed display
+                document.getElementById('speed').textContent = Math.abs(Math.floor(this.speed));
+                
+                // Update throttle display
+                this.updateThrottleUI();
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const deltaTime = Math.min(this.clock.getDelta(), 0.1);
+                
+                this.updatePhysics(deltaTime);
+                this.updateEnvironment();
+                this.updateCameraPosition();
+                this.updateHUD();
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new TrainWorld();
+        });
+    </script>
+</body>
+</html>
