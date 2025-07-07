@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interactive World - Azure OpenAI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+        }
+
+        .initial-setup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 2px solid #00ff88;
+            max-width: 600px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .initial-setup h1 {
+            color: #00ff88;
+            font-size: 36px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .api-input-group input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .generate-button {
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            color: #000;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 30px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .generate-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 255, 136, 0.5);
+        }
+
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            max-width: 400px;
+            display: none;
+        }
+
+        .hud.active {
+            display: block;
+        }
+
+        .ai-chat {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            height: 500px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 20px;
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            display: none;
+            flex-direction: column;
+            z-index: 200;
+        }
+
+        .ai-chat.active {
+            display: flex;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .chat-message.user {
+            background: rgba(0, 255, 136, 0.2);
+            margin-left: 50px;
+        }
+
+        .chat-message.ai {
+            background: rgba(100, 100, 255, 0.2);
+            margin-right: 50px;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 20px;
+            border-top: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 20px;
+            color: white;
+            margin-right: 10px;
+        }
+
+        .chat-input button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .ai-object {
+            position: absolute;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: pulse 2s infinite;
+        }
+
+        .ai-object:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(1.05);
+        }
+
+        .ai-object .title {
+            color: #00ff88;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .ai-object .description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .context-menu {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 10px;
+            display: none;
+            z-index: 300;
+        }
+
+        .context-menu.active {
+            display: block;
+        }
+
+        .context-menu-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .context-menu-item:hover {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .ai-visualization {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            max-height: 600px;
+            overflow-y: auto;
+            display: none;
+            z-index: 400;
+        }
+
+        .ai-visualization.active {
+            display: block;
+        }
+
+        .ai-response-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 20px;
+            padding: 30px;
+            display: none;
+            z-index: 500;
+        }
+
+        .ai-response-indicator.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 255, 136, 0.3);
+            border-top: 4px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 255, 136, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 25px;
+            display: none;
+            z-index: 50;
+        }
+
+        .controls.active {
+            display: block;
+        }
+
+        .ai-action-log {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+            display: none;
+            z-index: 90;
+        }
+
+        .ai-action-log.active {
+            display: block;
+        }
+
+        .action-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 5px;
+            font-size: 14px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .floating-ai-assistant {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: #00ff88;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+            transition: all 0.3s ease;
+            z-index: 150;
+        }
+
+        .floating-ai-assistant:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 30px rgba(0, 255, 136, 0.6);
+        }
+
+        .floating-ai-assistant svg {
+            width: 30px;
+            height: 30px;
+            fill: #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="initial-setup" id="initialSetup">
+        <h1>AI-Powered Interactive World</h1>
+        <p>Experience a dynamic world where AI responds to your every action in real-time</p>
+        
+        <div class="api-input-group">
+            <input type="password" id="functionKeyInput" placeholder="Enter your Azure Function key" />
+        </div>
+        
+        <button class="generate-button" onclick="initializeWorld()">Enter AI World</button>
+    </div>
+
+    <div class="hud" id="hud">
+        <h2 style="color: #00ff88; margin-bottom: 10px;">AI Interactive Zone</h2>
+        <p id="hudInfo">Click on objects to interact with AI</p>
+        <div id="aiStats" style="margin-top: 15px; font-size: 14px;">
+            <div>AI Interactions: <span id="interactionCount">0</span></div>
+            <div>Active AI Objects: <span id="objectCount">0</span></div>
+        </div>
+    </div>
+
+    <div class="ai-action-log" id="actionLog">
+        <h3 style="color: #00ff88; margin-bottom: 10px;">AI Actions</h3>
+        <div id="actionList"></div>
+    </div>
+
+    <div class="controls" id="controls">
+        WASD: Move | Mouse: Look | Click Objects: AI Interact | C: Toggle Chat | Tab: AI Menu
+    </div>
+
+    <div class="ai-chat" id="aiChat">
+        <div class="chat-header">AI Assistant</div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="Ask AI anything..." />
+            <button onclick="sendChatMessage()">Send</button>
+        </div>
+    </div>
+
+    <div class="floating-ai-assistant" onclick="toggleAIChat()">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-13h4v6h-4zm0 8h4v2h-4z"/>
+        </svg>
+    </div>
+
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="generateAIStory()">Generate AI Story</div>
+        <div class="context-menu-item" onclick="analyzeEnvironment()">Analyze Environment</div>
+        <div class="context-menu-item" onclick="createAIObject()">Create AI Object</div>
+        <div class="context-menu-item" onclick="requestAIAdvice()">Get AI Advice</div>
+    </div>
+
+    <div class="ai-visualization" id="aiVisualization">
+        <h2 style="color: #00ff88; margin-bottom: 20px;">AI Response</h2>
+        <div id="visualizationContent"></div>
+        <button onclick="closeVisualization()" style="margin-top: 20px; background: #00ff88; color: #000; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer;">Close</button>
+    </div>
+
+    <div class="ai-response-indicator" id="aiIndicator">
+        <div class="spinner"></div>
+        <p style="text-align: center; color: #00ff88;">AI is thinking...</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer;
+        let player = { x: 0, y: 1.6, z: 10 };
+        let rotation = { x: 0, y: 0 };
+        let keys = {};
+        let raycaster, mouse;
+        let clock = new THREE.Clock();
+        let functionKey = '';
+        let conversationHistory = [];
+        let userGuid = '';
+        let interactionCount = 0;
+        let aiObjects = [];
+        let isAIChatting = false;
+
+        // Azure Function configuration
+        const azureFunctionUrl = "https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function";
+
+        // Generate GUID
+        function generateGuid() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Initialize world
+        async function initializeWorld() {
+            const keyInput = document.getElementById('functionKeyInput');
+            functionKey = keyInput.value.trim();
+            
+            if (!functionKey) {
+                alert('Please enter your Azure Function key');
+                return;
+            }
+
+            localStorage.setItem('azureFunctionKey', functionKey);
+            userGuid = localStorage.getItem('aiWorldUserGuid') || generateGuid();
+            localStorage.setItem('aiWorldUserGuid', userGuid);
+
+            document.getElementById('initialSetup').style.display = 'none';
+            
+            initScene();
+            createEnvironment();
+            createAIObjects();
+            setupEventListeners();
+            
+            document.getElementById('hud').classList.add('active');
+            document.getElementById('controls').classList.add('active');
+            document.getElementById('actionLog').classList.add('active');
+            
+            animate();
+
+            // Welcome message from AI
+            await callAIFunction("Initialize a helpful AI assistant for an interactive 3D world. Introduce yourself briefly.");
+        }
+
+        // Initialize Three.js scene
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x001122, 10, 100);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(player.x, player.y, player.z);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // AI glow light
+            const aiLight = new THREE.PointLight(0x00ff88, 1, 50);
+            aiLight.position.set(0, 5, 0);
+            scene.add(aiLight);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+        }
+
+        // Create environment
+        function createEnvironment() {
+            // Ground with grid
+            const groundGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+            const groundMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x112233,
+                wireframe: true,
+                emissive: 0x00ff88,
+                emissiveIntensity: 0.1
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            scene.add(ground);
+
+            // Central AI core
+            const coreGeometry = new THREE.OctahedronGeometry(2);
+            const coreMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00ff88,
+                emissive: 0x00ff88,
+                emissiveIntensity: 0.5,
+                wireframe: true
+            });
+            const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            core.position.y = 5;
+            core.userData = { type: 'ai-core', name: 'Central AI Core' };
+            scene.add(core);
+
+            // Particles
+            const particleCount = 3000;
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 100;
+                positions[i + 1] = Math.random() * 50;
+                positions[i + 2] = (Math.random() - 0.5) * 100;
+                
+                colors[i] = 0;
+                colors[i + 1] = Math.random();
+                colors[i + 2] = Math.random() * 0.5;
+            }
+            
+            const particleGeometry = new THREE.BufferGeometry();
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+        }
+
+        // Create interactive AI objects
+        function createAIObjects() {
+            const objectTypes = [
+                { name: 'Knowledge Sphere', prompt: 'Tell me something fascinating about artificial intelligence', color: 0x00ffff },
+                { name: 'Creativity Cube', prompt: 'Generate a creative idea for me', color: 0xff00ff },
+                { name: 'Analysis Pyramid', prompt: 'Analyze the current state of technology', color: 0xffff00 },
+                { name: 'Wisdom Crystal', prompt: 'Share some wisdom about learning and growth', color: 0xff8800 },
+                { name: 'Innovation Orb', prompt: 'Suggest an innovative solution to a common problem', color: 0x8800ff }
+            ];
+
+            objectTypes.forEach((type, index) => {
+                const angle = (index / objectTypes.length) * Math.PI * 2;
+                const radius = 15;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+
+                let geometry;
+                switch(index % 5) {
+                    case 0: geometry = new THREE.SphereGeometry(1.5); break;
+                    case 1: geometry = new THREE.BoxGeometry(2, 2, 2); break;
+                    case 2: geometry = new THREE.ConeGeometry(1.5, 3); break;
+                    case 3: geometry = new THREE.OctahedronGeometry(1.5); break;
+                    case 4: geometry = new THREE.TorusGeometry(1.5, 0.5); break;
+                }
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: type.color,
+                    emissive: type.color,
+                    emissiveIntensity: 0.3
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, 2, z);
+                mesh.userData = {
+                    type: 'ai-object',
+                    name: type.name,
+                    prompt: type.prompt,
+                    interacted: false
+                };
+                
+                scene.add(mesh);
+                aiObjects.push(mesh);
+            });
+
+            updateObjectCount();
+        }
+
+        // Call Azure Function
+        async function callAIFunction(prompt, addToHistory = true) {
+            showAIIndicator();
+            
+            try {
+                const requestBody = {
+                    user_input: prompt,
+                    conversation_history: conversationHistory,
+                    user_guid: userGuid
+                };
+
+                const response = await fetch(azureFunctionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': functionKey
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const aiResponse = data.assistant_response || data.text || '';
+
+                if (addToHistory) {
+                    conversationHistory.push({ role: 'user', content: prompt });
+                    conversationHistory.push({ role: 'assistant', content: aiResponse });
+                }
+
+                hideAIIndicator();
+                logAction(`AI: ${aiResponse.substring(0, 50)}...`);
+                
+                return aiResponse;
+
+            } catch (error) {
+                console.error('AI Function Error:', error);
+                hideAIIndicator();
+                return 'Error connecting to AI. Please check your function key.';
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Keyboard controls
+            window.addEventListener('keydown', (e) => {
+                keys[e.key.toLowerCase()] = true;
+                
+                if (e.key === 'c' || e.key === 'C') {
+                    toggleAIChat();
+                }
+                
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    showContextMenu();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+            });
+
+            // Mouse controls
+            window.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === renderer.domElement) {
+                    rotation.y -= e.movementX * 0.002;
+                    rotation.x -= e.movementY * 0.002;
+                    rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotation.x));
+                }
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            });
+
+            window.addEventListener('click', (e) => {
+                if (!document.pointerLockElement && !isAIChatting) {
+                    renderer.domElement.requestPointerLock();
+                } else if (document.pointerLockElement) {
+                    checkObjectClick();
+                }
+            });
+
+            // Chat input
+            document.getElementById('chatInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendChatMessage();
+                }
+            });
+
+            // Context menu
+            window.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+            
+            updatePlayer(delta);
+            updateAIObjects(elapsedTime);
+            updateParticles(elapsedTime);
+
+            renderer.render(scene, camera);
+        }
+
+        // Update player movement
+        function updatePlayer(delta) {
+            const moveSpeed = 10 * delta;
+            const direction = new THREE.Vector3();
+
+            if (keys['w']) direction.z -= 1;
+            if (keys['s']) direction.z += 1;
+            if (keys['a']) direction.x -= 1;
+            if (keys['d']) direction.x += 1;
+
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation.y);
+            direction.normalize();
+
+            player.x += direction.x * moveSpeed;
+            player.z += direction.z * moveSpeed;
+
+            camera.position.set(player.x, player.y, player.z);
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = rotation.y;
+            camera.rotation.x = rotation.x;
+        }
+
+        // Update AI objects
+        function updateAIObjects(time) {
+            aiObjects.forEach((obj, index) => {
+                obj.rotation.y = time * 0.5 + index;
+                obj.position.y = 2 + Math.sin(time + index) * 0.5;
+                
+                if (obj.userData.interacted) {
+                    obj.material.emissiveIntensity = 0.6 + Math.sin(time * 3) * 0.2;
+                }
+            });
+
+            // Update central core
+            const core = scene.children.find(child => child.userData.type === 'ai-core');
+            if (core) {
+                core.rotation.x = time * 0.3;
+                core.rotation.y = time * 0.5;
+                core.scale.setScalar(1 + Math.sin(time * 2) * 0.1);
+            }
+        }
+
+        // Update particles
+        function updateParticles(time) {
+            const particles = scene.children.find(child => child.type === 'Points');
+            if (particles) {
+                particles.rotation.y = time * 0.05;
+                
+                // Update particle positions
+                const positions = particles.geometry.attributes.position.array;
+                for (let i = 1; i < positions.length; i += 3) {
+                    positions[i] = Math.abs(Math.sin(time * 0.5 + i) * 25);
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+            }
+        }
+
+        // Check object clicks
+        function checkObjectClick() {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(aiObjects);
+            
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                interactWithAIObject(object);
+            }
+        }
+
+        // Interact with AI object
+        async function interactWithAIObject(object) {
+            const userData = object.userData;
+            userData.interacted = true;
+            interactionCount++;
+            updateInteractionCount();
+
+            const response = await callAIFunction(userData.prompt);
+            showVisualization(userData.name, response);
+        }
+
+        // AI Chat functions
+        function toggleAIChat() {
+            const chat = document.getElementById('aiChat');
+            isAIChatting = !isAIChatting;
+            chat.classList.toggle('active');
+            
+            if (isAIChatting) {
+                document.exitPointerLock();
+                document.getElementById('chatInput').focus();
+            } else {
+                renderer.domElement.requestPointerLock();
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            const response = await callAIFunction(message);
+            addChatMessage(response, 'ai');
+        }
+
+        function addChatMessage(message, sender) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            messageDiv.textContent = message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Context menu functions
+        function showContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            menu.style.left = window.innerWidth / 2 - 100 + 'px';
+            menu.style.top = window.innerHeight / 2 - 100 + 'px';
+            menu.classList.add('active');
+            
+            setTimeout(() => {
+                window.addEventListener('click', hideContextMenu);
+            }, 100);
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').classList.remove('active');
+            window.removeEventListener('click', hideContextMenu);
+        }
+
+        // AI Action functions
+        async function generateAIStory() {
+            hideContextMenu();
+            const prompt = "Generate a short, inspiring story about innovation and technology in 100 words.";
+            const response = await callAIFunction(prompt);
+            showVisualization('AI Generated Story', response);
+        }
+
+        async function analyzeEnvironment() {
+            hideContextMenu();
+            const prompt = `Analyze this virtual environment: There are ${aiObjects.length} AI objects, ${interactionCount} interactions have occurred. The environment represents an AI-powered interactive space. Provide insights about the user's exploration pattern and suggest what they should explore next.`;
+            const response = await callAIFunction(prompt);
+            showVisualization('Environment Analysis', response);
+        }
+
+        async function createAIObject() {
+            hideContextMenu();
+            const prompt = "Suggest a new interactive AI object for this world. Include: name, appearance description, primary function, and what question it should ask users.";
+            const response = await callAIFunction(prompt);
+            
+            // Parse response and create new object
+            try {
+                const newObjectData = parseAIObjectSuggestion(response);
+                addNewAIObject(newObjectData);
+                showVisualization('New AI Object Created', `Created: ${newObjectData.name}\n\n${response}`);
+            } catch (error) {
+                showVisualization('AI Object Suggestion', response);
+            }
+        }
+
+        async function requestAIAdvice() {
+            hideContextMenu();
+            const prompt = "As an AI assistant in this interactive world, give me advice on how to best explore and learn from this environment. What mindset should I adopt?";
+            const response = await callAIFunction(prompt);
+            showVisualization('AI Wisdom', response);
+        }
+
+        // Parse AI object suggestion
+        function parseAIObjectSuggestion(response) {
+            // Simple parsing - in production, use more robust parsing
+            const lines = response.split('\n');
+            let name = 'Mystery Object';
+            let prompt = 'Tell me something interesting';
+            
+            lines.forEach(line => {
+                if (line.toLowerCase().includes('name:')) {
+                    name = line.split(':')[1].trim();
+                }
+                if (line.toLowerCase().includes('question:') || line.toLowerCase().includes('ask:')) {
+                    prompt = line.split(':')[1].trim();
+                }
+            });
+            
+            return { name, prompt };
+        }
+
+        // Add new AI object dynamically
+        function addNewAIObject(objectData) {
+            const geometry = new THREE.DodecahedronGeometry(1.5);
+            const material = new THREE.MeshStandardMaterial({
+                color: Math.random() * 0xffffff,
+                emissive: 0x00ff88,
+                emissiveIntensity: 0.3
+            });
+            
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                (Math.random() - 0.5) * 30,
+                2,
+                (Math.random() - 0.5) * 30
+            );
+            mesh.userData = {
+                type: 'ai-object',
+                name: objectData.name,
+                prompt: objectData.prompt,
+                interacted: false,
+                dynamicallyCreated: true
+            };
+            
+            scene.add(mesh);
+            aiObjects.push(mesh);
+            updateObjectCount();
+            logAction(`Created: ${objectData.name}`);
+        }
+
+        // Show visualization
+        function showVisualization(title, content) {
+            const viz = document.getElementById('aiVisualization');
+            const contentDiv = document.getElementById('visualizationContent');
+            
+            viz.querySelector('h2').textContent = title;
+            contentDiv.innerHTML = `<div style="white-space: pre-wrap;">${content}</div>`;
+            viz.classList.add('active');
+            
+            document.exitPointerLock();
+        }
+
+        function closeVisualization() {
+            document.getElementById('aiVisualization').classList.remove('active');
+            renderer.domElement.requestPointerLock();
+        }
+
+        // UI Update functions
+        function updateInteractionCount() {
+            document.getElementById('interactionCount').textContent = interactionCount;
+        }
+
+        function updateObjectCount() {
+            document.getElementById('objectCount').textContent = aiObjects.length;
+        }
+
+        function logAction(action) {
+            const actionList = document.getElementById('actionList');
+            const actionItem = document.createElement('div');
+            actionItem.className = 'action-item';
+            actionItem.textContent = new Date().toLocaleTimeString() + ' - ' + action;
+            actionList.insertBefore(actionItem, actionList.firstChild);
+            
+            // Keep only last 10 actions
+            while (actionList.children.length > 10) {
+                actionList.removeChild(actionList.lastChild);
+            }
+        }
+
+        // Show/hide AI indicator
+        function showAIIndicator() {
+            document.getElementById('aiIndicator').classList.add('active');
+        }
+
+        function hideAIIndicator() {
+            document.getElementById('aiIndicator').classList.remove('active');
+        }
+
+        // Advanced AI Features
+        async function startAIConversation(topic) {
+            const prompt = `Let's have an interactive conversation about ${topic}. Start by asking me an engaging question about this topic.`;
+            const response = await callAIFunction(prompt);
+            
+            showVisualization(`AI Conversation: ${topic}`, response);
+            
+            // Add follow-up button
+            const vizContent = document.getElementById('visualizationContent');
+            const followUpBtn = document.createElement('button');
+            followUpBtn.textContent = 'Continue Conversation';
+            followUpBtn.style.cssText = 'margin-top: 20px; background: #00ff88; color: #000; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer;';
+            followUpBtn.onclick = () => continueConversation(topic);
+            vizContent.appendChild(followUpBtn);
+        }
+
+        async function continueConversation(topic) {
+            const userResponse = prompt('Your response:');
+            if (userResponse) {
+                const aiResponse = await callAIFunction(userResponse);
+                const vizContent = document.getElementById('visualizationContent');
+                vizContent.innerHTML += `<div style="margin-top: 20px; padding: 15px; background: rgba(0,255,136,0.1); border-radius: 10px;">
+                    <strong>You:</strong> ${userResponse}<br><br>
+                    <strong>AI:</strong> ${aiResponse}
+                </div>`;
+                
+                // Add another continue button
+                const followUpBtn = document.createElement('button');
+                followUpBtn.textContent = 'Continue Conversation';
+                followUpBtn.style.cssText = 'margin-top: 20px; background: #00ff88; color: #000; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer;';
+                followUpBtn.onclick = () => continueConversation(topic);
+                vizContent.appendChild(followUpBtn);
+            }
+        }
+
+        // Dynamic world generation based on AI
+        async function generateAIWorld() {
+            const prompt = "Design a new section of this AI world. Describe 3 unique interactive elements that would enhance the user's experience. For each element, include its appearance, function, and the type of AI interaction it provides.";
+            const response = await callAIFunction(prompt);
+            
+            // Parse and create new world elements
+            const elements = parseWorldElements(response);
+            elements.forEach(element => createWorldElement(element));
+            
+            logAction('AI generated new world section');
+        }
+
+        function parseWorldElements(response) {
+            // Simple parsing for demo - enhance for production
+            return [
+                {
+                    name: 'Data Stream Visualizer',
+                    color: 0x00ffff,
+                    position: { x: 20, y: 3, z: 0 },
+                    prompt: 'Visualize and explain a data concept'
+                },
+                {
+                    name: 'Algorithm Animator',
+                    color: 0xff00ff,
+                    position: { x: -20, y: 3, z: 0 },
+                    prompt: 'Animate and explain an algorithm'
+                },
+                {
+                    name: 'Neural Network Node',
+                    color: 0xffff00,
+                    position: { x: 0, y: 3, z: -20 },
+                    prompt: 'Explain neural network concepts'
+                }
+            ];
+        }
+
+        function createWorldElement(element) {
+            const geometry = new THREE.IcosahedronGeometry(2);
+            const material = new THREE.MeshStandardMaterial({
+                color: element.color,
+                emissive: element.color,
+                emissiveIntensity: 0.3,
+                wireframe: Math.random() > 0.5
+            });
+            
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(element.position.x, element.position.y, element.position.z);
+            mesh.userData = {
+                type: 'ai-world-element',
+                name: element.name,
+                prompt: element.prompt,
+                interacted: false
+            };
+            
+            scene.add(mesh);
+            aiObjects.push(mesh);
+            
+            // Add connecting lines
+            const points = [
+                new THREE.Vector3(0, 5, 0),
+                new THREE.Vector3(element.position.x, element.position.y, element.position.z)
+            ];
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const lineMaterial = new THREE.LineBasicMaterial({ 
+                color: element.color,
+                opacity: 0.5,
+                transparent: true
+            });
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+            scene.add(line);
+        }
+
+        // Periodic AI updates
+        setInterval(async () => {
+            if (Math.random() > 0.7 && !isAIChatting) {
+                const prompts = [
+                    "Generate a random tech fact",
+                    "Share an inspiring quote about innovation",
+                    "Describe a future technology possibility",
+                    "Explain a simple AI concept"
+                ];
+                
+                const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+                const response = await callAIFunction(randomPrompt, false);
+                
+                // Create floating text
+                createFloatingText(response.substring(0, 100) + '...', {
+                    x: (Math.random() - 0.5) * 20,
+                    y: 10,
+                    z: (Math.random() - 0.5) * 20
+                });
+            }
+        }, 30000); // Every 30 seconds
+
+        function createFloatingText(text, position) {
+            const actionItem = document.createElement('div');
+            actionItem.style.cssText = `
+                position: absolute;
+                background: rgba(0, 255, 136, 0.2);
+                border: 1px solid #00ff88;
+                padding: 10px;
+                border-radius: 10px;
+                max-width: 300px;
+                animation: fadeInOut 5s ease;
+                pointer-events: none;
+            `;
+            actionItem.textContent = 'AI Insight: ' + text;
+            
+            document.body.appendChild(actionItem);
+            
+            // Position based on 3D coordinates
+            const vector = new THREE.Vector3(position.x, position.y, position.z);
+            vector.project(camera);
+            
+            actionItem.style.left = ((vector.x + 1) / 2 * window.innerWidth) + 'px';
+            actionItem.style.top = ((1 - vector.y) / 2 * window.innerHeight) + 'px';
+            
+            setTimeout(() => actionItem.remove(), 5000);
+        }
+
+        // Add fadeInOut animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateY(-20px); }
+                20% { opacity: 1; transform: translateY(0); }
+                80% { opacity: 1; transform: translateY(0); }
+                100% { opacity: 0; transform: translateY(20px); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('azureFunctionKey');
+            if (savedKey) {
+                document.getElementById('functionKeyInput').value = savedKey;
+            }
+        });
+
+        // Auto-generate world sections periodically
+        setInterval(() => {
+            if (aiObjects.length < 20 && Math.random() > 0.8) {
+                generateAIWorld();
+            }
+        }, 60000); // Every minute
+
+        // Special AI interactions based on position
+        setInterval(() => {
+            // Check if player is near AI objects
+            aiObjects.forEach(obj => {
+                const distance = Math.sqrt(
+                    Math.pow(player.x - obj.position.x, 2) +
+                    Math.pow(player.z - obj.position.z, 2)
+                );
+                
+                if (distance < 5 && !obj.userData.proximityTriggered) {
+                    obj.userData.proximityTriggered = true;
+                    logAction(`Near ${obj.userData.name}`);
+                    
+                    // Enhance object when player is near
+                    obj.material.emissiveIntensity = 0.8;
+                    
+                    setTimeout(() => {
+                        obj.userData.proximityTriggered = false;
+                        obj.material.emissiveIntensity = 0.3;
+                    }, 5000);
+                }
+            });
+        }, 1000);
+
+        // Voice commands simulation (text-based)
+        window.addEventListener('keypress', async (e) => {
+            if (e.key === 'v' || e.key === 'V') {
+                const command = prompt('Voice command to AI:');
+                if (command) {
+                    const response = await callAIFunction(`Execute this command in the context of an interactive AI world: ${command}`);
+                    showVisualization('AI Command Response', response);
+                }
+            }
+        });
+
+        console.log('AI World initialized. Press Tab for AI menu, C for chat, V for voice commands.');
+    </script>
+</body>
+</html>
