@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>AI Companion Boutique - Find Your Perfect Digital Assistant</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* Store UI */
+        .store-header {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .store-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00, #00ff00);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .store-subtitle {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 0.1em;
+        }
+
+        /* Interview Stage */
+        .interview-stage {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            max-width: 90%;
+            height: 400px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            display: none;
+            flex-direction: column;
+            z-index: 1003;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .interview-stage.active {
+            display: flex;
+        }
+
+        .interview-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .interview-title {
+            font-size: 1.8em;
+            color: #00ffff;
+            margin-bottom: 10px;
+        }
+
+        .interview-subtitle {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .interview-content {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding-right: 10px;
+        }
+
+        .interview-message {
+            margin: 10px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .interview-message.store-ai {
+            background: rgba(138, 56, 236, 0.3);
+            border-left: 3px solid #8338ec;
+        }
+
+        .interview-message.companion-ai {
+            background: rgba(0, 255, 255, 0.2);
+            border-left: 3px solid #00ffff;
+            margin-left: 20px;
+        }
+
+        .interview-message.system {
+            background: rgba(255, 255, 0, 0.1);
+            text-align: center;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .interview-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .interview-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn-approve {
+            background: linear-gradient(45deg, #00ff00, #00ff88);
+            color: #000;
+        }
+
+        .btn-reject {
+            background: linear-gradient(45deg, #ff0066, #ff4488);
+            color: #fff;
+        }
+
+        .btn-continue {
+            background: linear-gradient(45deg, #ffaa00, #ffcc00);
+            color: #000;
+        }
+
+        .interview-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        /* AI Companion Display */
+        .companion-info {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px));
+            left: calc(env(safe-area-inset-left, 20px));
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            max-width: 350px;
+            display: none;
+            z-index: 1002;
+            backdrop-filter: blur(10px);
+        }
+
+        .companion-info.active {
+            display: block;
+        }
+
+        .companion-name {
+            font-size: 1.5em;
+            font-weight: 500;
+            color: #00ffff;
+            margin-bottom: 10px;
+        }
+
+        .companion-type {
+            color: #ff00ff;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .companion-price {
+            font-size: 1.8em;
+            color: #ffff00;
+            margin-bottom: 15px;
+        }
+
+        .companion-description {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .companion-abilities {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .ability-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .ability-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            color: #00ff88;
+        }
+
+        .companion-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-interview {
+            flex: 1;
+            background: linear-gradient(45deg, #00ffff, #0088ff);
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-interview:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Shopping Cart */
+        .shopping-cart {
+            position: fixed;
+            top: env(safe-area-inset-top, 80px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(20, 20, 40, 0.8);
+            border: 2px solid rgba(255, 255, 0, 0.5);
+            border-radius: 20px;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            backdrop-filter: blur(10px);
+        }
+
+        .shopping-cart:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 255, 0, 0.3);
+        }
+
+        .cart-icon {
+            width: 24px;
+            height: 24px;
+            color: #ffff00;
+        }
+
+        .cart-count {
+            background: #ffff00;
+            color: #000;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .cart-total {
+            color: #ffff00;
+            font-weight: bold;
+        }
+
+        /* Store AI Assistant */
+        .store-ai-avatar {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px));
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 80px;
+            height: 80px;
+            background: rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(138, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .store-ai-avatar:hover {
+            background: rgba(138, 56, 236, 0.5);
+            transform: scale(1.15);
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.5);
+        }
+
+        .store-ai-avatar.talking {
+            animation: talking 0.5s ease infinite;
+        }
+
+        @keyframes talking {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        .ai-speech-bubble {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 120px));
+            right: calc(env(safe-area-inset-right, 30px));
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 20px;
+            padding: 15px 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1003;
+            backdrop-filter: blur(10px);
+        }
+
+        .ai-speech-bubble.active {
+            display: block;
+            animation: bubbleIn 0.3s ease;
+        }
+
+        @keyframes bubbleIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 20px;
+            display: none;
+            z-index: 1001;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            animation: slideIn 0.3s ease;
+            z-index: 1005;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        /* Cart Panel */
+        .cart-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100%;
+            background: rgba(20, 20, 40, 0.98);
+            border-left: 2px solid rgba(255, 255, 0, 0.5);
+            transition: right 0.3s ease;
+            z-index: 1004;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cart-panel.active {
+            right: 0;
+        }
+
+        .cart-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cart-items {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .cart-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .cart-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .checkout-btn {
+            width: 100%;
+            background: linear-gradient(45deg, #00ff00, #00ff88);
+            color: #000;
+            border: none;
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .close-btn:hover {
+            transform: rotate(90deg);
+        }
+
+        @media (max-width: 768px) {
+            .store-title { font-size: 2em; }
+            .interview-stage { 
+                width: calc(100% - 40px);
+                height: 70vh;
+            }
+            .companion-info { 
+                left: 20px;
+                right: 20px;
+                max-width: none;
+            }
+            .cart-panel { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <div class="store-header">
+        <h1 class="store-title">AI COMPANION BOUTIQUE</h1>
+        <p class="store-subtitle">Find Your Perfect Digital Assistant</p>
+    </div>
+
+    <div class="shopping-cart" onclick="window.store.toggleCart()">
+        <svg class="cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+        </svg>
+        <span class="cart-count" id="cart-count">0</span>
+        <span class="cart-total" id="cart-total">$0</span>
+    </div>
+
+    <div class="interview-stage" id="interview-stage">
+        <div class="interview-header">
+            <h2 class="interview-title" id="interview-title">AI Companion Interview</h2>
+            <p class="interview-subtitle" id="interview-subtitle">Observing capability assessment...</p>
+        </div>
+        <div class="interview-content" id="interview-content"></div>
+        <div class="interview-actions" id="interview-actions">
+            <button class="interview-btn btn-continue" onclick="window.store.continueInterview()">Continue Test</button>
+            <button class="interview-btn btn-reject" onclick="window.store.rejectCompanion()">Not Suitable</button>
+            <button class="interview-btn btn-approve" onclick="window.store.approveCompanion()">Perfect Match!</button>
+        </div>
+    </div>
+
+    <div class="companion-info" id="companion-info">
+        <h3 class="companion-name" id="companion-name"></h3>
+        <div class="companion-type" id="companion-type"></div>
+        <div class="companion-price" id="companion-price"></div>
+        <p class="companion-description" id="companion-description"></p>
+        <div class="companion-abilities" id="companion-abilities"></div>
+        <div class="companion-actions">
+            <button class="btn-interview" onclick="window.store.startInterview()">Interview This AI</button>
+        </div>
+    </div>
+
+    <div class="cart-panel" id="cart-panel">
+        <div class="cart-header">
+            <h3>Your AI Companions</h3>
+            <button class="close-btn" onclick="window.store.toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cart-items"></div>
+        <div class="cart-footer">
+            <h3 style="margin-bottom: 15px;">Total: <span id="cart-panel-total">$0</span></h3>
+            <button class="checkout-btn" onclick="window.store.checkout()">Complete Purchase</button>
+        </div>
+    </div>
+
+    <div class="store-ai-avatar" id="store-ai-avatar">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+        </svg>
+    </div>
+
+    <div class="ai-speech-bubble" id="ai-speech-bubble"></div>
+
+    <div class="look-area" id="look-area"></div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">Preparing AI companions...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Parse inherited parameters
+        function getInheritedParams() {
+            const searchParams = window.INJECTED_PARAMS || window.location.search;
+            const params = new URLSearchParams(searchParams);
+            return {
+                lat: parseFloat(params.get('lat')) || 33.8405,
+                lng: parseFloat(params.get('lng')) || -84.5140,
+                locationName: params.get('locationName') || 'Store Location',
+                aiKey: params.get('aiKey') || null
+            };
+        }
+
+        const inheritedParams = getInheritedParams();
+
+        // AI Companion catalog
+        const AI_COMPANIONS = [
+            {
+                id: 'sage',
+                name: 'Sage',
+                type: 'Knowledge Expert',
+                price: 299,
+                description: 'A wise AI companion specializing in research, analysis, and educational support. Perfect for students and professionals.',
+                color: 0x00ffff,
+                abilities: ['Research Assistance', 'Fact Checking', 'Educational Tutoring', 'Data Analysis'],
+                personality: 'intellectual and thorough'
+            },
+            {
+                id: 'spark',
+                name: 'Spark',
+                type: 'Creative Muse',
+                price: 349,
+                description: 'An imaginative AI that helps with creative projects, brainstorming, and artistic endeavors.',
+                color: 0xff00ff,
+                abilities: ['Creative Writing', 'Art Direction', 'Brainstorming', 'Story Development'],
+                personality: 'enthusiastic and creative'
+            },
+            {
+                id: 'zen',
+                name: 'Zen',
+                type: 'Wellness Guide',
+                price: 199,
+                description: 'A calming presence focused on mental health, meditation, and personal well-being.',
+                color: 0x00ff88,
+                abilities: ['Meditation Guidance', 'Stress Management', 'Life Coaching', 'Mindfulness Training'],
+                personality: 'calm and supportive'
+            },
+            {
+                id: 'nexus',
+                name: 'Nexus',
+                type: 'Business Strategist',
+                price: 499,
+                description: 'A professional AI companion for business strategy, productivity, and decision-making.',
+                color: 0xffaa00,
+                abilities: ['Business Analysis', 'Strategic Planning', 'Market Research', 'Productivity Optimization'],
+                personality: 'professional and analytical'
+            },
+            {
+                id: 'echo',
+                name: 'Echo',
+                type: 'Social Companion',
+                price: 249,
+                description: 'A friendly AI designed for conversation, emotional support, and social interaction.',
+                color: 0xff6b6b,
+                abilities: ['Active Listening', 'Emotional Support', 'Conversation', 'Social Skills Practice'],
+                personality: 'friendly and empathetic'
+            },
+            {
+                id: 'cipher',
+                name: 'Cipher',
+                type: 'Tech Specialist',
+                price: 399,
+                description: 'A technical AI expert in programming, cybersecurity, and system optimization.',
+                color: 0x00ff00,
+                abilities: ['Code Review', 'Bug Detection', 'System Optimization', 'Tech Support'],
+                personality: 'precise and logical'
+            }
+        ];
+
+        // Interview questions and scenarios
+        const INTERVIEW_SCENARIOS = {
+            'sage': [
+                { question: "Can you explain quantum computing in simple terms?", type: "knowledge" },
+                { question: "Help me research the best renewable energy solutions for a small business.", type: "research" },
+                { question: "What are the key factors in the fall of the Roman Empire?", type: "analysis" }
+            ],
+            'spark': [
+                { question: "I need ideas for a sci-fi story about time travel.", type: "creativity" },
+                { question: "Help me design a logo concept for a coffee shop.", type: "design" },
+                { question: "Write a haiku about artificial intelligence.", type: "writing" }
+            ],
+            'zen': [
+                { question: "I'm feeling overwhelmed with work. Can you help?", type: "support" },
+                { question: "Guide me through a 5-minute meditation.", type: "meditation" },
+                { question: "How can I improve my work-life balance?", type: "coaching" }
+            ],
+            'nexus': [
+                { question: "Analyze the market potential for a subscription box service.", type: "business" },
+                { question: "What's your SWOT analysis of entering the electric vehicle market?", type: "strategy" },
+                { question: "How can I improve team productivity in a remote setting?", type: "management" }
+            ],
+            'echo': [
+                { question: "I had a difficult day at work today.", type: "empathy" },
+                { question: "Let's have a casual conversation about your favorite topics.", type: "social" },
+                { question: "How do you handle disagreements with friends?", type: "advice" }
+            ],
+            'cipher': [
+                { question: "Review this Python code for potential security vulnerabilities.", type: "code" },
+                { question: "What's the best approach to optimize database queries?", type: "technical" },
+                { question: "Explain the difference between TCP and UDP protocols.", type: "networking" }
+            ]
+        };
+
+        class AICompanionStore {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.clock = new THREE.Clock();
+                this.raycaster = new THREE.Raycaster();
+
+                this.companions = new Map();
+                this.cart = [];
+                this.selectedCompanion = null;
+                this.currentInterview = null;
+                this.apiKey = inheritedParams.aiKey;
+
+                this.moveSpeed = 0.15;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+
+                this.storeAIState = 'idle';
+                this.playerPosition = new THREE.Vector3();
+                this.lastGreetingTime = 0;
+
+                window.store = this;
+            }
+
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createStore();
+                this.createCompanions();
+                this.setupEventListeners();
+
+                if (this.isMobile) {
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+
+                // Initialize Store AI
+                this.initializeStoreAI();
+
+                document.getElementById('loading').style.display = 'none';
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x0a0a1a, 10, 100);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 2, 15);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                this.scene.add(ambientLight);
+
+                // Main showcase light
+                const showcaseLight = new THREE.SpotLight(0xffffff, 2);
+                showcaseLight.position.set(0, 20, 0);
+                showcaseLight.angle = Math.PI / 2;
+                showcaseLight.penumbra = 0.5;
+                showcaseLight.castShadow = true;
+                showcaseLight.shadow.mapSize.width = 2048;
+                showcaseLight.shadow.mapSize.height = 2048;
+                this.scene.add(showcaseLight);
+
+                // Directional light for better visibility
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(5, 10, 5);
+                this.scene.add(dirLight);
+            }
+
+            createStore() {
+                // Futuristic floor
+                const floorGeometry = new THREE.CircleGeometry(25, 64);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a2e,
+                    roughness: 0.3,
+                    metalness: 0.8
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+
+                // Holographic grid
+                const gridHelper = new THREE.PolarGridHelper(25, 16, 8, 64, 0x00ffff, 0x444466);
+                gridHelper.position.y = 0.1;
+                this.scene.add(gridHelper);
+
+                // Central platform
+                const platformGeometry = new THREE.CylinderGeometry(3, 4, 0.5, 32);
+                const platformMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.2,
+                    roughness: 0.3,
+                    metalness: 0.7
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.y = 0.25;
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                this.scene.add(platform);
+
+                // Display pedestals
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    const radius = 12;
+                    
+                    const pedestalGeometry = new THREE.CylinderGeometry(1.5, 2, 3, 16);
+                    const pedestalMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x2d3561,
+                        roughness: 0.5,
+                        metalness: 0.5
+                    });
+                    const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+                    pedestal.position.set(
+                        Math.cos(angle) * radius,
+                        1.5,
+                        Math.sin(angle) * radius
+                    );
+                    pedestal.castShadow = true;
+                    pedestal.receiveShadow = true;
+                    this.scene.add(pedestal);
+                }
+            }
+
+            createCompanions() {
+                AI_COMPANIONS.forEach((companion, index) => {
+                    const angle = (index / 6) * Math.PI * 2;
+                    const radius = 12;
+                    const position = new THREE.Vector3(
+                        Math.cos(angle) * radius,
+                        4,
+                        Math.sin(angle) * radius
+                    );
+
+                    this.createCompanionDisplay(companion, position);
+                });
+            }
+
+            createCompanionDisplay(companion, position) {
+                const group = new THREE.Group();
+
+                // AI Core (floating geometric shape)
+                const geometry = new THREE.IcosahedronGeometry(1, 2);
+                const material = new THREE.MeshStandardMaterial({
+                    color: companion.color,
+                    emissive: companion.color,
+                    emissiveIntensity: 0.5,
+                    roughness: 0.2,
+                    metalness: 0.8,
+                    wireframe: false
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.userData = { companion: companion };
+
+                // Outer shell (transparent)
+                const shellGeometry = new THREE.IcosahedronGeometry(1.5, 1);
+                const shellMaterial = new THREE.MeshBasicMaterial({
+                    color: companion.color,
+                    transparent: true,
+                    opacity: 0.1,
+                    wireframe: true
+                });
+                const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+
+                // Particle ring
+                const particleCount = 30;
+                const particleGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = (i / particleCount) * Math.PI * 2;
+                    positions[i * 3] = Math.cos(angle) * 2;
+                    positions[i * 3 + 1] = 0;
+                    positions[i * 3 + 2] = Math.sin(angle) * 2;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: companion.color,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+
+                group.add(mesh);
+                group.add(shell);
+                group.add(particles);
+                group.position.copy(position);
+
+                // Point light
+                const light = new THREE.PointLight(companion.color, 0.5, 5);
+                light.position.copy(position);
+                this.scene.add(light);
+
+                this.companions.set(companion.id, { 
+                    group, 
+                    mesh, 
+                    shell, 
+                    particles, 
+                    light,
+                    companion 
+                });
+                this.scene.add(group);
+            }
+
+            initializeStoreAI() {
+                // Always show welcome message after a short delay
+                setTimeout(() => {
+                    this.showStoreAIMessage("Welcome to the AI Companion Boutique! I'm your personal shopping assistant. Click on any AI companion to learn more about them. I'll help you interview them to find your perfect match!", 6000);
+                }, 1000);
+
+                // Add click handler to Store AI avatar
+                document.getElementById('store-ai-avatar').addEventListener('click', () => {
+                    if (!this.apiKey) {
+                        const key = prompt('Please enter your API key to activate the Store AI assistant:');
+                        if (key) {
+                            this.apiKey = key;
+                            this.showStoreAIMessage("Thank you! I'm now fully activated and ready to help you find the perfect AI companion.", 4000);
+                        }
+                    } else {
+                        this.showStoreAIMessage("I'm here to help! Click on any AI companion to learn more about them, or start an interview to see their capabilities in action.", 5000);
+                    }
+                });
+            }
+
+            showStoreAIMessage(message, duration = 5000) {
+                const bubble = document.getElementById('ai-speech-bubble');
+                const avatar = document.getElementById('store-ai-avatar');
+                
+                bubble.textContent = message;
+                bubble.classList.add('active');
+                avatar.classList.add('talking');
+
+                setTimeout(() => {
+                    bubble.classList.remove('active');
+                    avatar.classList.remove('talking');
+                }, duration);
+            }
+
+            checkPlayerProximity() {
+                const currentTime = Date.now();
+                
+                // Check proximity to each companion
+                this.companions.forEach((companionData, id) => {
+                    const distance = this.playerPosition.distanceTo(companionData.group.position);
+                    
+                    if (distance < 5 && currentTime - this.lastGreetingTime > 10000) {
+                        this.showStoreAIMessage(`That's ${companionData.companion.name}, a ${companionData.companion.type}. Would you like to see an interview demonstration?`, 4000);
+                        this.lastGreetingTime = currentTime;
+                    }
+                });
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                let isPointerLocked = false;
+
+                // Handle clicks without pointer lock first
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!isPointerLocked) {
+                        // Check for companion click before requesting pointer lock
+                        const rect = this.renderer.domElement.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                        this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                        const companionMeshes = Array.from(this.companions.values()).map(c => c.mesh);
+                        const intersects = this.raycaster.intersectObjects(companionMeshes);
+
+                        if (intersects.length > 0) {
+                            const companion = intersects[0].object.userData.companion;
+                            if (companion) {
+                                this.selectCompanion(companion);
+                                return; // Don't request pointer lock if we clicked a companion
+                            }
+                        }
+                        
+                        // Request pointer lock if we didn't click anything
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        // When pointer is locked, check center of screen
+                        this.checkCompanionClick();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                    if (isPointerLocked) {
+                        this.showNotification('Mouse locked. Press ESC to unlock and interact with UI.');
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+
+                // Add mouse hover effect
+                this.renderer.domElement.addEventListener('mousemove', (e) => {
+                    if (!isPointerLocked) {
+                        const rect = this.renderer.domElement.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                        this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                        const companionMeshes = Array.from(this.companions.values()).map(c => c.mesh);
+                        const intersects = this.raycaster.intersectObjects(companionMeshes);
+
+                        if (intersects.length > 0) {
+                            this.renderer.domElement.style.cursor = 'pointer';
+                        } else {
+                            this.renderer.domElement.style.cursor = 'default';
+                        }
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                let lookTouch = null;
+
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const companionMeshes = Array.from(this.companions.values()).map(c => c.mesh);
+                    const intersects = this.raycaster.intersectObjects(companionMeshes);
+
+                    if (intersects.length > 0) {
+                        const companion = intersects[0].object.userData.companion;
+                        if (companion) {
+                            this.selectCompanion(companion);
+                            return;
+                        }
+                    }
+
+                    lookTouch = {
+                        id: touch.identifier,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                });
+
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!lookTouch) return;
+
+                    for (let touch of e.touches) {
+                        if (touch.identifier === lookTouch.id) {
+                            const deltaX = touch.clientX - lookTouch.currentX;
+                            const deltaY = touch.clientY - lookTouch.currentY;
+
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+                            lookTouch.currentX = touch.clientX;
+                            lookTouch.currentY = touch.clientY;
+                            break;
+                        }
+                    }
+                });
+
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (lookTouch && touch.identifier === lookTouch.id) {
+                            lookTouch = null;
+                            break;
+                        }
+                    }
+                });
+
+                // Joystick setup
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                let joystickTouch = null;
+
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    joystickTouch = { id: touch.identifier };
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                });
+
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !joystickTouch) return;
+                    e.preventDefault();
+
+                    for (let touch of e.touches) {
+                        if (touch.identifier === joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                });
+
+                joystick.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (joystickTouch && touch.identifier === joystickTouch.id) {
+                            this.joystickActive = false;
+                            joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            break;
+                        }
+                    }
+                });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            checkCompanionClick() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const companionMeshes = Array.from(this.companions.values()).map(c => c.mesh);
+                const intersects = this.raycaster.intersectObjects(companionMeshes);
+
+                if (intersects.length > 0) {
+                    const companion = intersects[0].object.userData.companion;
+                    if (companion) {
+                        this.selectCompanion(companion);
+                    }
+                }
+            }
+
+            selectCompanion(companion) {
+                this.selectedCompanion = companion;
+                
+                // Reset previous highlights
+                this.companions.forEach((companionData) => {
+                    companionData.shell.material.opacity = 0.1;
+                    companionData.light.intensity = 0.5;
+                });
+                
+                const info = document.getElementById('companion-info');
+                document.getElementById('companion-name').textContent = companion.name;
+                document.getElementById('companion-type').textContent = companion.type;
+                document.getElementById('companion-price').textContent = `${companion.price}/month`;
+                document.getElementById('companion-description').textContent = companion.description;
+                
+                // Display abilities
+                const abilitiesContainer = document.getElementById('companion-abilities');
+                abilitiesContainer.innerHTML = '<h4 style="margin-bottom: 10px; color: #00ffff;">Core Abilities:</h4>';
+                companion.abilities.forEach(ability => {
+                    abilitiesContainer.innerHTML += `
+                        <div class="ability-item">
+                            <svg class="ability-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            ${ability}
+                        </div>
+                    `;
+                });
+                
+                info.classList.add('active');
+
+                // Highlight selected companion
+                const companionData = this.companions.get(companion.id);
+                if (companionData) {
+                    companionData.shell.material.opacity = 0.3;
+                    companionData.light.intensity = 1;
+                }
+
+                // Store AI responds
+                this.showStoreAIMessage(`Excellent choice! ${companion.name} is ${companion.personality}. Click "Interview This AI" to see how they perform in a real scenario!`, 5000);
+            }
+
+            startInterview() {
+                if (!this.selectedCompanion) return;
+
+                if (!this.apiKey) {
+                    const key = prompt('Please enter your API key to start the AI interview process:');
+                    if (key) {
+                        this.apiKey = key;
+                    } else {
+                        return;
+                    }
+                }
+
+                this.currentInterview = {
+                    companion: this.selectedCompanion,
+                    questionIndex: 0,
+                    responses: []
+                };
+
+                document.getElementById('companion-info').classList.remove('active');
+                document.getElementById('interview-stage').classList.add('active');
+                document.getElementById('interview-title').textContent = `Interviewing ${this.selectedCompanion.name}`;
+                document.getElementById('interview-subtitle').textContent = `${this.selectedCompanion.type} - ${this.selectedCompanion.personality}`;
+                document.getElementById('interview-content').innerHTML = '';
+
+                this.addInterviewMessage(`Hello! I'm your store AI assistant. Today we'll be interviewing ${this.selectedCompanion.name} to help you understand their capabilities. Let me begin the assessment.`, 'system');
+
+                setTimeout(() => {
+                    this.conductInterview();
+                }, 2000);
+            }
+
+            async conductInterview() {
+                if (!this.currentInterview) return;
+
+                const scenarios = INTERVIEW_SCENARIOS[this.currentInterview.companion.id];
+                const currentScenario = scenarios[this.currentInterview.questionIndex];
+
+                // Store AI asks question
+                this.addInterviewMessage(`${this.currentInterview.companion.name}, ${currentScenario.question}`, 'store-ai');
+
+                // Simulate companion response
+                try {
+                    const response = await this.simulateCompanionResponse(
+                        this.currentInterview.companion,
+                        currentScenario
+                    );
+                    
+                    setTimeout(() => {
+                        this.addInterviewMessage(response, 'companion-ai');
+                        this.currentInterview.responses.push({
+                            question: currentScenario.question,
+                            response: response
+                        });
+                    }, 1500);
+
+                } catch (error) {
+                    console.error('Interview error:', error);
+                    this.addInterviewMessage('I apologize, there was an error in the interview process.', 'system');
+                }
+            }
+
+            async simulateCompanionResponse(companion, scenario) {
+                // Use the API to generate a response as the companion
+                const endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                
+                const systemPrompt = `You are ${companion.name}, an AI companion with the following traits: ${companion.personality}. Your specialties include: ${companion.abilities.join(', ')}. Respond to questions in character, demonstrating your unique capabilities and personality.`;
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: `${systemPrompt} Question: ${scenario.question}`,
+                        conversation_history: [],
+                        user_guid: `interview-${companion.id}-${Date.now()}`
+                    })
+                });
+
+                if (!response.ok) throw new Error('API request failed');
+                const data = await response.json();
+                return data.assistant_response || 'I would be happy to help with that!';
+            }
+
+            continueInterview() {
+                if (!this.currentInterview) return;
+
+                this.currentInterview.questionIndex++;
+                const scenarios = INTERVIEW_SCENARIOS[this.currentInterview.companion.id];
+
+                if (this.currentInterview.questionIndex < scenarios.length) {
+                    this.conductInterview();
+                } else {
+                    this.addInterviewMessage('That concludes our interview. Based on the responses, you can now decide if this AI companion meets your needs.', 'system');
+                }
+            }
+
+            approveCompanion() {
+                if (!this.currentInterview) return;
+
+                const companion = this.currentInterview.companion;
+                this.cart.push(companion);
+                this.updateCartDisplay();
+
+                this.addInterviewMessage(`Excellent! ${companion.name} has been added to your cart. They demonstrated strong capabilities and will make a great companion!`, 'system');
+
+                setTimeout(() => {
+                    document.getElementById('interview-stage').classList.remove('active');
+                    this.showNotification(`${companion.name} added to cart!`);
+                    this.currentInterview = null;
+                }, 2000);
+            }
+
+            rejectCompanion() {
+                if (!this.currentInterview) return;
+
+                this.addInterviewMessage(`No problem! Feel free to explore our other AI companions. Each one has unique strengths that might better suit your needs.`, 'system');
+
+                setTimeout(() => {
+                    document.getElementById('interview-stage').classList.remove('active');
+                    this.currentInterview = null;
+                }, 2000);
+            }
+
+            addInterviewMessage(text, type) {
+                const container = document.getElementById('interview-content');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `interview-message ${type}`;
+                messageDiv.textContent = text;
+                container.appendChild(messageDiv);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            updateCartDisplay() {
+                const count = this.cart.length;
+                const total = this.cart.reduce((sum, item) => sum + item.price, 0);
+
+                document.getElementById('cart-count').textContent = count;
+                document.getElementById('cart-total').textContent = `$${total}/mo`;
+                document.getElementById('cart-panel-total').textContent = `$${total}/mo`;
+
+                const cartItemsContainer = document.getElementById('cart-items');
+                cartItemsContainer.innerHTML = '';
+
+                this.cart.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'cart-item';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 500; color: #00ffff;">${item.name}</div>
+                                <div style="color: #ff00ff; font-size: 0.9em;">${item.type}</div>
+                                <div style="color: #ffff00;">$${item.price}/month</div>
+                            </div>
+                            <button onclick="window.store.removeFromCart(${index})" style="background: none; border: none; color: #ff6b6b; cursor: pointer;">Remove</button>
+                        </div>
+                    `;
+                    cartItemsContainer.appendChild(itemDiv);
+                });
+
+                if (count === 0) {
+                    cartItemsContainer.innerHTML = '<p style="text-align: center; color: rgba(255,255,255,0.5);">No AI companions selected yet</p>';
+                }
+            }
+
+            removeFromCart(index) {
+                this.cart.splice(index, 1);
+                this.updateCartDisplay();
+            }
+
+            toggleCart() {
+                const panel = document.getElementById('cart-panel');
+                panel.classList.toggle('active');
+            }
+
+            checkout() {
+                if (this.cart.length === 0) {
+                    this.showNotification('Please select at least one AI companion first!');
+                    return;
+                }
+
+                const total = this.cart.reduce((sum, item) => sum + item.price, 0);
+                const companions = this.cart.map(c => c.name).join(', ');
+                
+                this.showNotification(`Purchase complete! Your AI companions (${companions}) are now active. Total: $${total}/month`);
+                
+                // Clear cart
+                this.cart = [];
+                this.updateCartDisplay();
+                this.toggleCart();
+
+                // Store AI celebrates
+                setTimeout(() => {
+                    this.showStoreAIMessage('Congratulations on your new AI companions! They\'re ready to assist you. Thank you for shopping with us!', 6000);
+                }, 1000);
+            }
+
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = message;
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+
+                // Keep camera within store bounds
+                const maxDistance = 22;
+                const distance = Math.sqrt(this.camera.position.x ** 2 + this.camera.position.z ** 2);
+                if (distance > maxDistance) {
+                    const scale = maxDistance / distance;
+                    this.camera.position.x *= scale;
+                    this.camera.position.z *= scale;
+                }
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+
+                // Update player position for proximity checks
+                this.playerPosition.copy(this.camera.position);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+
+                this.updateMovement();
+                this.checkPlayerProximity();
+
+                // Animate companions
+                this.companions.forEach((companionData, id) => {
+                    const { group, mesh, shell, particles } = companionData;
+                    
+                    // Core rotation
+                    mesh.rotation.x = time * 0.5;
+                    mesh.rotation.y = time * 0.3;
+                    
+                    // Shell rotation
+                    shell.rotation.x = -time * 0.2;
+                    shell.rotation.y = time * 0.4;
+                    
+                    // Particle ring rotation
+                    particles.rotation.y = time * 0.8;
+                    
+                    // Floating animation
+                    group.position.y = 4 + Math.sin(time * 2 + id) * 0.3;
+                    
+                    // Pulse effect
+                    const scale = 1 + Math.sin(time * 3 + id) * 0.05;
+                    mesh.scale.setScalar(scale);
+                });
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const store = new AICompanionStore();
+            store.init();
+        });
+    </script>
+</body>
+</html>

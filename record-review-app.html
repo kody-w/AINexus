@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record & Review - Communication Training</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #9ca3af;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .main-content {
+            display: grid;
+            gap: 2rem;
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .recording-section {
+            text-align: center;
+        }
+
+        #videoElement, #recordedVideo {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border-radius: 15px;
+            background: #000;
+            margin: 1rem auto;
+            display: block;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        }
+
+        button {
+            padding: 0.8rem 2rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .timer {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 1rem 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .analysis-section {
+            display: none;
+        }
+
+        .analysis-section.active {
+            display: block;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #e0e0e0;
+        }
+
+        .tab.active {
+            color: #667eea;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .checklist {
+            list-style: none;
+            margin: 1rem 0;
+        }
+
+        .checklist li {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .checklist li:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(10px);
+        }
+
+        .transcription-area {
+            width: 100%;
+            min-height: 200px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1rem;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+        }
+
+        .filler-words {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .video-library {
+            margin-top: 3rem;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .video-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .video-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-3px);
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            height: 150px;
+            background: #000;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            object-fit: cover;
+        }
+
+        .video-info {
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+
+        .import-export {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 0.8rem 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-label:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
+            }
+        }
+
+        .recording {
+            animation: pulse 2s infinite;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+            
+            .tabs {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Record & Review</h1>
+            <p class="subtitle">Transform your communication skills through video analysis</p>
+        </header>
+
+        <div class="main-content">
+            <div class="card recording-section">
+                <h2>Step 0: Record Your Video</h2>
+                <p style="margin-bottom: 1rem; color: #9ca3af;">Record a 5-minute impromptu video to analyze your communication style</p>
+                
+                <video id="videoElement" autoplay muted></video>
+                <video id="recordedVideo" controls style="display: none;"></video>
+                
+                <div class="timer" id="timer">00:00</div>
+                
+                <div class="controls">
+                    <button id="startBtn" class="btn-primary">Start Recording</button>
+                    <button id="stopBtn" class="btn-secondary" disabled>Stop Recording</button>
+                    <button id="resetBtn" class="btn-secondary" style="display: none;">Record Again</button>
+                    <button id="analyzeBtn" class="btn-primary" style="display: none;">Analyze Video</button>
+                </div>
+
+                <div class="import-export">
+                    <label for="importVideo" class="file-label">
+                        Import Video
+                    </label>
+                    <input type="file" id="importVideo" accept="video/*">
+                    <button id="exportBtn" class="btn-secondary" style="display: none;">Export Video</button>
+                </div>
+            </div>
+
+            <div class="card analysis-section" id="analysisSection">
+                <h2>Video Analysis</h2>
+                
+                <div class="tabs">
+                    <button class="tab active" data-tab="visual">Step 1: Visual Review</button>
+                    <button class="tab" data-tab="vocal">Step 2: Vocal Review</button>
+                    <button class="tab" data-tab="transcript">Step 3: Transcription</button>
+                </div>
+
+                <div class="tab-content active" id="visual-tab">
+                    <h3>Visual Image Review</h3>
+                    <p style="margin-bottom: 1rem; color: #9ca3af;">Analyze your body language, facial expressions, and visual tics</p>
+                    
+                    <ul class="checklist">
+                        <li>👁️ <strong>Eye Contact:</strong> Are you maintaining appropriate eye contact with the camera?</li>
+                        <li>😊 <strong>Facial Expressions:</strong> Do your expressions match your message?</li>
+                        <li>🙌 <strong>Hand Gestures:</strong> Are your gestures natural and purposeful?</li>
+                        <li>🧍 <strong>Posture:</strong> Is your posture confident and open?</li>
+                        <li>🔄 <strong>Distracting Tics:</strong> Notice any repetitive movements or habits</li>
+                    </ul>
+
+                    <textarea class="transcription-area" placeholder="Take notes on your visual presentation..."></textarea>
+                </div>
+
+                <div class="tab-content" id="vocal-tab">
+                    <h3>Vocal Image Review</h3>
+                    <p style="margin-bottom: 1rem; color: #9ca3af;">Review your melody, rate of speech, volume, tonality, and use of pauses</p>
+                    
+                    <ul class="checklist">
+                        <li>🎵 <strong>Melody & Variation:</strong> Is your voice engaging with appropriate pitch variation?</li>
+                        <li>⏱️ <strong>Rate of Speech:</strong> Are you speaking too fast or too slow?</li>
+                        <li>🔊 <strong>Volume:</strong> Is your volume consistent and appropriate?</li>
+                        <li>🎭 <strong>Tonality:</strong> Does your tone match your message?</li>
+                        <li>⏸️ <strong>Pauses:</strong> Are you using pauses effectively for emphasis?</li>
+                    </ul>
+
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="avgPace">--</div>
+                            <div class="stat-label">Words/Minute</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="pauseCount">--</div>
+                            <div class="stat-label">Pauses</div>
+                        </div>
+                    </div>
+
+                    <textarea class="transcription-area" placeholder="Take notes on your vocal delivery..."></textarea>
+                </div>
+
+                <div class="tab-content" id="transcript-tab">
+                    <h3>Video Transcription</h3>
+                    <p style="margin-bottom: 1rem; color: #9ca3af;">Transcribe your video to identify filler words and speech patterns</p>
+                    
+                    <button id="transcribeBtn" class="btn-primary">Start Transcription</button>
+                    
+                    <textarea id="transcriptionText" class="transcription-area" placeholder="Your transcription will appear here..."></textarea>
+                    
+                    <div class="filler-words" id="fillerWords" style="display: none;">
+                        <h4>Filler Words Analysis</h4>
+                        <div id="fillerStats"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card video-library">
+                <h2>Your Video Library</h2>
+                <div class="video-grid" id="videoGrid">
+                    <!-- Saved videos will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let mediaRecorder;
+        let recordedBlobs = [];
+        let videoStream;
+        let startTime;
+        let timerInterval;
+        let currentVideoBlob;
+        let recognition;
+
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+        }
+
+        // DOM elements
+        const videoElement = document.getElementById('videoElement');
+        const recordedVideo = document.getElementById('recordedVideo');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const timer = document.getElementById('timer');
+        const analysisSection = document.getElementById('analysisSection');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const transcriptionText = document.getElementById('transcriptionText');
+        const importVideo = document.getElementById('importVideo');
+        const exportBtn = document.getElementById('exportBtn');
+        const videoGrid = document.getElementById('videoGrid');
+
+        // Initialize the app
+        async function init() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+                videoElement.srcObject = videoStream;
+            } catch (err) {
+                console.error('Error accessing media devices:', err);
+                alert('Please allow camera and microphone access to use this app.');
+            }
+
+            loadVideosFromStorage();
+        }
+
+        // Start recording
+        startBtn.addEventListener('click', () => {
+            recordedBlobs = [];
+            
+            const options = { mimeType: 'video/webm' };
+            try {
+                mediaRecorder = new MediaRecorder(videoStream, options);
+            } catch (e) {
+                console.error('Error creating MediaRecorder:', e);
+                return;
+            }
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    recordedBlobs.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = handleStop;
+
+            mediaRecorder.start();
+            startTime = Date.now();
+            startTimer();
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            videoElement.classList.add('recording');
+        });
+
+        // Stop recording
+        stopBtn.addEventListener('click', () => {
+            mediaRecorder.stop();
+            stopTimer();
+            
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            videoElement.classList.remove('recording');
+        });
+
+        // Handle stop
+        function handleStop() {
+            const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+            currentVideoBlob = blob;
+            const url = URL.createObjectURL(blob);
+            
+            videoElement.style.display = 'none';
+            recordedVideo.style.display = 'block';
+            recordedVideo.src = url;
+            
+            resetBtn.style.display = 'inline-block';
+            analyzeBtn.style.display = 'inline-block';
+            exportBtn.style.display = 'inline-block';
+            
+            // Save to local storage
+            saveVideoToStorage(blob);
+        }
+
+        // Reset recording
+        resetBtn.addEventListener('click', () => {
+            recordedVideo.style.display = 'none';
+            videoElement.style.display = 'block';
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            resetBtn.style.display = 'none';
+            analyzeBtn.style.display = 'none';
+            
+            timer.textContent = '00:00';
+            analysisSection.classList.remove('active');
+        });
+
+        // Analyze video
+        analyzeBtn.addEventListener('click', () => {
+            analysisSection.classList.add('active');
+            analysisSection.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // Timer functions
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                timer.textContent = `${minutes}:${seconds}`;
+                
+                // Auto-stop at 5 minutes
+                if (elapsed >= 300) {
+                    stopBtn.click();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        // Tab functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.getAttribute('data-tab');
+                
+                // Update active tab
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update active content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+            });
+        });
+
+        // Transcription
+        transcribeBtn.addEventListener('click', () => {
+            if (!recognition) {
+                alert('Speech recognition is not supported in your browser.');
+                return;
+            }
+
+            transcribeBtn.disabled = true;
+            transcribeBtn.textContent = 'Transcribing...';
+            
+            let finalTranscript = '';
+            
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                transcriptionText.value = finalTranscript + interimTranscript;
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                transcribeBtn.disabled = false;
+                transcribeBtn.textContent = 'Start Transcription';
+            };
+
+            recognition.onend = () => {
+                transcribeBtn.disabled = false;
+                transcribeBtn.textContent = 'Start Transcription';
+                analyzeFillerWords(finalTranscript);
+            };
+
+            // Play the video and start recognition
+            recordedVideo.play();
+            recognition.start();
+            
+            // Stop recognition when video ends
+            recordedVideo.onended = () => {
+                recognition.stop();
+            };
+        });
+
+        // Analyze filler words
+        function analyzeFillerWords(text) {
+            const fillerWords = ['um', 'uh', 'like', 'you know', 'so', 'actually', 'basically', 'literally', 'right'];
+            const wordCount = text.split(' ').length;
+            const fillerStats = {};
+            
+            fillerWords.forEach(filler => {
+                const regex = new RegExp(`\\b${filler}\\b`, 'gi');
+                const matches = text.match(regex);
+                if (matches) {
+                    fillerStats[filler] = matches.length;
+                }
+            });
+            
+            // Display filler word stats
+            const fillerDiv = document.getElementById('fillerWords');
+            const statsDiv = document.getElementById('fillerStats');
+            
+            fillerDiv.style.display = 'block';
+            statsDiv.innerHTML = '';
+            
+            let totalFillers = 0;
+            for (const [word, count] of Object.entries(fillerStats)) {
+                totalFillers += count;
+                const statElement = document.createElement('div');
+                statElement.style.marginBottom = '0.5rem';
+                statElement.innerHTML = `<strong>${word}:</strong> ${count} times`;
+                statsDiv.appendChild(statElement);
+            }
+            
+            const summaryElement = document.createElement('div');
+            summaryElement.style.marginTop = '1rem';
+            summaryElement.style.fontWeight = 'bold';
+            summaryElement.innerHTML = `Total filler words: ${totalFillers} (${((totalFillers / wordCount) * 100).toFixed(1)}% of speech)`;
+            statsDiv.appendChild(summaryElement);
+            
+            // Update pace statistics
+            const duration = recordedVideo.duration / 60; // in minutes
+            const wordsPerMinute = Math.round(wordCount / duration);
+            document.getElementById('avgPace').textContent = wordsPerMinute;
+        }
+
+        // Import video
+        importVideo.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('video/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const blob = new Blob([e.target.result], { type: file.type });
+                    currentVideoBlob = blob;
+                    const url = URL.createObjectURL(blob);
+                    
+                    videoElement.style.display = 'none';
+                    recordedVideo.style.display = 'block';
+                    recordedVideo.src = url;
+                    
+                    resetBtn.style.display = 'inline-block';
+                    analyzeBtn.style.display = 'inline-block';
+                    exportBtn.style.display = 'inline-block';
+                    
+                    saveVideoToStorage(blob);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // Export video
+        exportBtn.addEventListener('click', () => {
+            if (currentVideoBlob) {
+                const url = URL.createObjectURL(currentVideoBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `recording_${new Date().toISOString()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        });
+
+        // Local storage functions
+        function saveVideoToStorage(blob) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const videoData = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    data: e.target.result,
+                    type: blob.type
+                };
+                
+                let videos = JSON.parse(localStorage.getItem('recordReviewVideos') || '[]');
+                videos.push(videoData);
+                
+                // Keep only last 10 videos to manage storage
+                if (videos.length > 10) {
+                    videos = videos.slice(-10);
+                }
+                
+                localStorage.setItem('recordReviewVideos', JSON.stringify(videos));
+                loadVideosFromStorage();
+            };
+            reader.readAsDataURL(blob);
+        }
+
+        function loadVideosFromStorage() {
+            const videos = JSON.parse(localStorage.getItem('recordReviewVideos') || '[]');
+            videoGrid.innerHTML = '';
+            
+            videos.reverse().forEach(video => {
+                const videoItem = document.createElement('div');
+                videoItem.className = 'video-item';
+                
+                const date = new Date(video.date);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                
+                videoItem.innerHTML = `
+                    <video class="video-thumbnail" src="${video.data}"></video>
+                    <div class="video-info">
+                        <strong>Recording</strong>
+                        <br>${dateStr}
+                    </div>
+                `;
+                
+                videoItem.addEventListener('click', () => {
+                    currentVideoBlob = dataURLtoBlob(video.data, video.type);
+                    videoElement.style.display = 'none';
+                    recordedVideo.style.display = 'block';
+                    recordedVideo.src = video.data;
+                    
+                    resetBtn.style.display = 'inline-block';
+                    analyzeBtn.style.display = 'inline-block';
+                    exportBtn.style.display = 'inline-block';
+                    
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+                
+                videoGrid.appendChild(videoItem);
+            });
+        }
+
+        function dataURLtoBlob(dataURL, type) {
+            const arr = dataURL.split(',');
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], { type: type });
+        }
+
+        // Initialize app
+        init();
+    </script>
+</body>
+</html>
