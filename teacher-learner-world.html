@@ -131,6 +131,14 @@
             background: rgba(220, 53, 69, 1);
         }
 
+        .control-button.success {
+            background: rgba(40, 167, 69, 0.8);
+        }
+
+        .control-button.success:hover {
+            background: rgba(40, 167, 69, 1);
+        }
+
         .progress-display {
             background: rgba(0, 0, 0, 0.6);
             padding: 8px 16px;
@@ -433,6 +441,106 @@
             font-weight: 600;
         }
 
+        /* Productivity Metrics Panel */
+        .metrics-panel {
+            position: absolute;
+            top: env(safe-area-inset-top, 80px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(40, 167, 69, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            max-width: 350px;
+            backdrop-filter: blur(10px);
+            z-index: 1003;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .metrics-panel.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .metrics-title {
+            font-size: 1.4em;
+            color: #28a745;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metric-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid #28a745;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .metric-sublabel {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 3px;
+        }
+
+        .productivity-chart {
+            margin-top: 20px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-bar {
+            position: absolute;
+            bottom: 0;
+            width: 30px;
+            background: linear-gradient(to top, #28a745, #3dd058);
+            border-radius: 5px 5px 0 0;
+            transition: height 0.5s ease;
+        }
+
+        .export-metrics-btn {
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .metrics-toggle {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 280px);
+            background: rgba(40, 167, 69, 0.8);
+            padding: 8px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .metrics-toggle:hover {
+            background: rgba(40, 167, 69, 1);
+            transform: translateY(-2px);
+        }
+
         @media (max-width: 768px) {
             .world-title {
                 font-size: 1.8em;
@@ -452,6 +560,17 @@
                 padding: 8px 15px;
                 font-size: 0.9em;
             }
+
+            .metrics-panel {
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+
+            .metrics-toggle {
+                right: env(safe-area-inset-right, 20px);
+                top: env(safe-area-inset-top, 60px);
+            }
         }
     </style>
 </head>
@@ -465,6 +584,50 @@
     
     <div class="status-indicator">
         <span class="status-text" id="status-text">Ready to load conversation</span>
+    </div>
+
+    <div class="metrics-toggle" id="metrics-toggle">
+        <i class="fas fa-chart-line"></i>
+        <span>Productivity Metrics</span>
+    </div>
+
+    <div class="metrics-panel" id="metrics-panel">
+        <h3 class="metrics-title">
+            <i class="fas fa-chart-bar"></i>
+            Productivity Metrics
+        </h3>
+        
+        <div class="metric-item">
+            <div class="metric-label">Estimated Time Saved</div>
+            <div class="metric-value" id="time-saved">0 min</div>
+            <div class="metric-sublabel">Per conversation</div>
+        </div>
+        
+        <div class="metric-item">
+            <div class="metric-label">Task Complexity</div>
+            <div class="metric-value" id="task-complexity">-</div>
+            <div class="metric-sublabel">Based on interaction depth</div>
+        </div>
+        
+        <div class="metric-item">
+            <div class="metric-label">AI Efficiency Score</div>
+            <div class="metric-value" id="efficiency-score">0%</div>
+            <div class="metric-sublabel">Automation potential</div>
+        </div>
+        
+        <div class="metric-item">
+            <div class="metric-label">Daily Productivity Gain</div>
+            <div class="metric-value" id="daily-gain">0 hrs</div>
+            <div class="metric-sublabel">Based on usage patterns</div>
+        </div>
+        
+        <div class="productivity-chart" id="productivity-chart">
+            <canvas id="chart-canvas"></canvas>
+        </div>
+        
+        <button class="control-button success export-metrics-btn" id="export-metrics">
+            <i class="fas fa-download"></i> Export Metrics
+        </button>
     </div>
     
     <div class="controls-panel">
@@ -525,7 +688,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script>
-        // Teacher-Learner Activity World
+        // Teacher-Learner Activity World with Productivity Metrics
         class TeacherLearnerWorld {
             constructor() {
                 this.scene = null;
@@ -547,6 +710,15 @@
                 this.apiUrl = localStorage.getItem('tlw_apiUrl') || '';
                 this.apiKey = localStorage.getItem('tlw_apiKey') || '';
                 
+                // Productivity metrics
+                this.metrics = {
+                    timeSaved: 0,
+                    taskComplexity: 'Low',
+                    efficiencyScore: 0,
+                    dailyGain: 0,
+                    historicalData: JSON.parse(localStorage.getItem('tlw_metrics') || '[]')
+                };
+                
                 // UI elements
                 this.statusText = document.getElementById('status-text');
                 this.progressText = document.getElementById('progress-text');
@@ -562,6 +734,8 @@
                 this.teacherBubble = document.getElementById('teacher-bubble');
                 this.studentOriginalBubble = document.getElementById('student-original-bubble');
                 this.studentLiveBubble = document.getElementById('student-live-bubble');
+                this.metricsPanel = document.getElementById('metrics-panel');
+                this.metricsToggle = document.getElementById('metrics-toggle');
                 
                 this.setupEventListeners();
                 this.init();
@@ -577,6 +751,16 @@
                     if (this.autoMode && this.isPlaying) {
                         this.scheduleNextStep();
                     }
+                });
+                
+                // Metrics toggle
+                this.metricsToggle.addEventListener('click', () => {
+                    this.metricsPanel.classList.toggle('visible');
+                });
+                
+                // Export metrics
+                document.getElementById('export-metrics').addEventListener('click', () => {
+                    this.exportMetrics();
                 });
                 
                 // Upload handling
@@ -646,6 +830,9 @@
                 if (!this.apiUrl || !this.apiKey) {
                     this.apiConfig.classList.add('visible');
                 }
+                
+                // Initialize productivity chart
+                this.initProductivityChart();
             }
             
             setupScene() {
@@ -998,6 +1185,235 @@
                 this.updateStatus('Conversation loaded');
                 this.startBtn.disabled = false;
                 this.updateProgress();
+                
+                // Analyze conversation for productivity metrics
+                this.analyzeConversationMetrics();
+            }
+            
+            analyzeConversationMetrics() {
+                if (!this.conversationData) return;
+                
+                const conversation = this.conversationData.conversation;
+                let totalWords = 0;
+                let userQuestions = 0;
+                let assistantResponses = 0;
+                let averageResponseLength = 0;
+                let complexityIndicators = 0;
+                let crmOperations = 0;
+                let dataExtraction = 0;
+                
+                // Calculate conversation duration if timestamps are available
+                let conversationDuration = 0;
+                if (this.conversationData.timestamp) {
+                    const startTime = new Date(this.conversationData.timestamp);
+                    // Estimate 30 seconds between each message exchange
+                    conversationDuration = (conversation.length * 0.5); // minutes
+                }
+                
+                conversation.forEach(msg => {
+                    const words = msg.content.split(' ').length;
+                    
+                    if (msg.role === 'user') {
+                        userQuestions++;
+                        totalWords += words;
+                        
+                        // Check for complexity indicators
+                        if (msg.content.match(/create|update|set|add|extract|analyze|calculate|compare/i)) {
+                            complexityIndicators++;
+                        }
+                        
+                        // Check for CRM operations
+                        if (msg.content.match(/account|opportunity|contact|record|dynamics/i)) {
+                            crmOperations++;
+                        }
+                    } else if (msg.role === 'assistant') {
+                        assistantResponses++;
+                        averageResponseLength += words;
+                        totalWords += words;
+                    } else if (msg.role === 'system') {
+                        // System messages indicate actual operations performed
+                        if (msg.content.includes('Dynamics365CRUD')) {
+                            crmOperations++;
+                        }
+                        if (msg.content.includes('SharePointDocumentExtractor')) {
+                            dataExtraction++;
+                        }
+                    }
+                });
+                
+                if (assistantResponses > 0) {
+                    averageResponseLength /= assistantResponses;
+                }
+                
+                // Calculate time saved based on manual task estimation
+                let manualTime = 0;
+                
+                // CRM operations (creating records, updating, searching)
+                manualTime += crmOperations * 5; // 5 minutes per CRM operation
+                
+                // Data extraction and analysis
+                manualTime += dataExtraction * 10; // 10 minutes to manually extract SharePoint data
+                
+                // Information lookup and navigation
+                manualTime += userQuestions * 2; // 2 minutes per lookup/navigation
+                
+                // Documentation and data entry
+                const dataEntryTime = (totalWords / 40) * 1.5; // Typing + formatting time
+                manualTime += dataEntryTime;
+                
+                // Context switching between systems
+                manualTime += (crmOperations + dataExtraction) * 2; // 2 minutes per system switch
+                
+                // Add conversation duration comparison
+                if (conversationDuration > 0) {
+                    // The AI conversation took X minutes, but manual would have taken manualTime
+                    this.metrics.actualConversationTime = Math.round(conversationDuration);
+                }
+                
+                this.metrics.timeSaved = Math.round(manualTime - conversationDuration);
+                
+                // Determine task complexity based on operations
+                if (crmOperations >= 3 || dataExtraction > 0) {
+                    this.metrics.taskComplexity = 'High';
+                } else if (crmOperations >= 1) {
+                    this.metrics.taskComplexity = 'Medium';
+                } else {
+                    this.metrics.taskComplexity = 'Low';
+                }
+                
+                // Calculate efficiency score
+                const automationRatio = this.metrics.timeSaved / manualTime;
+                const operationalDepth = (crmOperations + dataExtraction) / Math.max(userQuestions, 1);
+                this.metrics.efficiencyScore = Math.round(
+                    Math.min((automationRatio * 0.7 + operationalDepth * 0.3) * 100, 100)
+                );
+                
+                // Estimate daily gain (assuming 10 similar conversations per day)
+                this.metrics.dailyGain = (this.metrics.timeSaved * 10) / 60; // Convert to hours
+                
+                // Store additional metrics for reporting
+                this.metrics.crmOperations = crmOperations;
+                this.metrics.dataExtractions = dataExtraction;
+                this.metrics.manualTimeEstimate = manualTime;
+                
+                // Update UI
+                this.updateMetricsDisplay();
+                
+                // Save to historical data
+                this.saveMetricsToHistory();
+            }
+            
+            updateMetricsDisplay() {
+                document.getElementById('time-saved').textContent = `${this.metrics.timeSaved} min`;
+                document.getElementById('task-complexity').textContent = this.metrics.taskComplexity;
+                document.getElementById('efficiency-score').textContent = `${this.metrics.efficiencyScore}%`;
+                document.getElementById('daily-gain').textContent = `${this.metrics.dailyGain.toFixed(1)} hrs`;
+                
+                // Show additional metrics if available
+                if (this.metrics.actualConversationTime) {
+                    const timeSavedElement = document.getElementById('time-saved');
+                    timeSavedElement.innerHTML = `${this.metrics.timeSaved} min<br><span style="font-size: 0.8em; opacity: 0.7">(${this.metrics.actualConversationTime} min AI vs ${this.metrics.manualTimeEstimate} min manual)</span>`;
+                }
+                
+                // Update chart
+                this.updateProductivityChart();
+            }
+            
+            saveMetricsToHistory() {
+                const historyEntry = {
+                    date: new Date().toISOString(),
+                    timeSaved: this.metrics.timeSaved,
+                    complexity: this.metrics.taskComplexity,
+                    efficiency: this.metrics.efficiencyScore,
+                    conversationLength: this.conversationData.conversation.length,
+                    crmOperations: this.metrics.crmOperations || 0,
+                    dataExtractions: this.metrics.dataExtractions || 0
+                };
+                
+                this.metrics.historicalData.push(historyEntry);
+                
+                // Keep only last 30 days of data
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                
+                this.metrics.historicalData = this.metrics.historicalData.filter(entry => 
+                    new Date(entry.date) > thirtyDaysAgo
+                );
+                
+                localStorage.setItem('tlw_metrics', JSON.stringify(this.metrics.historicalData));
+            }
+            
+            initProductivityChart() {
+                const canvas = document.getElementById('chart-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Simple bar chart implementation
+                this.chartCanvas = canvas;
+                this.chartCtx = ctx;
+                
+                this.updateProductivityChart();
+            }
+            
+            updateProductivityChart() {
+                const canvas = this.chartCanvas;
+                const ctx = this.chartCtx;
+                
+                if (!canvas || !ctx) return;
+                
+                // Clear canvas
+                canvas.width = canvas.parentElement.offsetWidth;
+                canvas.height = canvas.parentElement.offsetHeight;
+                
+                // Get last 7 days of data
+                const last7Days = this.metrics.historicalData.slice(-7);
+                
+                if (last7Days.length === 0) return;
+                
+                const barWidth = canvas.width / 8;
+                const maxTime = Math.max(...last7Days.map(d => d.timeSaved), 60);
+                
+                // Draw bars
+                last7Days.forEach((data, index) => {
+                    const barHeight = (data.timeSaved / maxTime) * (canvas.height - 20);
+                    const x = (index + 1) * barWidth;
+                    const y = canvas.height - barHeight - 10;
+                    
+                    // Draw bar
+                    ctx.fillStyle = '#28a745';
+                    ctx.fillRect(x - barWidth/2, y, barWidth * 0.8, barHeight);
+                    
+                    // Draw value
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${data.timeSaved}m`, x, y - 5);
+                });
+            }
+            
+            exportMetrics() {
+                const exportData = {
+                    summary: {
+                        totalConversations: this.metrics.historicalData.length,
+                        totalTimeSaved: this.metrics.historicalData.reduce((sum, d) => sum + d.timeSaved, 0),
+                        averageEfficiency: Math.round(
+                            this.metrics.historicalData.reduce((sum, d) => sum + d.efficiency, 0) / 
+                            this.metrics.historicalData.length
+                        ),
+                        exportDate: new Date().toISOString()
+                    },
+                    historicalData: this.metrics.historicalData,
+                    currentSession: this.metrics
+                };
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                
+                const exportLink = document.createElement('a');
+                exportLink.setAttribute('href', dataUri);
+                exportLink.setAttribute('download', `productivity_metrics_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(exportLink);
+                exportLink.click();
+                document.body.removeChild(exportLink);
             }
             
             startConversation() {
@@ -1007,6 +1423,9 @@
                 this.startBtn.disabled = true;
                 this.nextBtn.disabled = false;
                 this.resetBtn.disabled = false;
+                
+                // Show metrics panel when conversation starts
+                this.metricsPanel.classList.add('visible');
                 
                 this.nextStep();
             }

@@ -362,6 +362,53 @@
             letter-spacing: 2px;
         }
 
+        /* Replay Controls */
+        .replay-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 25px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            z-index: 2001;
+            display: none;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .replay-controls.active {
+            display: flex;
+        }
+
+        .replay-control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .replay-control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .replay-control-btn.active {
+            background: rgba(255, 0, 0, 0.5);
+        }
+
+        .replay-status {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin: 0 15px;
+        }
+
         /* Map View */
         #map-container {
             position: fixed;
@@ -446,7 +493,7 @@
             color: #fff;
         }
 
-        /* Portal Import/Export UI */
+        /* Portal Manager */
         .portal-manager {
             position: fixed;
             bottom: calc(env(safe-area-inset-bottom, 30px) + 430px);
@@ -531,11 +578,13 @@
             justify-content: space-between;
             align-items: center;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .portal-item:hover {
             background: rgba(255, 255, 255, 0.2);
             transform: translateX(5px);
+            border-color: rgba(0, 255, 255, 0.5);
         }
 
         .portal-item-info {
@@ -572,6 +621,16 @@
         .portal-action-btn:hover {
             background: rgba(255, 255, 255, 0.3);
             transform: scale(1.05);
+        }
+
+        .portal-action-btn.enter {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            font-weight: bold;
+        }
+
+        .portal-action-btn.enter:hover {
+            box-shadow: 0 3px 15px rgba(6, 255, 165, 0.4);
         }
 
         .portal-action-btn.delete {
@@ -2242,6 +2301,14 @@
         <div class="replay-text">▶️ REPLAYING SCENE</div>
     </div>
 
+    <!-- Replay Controls -->
+    <div class="replay-controls" id="replay-controls">
+        <button class="replay-control-btn" id="replay-play-pause">⏸️ Pause</button>
+        <span class="replay-status" id="replay-status">Step 1 of 1</span>
+        <button class="replay-control-btn" id="replay-next-step">Next ⏭️</button>
+        <button class="replay-control-btn" id="replay-stop">⏹️ Stop</button>
+    </div>
+
     <!-- Portal Manager Button -->
     <div class="portal-manager" id="portal-manager-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2257,7 +2324,7 @@
             <button class="portal-close-btn" id="portal-close">&times;</button>
             <h3>Portal Manager</h3>
             <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px; text-align: center;">
-                Import and export portal configurations to quickly add worlds to your Nexus.
+                Import, export, and fast travel through your portal network.
             </p>
             
             <div class="portal-list" id="portal-list">
@@ -2709,12 +2776,14 @@
 
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-        // Scene Recorder Class
+        // Enhanced Scene Recorder Class
         class SceneRecorder {
             constructor(worldInstance) {
                 this.world = worldInstance;
                 this.isRecording = false;
                 this.isPlaying = false;
+                this.isPaused = false;
+                this.stepByStep = false;
                 this.recordedActions = [];
                 this.recordStartTime = 0;
                 this.playbackStartTime = 0;
@@ -2723,6 +2792,7 @@
                 this.recordingTimer = null;
                 this.playbackTimer = null;
                 this.savedScenes = new Map();
+                this.currentScene = null;
 
                 this.setupEventListeners();
                 this.loadSavedScenes();
@@ -2759,6 +2829,19 @@
                         document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
                         e.target.classList.add('active');
                     });
+                });
+
+                // Replay controls
+                document.getElementById('replay-play-pause').addEventListener('click', () => {
+                    this.togglePlayPause();
+                });
+
+                document.getElementById('replay-next-step').addEventListener('click', () => {
+                    this.nextStep();
+                });
+
+                document.getElementById('replay-stop').addEventListener('click', () => {
+                    this.stopPlayback();
                 });
 
                 // Close on outside click
@@ -2904,7 +2987,8 @@
                     type: 'portal_interaction',
                     data: {
                         portalName: portalName,
-                        url: url
+                        url: url,
+                        timestamp: Date.now() - this.recordStartTime
                     }
                 });
             }
@@ -2914,23 +2998,31 @@
                     type: 'chat',
                     data: {
                         message: message,
-                        sender: sender
+                        sender: sender,
+                        timestamp: Date.now() - this.recordStartTime
                     }
                 });
             }
 
-            playScene(sceneId) {
+            playScene(sceneId, stepMode = false) {
                 const scene = this.savedScenes.get(sceneId);
                 if (!scene) return;
 
+                this.currentScene = scene;
                 this.isPlaying = true;
+                this.stepByStep = stepMode;
+                this.isPaused = false;
                 this.playbackIndex = 0;
                 this.playbackStartTime = Date.now();
 
-                // Show replay overlay
+                // Show replay overlay and controls
                 document.getElementById('replay-overlay').classList.add('active');
+                document.getElementById('replay-controls').classList.add('active');
                 document.getElementById('scene-timeline').style.display = 'block';
                 document.getElementById('total-time').textContent = this.formatTime(scene.duration);
+
+                // Update step counter
+                this.updateStepCounter();
 
                 // Initialize scene state
                 const initAction = scene.actions.find(a => a.type === 'init');
@@ -2940,15 +3032,69 @@
                     this.world.rotation.y = initAction.data.cameraRotation.y;
                 }
 
-                this.world.showNotification('Starting scene replay...');
+                this.world.showNotification(stepMode ? 'Starting step-by-step replay...' : 'Starting scene replay...');
 
                 // Start playback
-                this.playNextAction(scene);
+                if (stepMode) {
+                    this.isPaused = true;
+                    this.executeCurrentAction();
+                } else {
+                    this.playNextAction(scene);
+                }
+            }
+
+            togglePlayPause() {
+                if (!this.isPlaying) return;
+
+                this.isPaused = !this.isPaused;
+                const btn = document.getElementById('replay-play-pause');
+                btn.textContent = this.isPaused ? '▶️ Play' : '⏸️ Pause';
+
+                if (!this.isPaused && this.stepByStep) {
+                    this.stepByStep = false;
+                    this.playNextAction(this.currentScene);
+                }
+            }
+
+            nextStep() {
+                if (!this.isPlaying || !this.currentScene) return;
+
+                if (this.playbackIndex < this.currentScene.actions.length - 1) {
+                    this.playbackIndex++;
+                    this.executeCurrentAction();
+                    this.updateStepCounter();
+                } else {
+                    this.world.showNotification('Reached end of recording');
+                }
+            }
+
+            executeCurrentAction() {
+                if (!this.currentScene || this.playbackIndex >= this.currentScene.actions.length) return;
+
+                const action = this.currentScene.actions[this.playbackIndex];
+                this.executeAction(action);
+
+                // Update timeline
+                const progress = (this.playbackIndex / this.currentScene.actions.length) * 100;
+                document.getElementById('timeline-bar').style.width = `${progress}%`;
+                document.getElementById('current-time').textContent = this.formatTime(action.timestamp);
+            }
+
+            updateStepCounter() {
+                const status = document.getElementById('replay-status');
+                if (this.currentScene) {
+                    status.textContent = `Step ${this.playbackIndex + 1} of ${this.currentScene.actions.length}`;
+                }
             }
 
             playNextAction(scene) {
                 if (!this.isPlaying || this.playbackIndex >= scene.actions.length) {
                     this.stopPlayback();
+                    return;
+                }
+
+                if (this.isPaused) {
+                    requestAnimationFrame(() => this.playNextAction(scene));
                     return;
                 }
 
@@ -2967,6 +3113,7 @@
                     const action = scene.actions[this.playbackIndex];
                     this.executeAction(action);
                     this.playbackIndex++;
+                    this.updateStepCounter();
                 }
 
                 // Continue playback
@@ -2983,6 +3130,15 @@
 
                     case 'portal_interaction':
                         this.world.showNotification(`Portal interaction: ${action.data.portalName}`);
+                        // Highlight the portal
+                        this.world.portals.forEach(portal => {
+                            if (portal.userData.name === action.data.portalName) {
+                                portal.userData.material.uniforms.color1.value = new THREE.Color(0xff0000);
+                                setTimeout(() => {
+                                    portal.userData.material.uniforms.color1.value = new THREE.Color(CURRENT_WORLD.portalColor1);
+                                }, 1000);
+                            }
+                        });
                         break;
 
                     case 'chat':
@@ -3011,7 +3167,11 @@
 
             stopPlayback() {
                 this.isPlaying = false;
+                this.isPaused = false;
+                this.stepByStep = false;
+                this.currentScene = null;
                 document.getElementById('replay-overlay').classList.remove('active');
+                document.getElementById('replay-controls').classList.remove('active');
                 document.getElementById('scene-timeline').style.display = 'none';
                 this.world.showNotification('Playback complete!');
             }
@@ -3117,6 +3277,7 @@
                         </div>
                         <div class="scene-item-actions">
                             <button class="scene-action-btn play" onclick="window.worldNavigator.sceneRecorder.playScene('${sceneId}')">▶️ Play</button>
+                            <button class="scene-action-btn" onclick="window.worldNavigator.sceneRecorder.playScene('${sceneId}', true)">⏭️ Step</button>
                             <button class="scene-action-btn delete" onclick="window.worldNavigator.sceneRecorder.deleteScene('${sceneId}')">Delete</button>
                         </div>
                     `;
@@ -3152,7 +3313,7 @@
             }
         }
 
-        // Portal Manager Class
+        // Enhanced Portal Manager Class with Fast Travel
         class PortalManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3218,12 +3379,36 @@
                             <div class="portal-item-location">${locationText}</div>
                         </div>
                         <div class="portal-item-actions">
+                            <button class="portal-action-btn enter" onclick="window.worldNavigator.portalManager.fastTravel('${portal.url || portal.raw_url || '#'}', '${portal.name}')">Enter</button>
                             ${portal.isCustom ? `<button class="portal-action-btn delete" onclick="window.worldNavigator.portalManager.removePortal('${portal.id}')">Remove</button>` : ''}
                         </div>
                     `;
                     
+                    // Make the entire item clickable for fast travel
+                    portalItem.onclick = (e) => {
+                        if (!e.target.classList.contains('portal-action-btn')) {
+                            this.fastTravel(portal.url || portal.raw_url || '#', portal.name);
+                        }
+                    };
+                    
                     portalList.appendChild(portalItem);
                 });
+            }
+
+            fastTravel(url, portalName) {
+                // Record the fast travel action if recording
+                if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                    this.world.sceneRecorder.recordPortalInteraction(portalName, url);
+                }
+
+                // Close the modal
+                this.hideModal();
+
+                // Show notification
+                this.world.showNotification(`Fast traveling to ${portalName}...`);
+
+                // Enter the world
+                this.world.enterWorld(url);
             }
 
             exportPortals() {
@@ -3353,13 +3538,15 @@
             }
         }
 
-        // Updated Task Manager for conversation replay
+        // Enhanced Task Manager for step-by-step conversation replay
         class TaskManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
                 this.conversations = new Map(); // Store imported conversations
                 this.currentReplay = null;
                 this.isReplaying = false;
+                this.isPaused = false;
+                this.stepByStep = false;
 
                 this.setupEventListeners();
             }
@@ -3405,7 +3592,7 @@
                             ${conversation.guid ? 'User ID: ' + conversation.guid.slice(0, 8) + '...' : 'No user ID'}
                         </div>
                     `;
-                    taskEl.onclick = () => this.replayConversation(conversationId);
+                    taskEl.onclick = () => this.startConversationReplay(conversationId);
                     taskList.appendChild(taskEl);
                 });
             }
@@ -3442,9 +3629,15 @@
                 event.target.value = '';
             }
 
-            async replayConversation(conversationId) {
+            async startConversationReplay(conversationId) {
                 const conversation = this.conversations.get(conversationId);
                 if (!conversation) return;
+
+                // Start recording if not already recording
+                if (this.world.sceneRecorder && !this.world.sceneRecorder.isRecording) {
+                    this.world.sceneRecorder.startRecording();
+                    this.world.showNotification('Recording started for conversation replay');
+                }
 
                 // Show notification
                 this.world.showNotification(`Starting conversation replay...`);
@@ -3452,8 +3645,9 @@
                 // Open chat interface
                 document.getElementById('ai-chat-interface').classList.add('active');
 
-                // Show replay indicator
+                // Show replay indicator and controls
                 document.getElementById('task-replay-indicator').classList.add('active');
+                document.getElementById('replay-controls').classList.add('active');
 
                 // Clear current chat
                 const chatMessages = document.getElementById('ai-chat-messages');
@@ -3461,16 +3655,30 @@
 
                 // Set replaying flag
                 this.isReplaying = true;
+                this.stepByStep = true;
+                this.isPaused = true;
                 this.currentReplay = {
                     conversation: conversation,
                     currentIndex: 0
                 };
 
-                // Start replay
-                await this.replayNextMessage();
+                // Update controls
+                this.updateReplayControls();
+
+                // Show first message
+                await this.showNextMessage();
             }
 
-            async replayNextMessage() {
+            updateReplayControls() {
+                const status = document.getElementById('replay-status');
+                if (this.currentReplay) {
+                    const current = this.currentReplay.currentIndex + 1;
+                    const total = this.currentReplay.conversation.conversation.length;
+                    status.textContent = `Message ${current} of ${total}`;
+                }
+            }
+
+            async showNextMessage() {
                 if (!this.isReplaying || !this.currentReplay) return;
 
                 const { conversation, currentIndex } = this.currentReplay;
@@ -3483,13 +3691,33 @@
 
                 const message = conversation.conversation[currentIndex];
 
+                // Process the message
+                await this.processMessage(message);
+
+                // Update index
+                this.currentReplay.currentIndex++;
+                this.updateReplayControls();
+
+                // If not in step mode, continue automatically
+                if (!this.stepByStep && !this.isPaused) {
+                    const nextDelay = message.role === 'system' ? 500 : 2000;
+                    setTimeout(() => this.showNextMessage(), nextDelay);
+                }
+            }
+
+            async processMessage(message) {
                 // Add message to chat
                 if (message.role === 'user') {
                     this.addReplayMessage(message.content, 'user');
-                    // Record in scene recorder if active
+                    
+                    // Record in scene recorder
                     if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
                         this.world.sceneRecorder.recordChatMessage(message.content, 'user');
                     }
+
+                    // Simulate user movement
+                    this.simulateUserAction(message.content);
+                    
                 } else if (message.role === 'assistant') {
                     // Show typing indicator for assistant
                     this.world.aiManager.showTypingIndicator();
@@ -3505,10 +3733,14 @@
                         this.world.aiManager.animateTextResponse(message.content);
                     }
                     
-                    // Record in scene recorder if active
+                    // Record in scene recorder
                     if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
                         this.world.sceneRecorder.recordChatMessage(message.content, 'ai');
                     }
+
+                    // Simulate AI companion actions
+                    this.simulateAIAction(message.content);
+                    
                 } else if (message.role === 'system') {
                     // Show system messages differently
                     this.addReplayMessage(message.content, 'system');
@@ -3520,14 +3752,85 @@
                             this.world.aiManager.animateAgentLog(simplifiedLog);
                         }
                     }
+
+                    // Simulate system actions
+                    this.simulateSystemAction(message.content);
                 }
+            }
 
-                // Move to next message
-                this.currentReplay.currentIndex++;
+            simulateUserAction(messageContent) {
+                // Simulate user movement based on message content
+                const lowerContent = messageContent.toLowerCase();
+                
+                if (lowerContent.includes('portal') || lowerContent.includes('enter') || lowerContent.includes('go to')) {
+                    // Move camera towards a random portal
+                    const portalIndex = Math.floor(Math.random() * this.world.portals.length);
+                    const portal = this.world.portals[portalIndex];
+                    if (portal) {
+                        const targetPos = portal.parent.position.clone();
+                        targetPos.y = this.world.camera.position.y;
+                        
+                        // Animate camera movement
+                        const startPos = this.world.camera.position.clone();
+                        const animateMove = (progress) => {
+                            if (progress <= 1) {
+                                this.world.camera.position.lerpVectors(startPos, targetPos, progress);
+                                requestAnimationFrame(() => animateMove(progress + 0.02));
+                            }
+                        };
+                        animateMove(0);
+                    }
+                }
+                
+                if (lowerContent.includes('look') || lowerContent.includes('see') || lowerContent.includes('view')) {
+                    // Rotate camera
+                    const targetRotation = this.world.rotation.y + (Math.random() - 0.5) * Math.PI;
+                    const startRotation = this.world.rotation.y;
+                    const animateRotation = (progress) => {
+                        if (progress <= 1) {
+                            this.world.rotation.y = startRotation + (targetRotation - startRotation) * progress;
+                            requestAnimationFrame(() => animateRotation(progress + 0.02));
+                        }
+                    };
+                    animateRotation(0);
+                }
+            }
 
-                // Continue replay after delay
-                const nextDelay = message.role === 'system' ? 500 : 2000;
-                setTimeout(() => this.replayNextMessage(), nextDelay);
+            simulateAIAction(messageContent) {
+                // Simulate AI companion movement based on response
+                if (!this.world.aiManager || !this.world.aiManager.isActive) return;
+                
+                const companion = this.world.aiManager.companions.get('ai-assistant');
+                if (!companion) return;
+
+                const lowerContent = messageContent.toLowerCase();
+                
+                if (lowerContent.includes('follow') || lowerContent.includes('come') || lowerContent.includes('join')) {
+                    // Move companion closer to camera
+                    const targetPos = this.world.camera.position.clone();
+                    targetPos.x += 3;
+                    targetPos.z += 3;
+                    companion.object.position.lerp(targetPos, 0.1);
+                }
+                
+                if (lowerContent.includes('portal') || lowerContent.includes('world')) {
+                    // Make companion orbit around its position
+                    companion.orb.material.emissiveIntensity = 0.8;
+                    companion.light.intensity = 4;
+                }
+            }
+
+            simulateSystemAction(messageContent) {
+                // Simulate world changes based on system messages
+                if (messageContent.includes('Workshop Initialized')) {
+                    // Flash all portals
+                    this.world.portals.forEach(portal => {
+                        portal.userData.material.uniforms.color2.value = new THREE.Color(0x00ff00);
+                        setTimeout(() => {
+                            portal.userData.material.uniforms.color2.value = new THREE.Color(CURRENT_WORLD.portalColor2);
+                        }, 500);
+                    });
+                }
             }
 
             extractWorkshopStatus(systemMessage) {
@@ -3562,14 +3865,49 @@
                 }
             }
 
+            toggleReplayPause() {
+                if (!this.isReplaying) return;
+                
+                this.isPaused = !this.isPaused;
+                const btn = document.getElementById('replay-play-pause');
+                btn.textContent = this.isPaused ? '▶️ Play' : '⏸️ Pause';
+
+                if (!this.isPaused && this.stepByStep) {
+                    this.stepByStep = false;
+                    this.showNextMessage();
+                }
+            }
+
+            nextReplayStep() {
+                if (!this.isReplaying || !this.currentReplay) return;
+
+                if (this.currentReplay.currentIndex < this.currentReplay.conversation.conversation.length) {
+                    this.showNextMessage();
+                } else {
+                    this.world.showNotification('Reached end of conversation');
+                }
+            }
+
+            stopReplay() {
+                this.endReplay();
+            }
+
             endReplay() {
                 this.isReplaying = false;
+                this.isPaused = false;
+                this.stepByStep = false;
                 this.currentReplay = null;
                 
-                // Hide replay indicator
+                // Hide replay indicator and controls
                 document.getElementById('task-replay-indicator').classList.remove('active');
+                document.getElementById('replay-controls').classList.remove('active');
                 
                 this.world.showNotification('Conversation replay completed!');
+
+                // Stop recording if it was started for this replay
+                if (this.world.sceneRecorder && this.world.sceneRecorder.isRecording) {
+                    this.world.sceneRecorder.stopRecording();
+                }
             }
 
             delay(ms) {
@@ -3577,7 +3915,7 @@
             }
         }
 
-        // World Creator Class
+        // World Creator Class (unchanged)
         class WorldCreator {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3810,7 +4148,7 @@
             }
         }
 
-        // AI Manager Class (Modified to work with scene recording)
+        // Main AI Manager Class (unchanged except for integration with replay controls)
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3913,6 +4251,25 @@
                 this.aiModal.addEventListener('click', (e) => {
                     if (e.target === this.aiModal) {
                         this.aiModal.classList.remove('show');
+                    }
+                });
+
+                // Connect replay controls to task manager
+                document.getElementById('replay-play-pause').addEventListener('click', () => {
+                    if (this.world.taskManager && this.world.taskManager.isReplaying) {
+                        this.world.taskManager.toggleReplayPause();
+                    }
+                });
+
+                document.getElementById('replay-next-step').addEventListener('click', () => {
+                    if (this.world.taskManager && this.world.taskManager.isReplaying) {
+                        this.world.taskManager.nextReplayStep();
+                    }
+                });
+
+                document.getElementById('replay-stop').addEventListener('click', () => {
+                    if (this.world.taskManager && this.world.taskManager.isReplaying) {
+                        this.world.taskManager.stopReplay();
                     }
                 });
             }
@@ -4588,7 +4945,7 @@
             }
         }
 
-        // GPS Manager Class
+        // GPS Manager Class (unchanged)
         class GPSManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -4773,7 +5130,7 @@
             }
         }
 
-        // Map Manager Class
+        // Map Manager Class (unchanged)
         class MapManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -5074,7 +5431,7 @@
             }
         }
 
-        // Multiplayer Manager Class (Fixed)
+        // Multiplayer Manager Class (unchanged)
         class MultiplayerManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -5544,6 +5901,7 @@
             }
         }
 
+        // Main World Navigator Class
         class WorldNavigator {
             constructor() {
                 this.scene = null;

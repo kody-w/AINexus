@@ -745,7 +745,9 @@
                 this.cart = [];
                 this.selectedCompanion = null;
                 this.currentInterview = null;
-                this.apiKey = inheritedParams.aiKey;
+                
+                // Load API key from localStorage or inherited params
+                this.apiKey = localStorage.getItem('ai_companion_api_key') || inheritedParams.aiKey;
 
                 this.moveSpeed = 0.15;
                 this.lookSpeed = 0.002;
@@ -764,21 +766,28 @@
             }
 
             async init() {
-                this.setupScene();
-                this.setupLighting();
-                this.createStore();
-                this.createCompanions();
-                this.setupEventListeners();
+                try {
+                    this.setupScene();
+                    this.setupLighting();
+                    this.createStore();
+                    this.createCompanions();
+                    this.setupEventListeners();
 
-                if (this.isMobile) {
-                    document.getElementById('mobile-controls').classList.add('show');
+                    if (this.isMobile) {
+                        document.getElementById('mobile-controls').classList.add('show');
+                    }
+
+                    // Initialize Store AI
+                    this.initializeStoreAI();
+
+                    document.getElementById('loading').style.display = 'none';
+                    this.animate();
+
+                    console.log('Store initialized successfully');
+                } catch (error) {
+                    console.error('Initialization error:', error);
+                    alert('Error initializing store: ' + error.message);
                 }
-
-                // Initialize Store AI
-                this.initializeStoreAI();
-
-                document.getElementById('loading').style.display = 'none';
-                this.animate();
             }
 
             setupScene() {
@@ -797,11 +806,12 @@
             }
 
             setupLighting() {
-                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                // Very bright ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 1);
                 this.scene.add(ambientLight);
 
                 // Main showcase light
-                const showcaseLight = new THREE.SpotLight(0xffffff, 2);
+                const showcaseLight = new THREE.SpotLight(0xffffff, 3);
                 showcaseLight.position.set(0, 20, 0);
                 showcaseLight.angle = Math.PI / 2;
                 showcaseLight.penumbra = 0.5;
@@ -810,10 +820,18 @@
                 showcaseLight.shadow.mapSize.height = 2048;
                 this.scene.add(showcaseLight);
 
-                // Directional light for better visibility
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                dirLight.position.set(5, 10, 5);
-                this.scene.add(dirLight);
+                // Multiple directional lights
+                const dirLight1 = new THREE.DirectionalLight(0xffffff, 1);
+                dirLight1.position.set(5, 10, 5);
+                this.scene.add(dirLight1);
+
+                const dirLight2 = new THREE.DirectionalLight(0xffffff, 1);
+                dirLight2.position.set(-5, 10, -5);
+                this.scene.add(dirLight2);
+
+                const dirLight3 = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight3.position.set(0, 10, 10);
+                this.scene.add(dirLight3);
             }
 
             createStore() {
@@ -873,6 +891,8 @@
             }
 
             createCompanions() {
+                console.log(`Creating ${AI_COMPANIONS.length} companions`);
+                
                 AI_COMPANIONS.forEach((companion, index) => {
                     const angle = (index / 6) * Math.PI * 2;
                     const radius = 12;
@@ -882,78 +902,93 @@
                         Math.sin(angle) * radius
                     );
 
-                    this.createCompanionDisplay(companion, position);
+                    this.createCompanionDisplay(companion, position, index);
                 });
+
+                console.log(`Created ${this.companions.size} companion displays`);
             }
 
-            createCompanionDisplay(companion, position) {
+            createCompanionDisplay(companion, position, index) {
                 const group = new THREE.Group();
 
-                // AI Core (floating geometric shape)
-                const geometry = new THREE.IcosahedronGeometry(1, 2);
-                const material = new THREE.MeshStandardMaterial({
+                // Simple glowing sphere as main visual
+                const geometry = new THREE.SphereGeometry(1, 32, 32);
+                const material = new THREE.MeshBasicMaterial({
                     color: companion.color,
                     emissive: companion.color,
-                    emissiveIntensity: 0.5,
-                    roughness: 0.2,
-                    metalness: 0.8,
-                    wireframe: false
+                    emissiveIntensity: 1
                 });
 
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.castShadow = true;
                 mesh.userData = { companion: companion };
 
-                // Outer shell (transparent)
-                const shellGeometry = new THREE.IcosahedronGeometry(1.5, 1);
-                const shellMaterial = new THREE.MeshBasicMaterial({
+                // Glowing effect with larger transparent sphere
+                const glowGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({
                     color: companion.color,
                     transparent: true,
-                    opacity: 0.1,
-                    wireframe: true
+                    opacity: 0.3
                 });
-                const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+                const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
 
-                // Particle ring
+                // Create ring around companion
+                const ringGeometry = new THREE.TorusGeometry(2, 0.1, 16, 100);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    color: companion.color,
+                    emissive: companion.color,
+                    emissiveIntensity: 0.5
+                });
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+
+                // Create particles
                 const particleCount = 30;
                 const particleGeometry = new THREE.BufferGeometry();
                 const positions = new Float32Array(particleCount * 3);
 
                 for (let i = 0; i < particleCount; i++) {
                     const angle = (i / particleCount) * Math.PI * 2;
-                    positions[i * 3] = Math.cos(angle) * 2;
-                    positions[i * 3 + 1] = 0;
-                    positions[i * 3 + 2] = Math.sin(angle) * 2;
+                    positions[i * 3] = Math.cos(angle) * 2.5;
+                    positions[i * 3 + 1] = (Math.random() - 0.5) * 2;
+                    positions[i * 3 + 2] = Math.sin(angle) * 2.5;
                 }
 
                 particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
                 const particleMaterial = new THREE.PointsMaterial({
                     color: companion.color,
-                    size: 0.1,
+                    size: 0.2,
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 1,
+                    sizeAttenuation: true
                 });
                 const particles = new THREE.Points(particleGeometry, particleMaterial);
 
+                // Add everything to group
                 group.add(mesh);
-                group.add(shell);
+                group.add(glowMesh);
+                group.add(ring);
                 group.add(particles);
                 group.position.copy(position);
 
-                // Point light
-                const light = new THREE.PointLight(companion.color, 0.5, 5);
+                // Add bright point light
+                const light = new THREE.PointLight(companion.color, 2, 10);
                 light.position.copy(position);
                 this.scene.add(light);
 
                 this.companions.set(companion.id, { 
                     group, 
                     mesh, 
-                    shell, 
+                    glowMesh,
+                    ring,
                     particles, 
                     light,
-                    companion 
+                    companion,
+                    initialY: position.y
                 });
+                
                 this.scene.add(group);
+                console.log(`Created companion: ${companion.name} at position ${position.x}, ${position.y}, ${position.z}`);
             }
 
             initializeStoreAI() {
@@ -968,6 +1003,8 @@
                         const key = prompt('Please enter your API key to activate the Store AI assistant:');
                         if (key) {
                             this.apiKey = key;
+                            // Save to localStorage for future use
+                            localStorage.setItem('ai_companion_api_key', key);
                             this.showStoreAIMessage("Thank you! I'm now fully activated and ready to help you find the perfect AI companion.", 4000);
                         }
                     } else {
@@ -1232,14 +1269,14 @@
                 
                 // Reset previous highlights
                 this.companions.forEach((companionData) => {
-                    companionData.shell.material.opacity = 0.1;
-                    companionData.light.intensity = 0.5;
+                    companionData.glowMesh.material.opacity = 0.3;
+                    companionData.light.intensity = 2;
                 });
                 
                 const info = document.getElementById('companion-info');
                 document.getElementById('companion-name').textContent = companion.name;
                 document.getElementById('companion-type').textContent = companion.type;
-                document.getElementById('companion-price').textContent = `${companion.price}/month`;
+                document.getElementById('companion-price').textContent = `$${companion.price}/month`;
                 document.getElementById('companion-description').textContent = companion.description;
                 
                 // Display abilities
@@ -1261,8 +1298,8 @@
                 // Highlight selected companion
                 const companionData = this.companions.get(companion.id);
                 if (companionData) {
-                    companionData.shell.material.opacity = 0.3;
-                    companionData.light.intensity = 1;
+                    companionData.glowMesh.material.opacity = 0.6;
+                    companionData.light.intensity = 4;
                 }
 
                 // Store AI responds
@@ -1276,6 +1313,8 @@
                     const key = prompt('Please enter your API key to start the AI interview process:');
                     if (key) {
                         this.apiKey = key;
+                        // Save to localStorage for future use
+                        localStorage.setItem('ai_companion_api_key', key);
                     } else {
                         return;
                     }
@@ -1530,21 +1569,19 @@
 
                 // Animate companions
                 this.companions.forEach((companionData, id) => {
-                    const { group, mesh, shell, particles } = companionData;
+                    const { group, mesh, ring, particles, initialY } = companionData;
                     
                     // Core rotation
-                    mesh.rotation.x = time * 0.5;
-                    mesh.rotation.y = time * 0.3;
+                    mesh.rotation.y = time * 0.5;
                     
-                    // Shell rotation
-                    shell.rotation.x = -time * 0.2;
-                    shell.rotation.y = time * 0.4;
+                    // Ring rotation
+                    ring.rotation.z = time * 0.3;
                     
-                    // Particle ring rotation
+                    // Particle rotation
                     particles.rotation.y = time * 0.8;
                     
                     // Floating animation
-                    group.position.y = 4 + Math.sin(time * 2 + id) * 0.3;
+                    group.position.y = initialY + Math.sin(time * 2 + id) * 0.3;
                     
                     // Pulse effect
                     const scale = 1 + Math.sin(time * 3 + id) * 0.05;

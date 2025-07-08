@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Village - Living World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #87CEEB;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Village HUD */
+        .village-hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            max-width: 300px;
+        }
+
+        .village-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+
+        .village-stats {
+            display: grid;
+            gap: 10px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        /* Villager Dialogue Box */
+        .dialogue-box {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.98);
+            padding: 20px 30px;
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 90%;
+            display: none;
+            z-index: 200;
+        }
+
+        .dialogue-box.active {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .dialogue-speaker {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .villager-emoji {
+            font-size: 24px;
+        }
+
+        .dialogue-text {
+            color: #4a5568;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        .dialogue-options {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .dialogue-option {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .dialogue-option:hover {
+            background: #3182ce;
+            transform: translateY(-2px);
+        }
+
+        /* Activity Log */
+        .activity-log {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            max-width: 350px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Speech Bubble */
+        .speech-bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            color: #2d3748;
+            max-width: 200px;
+            z-index: 200;
+            pointer-events: none;
+            animation: fadeInBounce 0.5s ease;
+        }
+
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid rgba(255, 255, 255, 0.95);
+        }
+
+        @keyframes fadeInBounce {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .activity-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+
+        .activity-item {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #2d3748;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .activity-time {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 5px;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 10px;
+            z-index: 150;
+        }
+
+        .control-btn {
+            background: white;
+            border: 2px solid #e2e8f0;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Settings Modal */
+        .settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+        }
+
+        .settings-modal.active {
+            display: flex;
+        }
+
+        .settings-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .settings-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+
+        .settings-section {
+            margin-bottom: 25px;
+        }
+
+        .settings-section h3 {
+            font-size: 18px;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .settings-btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        .settings-btn:hover {
+            background: #3182ce;
+        }
+
+        .settings-btn.secondary {
+            background: #718096;
+        }
+
+        .settings-btn.secondary:hover {
+            background: #4a5568;
+        }
+
+        /* Villager Info Panel */
+        .villager-info {
+            position: fixed;
+            left: 20px;
+            bottom: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            display: none;
+            max-width: 300px;
+        }
+
+        .villager-info.active {
+            display: block;
+        }
+
+        .villager-info-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .villager-avatar {
+            font-size: 40px;
+        }
+
+        .villager-details h3 {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .villager-personality {
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .villager-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .villager-stat {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 8px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .villager-stat-label {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .villager-stat-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #87CEEB;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-emoji {
+            font-size: 80px;
+            animation: bounce 1s ease infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .loading-text {
+            font-size: 24px;
+            color: white;
+            margin-top: 20px;
+            font-weight: 300;
+        }
+
+        /* Weather Effects */
+        .weather-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 18px;
+            z-index: 400;
+            display: none;
+        }
+
+        .notification.active {
+            display: block;
+            animation: fadeInOut 3s ease;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            10%, 90% { opacity: 1; }
+        }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 15px;
+            z-index: 150;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex;
+            }
+
+            .village-hud {
+                top: 10px;
+                left: 10px;
+                padding: 15px;
+                max-width: 200px;
+            }
+
+            .activity-log {
+                display: none;
+            }
+        }
+
+        .mobile-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loading-screen">
+        <div class="loading-emoji">🏘️</div>
+        <div class="loading-text">Creating your village...</div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div id="canvas-container">
+        <canvas id="village-canvas"></canvas>
+    </div>
+
+    <!-- Weather Overlay -->
+    <div class="weather-overlay" id="weather-overlay"></div>
+
+    <!-- Village HUD -->
+    <div class="village-hud">
+        <div class="village-name" id="village-name">Loading Village...</div>
+        <div class="village-stats">
+            <div class="stat-item">
+                <span class="stat-label">Population</span>
+                <span class="stat-value" id="population">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Happiness</span>
+                <span class="stat-value" id="happiness">0%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Time</span>
+                <span class="stat-value" id="game-time">6:00 AM</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Weather</span>
+                <span class="stat-value" id="weather">☀️ Sunny</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="activity-log">
+        <div class="activity-title">Village Activity</div>
+        <div id="activity-list"></div>
+    </div>
+
+    <!-- Villager Info Panel -->
+    <div class="villager-info" id="villager-info">
+        <div class="villager-info-header">
+            <div class="villager-avatar" id="villager-avatar">🐻</div>
+            <div class="villager-details">
+                <h3 id="villager-name">Villager</h3>
+                <div class="villager-personality" id="villager-personality">Friendly</div>
+            </div>
+        </div>
+        <div class="villager-stats-grid">
+            <div class="villager-stat">
+                <div class="villager-stat-label">Happiness</div>
+                <div class="villager-stat-value" id="villager-happiness">100</div>
+            </div>
+            <div class="villager-stat">
+                <div class="villager-stat-label">Energy</div>
+                <div class="villager-stat-value" id="villager-energy">100</div>
+            </div>
+            <div class="villager-stat">
+                <div class="villager-stat-label">Friendship</div>
+                <div class="villager-stat-value" id="villager-friendship">0</div>
+            </div>
+            <div class="villager-stat">
+                <div class="villager-stat-label">Location</div>
+                <div class="villager-stat-value" id="villager-location">Home</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialogue Box -->
+    <div class="dialogue-box" id="dialogue-box">
+        <div class="dialogue-speaker">
+            <span class="villager-emoji" id="dialogue-emoji">🐻</span>
+            <span id="dialogue-speaker">Villager</span>
+        </div>
+        <div class="dialogue-text" id="dialogue-text">...</div>
+        <div class="dialogue-options" id="dialogue-options"></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <button class="control-btn" id="save-btn" title="Save Village">💾</button>
+        <button class="control-btn" id="load-btn" title="Load Village">📂</button>
+        <button class="control-btn" id="settings-btn" title="Settings">⚙️</button>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls">
+        <button class="mobile-btn" id="mobile-up">⬆️</button>
+        <button class="mobile-btn" id="mobile-down">⬇️</button>
+        <button class="mobile-btn" id="mobile-left">⬅️</button>
+        <button class="mobile-btn" id="mobile-right">➡️</button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settings-modal">
+        <div class="settings-content">
+            <h2 class="settings-title">Village Settings</h2>
+            
+            <div class="settings-section">
+                <h3>API Configuration</h3>
+                <input type="password" class="api-key-input" id="api-key-input" placeholder="Enter your API key">
+                <button class="settings-btn" id="save-api-key">Save API Key</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>Village Management</h3>
+                <button class="settings-btn" id="export-village">Export Village</button>
+                <button class="settings-btn" id="import-village">Import Village</button>
+                <input type="file" id="import-file" accept=".json" style="display: none;">
+                <button class="settings-btn secondary" id="reset-village">Reset Village</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>Game Settings</h3>
+                <label>
+                    <input type="checkbox" id="auto-save" checked> Auto-save every 5 minutes
+                </label>
+            </div>
+
+            <button class="settings-btn" id="close-settings">Close</button>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Village AI System
+        class VillageAISystem {
+            constructor() {
+                this.apiKey = localStorage.getItem('village_api_key') || null;
+                this.apiEndpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.villageData = this.loadVillageData();
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.clock = new THREE.Clock();
+                
+                // Game state
+                this.isPaused = false;
+                this.selectedVillager = null;
+                this.playerPosition = { x: 0, z: 0 };
+                this.timeSpeed = 1;
+                this.speechBubbles = new Map(); // Track speech bubbles
+                
+                // AI update intervals
+                this.lastAIUpdate = 0;
+                this.aiUpdateInterval = 3000; // Update AI every 3 seconds (faster for more visible activity)
+                this.lastActivityUpdate = 0;
+                this.activityUpdateInterval = 8000; // Update activities every 8 seconds
+                
+                // Autonomous systems
+                this.weatherSystem = new WeatherSystem(this);
+                this.timeSystem = new TimeSystem(this);
+                this.conversationSystem = new ConversationSystem(this);
+                this.activitySystem = new ActivitySystem(this);
+                
+                this.init();
+            }
+
+            loadVillageData() {
+                const saved = localStorage.getItem('village_data');
+                if (saved) {
+                    return JSON.parse(saved);
+                }
+                
+                // Default village data
+                return {
+                    name: "New Horizons",
+                    id: this.generateId(),
+                    created: new Date().toISOString(),
+                    lastPlayed: new Date().toISOString(),
+                    stats: {
+                        population: 0,
+                        happiness: 75,
+                        resources: {
+                            bells: 1000,
+                            wood: 10,
+                            stone: 5,
+                            fruit: 20
+                        }
+                    },
+                    villagers: [],
+                    buildings: this.generateDefaultBuildings(),
+                    environment: {
+                        time: 6, // 6 AM
+                        weather: 'sunny',
+                        season: 'spring'
+                    },
+                    player: {
+                        name: "Player",
+                        position: { x: 0, z: 0 },
+                        inventory: [],
+                        relationships: {}
+                    }
+                };
+            }
+
+            generateId() {
+                return 'village_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            generateDefaultBuildings() {
+                return [
+                    { type: 'townhall', position: { x: 0, z: -20 }, name: 'Town Hall' },
+                    { type: 'shop', position: { x: -30, z: 0 }, name: "Tom's Shop" },
+                    { type: 'museum', position: { x: 30, z: 0 }, name: 'Museum' },
+                    { type: 'house', position: { x: -20, z: 20 }, name: 'Player House' }
+                ];
+            }
+
+            async init() {
+                this.setupThreeJS();
+                this.setupEventListeners();
+                this.createVillageEnvironment();
+                
+                // Check API key
+                if (this.apiKey) {
+                    await this.initializeVillagers();
+                    this.startAutonomousSystems();
+                } else {
+                    this.showNotification("Please set your API key in settings to activate AI villagers");
+                }
+                
+                // Hide loading screen
+                setTimeout(() => {
+                    document.getElementById('loading-screen').classList.add('hidden');
+                }, 1000);
+                
+                this.updateUI();
+                this.animate();
+                
+                // Auto-save
+                if (document.getElementById('auto-save').checked) {
+                    setInterval(() => this.saveVillageData(), 300000); // Every 5 minutes
+                }
+            }
+
+            setupThreeJS() {
+                const canvas = document.getElementById('village-canvas');
+                
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
+                
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(0, 30, 40);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    canvas: canvas,
+                    antialias: true,
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(50, 100, 50);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.near = 0.1;
+                directionalLight.shadow.camera.far = 200;
+                directionalLight.shadow.camera.left = -50;
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                this.scene.add(directionalLight);
+            }
+
+            createVillageEnvironment() {
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(200, 200, 20, 20);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x7CFC00,
+                    roughness: 0.8
+                });
+                
+                // Add some terrain variation
+                const vertices = groundGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i + 2] = Math.sin(vertices[i] * 0.05) * Math.cos(vertices[i + 1] * 0.05) * 2;
+                }
+                groundGeometry.computeVertexNormals();
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+                
+                // Trees
+                this.createTrees();
+                
+                // Buildings
+                this.createBuildings();
+                
+                // River
+                this.createRiver();
+                
+                // Paths
+                this.createPaths();
+            }
+
+            createTrees() {
+                const treePositions = [
+                    { x: -40, z: -40 }, { x: 40, z: -40 },
+                    { x: -40, z: 40 }, { x: 40, z: 40 },
+                    { x: -60, z: 0 }, { x: 60, z: 0 },
+                    { x: 0, z: -60 }, { x: 0, z: 60 }
+                ];
+                
+                treePositions.forEach(pos => {
+                    const tree = this.createTree();
+                    tree.position.set(pos.x, 0, pos.z);
+                    this.scene.add(tree);
+                });
+            }
+
+            createTree() {
+                const tree = new THREE.Group();
+                
+                // Trunk
+                const trunkGeometry = new THREE.CylinderGeometry(1, 1.5, 8);
+                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = 4;
+                trunk.castShadow = true;
+                tree.add(trunk);
+                
+                // Leaves
+                const leavesGeometry = new THREE.SphereGeometry(5, 8, 6);
+                const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = 10;
+                leaves.castShadow = true;
+                tree.add(leaves);
+                
+                return tree;
+            }
+
+            createBuildings() {
+                this.villageData.buildings.forEach(buildingData => {
+                    const building = this.createBuilding(buildingData.type);
+                    building.position.set(buildingData.position.x, 0, buildingData.position.z);
+                    building.userData = buildingData;
+                    this.scene.add(building);
+                });
+            }
+
+            createBuilding(type) {
+                const building = new THREE.Group();
+                
+                let color, width, height, depth;
+                switch(type) {
+                    case 'townhall':
+                        color = 0xFFD700;
+                        width = 15;
+                        height = 20;
+                        depth = 15;
+                        break;
+                    case 'shop':
+                        color = 0x4169E1;
+                        width = 12;
+                        height = 15;
+                        depth = 12;
+                        break;
+                    case 'museum':
+                        color = 0x8B4513;
+                        width = 20;
+                        height = 18;
+                        depth = 15;
+                        break;
+                    case 'house':
+                        color = 0xFFB6C1;
+                        width = 10;
+                        height = 12;
+                        depth = 10;
+                        break;
+                    default:
+                        color = 0xC0C0C0;
+                        width = 10;
+                        height = 10;
+                        depth = 10;
+                }
+                
+                // Building base
+                const baseGeometry = new THREE.BoxGeometry(width, height, depth);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: color });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = height / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                building.add(base);
+                
+                // Roof
+                const roofGeometry = new THREE.ConeGeometry(width * 0.8, height * 0.3, 4);
+                const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000 });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = height + height * 0.15;
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                building.add(roof);
+                
+                return building;
+            }
+
+            createRiver() {
+                const riverGeometry = new THREE.PlaneGeometry(20, 200);
+                const riverMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x4682B4,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const river = new THREE.Mesh(riverGeometry, riverMaterial);
+                river.rotation.x = -Math.PI / 2;
+                river.position.set(-70, 0.1, 0);
+                this.scene.add(river);
+            }
+
+            createPaths() {
+                const pathMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xD2691E,
+                    roughness: 0.9
+                });
+                
+                // Main paths
+                const paths = [
+                    { width: 5, length: 40, position: { x: 0, z: 0 }, rotation: 0 },
+                    { width: 5, length: 40, position: { x: 0, z: 0 }, rotation: Math.PI / 2 }
+                ];
+                
+                paths.forEach(pathData => {
+                    const pathGeometry = new THREE.PlaneGeometry(pathData.width, pathData.length);
+                    const path = new THREE.Mesh(pathGeometry, pathMaterial);
+                    path.rotation.x = -Math.PI / 2;
+                    path.rotation.z = pathData.rotation;
+                    path.position.set(pathData.position.x, 0.05, pathData.position.z);
+                    this.scene.add(path);
+                });
+            }
+
+            async initializeVillagers() {
+                // Create initial villagers if none exist
+                if (this.villageData.villagers.length === 0) {
+                    await this.createInitialVillagers();
+                } else {
+                    // Load existing villagers
+                    this.villageData.villagers.forEach(villagerData => {
+                        this.createVillager3D(villagerData);
+                    });
+                }
+                
+                this.villageData.stats.population = this.villageData.villagers.length;
+            }
+
+            async createInitialVillagers() {
+                const initialVillagers = [
+                    { name: "Tom", emoji: "🦝", personality: "entrepreneurial" },
+                    { name: "Isabelle", emoji: "🐕", personality: "helpful" },
+                    { name: "Blathers", emoji: "🦉", personality: "scholarly" }
+                ];
+                
+                for (const villagerBase of initialVillagers) {
+                    const villagerData = await this.generateVillagerPersonality(villagerBase);
+                    this.villageData.villagers.push(villagerData);
+                    this.createVillager3D(villagerData);
+                }
+            }
+
+            async generateVillagerPersonality(baseData) {
+                try {
+                    const prompt = `You are creating a personality for ${baseData.name}, a ${baseData.personality} villager in an Animal Crossing style village. Generate their traits, likes, dislikes, and initial dialogue.`;
+                    
+                    const response = await this.callAPI(prompt);
+                    
+                    // Parse AI response or use defaults
+                    const villagerData = {
+                        id: this.generateId(),
+                        name: baseData.name,
+                        emoji: baseData.emoji,
+                        personality: baseData.personality,
+                        position: {
+                            x: Math.random() * 60 - 30,
+                            z: Math.random() * 60 - 30
+                        },
+                        stats: {
+                            happiness: 80,
+                            energy: 100,
+                            friendship: 0
+                        },
+                        currentActivity: "wandering",
+                        home: this.assignHome(),
+                        traits: response.traits || ["friendly", "curious"],
+                        likes: response.likes || ["flowers", "conversation"],
+                        dislikes: response.dislikes || ["rain", "bugs"],
+                        schedule: this.generateSchedule(),
+                        memory: [],
+                        relationships: {}
+                    };
+                    
+                    return villagerData;
+                } catch (error) {
+                    console.error('Error generating villager personality:', error);
+                    return this.getDefaultVillagerData(baseData);
+                }
+            }
+
+            getDefaultVillagerData(baseData) {
+                return {
+                    id: this.generateId(),
+                    name: baseData.name,
+                    emoji: baseData.emoji,
+                    personality: baseData.personality,
+                    position: {
+                        x: Math.random() * 60 - 30,
+                        z: Math.random() * 60 - 30
+                    },
+                    stats: {
+                        happiness: 80,
+                        energy: 100,
+                        friendship: 0
+                    },
+                    currentActivity: "wandering",
+                    home: this.assignHome(),
+                    traits: ["friendly", "curious"],
+                    likes: ["flowers", "conversation"],
+                    dislikes: ["rain", "bugs"],
+                    schedule: this.generateSchedule(),
+                    memory: [],
+                    relationships: {}
+                };
+            }
+
+            assignHome() {
+                const homePosition = {
+                    x: Math.random() * 40 - 20,
+                    z: Math.random() * 40 - 20 + 30
+                };
+                
+                // Add house to buildings
+                this.villageData.buildings.push({
+                    type: 'house',
+                    position: homePosition,
+                    name: 'Villager House'
+                });
+                
+                return homePosition;
+            }
+
+            generateSchedule() {
+                return {
+                    6: "wake_up",
+                    7: "breakfast",
+                    8: "morning_activity",
+                    12: "lunch",
+                    14: "afternoon_activity",
+                    18: "dinner",
+                    20: "evening_activity",
+                    22: "sleep"
+                };
+            }
+
+            createVillager3D(villagerData) {
+                const villager = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(2, 2, 5);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                    color: this.getVillagerColor(villagerData.personality)
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 2.5;
+                body.castShadow = true;
+                villager.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(1.5);
+                const head = new THREE.Mesh(headGeometry, bodyMaterial);
+                head.position.y = 6;
+                head.castShadow = true;
+                villager.add(head);
+                
+                // Emoji sprite
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                ctx.font = '100px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(villagerData.emoji, 64, 64);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(4, 4, 1);
+                sprite.position.y = 8;
+                villager.add(sprite);
+                
+                // Set position and data
+                villager.position.set(
+                    villagerData.position.x,
+                    0,
+                    villagerData.position.z
+                );
+                villager.userData = villagerData;
+                
+                this.scene.add(villager);
+                villagerData.object3D = villager;
+            }
+
+            getVillagerColor(personality) {
+                const colors = {
+                    entrepreneurial: 0x4169E1,
+                    helpful: 0xFFD700,
+                    scholarly: 0x8B4513,
+                    lazy: 0x90EE90,
+                    peppy: 0xFF69B4,
+                    cranky: 0x696969,
+                    snooty: 0x9370DB,
+                    jock: 0xFF4500
+                };
+                return colors[personality] || 0x4682B4;
+            }
+
+            async callAPI(prompt, conversationHistory = []) {
+                if (!this.apiKey) {
+                    throw new Error('API key not set');
+                }
+                
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'x-functions-key': this.apiKey
+                };
+                
+                const body = {
+                    user_input: prompt,
+                    conversation_history: conversationHistory,
+                    user_guid: this.villageData.id
+                };
+                
+                try {
+                    const response = await fetch(this.apiEndpoint, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(body)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`API request failed: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    return this.parseAIResponse(data.assistant_response);
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    return null;
+                }
+            }
+
+            parseAIResponse(response) {
+                // Try to extract structured data from AI response
+                try {
+                    // Look for JSON in the response
+                    const jsonMatch = response.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        return JSON.parse(jsonMatch[0]);
+                    }
+                    
+                    // Otherwise return as dialogue
+                    return {
+                        dialogue: response,
+                        action: null,
+                        emotion: 'neutral'
+                    };
+                } catch (error) {
+                    return {
+                        dialogue: response,
+                        action: null,
+                        emotion: 'neutral'
+                    };
+                }
+            }
+
+            startAutonomousSystems() {
+                // Time system
+                this.timeSystem.start();
+                
+                // Weather system
+                this.weatherSystem.start();
+                
+                // Activity system
+                this.activitySystem.start();
+                
+                // Conversation system
+                this.conversationSystem.start();
+            }
+
+            async updateVillagerAI(deltaTime) {
+                const currentTime = Date.now();
+                
+                if (currentTime - this.lastAIUpdate > this.aiUpdateInterval) {
+                    this.lastAIUpdate = currentTime;
+                    
+                    for (const villager of this.villageData.villagers) {
+                        await this.updateSingleVillager(villager);
+                    }
+                }
+            }
+
+            async updateSingleVillager(villager) {
+                try {
+                    // Build context for AI decision
+                    const context = {
+                        villager: {
+                            name: villager.name,
+                            personality: villager.personality,
+                            stats: villager.stats,
+                            currentActivity: villager.currentActivity,
+                            position: villager.position
+                        },
+                        environment: {
+                            time: this.villageData.environment.time,
+                            weather: this.villageData.environment.weather,
+                            season: this.villageData.environment.season
+                        },
+                        nearbyVillagers: this.getNearbyVillagers(villager),
+                        playerNearby: this.isPlayerNearby(villager)
+                    };
+                    
+                    const prompt = `As ${villager.name} (${villager.personality} personality), decide what to do next. Current context: ${JSON.stringify(context)}. Respond with action, dialogue (what they say out loud), and any stat changes. Always include dialogue showing their thoughts or speech.`;
+                    
+                    const response = await this.callAPI(prompt, villager.memory.slice(-5));
+                    
+                    if (response) {
+                        this.executeVillagerAction(villager, response);
+                    }
+                } catch (error) {
+                    console.error(`Error updating villager ${villager.name}:`, error);
+                    // Fallback action with dialogue
+                    this.executeVillagerAction(villager, {
+                        activity: "thinking",
+                        dialogue: "Hmm, what should I do today?"
+                    });
+                }
+            }
+
+            getNearbyVillagers(villager) {
+                return this.villageData.villagers.filter(other => {
+                    if (other.id === villager.id) return false;
+                    const distance = Math.sqrt(
+                        Math.pow(other.position.x - villager.position.x, 2) +
+                        Math.pow(other.position.z - villager.position.z, 2)
+                    );
+                    return distance < 20;
+                });
+            }
+
+            isPlayerNearby(villager) {
+                const distance = Math.sqrt(
+                    Math.pow(this.playerPosition.x - villager.position.x, 2) +
+                    Math.pow(this.playerPosition.z - villager.position.z, 2)
+                );
+                return distance < 10;
+            }
+
+            executeVillagerAction(villager, action) {
+                // Update activity
+                if (action.activity) {
+                    villager.currentActivity = action.activity;
+                    this.activitySystem.logActivity(villager, action.activity);
+                }
+                
+                // Update stats
+                if (action.statChanges) {
+                    Object.entries(action.statChanges).forEach(([stat, change]) => {
+                        if (villager.stats[stat] !== undefined) {
+                            villager.stats[stat] = Math.max(0, Math.min(100, villager.stats[stat] + change));
+                        }
+                    });
+                }
+                
+                // Handle movement
+                if (action.moveTo) {
+                    this.moveVillager(villager, action.moveTo);
+                }
+                
+                // Show dialogue in speech bubble
+                if (action.dialogue) {
+                    this.showSpeechBubble(villager, action.dialogue);
+                    
+                    // If player is nearby, also queue it for conversation system
+                    if (this.isPlayerNearby(villager)) {
+                        this.conversationSystem.queueDialogue(villager, action.dialogue);
+                    }
+                }
+                
+                // Update memory
+                villager.memory.push({
+                    timestamp: Date.now(),
+                    action: action,
+                    context: villager.currentActivity
+                });
+                
+                // Keep memory size manageable
+                if (villager.memory.length > 50) {
+                    villager.memory = villager.memory.slice(-30);
+                }
+            }
+
+            showSpeechBubble(villager, text) {
+                // Remove existing bubble for this villager
+                if (this.speechBubbles.has(villager.id)) {
+                    const oldBubble = this.speechBubbles.get(villager.id);
+                    oldBubble.remove();
+                }
+
+                // Create new speech bubble
+                const bubble = document.createElement('div');
+                bubble.className = 'speech-bubble';
+                bubble.textContent = text;
+                document.body.appendChild(bubble);
+
+                // Store reference
+                this.speechBubbles.set(villager.id, bubble);
+
+                // Update position
+                this.updateSpeechBubblePosition(villager, bubble);
+
+                // Remove after delay
+                setTimeout(() => {
+                    bubble.style.animation = 'fadeOut 0.5s ease';
+                    setTimeout(() => {
+                        bubble.remove();
+                        this.speechBubbles.delete(villager.id);
+                    }, 500);
+                }, 5000); // Show for 5 seconds
+            }
+
+            updateSpeechBubblePosition(villager, bubble) {
+                if (!villager.object3D) return;
+
+                // Convert 3D position to screen coordinates
+                const vector = new THREE.Vector3();
+                villager.object3D.getWorldPosition(vector);
+                vector.y += 10; // Position above villager
+                vector.project(this.camera);
+
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                bubble.style.left = `${x}px`;
+                bubble.style.top = `${y - 20}px`;
+                bubble.style.transform = 'translateX(-50%)';
+            }
+
+            moveVillager(villager, destination) {
+                // Smooth movement animation
+                const startPos = { ...villager.position };
+                const endPos = this.getDestinationPosition(destination);
+                
+                const duration = 2000; // 2 seconds
+                const startTime = Date.now();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    villager.position.x = startPos.x + (endPos.x - startPos.x) * progress;
+                    villager.position.z = startPos.z + (endPos.z - startPos.z) * progress;
+                    
+                    if (villager.object3D) {
+                        villager.object3D.position.x = villager.position.x;
+                        villager.object3D.position.z = villager.position.z;
+                    }
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+
+            getDestinationPosition(destination) {
+                switch(destination) {
+                    case 'home':
+                        return { ...villager.home };
+                    case 'plaza':
+                        return { x: 0, z: 0 };
+                    case 'shop':
+                        return { x: -30, z: 0 };
+                    case 'museum':
+                        return { x: 30, z: 0 };
+                    case 'random':
+                        return {
+                            x: Math.random() * 80 - 40,
+                            z: Math.random() * 80 - 40
+                        };
+                    default:
+                        return villager.position;
+                }
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                // Mouse/touch events
+                document.addEventListener('click', (e) => this.handleClick(e));
+                document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                
+                // Keyboard controls
+                document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                
+                // Control buttons
+                document.getElementById('save-btn').addEventListener('click', () => this.saveVillageData());
+                document.getElementById('load-btn').addEventListener('click', () => this.showLoadOptions());
+                document.getElementById('settings-btn').addEventListener('click', () => this.showSettings());
+                
+                // Settings
+                document.getElementById('save-api-key').addEventListener('click', () => this.saveApiKey());
+                document.getElementById('export-village').addEventListener('click', () => this.exportVillage());
+                document.getElementById('import-village').addEventListener('click', () => {
+                    document.getElementById('import-file').click();
+                });
+                document.getElementById('import-file').addEventListener('change', (e) => this.importVillage(e));
+                document.getElementById('reset-village').addEventListener('click', () => this.resetVillage());
+                document.getElementById('close-settings').addEventListener('click', () => this.hideSettings());
+                
+                // Mobile controls
+                document.getElementById('mobile-up').addEventListener('click', () => this.movePlayer(0, -5));
+                document.getElementById('mobile-down').addEventListener('click', () => this.movePlayer(0, 5));
+                document.getElementById('mobile-left').addEventListener('click', () => this.movePlayer(-5, 0));
+                document.getElementById('mobile-right').addEventListener('click', () => this.movePlayer(5, 0));
+            }
+
+            handleClick(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    const parent = object.parent;
+                    
+                    // Check if clicked on villager
+                    if (parent && parent.userData && parent.userData.id) {
+                        this.selectVillager(parent.userData);
+                    }
+                    // Check if clicked on building
+                    else if (parent && parent.userData && parent.userData.type) {
+                        this.interactWithBuilding(parent.userData);
+                    }
+                }
+            }
+
+            handleMouseMove(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+
+            handleKeyDown(event) {
+                const moveAmount = 5;
+                switch(event.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                        this.movePlayer(0, -moveAmount);
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        this.movePlayer(0, moveAmount);
+                        break;
+                    case 'ArrowLeft':
+                    case 'a':
+                        this.movePlayer(-moveAmount, 0);
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                        this.movePlayer(moveAmount, 0);
+                        break;
+                }
+            }
+
+            movePlayer(dx, dz) {
+                this.playerPosition.x += dx;
+                this.playerPosition.z += dz;
+                
+                // Update camera to follow player
+                this.camera.position.x = this.playerPosition.x;
+                this.camera.position.z = this.playerPosition.z + 40;
+                this.camera.lookAt(this.playerPosition.x, 0, this.playerPosition.z);
+                
+                // Check for nearby villagers
+                this.checkNearbyVillagers();
+            }
+
+            checkNearbyVillagers() {
+                this.villageData.villagers.forEach(villager => {
+                    if (this.isPlayerNearby(villager) && !villager.greeted) {
+                        villager.greeted = true;
+                        this.conversationSystem.initiateConversation(villager);
+                        
+                        // Reset greeted flag after moving away
+                        setTimeout(() => {
+                            if (!this.isPlayerNearby(villager)) {
+                                villager.greeted = false;
+                            }
+                        }, 10000);
+                    }
+                });
+            }
+
+            async selectVillager(villagerData) {
+                this.selectedVillager = villagerData;
+                
+                // Update villager info panel
+                document.getElementById('villager-avatar').textContent = villagerData.emoji;
+                document.getElementById('villager-name').textContent = villagerData.name;
+                document.getElementById('villager-personality').textContent = villagerData.personality;
+                document.getElementById('villager-happiness').textContent = villagerData.stats.happiness;
+                document.getElementById('villager-energy').textContent = villagerData.stats.energy;
+                document.getElementById('villager-friendship').textContent = villagerData.stats.friendship;
+                document.getElementById('villager-location').textContent = villagerData.currentActivity;
+                
+                document.getElementById('villager-info').classList.add('active');
+                
+                // Start conversation
+                await this.conversationSystem.startConversation(villagerData);
+            }
+
+            async interactWithBuilding(buildingData) {
+                const prompt = `The player is interacting with ${buildingData.name}. What happens?`;
+                const response = await this.callAPI(prompt);
+                
+                if (response) {
+                    this.showNotification(response.dialogue || `You entered ${buildingData.name}`);
+                }
+            }
+
+            saveVillageData() {
+                this.villageData.lastPlayed = new Date().toISOString();
+                localStorage.setItem('village_data', JSON.stringify(this.villageData));
+                this.showNotification('Village saved! 💾');
+            }
+
+            showLoadOptions() {
+                // For now, just reload saved data
+                const saved = localStorage.getItem('village_data');
+                if (saved) {
+                    if (confirm('Load saved village? Current progress will be lost.')) {
+                        location.reload();
+                    }
+                }
+            }
+
+            showSettings() {
+                document.getElementById('settings-modal').classList.add('active');
+                document.getElementById('api-key-input').value = this.apiKey || '';
+            }
+
+            hideSettings() {
+                document.getElementById('settings-modal').classList.remove('active');
+            }
+
+            saveApiKey() {
+                const apiKey = document.getElementById('api-key-input').value.trim();
+                if (apiKey) {
+                    this.apiKey = apiKey;
+                    localStorage.setItem('village_api_key', apiKey);
+                    this.showNotification('API key saved! AI villagers activated.');
+                    
+                    // Initialize villagers if not already done
+                    if (this.villageData.villagers.length === 0) {
+                        this.initializeVillagers();
+                        this.startAutonomousSystems();
+                    }
+                }
+            }
+
+            exportVillage() {
+                const exportData = {
+                    version: '1.0',
+                    exportDate: new Date().toISOString(),
+                    villageData: this.villageData
+                };
+                
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `village_${this.villageData.name}_${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                this.showNotification('Village exported! 📁');
+            }
+
+            async importVillage(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                try {
+                    const text = await file.text();
+                    const importData = JSON.parse(text);
+                    
+                    if (importData.version === '1.0' && importData.villageData) {
+                        if (confirm('Import this village? Current village will be replaced.')) {
+                            this.villageData = importData.villageData;
+                            this.saveVillageData();
+                            location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    this.showNotification('Failed to import village file.');
+                }
+                
+                event.target.value = '';
+            }
+
+            resetVillage() {
+                if (confirm('Reset village? This cannot be undone!')) {
+                    localStorage.removeItem('village_data');
+                    location.reload();
+                }
+            }
+
+            showNotification(message) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.classList.add('active');
+                
+                setTimeout(() => {
+                    notification.classList.remove('active');
+                }, 3000);
+            }
+
+            updateUI() {
+                // Update village stats
+                document.getElementById('village-name').textContent = this.villageData.name;
+                document.getElementById('population').textContent = this.villageData.stats.population;
+                document.getElementById('happiness').textContent = Math.round(this.villageData.stats.happiness) + '%';
+                
+                // Update time
+                const hour = Math.floor(this.villageData.environment.time);
+                const minute = Math.floor((this.villageData.environment.time - hour) * 60);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                document.getElementById('game-time').textContent = 
+                    `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
+                
+                // Update weather
+                const weatherIcons = {
+                    sunny: '☀️',
+                    cloudy: '☁️',
+                    rainy: '🌧️',
+                    stormy: '⛈️',
+                    snowy: '❄️'
+                };
+                document.getElementById('weather').textContent = 
+                    `${weatherIcons[this.villageData.environment.weather]} ${this.villageData.environment.weather}`;
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const deltaTime = this.clock.getDelta();
+                
+                if (!this.isPaused) {
+                    // Update autonomous systems
+                    this.updateVillagerAI(deltaTime);
+                    
+                    // Update animations
+                    this.villageData.villagers.forEach(villager => {
+                        if (villager.object3D) {
+                            // Simple idle animation
+                            villager.object3D.rotation.y += Math.sin(Date.now() * 0.001) * 0.01;
+                        }
+                    });
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Weather System
+        class WeatherSystem {
+            constructor(village) {
+                this.village = village;
+                this.weatherPatterns = ['sunny', 'cloudy', 'rainy', 'stormy'];
+                this.seasonalWeather = {
+                    spring: { sunny: 0.5, cloudy: 0.3, rainy: 0.2, stormy: 0 },
+                    summer: { sunny: 0.7, cloudy: 0.2, rainy: 0.1, stormy: 0 },
+                    fall: { sunny: 0.3, cloudy: 0.4, rainy: 0.2, stormy: 0.1 },
+                    winter: { sunny: 0.2, cloudy: 0.4, rainy: 0.1, snowy: 0.3 }
+                };
+            }
+
+            start() {
+                // Change weather every 30 minutes of game time
+                setInterval(() => this.updateWeather(), 60000); // Check every minute
+            }
+
+            async updateWeather() {
+                const currentSeason = this.village.villageData.environment.season;
+                const probabilities = this.seasonalWeather[currentSeason];
+                
+                // Ask AI for weather decision
+                const prompt = `Current season is ${currentSeason}. Current weather is ${this.village.villageData.environment.weather}. Should the weather change? If so, to what?`;
+                
+                try {
+                    const response = await this.village.callAPI(prompt);
+                    if (response && response.weather) {
+                        this.changeWeather(response.weather);
+                    }
+                } catch (error) {
+                    // Fallback to random weather
+                    if (Math.random() < 0.1) { // 10% chance to change
+                        const newWeather = this.getRandomWeather(probabilities);
+                        this.changeWeather(newWeather);
+                    }
+                }
+            }
+
+            getRandomWeather(probabilities) {
+                const rand = Math.random();
+                let cumulative = 0;
+                
+                for (const [weather, probability] of Object.entries(probabilities)) {
+                    cumulative += probability;
+                    if (rand < cumulative) {
+                        return weather;
+                    }
+                }
+                
+                return 'sunny';
+            }
+
+            changeWeather(newWeather) {
+                this.village.villageData.environment.weather = newWeather;
+                this.village.updateUI();
+                this.applyWeatherEffects(newWeather);
+                
+                // Log weather change
+                this.village.activitySystem.logActivity(null, `Weather changed to ${newWeather}`);
+            }
+
+            applyWeatherEffects(weather) {
+                const overlay = document.getElementById('weather-overlay');
+                overlay.innerHTML = '';
+                
+                switch(weather) {
+                    case 'rainy':
+                        this.createRainEffect(overlay);
+                        break;
+                    case 'snowy':
+                        this.createSnowEffect(overlay);
+                        break;
+                    case 'cloudy':
+                        this.village.scene.fog.far = 150;
+                        break;
+                    default:
+                        this.village.scene.fog.far = 200;
+                }
+            }
+
+            createRainEffect(container) {
+                for (let i = 0; i < 100; i++) {
+                    const raindrop = document.createElement('div');
+                    raindrop.style.cssText = `
+                        position: absolute;
+                        left: ${Math.random() * 100}%;
+                        top: -10px;
+                        width: 2px;
+                        height: 20px;
+                        background: rgba(174, 194, 224, 0.5);
+                        animation: fall ${2 + Math.random() * 3}s linear infinite;
+                        animation-delay: ${Math.random() * 2}s;
+                    `;
+                    container.appendChild(raindrop);
+                }
+                
+                // Add CSS animation
+                if (!document.getElementById('rain-animation')) {
+                    const style = document.createElement('style');
+                    style.id = 'rain-animation';
+                    style.textContent = `
+                        @keyframes fall {
+                            to {transform: translateY(100vh);
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+
+            createSnowEffect(container) {
+                for (let i = 0; i < 50; i++) {
+                    const snowflake = document.createElement('div');
+                    snowflake.style.cssText = `
+                        position: absolute;
+                        left: ${Math.random() * 100}%;
+                        top: -10px;
+                        width: ${5 + Math.random() * 5}px;
+                        height: ${5 + Math.random() * 5}px;
+                        background: white;
+                        border-radius: 50%;
+                        animation: snow ${5 + Math.random() * 10}s linear infinite;
+                        animation-delay: ${Math.random() * 5}s;
+                    `;
+                    container.appendChild(snowflake);
+                }
+                
+                // Add CSS animation
+                if (!document.getElementById('snow-animation')) {
+                    const style = document.createElement('style');
+                    style.id = 'snow-animation';
+                    style.textContent = `
+                        @keyframes snow {
+                            to {
+                                transform: translateY(100vh) translateX(${Math.random() * 100 - 50}px);
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+        }
+
+        // Time System
+        class TimeSystem {
+            constructor(village) {
+                this.village = village;
+                this.timeSpeed = 60; // 1 real second = 1 game minute
+            }
+
+            start() {
+                setInterval(() => this.updateTime(), 1000);
+            }
+
+            updateTime() {
+                // Advance time
+                this.village.villageData.environment.time += (1 / 60) * this.timeSpeed;
+                
+                // Wrap around at 24 hours
+                if (this.village.villageData.environment.time >= 24) {
+                    this.village.villageData.environment.time -= 24;
+                    this.newDay();
+                }
+                
+                // Update lighting based on time
+                this.updateLighting();
+                
+                // Check villager schedules
+                this.checkSchedules();
+                
+                this.village.updateUI();
+            }
+
+            updateLighting() {
+                const hour = this.village.villageData.environment.time;
+                const directionalLight = this.village.scene.children.find(child => child.type === 'DirectionalLight');
+                
+                if (directionalLight) {
+                    // Dawn: 5-7
+                    if (hour >= 5 && hour < 7) {
+                        const progress = (hour - 5) / 2;
+                        directionalLight.intensity = 0.1 + progress * 0.3;
+                        this.village.scene.fog.color.setHex(0xFFB6C1);
+                    }
+                    // Day: 7-17
+                    else if (hour >= 7 && hour < 17) {
+                        directionalLight.intensity = 0.4;
+                        this.village.scene.fog.color.setHex(0x87CEEB);
+                    }
+                    // Dusk: 17-19
+                    else if (hour >= 17 && hour < 19) {
+                        const progress = (hour - 17) / 2;
+                        directionalLight.intensity = 0.4 - progress * 0.3;
+                        this.village.scene.fog.color.setHex(0xFF6347);
+                    }
+                    // Night: 19-5
+                    else {
+                        directionalLight.intensity = 0.1;
+                        this.village.scene.fog.color.setHex(0x191970);
+                    }
+                }
+            }
+
+            checkSchedules() {
+                const currentHour = Math.floor(this.village.villageData.environment.time);
+                
+                this.village.villageData.villagers.forEach(villager => {
+                    if (villager.schedule[currentHour] && villager.lastScheduleHour !== currentHour) {
+                        villager.lastScheduleHour = currentHour;
+                        const scheduledActivity = villager.schedule[currentHour];
+                        
+                        // Trigger scheduled activity
+                        this.village.executeVillagerAction(villager, {
+                            activity: scheduledActivity,
+                            moveTo: this.getActivityLocation(scheduledActivity)
+                        });
+                    }
+                });
+            }
+
+            getActivityLocation(activity) {
+                const locations = {
+                    wake_up: 'home',
+                    breakfast: 'home',
+                    morning_activity: 'plaza',
+                    lunch: 'home',
+                    afternoon_activity: 'random',
+                    dinner: 'home',
+                    evening_activity: 'plaza',
+                    sleep: 'home'
+                };
+                return locations[activity] || 'random';
+            }
+
+            newDay() {
+                // Update season if needed
+                this.updateSeason();
+                
+                // Reset daily villager stats
+                this.village.villageData.villagers.forEach(villager => {
+                    villager.stats.energy = 100;
+                    villager.dailyActivities = [];
+                });
+                
+                // Random events
+                this.triggerDailyEvents();
+            }
+
+            updateSeason() {
+                // Simple season progression (90 days per season)
+                const dayOfYear = Math.floor((Date.now() - new Date(this.village.villageData.created).getTime()) / (1000 * 60 * 60 * 24));
+                const seasonIndex = Math.floor((dayOfYear % 360) / 90);
+                const seasons = ['spring', 'summer', 'fall', 'winter'];
+                this.village.villageData.environment.season = seasons[seasonIndex];
+            }
+
+            async triggerDailyEvents() {
+                const prompt = "Generate a special event for the village today. It could be a festival, visitor, or discovery.";
+                
+                try {
+                    const response = await this.village.callAPI(prompt);
+                    if (response && response.event) {
+                        this.village.activitySystem.logActivity(null, `Special Event: ${response.event}`);
+                        this.village.showNotification(`🎉 ${response.event}`);
+                    }
+                } catch (error) {
+                    console.error('Error generating daily event:', error);
+                }
+            }
+        }
+
+        // Conversation System
+        class ConversationSystem {
+            constructor(village) {
+                this.village = village;
+                this.activeConversation = null;
+                this.conversationQueue = [];
+                this.dialogueHistory = [];
+            }
+
+            start() {
+                // Check for queued dialogues periodically
+                setInterval(() => this.processQueue(), 2000);
+            }
+
+            async initiateConversation(villager) {
+                if (this.activeConversation) return;
+                
+                const context = {
+                    villagerName: villager.name,
+                    personality: villager.personality,
+                    playerRelationship: villager.stats.friendship,
+                    timeOfDay: this.getTimeOfDay(),
+                    weather: this.village.villageData.environment.weather,
+                    recentActivities: villager.memory.slice(-3)
+                };
+                
+                const prompt = `As ${villager.name}, greet the player. Context: ${JSON.stringify(context)}. Respond with a greeting and possible conversation topics.`;
+                
+                try {
+                    const response = await this.village.callAPI(prompt, this.dialogueHistory.slice(-5));
+                    this.startConversation(villager, response);
+                } catch (error) {
+                    console.error('Conversation error:', error);
+                    this.startConversation(villager, {
+                        dialogue: `Oh, hello there! Nice to see you!`,
+                        options: ['How are you?', 'What are you doing?', 'Goodbye']
+                    });
+                }
+            }
+
+            getTimeOfDay() {
+                const hour = this.village.villageData.environment.time;
+                if (hour < 6) return 'early morning';
+                if (hour < 12) return 'morning';
+                if (hour < 17) return 'afternoon';
+                if (hour < 20) return 'evening';
+                return 'night';
+            }
+
+            async startConversation(villager, initialResponse) {
+                this.activeConversation = {
+                    villager: villager,
+                    startTime: Date.now()
+                };
+                
+                // Show dialogue box
+                const dialogueBox = document.getElementById('dialogue-box');
+                dialogueBox.classList.add('active');
+                
+                // Update dialogue content
+                document.getElementById('dialogue-emoji').textContent = villager.emoji;
+                document.getElementById('dialogue-speaker').textContent = villager.name;
+                document.getElementById('dialogue-text').textContent = initialResponse.dialogue || initialResponse;
+                
+                // Create response options
+                this.createDialogueOptions(initialResponse.options || ['Tell me more', 'Goodbye']);
+                
+                // Update friendship
+                villager.stats.friendship = Math.min(100, villager.stats.friendship + 1);
+            }
+
+            createDialogueOptions(options) {
+                const container = document.getElementById('dialogue-options');
+                container.innerHTML = '';
+                
+                options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.className = 'dialogue-option';
+                    button.textContent = option;
+                    button.onclick = () => this.handlePlayerResponse(option);
+                    container.appendChild(button);
+                });
+            }
+
+            async handlePlayerResponse(response) {
+                if (!this.activeConversation) return;
+                
+                const villager = this.activeConversation.villager;
+                
+                // Add to dialogue history
+                this.dialogueHistory.push({
+                    speaker: 'player',
+                    text: response,
+                    timestamp: Date.now()
+                });
+                
+                if (response.toLowerCase().includes('goodbye') || response.toLowerCase().includes('bye')) {
+                    this.endConversation();
+                    return;
+                }
+                
+                // Generate villager response
+                const context = {
+                    villagerName: villager.name,
+                    personality: villager.personality,
+                    playerResponse: response,
+                    conversationHistory: this.dialogueHistory.slice(-10)
+                };
+                
+                const prompt = `As ${villager.name}, respond to the player who said: "${response}". Context: ${JSON.stringify(context)}. Include dialogue and new conversation options.`;
+                
+                try {
+                    const aiResponse = await this.village.callAPI(prompt, this.dialogueHistory.slice(-5));
+                    
+                    // Update dialogue
+                    document.getElementById('dialogue-text').textContent = aiResponse.dialogue || aiResponse;
+                    
+                    // Update options
+                    this.createDialogueOptions(aiResponse.options || ['Interesting...', 'Tell me more', 'Goodbye']);
+                    
+                    // Add to history
+                    this.dialogueHistory.push({
+                        speaker: villager.name,
+                        text: aiResponse.dialogue || aiResponse,
+                        timestamp: Date.now()
+                    });
+                    
+                    // Store in villager memory
+                    villager.memory.push({
+                        type: 'conversation',
+                        with: 'player',
+                        content: response,
+                        timestamp: Date.now()
+                    });
+                    
+                } catch (error) {
+                    console.error('Response generation error:', error);
+                    document.getElementById('dialogue-text').textContent = "Hmm, that's interesting! I'll have to think about that.";
+                    this.createDialogueOptions(['Goodbye']);
+                }
+            }
+
+            endConversation() {
+                const dialogueBox = document.getElementById('dialogue-box');
+                dialogueBox.classList.remove('active');
+                
+                if (this.activeConversation) {
+                    const villager = this.activeConversation.villager;
+                    
+                    // Log conversation
+                    this.village.activitySystem.logActivity(
+                        villager,
+                        `Had a conversation with the player`
+                    );
+                    
+                    // Update happiness based on conversation
+                    villager.stats.happiness = Math.min(100, villager.stats.happiness + 5);
+                }
+                
+                this.activeConversation = null;
+            }
+
+            queueDialogue(villager, dialogue) {
+                this.conversationQueue.push({
+                    villager: villager,
+                    dialogue: dialogue,
+                    timestamp: Date.now()
+                });
+            }
+
+            processQueue() {
+                if (this.conversationQueue.length === 0 || this.activeConversation) return;
+                
+                const nextDialogue = this.conversationQueue.shift();
+                
+                // Only show if player is still nearby
+                if (this.village.isPlayerNearby(nextDialogue.villager)) {
+                    this.startConversation(nextDialogue.villager, nextDialogue.dialogue);
+                }
+            }
+        }
+
+        // Activity System
+        class ActivitySystem {
+            constructor(village) {
+                this.village = village;
+                this.activityLog = [];
+                this.maxLogSize = 50;
+            }
+
+            start() {
+                // Periodic autonomous activities
+                setInterval(() => this.generateAutonomousActivities(), 15000);
+            }
+
+            async generateAutonomousActivities() {
+                // Select random villagers for activities
+                const activeVillagers = this.village.villageData.villagers
+                    .filter(v => v.stats.energy > 20)
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, 3);
+                
+                for (const villager of activeVillagers) {
+                    await this.generateVillagerActivity(villager);
+                }
+                
+                // Generate inter-villager interactions
+                await this.generateInteractions();
+            }
+
+            async generateVillagerActivity(villager) {
+                const context = {
+                    villager: {
+                        name: villager.name,
+                        personality: villager.personality,
+                        currentActivity: villager.currentActivity,
+                        stats: villager.stats
+                    },
+                    environment: this.village.villageData.environment,
+                    nearbyFeatures: this.getNearbyFeatures(villager.position)
+                };
+                
+                const prompt = `Generate an autonomous activity for ${villager.name}. Context: ${JSON.stringify(context)}. Respond with activity name and any effects.`;
+                
+                try {
+                    const response = await this.village.callAPI(prompt);
+                    
+                    if (response && response.activity) {
+                        this.executeActivity(villager, response);
+                    }
+                } catch (error) {
+                    // Fallback activities
+                    const activities = ['fishing', 'gardening', 'reading', 'exercising', 'crafting'];
+                    const activity = activities[Math.floor(Math.random() * activities.length)];
+                    this.executeActivity(villager, { activity: activity });
+                }
+            }
+
+            getNearbyFeatures(position) {
+                const features = [];
+                
+                // Check proximity to buildings
+                this.village.villageData.buildings.forEach(building => {
+                    const distance = Math.sqrt(
+                        Math.pow(building.position.x - position.x, 2) +
+                        Math.pow(building.position.z - position.z, 2)
+                    );
+                    if (distance < 20) {
+                        features.push(building.type);
+                    }
+                });
+                
+                // Check for river
+                if (position.x < -60) {
+                    features.push('river');
+                }
+                
+                return features;
+            }
+
+            executeActivity(villager, activityData) {
+                villager.currentActivity = activityData.activity;
+                
+                // Apply stat changes
+                if (activityData.effects) {
+                    Object.entries(activityData.effects).forEach(([stat, change]) => {
+                        if (villager.stats[stat] !== undefined) {
+                            villager.stats[stat] = Math.max(0, Math.min(100, villager.stats[stat] + change));
+                        }
+                    });
+                }
+                
+                // Log activity
+                this.logActivity(villager, activityData.activity);
+                
+                // Visual feedback
+                if (activityData.location) {
+                    this.village.moveVillager(villager, activityData.location);
+                }
+            }
+
+            async generateInteractions() {
+                // Find villagers close to each other
+                const interactions = [];
+                
+                for (let i = 0; i < this.village.villageData.villagers.length; i++) {
+                    for (let j = i + 1; j < this.village.villageData.villagers.length; j++) {
+                        const v1 = this.village.villageData.villagers[i];
+                        const v2 = this.village.villageData.villagers[j];
+                        
+                        const distance = Math.sqrt(
+                            Math.pow(v1.position.x - v2.position.x, 2) +
+                            Math.pow(v1.position.z - v2.position.z, 2)
+                        );
+                        
+                        if (distance < 15) {
+                            interactions.push({ v1, v2 });
+                        }
+                    }
+                }
+                
+                // Process interactions
+                for (const { v1, v2 } of interactions) {
+                    await this.processInteraction(v1, v2);
+                }
+            }
+
+            async processInteraction(villager1, villager2) {
+                const context = {
+                    villager1: {
+                        name: villager1.name,
+                        personality: villager1.personality,
+                        relationship: villager1.relationships[villager2.id] || 0
+                    },
+                    villager2: {
+                        name: villager2.name,
+                        personality: villager2.personality,
+                        relationship: villager2.relationships[villager1.id] || 0
+                    }
+                };
+                
+                const prompt = `Generate an interaction between ${villager1.name} and ${villager2.name}. Context: ${JSON.stringify(context)}. Describe what happens and any relationship changes.`;
+                
+                try {
+                    const response = await this.village.callAPI(prompt);
+                    
+                    if (response && response.interaction) {
+                        // Update relationships
+                        if (response.relationshipChange) {
+                            villager1.relationships[villager2.id] = 
+                                (villager1.relationships[villager2.id] || 0) + response.relationshipChange;
+                            villager2.relationships[villager1.id] = 
+                                (villager2.relationships[villager1.id] || 0) + response.relationshipChange;
+                        }
+                        
+                        // Log interaction
+                        this.logActivity(null, `${villager1.name} and ${villager2.name} ${response.interaction}`);
+                    }
+                } catch (error) {
+                    console.error('Interaction generation error:', error);
+                }
+            }
+
+            logActivity(villager, activity) {
+                const logEntry = {
+                    timestamp: Date.now(),
+                    villager: villager ? villager.name : 'Village',
+                    activity: activity,
+                    emoji: villager ? villager.emoji : '🏘️'
+                };
+                
+                this.activityLog.unshift(logEntry);
+                
+                // Keep log size manageable
+                if (this.activityLog.length > this.maxLogSize) {
+                    this.activityLog = this.activityLog.slice(0, this.maxLogSize);
+                }
+                
+                // Update UI
+                this.updateActivityDisplay();
+            }
+
+            updateActivityDisplay() {
+                const container = document.getElementById('activity-list');
+                container.innerHTML = '';
+                
+                this.activityLog.slice(0, 10).forEach(entry => {
+                    const item = document.createElement('div');
+                    item.className = 'activity-item';
+                    
+                    const timeAgo = this.getTimeAgo(entry.timestamp);
+                    
+                    item.innerHTML = `
+                        ${entry.emoji} <strong>${entry.villager}</strong> ${entry.activity}
+                        <div class="activity-time">${timeAgo}</div>
+                    `;
+                    
+                    container.appendChild(item);
+                });
+            }
+
+            getTimeAgo(timestamp) {
+                const seconds = Math.floor((Date.now() - timestamp) / 1000);
+                
+                if (seconds < 60) return 'Just now';
+                if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+                if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+                return `${Math.floor(seconds / 86400)}d ago`;
+            }
+        }
+
+        // Initialize the village
+        window.addEventListener('DOMContentLoaded', () => {
+            const village = new VillageAISystem();
+            window.village = village; // Make accessible for debugging
+        });
+    </script>
+</body>
+</html>
