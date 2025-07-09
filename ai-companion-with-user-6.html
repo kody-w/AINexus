@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion - Unified Agent Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Upload Interface */
+        .upload-interface {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(6, 255, 165, 0.5);
+            border-radius: 20px;
+            padding: 40px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .upload-interface h2 {
+            color: #06ffa5;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .upload-area {
+            border: 3px dashed rgba(6, 255, 165, 0.3);
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: rgba(6, 255, 165, 0.6);
+            background: rgba(6, 255, 165, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #06ffa5;
+            background: rgba(6, 255, 165, 0.1);
+            transform: scale(1.02);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* API Key Input */
+        .api-key-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            margin-top: 10px;
+        }
+
+        /* HUD */
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .hud-text {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            padding: 15px 30px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+            flex-direction: row;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .control-panel.active {
+            display: flex;
+        }
+
+        .control-button {
+            background: rgba(6, 255, 165, 0.1);
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            border-radius: 50%;
+            color: #06ffa5;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 16px;
+        }
+
+        .control-button:hover {
+            background: rgba(6, 255, 165, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Message Display */
+        .message-display {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 600px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .message-display.visible {
+            opacity: 1;
+        }
+
+        .message-role {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .message-role.user { color: #3b82f6; }
+        .message-role.assistant { color: #8338ec; }
+        .message-role.system { color: #ff6a00; }
+
+        /* API Status */
+        .api-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+            border: 1px solid rgba(6, 255, 165, 0.3);
+        }
+
+        .api-status.active {
+            display: flex;
+        }
+
+        .api-status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #06ffa5;
+            animation: apiPulse 1.5s infinite;
+        }
+
+        @keyframes apiPulse {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+        }
+
+        .api-status-text {
+            color: #06ffa5;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Floating Conversation Panel */
+        .conversation-panel {
+            position: fixed;
+            top: 120px;
+            left: 20px;
+            width: 400px;
+            height: 60vh;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            resize: both;
+            overflow: auto;
+            min-width: 300px;
+            min-height: 200px;
+            max-width: 600px;
+            max-height: 80vh;
+        }
+
+        .conversation-panel.active {
+            display: flex;
+        }
+
+        .conversation-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+        }
+
+        .conversation-header h3 {
+            color: #06ffa5;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .conversation-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .panel-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .panel-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .conversation-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            scroll-behavior: smooth;
+        }
+
+        .conversation-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .conversation-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .conversation-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .conversation-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .conv-message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .conv-message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .conv-message-role {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .conv-message-role.user {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .conv-message-role.assistant {
+            background: rgba(138, 56, 236, 0.2);
+            color: #a78bfa;
+        }
+
+        .conv-message-role.system {
+            background: rgba(255, 106, 0, 0.2);
+            color: #fb923c;
+        }
+
+        .conv-message-content {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .conv-message-content.user {
+            border-left: 3px solid #3b82f6;
+        }
+
+        .conv-message-content.assistant {
+            border-left: 3px solid #8338ec;
+            position: relative;
+        }
+
+        .conv-message-content.system {
+            border-left: 3px solid #ff6a00;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* Response versions */
+        .response-container {
+            position: relative;
+        }
+
+        .response-historical {
+            transition: opacity 0.5s ease;
+        }
+
+        .response-historical.faded {
+            opacity: 0.4;
+        }
+
+        .response-live {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            background: rgba(6, 255, 165, 0.05);
+            border-left: 3px solid #06ffa5;
+        }
+
+        .response-live.visible {
+            opacity: 1;
+        }
+
+        .version-toggle {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
+
+        .response-container:hover .version-toggle {
+            opacity: 1;
+        }
+
+        .version-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .version-indicator {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .version-indicator.historical {
+            background: rgba(102, 102, 102, 0.3);
+            color: #999;
+        }
+
+        .version-indicator.live {
+            background: rgba(6, 255, 165, 0.2);
+            color: #06ffa5;
+        }
+
+        /* Minimize state */
+        .conversation-panel.minimized {
+            height: auto;
+        }
+
+        .conversation-panel.minimized .conversation-content {
+            display: none;
+        }
+
+        /* Resize handle */
+        .upload-button {
+            background: linear-gradient(135deg, #06ffa5, #00cc88);
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .upload-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        /* Agent Status Display */
+        .agent-status {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            max-width: 250px;
+            display: none;
+        }
+
+        .agent-status.visible {
+            display: block;
+        }
+
+        .agent-status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+
+        .agent-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .agent-status-indicator.historical {
+            background: #666;
+        }
+
+        .agent-status-indicator.loading {
+            background: #ffeb3b;
+            animation: pulse 1s infinite;
+        }
+
+        .agent-status-indicator.live {
+            background: #06ffa5;
+            box-shadow: 0 0 10px #06ffa5;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Voice Controls */
+        .voice-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
+
+        .voice-controls.active {
+            display: block;
+        }
+
+        .voice-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .voice-button {
+            background: rgba(6, 255, 165, 0.1);
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            border-radius: 50%;
+            color: #06ffa5;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .voice-button:hover {
+            background: rgba(6, 255, 165, 0.2);
+            transform: scale(1.1);
+        }
+
+        .voice-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            box-shadow: 0 0 15px rgba(6, 255, 165, 0.5);
+        }
+
+        .voice-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            width: 100%;
+        }
+
+        .voice-select option {
+            background: #1a1a2e;
+        }
+
+        .voice-status {
+            font-size: 12px;
+            color: #06ffa5;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        /* Speaking indicator */
+        .speaking-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 300;
+        }
+
+        .speaking-indicator.active {
+            display: flex;
+        }
+
+        .speaking-bars {
+            display: flex;
+            gap: 3px;
+            height: 30px;
+            align-items: center;
+        }
+
+        .speaking-bar {
+            width: 4px;
+            background: #06ffa5;
+            border-radius: 2px;
+            animation: soundWave 1s ease-in-out infinite;
+        }
+
+        .speaking-bar:nth-child(1) { animation-delay: 0s; }
+        .speaking-bar:nth-child(2) { animation-delay: 0.1s; }
+        .speaking-bar:nth-child(3) { animation-delay: 0.2s; }
+        .speaking-bar:nth-child(4) { animation-delay: 0.3s; }
+        .speaking-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes soundWave {
+            0%, 100% { height: 10px; }
+            50% { height: 30px; }
+        }
+
+        .speaking-text {
+            color: #06ffa5;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <!-- Upload Interface -->
+    <div class="upload-interface" id="upload-interface">
+        <h2>Upload Conversation Transcript</h2>
+        <div class="upload-area" id="upload-area">
+            <div style="font-size: 48px;">📁</div>
+            <p>Drag & drop your conversation JSON file here</p>
+            <p style="font-size: 12px; opacity: 0.7;">or click to browse</p>
+        </div>
+        <input type="file" id="file-input" class="file-input" accept=".json">
+        
+        <div class="api-key-container">
+            <label style="font-size: 14px;">API Key (optional for live comparison)</label>
+            <input type="password" class="api-key-input" id="api-key-input" 
+                   placeholder="Enter your API key">
+        </div>
+        
+        <button class="upload-button" onclick="document.getElementById('file-input').click()">
+            Choose File
+        </button>
+    </div>
+
+    <!-- HUD -->
+    <div class="hud">
+        <div class="hud-text" id="conversation-info">No conversation loaded</div>
+        <div class="hud-text" id="message-counter">Message: 0/0</div>
+    </div>
+
+    <!-- Message Display -->
+    <div class="message-display" id="message-display">
+        <div class="message-role" id="message-role"></div>
+        <div class="message-content" id="message-content"></div>
+    </div>
+
+    <!-- API Status -->
+    <div class="api-status" id="api-status">
+        <div class="api-status-icon"></div>
+        <div class="api-status-text">Calling Live API...</div>
+    </div>
+
+    <!-- Agent Status -->
+    <div class="agent-status" id="agent-status">
+        <h4 style="color: #06ffa5; margin-bottom: 10px; font-size: 14px;">Agent Activity</h4>
+        <div id="agent-status-list"></div>
+    </div>
+
+    <!-- Conversation Panel -->
+    <div class="conversation-panel" id="conversation-panel">
+        <div class="conversation-header" id="conversation-header">
+            <h3>Conversation Transcript</h3>
+            <div class="conversation-controls">
+                <button class="panel-button" id="minimize-btn" title="Minimize">−</button>
+                <button class="panel-button" id="close-panel-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="conversation-content" id="conversation-content"></div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Voice Controls -->
+    <div class="voice-controls" id="voice-controls">
+        <div class="voice-toggle">
+            <button class="voice-button" id="voice-toggle-btn" title="Toggle Voice">
+                🔊
+            </button>
+            <span style="color: #06ffa5; font-size: 13px;">Text-to-Speech</span>
+        </div>
+        <select class="voice-select" id="voice-select">
+            <option value="en-US-JennyNeural">Jenny (Female)</option>
+            <option value="en-US-GuyNeural">Guy (Male)</option>
+            <option value="en-US-AriaNeural">Aria (Female)</option>
+            <option value="en-US-DavisNeural">Davis (Male)</option>
+        </select>
+        <div class="voice-status" id="voice-status">Voice: Off</div>
+    </div>
+
+    <!-- Speaking Indicator -->
+    <div class="speaking-indicator" id="speaking-indicator">
+        <div class="speaking-bars">
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+        </div>
+        <div class="speaking-text">Speaking...</div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel" id="control-panel">
+        <button class="control-button" id="play-pause-btn" title="Play/Pause">▶️</button>
+        <button class="control-button" id="prev-btn" title="Previous">⏮️</button>
+        <button class="control-button" id="next-btn" title="Next">⏭️</button>
+        <button class="control-button" id="reset-btn" title="Reset">🔄</button>
+        <button class="control-button" id="transcript-btn" title="Show Transcript">📜</button>
+        <button class="control-button" id="voice-btn" title="Voice Controls">🎤</button>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Azure Speech SDK -->
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    
+    <script>
+        // Simple OrbitControls
+        class OrbitControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.target = new THREE.Vector3();
+                
+                this.minDistance = 10;
+                this.maxDistance = 50;
+                this.minPolarAngle = 0;
+                this.maxPolarAngle = Math.PI;
+                
+                this.rotateSpeed = 1.0;
+                this.zoomSpeed = 1.2;
+                
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                
+                this.scale = 1;
+                
+                this.rotateStart = new THREE.Vector2();
+                this.rotateEnd = new THREE.Vector2();
+                this.rotateDelta = new THREE.Vector2();
+                
+                this.isUserInteracting = false;
+                
+                this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this), false);
+                this.domElement.addEventListener('wheel', this.onMouseWheel.bind(this), false);
+                
+                this.update();
+            }
+            
+            onMouseDown(event) {
+                event.preventDefault();
+                this.isUserInteracting = true;
+                
+                this.rotateStart.set(event.clientX, event.clientY);
+                
+                document.addEventListener('mousemove', this.onMouseMove.bind(this), false);
+                document.addEventListener('mouseup', this.onMouseUp.bind(this), false);
+            }
+            
+            onMouseMove(event) {
+                if (!this.isUserInteracting) return;
+                
+                event.preventDefault();
+                
+                this.rotateEnd.set(event.clientX, event.clientY);
+                this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
+                
+                const element = this.domElement;
+                
+                this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
+                this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+                
+                this.rotateStart.copy(this.rotateEnd);
+                
+                this.update();
+            }
+            
+            onMouseUp() {
+                this.isUserInteracting = false;
+                document.removeEventListener('mousemove', this.onMouseMove.bind(this), false);
+                document.removeEventListener('mouseup', this.onMouseUp.bind(this), false);
+            }
+            
+            onMouseWheel(event) {
+                event.preventDefault();
+                
+                if (event.deltaY < 0) {
+                    this.scale /= this.zoomSpeed;
+                } else {
+                    this.scale *= this.zoomSpeed;
+                }
+                
+                this.update();
+            }
+            
+            update() {
+                const offset = new THREE.Vector3();
+                offset.copy(this.camera.position).sub(this.target);
+                
+                this.spherical.setFromVector3(offset);
+                
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                
+                this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
+                this.spherical.makeSafe();
+                
+                this.spherical.radius *= this.scale;
+                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+                
+                offset.setFromSpherical(this.spherical);
+                
+                this.camera.position.copy(this.target).add(offset);
+                this.camera.lookAt(this.target);
+                
+                this.sphericalDelta.set(0, 0, 0);
+                this.scale = 1;
+            }
+        }
+
+        // Unified Agent that transitions from historical to live
+        class Agent3D {
+            constructor(scene, name, position, aiPosition) {
+                this.scene = scene;
+                this.name = name;
+                this.position = position;
+                this.aiPosition = aiPosition;
+                this.group = new THREE.Group();
+                this.color = this.getAgentColor(name);
+                this.state = 'inactive'; // inactive, historical, loading, live
+                this.orbitRadius = 4;
+                this.orbitSpeed = 0.5 + Math.random() * 0.3;
+                this.orbitAngle = Math.random() * Math.PI * 2;
+                
+                this.create();
+            }
+
+            getAgentColor(name) {
+                const colors = {
+                    'HackerNewsAgent': 0xff6600,
+                    'Dynamics365CRUD': 0x0078d4,
+                    'ManageMemory': 0x9b59b6,
+                    'LocalTimeAgent': 0x3498db,
+                    'PowerPoint': 0xd35400,
+                    'WikipediaAgent': 0x2ecc71,
+                    'EmailDrafting': 0xe74c3c,
+                    'CodeReview': 0x1abc9c
+                };
+                return colors[name] || 0x95a5a6;
+            }
+
+            create() {
+                // Agent crystal
+                const geometry = new THREE.OctahedronGeometry(0.6, 0);
+                this.material = new THREE.MeshStandardMaterial({
+                    color: 0x444444, // Start grey
+                    roughness: 0.1,
+                    metalness: 0.9,
+                    transparent: true,
+                    opacity: 0
+                });
+                this.mesh = new THREE.Mesh(geometry, this.material);
+                this.mesh.castShadow = true;
+                this.group.add(this.mesh);
+
+                // Inner glow
+                const glowGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+                this.glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x444444,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                this.glow = new THREE.Mesh(glowGeometry, this.glowMaterial);
+                this.group.add(this.glow);
+
+                // Outer ring (for loading state)
+                const ringGeometry = new THREE.TorusGeometry(1, 0.1, 16, 32);
+                this.ringMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffeb3b,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                this.ring = new THREE.Mesh(ringGeometry, this.ringMaterial);
+                this.ring.rotation.x = Math.PI / 2;
+                this.group.add(this.ring);
+
+                // Label
+                this.createLabel();
+
+                // Energy connection to AI
+                this.createEnergyConnection();
+
+                this.scene.add(this.group);
+                
+                // Start orbiting
+                this.startOrbit();
+            }
+
+            createLabel() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const context = canvas.getContext('2d');
+                
+                this.labelCanvas = canvas;
+                this.labelContext = context;
+                
+                this.updateLabel();
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                this.labelTexture = texture;
+                const spriteMaterial = new THREE.SpriteMaterial({ 
+                    map: texture,
+                    transparent: true,
+                    opacity: 0
+                });
+                this.labelSprite = new THREE.Sprite(spriteMaterial);
+                this.labelSprite.scale.set(2, 0.5, 1);
+                this.labelSprite.position.y = 1.5;
+                this.group.add(this.labelSprite);
+            }
+
+            updateLabel() {
+                const ctx = this.labelContext;
+                ctx.clearRect(0, 0, 256, 64);
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, 256, 64);
+                
+                ctx.fillStyle = this.state === 'live' ? '#06ffa5' : 
+                               this.state === 'loading' ? '#ffeb3b' : 
+                               this.state === 'historical' ? '#999' : '#666';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, 128, 40);
+                
+                if (this.labelTexture) {
+                    this.labelTexture.needsUpdate = true;
+                }
+            }
+
+            createEnergyConnection() {
+                // Dynamic energy beam to AI
+                const points = [];
+                for (let i = 0; i <= 20; i++) {
+                    points.push(new THREE.Vector3(0, 0, 0));
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                this.beamMaterial = new THREE.LineBasicMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0,
+                    linewidth: 2,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.energyBeam = new THREE.Line(geometry, this.beamMaterial);
+                this.scene.add(this.energyBeam);
+            }
+
+            startOrbit() {
+                const animate = () => {
+                    if (this.state === 'inactive') {
+                        requestAnimationFrame(animate);
+                        return;
+                    }
+                    
+                    // Orbit around AI
+                    this.orbitAngle += this.orbitSpeed * 0.01;
+                    const x = Math.cos(this.orbitAngle) * this.orbitRadius;
+                    const z = Math.sin(this.orbitAngle) * this.orbitRadius;
+                    
+                    this.group.position.set(
+                        this.aiPosition.x + x,
+                        this.aiPosition.y + Math.sin(Date.now() * 0.001) * 0.3,
+                        this.aiPosition.z + z
+                    );
+                    
+                    // Update energy beam
+                    this.updateEnergyBeam();
+                    
+                    // Rotate agent
+                    this.mesh.rotation.y += 0.02;
+                    this.mesh.rotation.x += 0.01;
+                    
+                    // Loading ring animation
+                    if (this.state === 'loading') {
+                        this.ring.rotation.z += 0.05;
+                    }
+                    
+                    requestAnimationFrame(animate);
+                };
+                animate();
+            }
+
+            updateEnergyBeam() {
+                const positions = this.energyBeam.geometry.attributes.position;
+                const start = this.group.position;
+                const end = this.aiPosition;
+                
+                for (let i = 0; i <= 20; i++) {
+                    const t = i / 20;
+                    const wave = Math.sin(t * Math.PI * 2 + Date.now() * 0.003) * 0.3;
+                    
+                    positions.setXYZ(
+                        i,
+                        start.x + (end.x - start.x) * t,
+                        start.y + (end.y - start.y) * t + wave,
+                        start.z + (end.z - start.z) * t
+                    );
+                }
+                
+                positions.needsUpdate = true;
+            }
+
+            showHistorical(result) {
+                this.state = 'historical';
+                this.updateAgentStatus('historical');
+                
+                // Fade in with grey color
+                const fadeIn = () => {
+                    const startTime = Date.now();
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / 1000, 1);
+                        
+                        this.material.opacity = progress * 0.6;
+                        this.glowMaterial.opacity = progress * 0.1;
+                        this.labelSprite.material.opacity = progress;
+                        this.beamMaterial.opacity = progress * 0.3;
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            // Send data packet
+                            this.sendDataPacket(0x666666);
+                        }
+                    };
+                    animate();
+                };
+                fadeIn();
+                
+                this.updateLabel();
+            }
+
+            transitionToLoading() {
+                this.state = 'loading';
+                this.updateAgentStatus('loading');
+                
+                // Color transition and loading ring
+                const startTime = Date.now();
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 500, 1);
+                    
+                    // Interpolate color from grey to yellow
+                    this.material.color.lerpColors(
+                        new THREE.Color(0x444444),
+                        new THREE.Color(0xffeb3b),
+                        progress
+                    );
+                    this.glowMaterial.color.copy(this.material.color);
+                    
+                    // Show loading ring
+                    this.ringMaterial.opacity = progress * 0.8;
+                    
+                    // Pulse effect
+                    const pulse = Math.sin(Date.now() * 0.005) * 0.1 + 0.9;
+                    this.glow.scale.setScalar(pulse);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+                
+                this.updateLabel();
+            }
+
+            transitionToLive(result) {
+                this.state = 'live';
+                this.updateAgentStatus('live');
+                
+                // Burst effect when transitioning to live
+                this.createBurstEffect();
+                
+                // Color transition from loading to live
+                const startTime = Date.now();
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1000, 1);
+                    
+                    // Interpolate to agent color
+                    this.material.color.lerpColors(
+                        new THREE.Color(0xffeb3b),
+                        new THREE.Color(this.color),
+                        progress
+                    );
+                    this.glowMaterial.color.copy(this.material.color);
+                    
+                    // Update opacity
+                    this.material.opacity = 0.6 + progress * 0.2;
+                    this.glowMaterial.opacity = 0.1 + progress * 0.2;
+                    this.beamMaterial.opacity = 0.3 + progress * 0.4;
+                    this.beamMaterial.color = new THREE.Color(this.color);
+                    
+                    // Hide loading ring
+                    this.ringMaterial.opacity = (1 - progress) * 0.8;
+                    
+                    // Scale effect
+                    const scale = 1 + Math.sin(progress * Math.PI) * 0.3;
+                    this.mesh.scale.setScalar(scale);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        // Send live data
+                        this.sendDataPacket(this.color);
+                    }
+                };
+                animate();
+                
+                this.updateLabel();
+            }
+
+            createBurstEffect() {
+                // Create expanding ring burst
+                const burstGeometry = new THREE.RingGeometry(0.5, 2, 32);
+                const burstMaterial = new THREE.MeshBasicMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0.8,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const burst = new THREE.Mesh(burstGeometry, burstMaterial);
+                burst.position.copy(this.group.position);
+                burst.rotation.x = Math.PI / 2;
+                this.scene.add(burst);
+                
+                // Animate burst
+                const startTime = Date.now();
+                const animateBurst = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1000, 1);
+                    
+                    burst.scale.setScalar(1 + progress * 3);
+                    burstMaterial.opacity = 0.8 * (1 - progress);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animateBurst);
+                    } else {
+                        this.scene.remove(burst);
+                    }
+                };
+                animateBurst();
+            }
+
+            sendDataPacket(color) {
+                // Create data packet
+                const packetGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const packetMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending
+                });
+                const packet = new THREE.Mesh(packetGeometry, packetMaterial);
+                packet.position.copy(this.group.position);
+                this.scene.add(packet);
+                
+                // Animate to AI
+                const startPos = this.group.position.clone();
+                const endPos = this.aiPosition.clone();
+                const startTime = Date.now();
+                
+                const animatePacket = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1500, 1);
+                    
+                    // Curved path
+                    const t = progress;
+                    packet.position.lerpVectors(startPos, endPos, t);
+                    packet.position.y += Math.sin(t * Math.PI) * 2;
+                    
+                    // Trail effect
+                    const trail = packet.clone();
+                    trail.scale.setScalar(0.5);
+                    trail.material = trail.material.clone();
+                    trail.material.opacity = 0.3;
+                    this.scene.add(trail);
+                    
+                    setTimeout(() => {
+                        this.scene.remove(trail);
+                    }, 200);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animatePacket);
+                    } else {
+                        this.scene.remove(packet);
+                    }
+                };
+                animatePacket();
+            }
+
+            updateAgentStatus(status) {
+                const statusList = document.getElementById('agent-status-list');
+                let item = document.getElementById(`status-${this.name}`);
+                
+                if (!item) {
+                    item = document.createElement('div');
+                    item.id = `status-${this.name}`;
+                    item.className = 'agent-status-item';
+                    item.innerHTML = `
+                        <div class="agent-status-indicator ${status}"></div>
+                        <span>${this.name}</span>
+                    `;
+                    statusList.appendChild(item);
+                    document.getElementById('agent-status').classList.add('visible');
+                } else {
+                    const indicator = item.querySelector('.agent-status-indicator');
+                    indicator.className = `agent-status-indicator ${status}`;
+                }
+            }
+
+            remove() {
+                this.scene.remove(this.group);
+                this.scene.remove(this.energyBeam);
+                
+                const statusItem = document.getElementById(`status-${this.name}`);
+                if (statusItem) statusItem.remove();
+                
+                if (document.getElementById('agent-status-list').children.length === 0) {
+                    document.getElementById('agent-status').classList.remove('visible');
+                }
+            }
+        }
+
+        // AI Companion
+        class AICompanion {
+            constructor(scene, position) {
+                this.scene = scene;
+                this.position = position;
+                this.group = new THREE.Group();
+                
+                this.create();
+            }
+
+            create() {
+                // Main core
+                const geometry = new THREE.IcosahedronGeometry(1.5, 1);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    roughness: 0.2,
+                    metalness: 0.8,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.castShadow = true;
+                this.group.add(this.mesh);
+
+                // Inner core
+                const coreGeometry = new THREE.OctahedronGeometry(0.7, 0);
+                const coreMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.5
+                });
+                this.core = new THREE.Mesh(coreGeometry, coreMaterial);
+                this.group.add(this.core);
+
+                // Light
+                this.light = new THREE.PointLight(0x8338ec, 2, 15);
+                this.group.add(this.light);
+
+                // Energy field
+                const fieldGeometry = new THREE.SphereGeometry(2.5, 32, 32);
+                const fieldMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x8338ec,
+                    transparent: true,
+                    opacity: 0.05,
+                    side: THREE.BackSide,
+                    blending: THREE.AdditiveBlending
+                });
+                this.energyField = new THREE.Mesh(fieldGeometry, fieldMaterial);
+                this.group.add(this.energyField);
+
+                this.group.position.copy(this.position);
+                this.scene.add(this.group);
+                
+                this.animate();
+            }
+
+            animate() {
+                const time = Date.now() * 0.001;
+                
+                this.mesh.rotation.x = time * 0.5;
+                this.mesh.rotation.y = time * 0.3;
+                this.core.rotation.x = -time * 0.7;
+                this.core.rotation.y = time * 0.9;
+                
+                const pulse = Math.sin(time * 2) * 0.1;
+                this.energyField.scale.setScalar(1 + pulse);
+                
+                requestAnimationFrame(() => this.animate());
+            }
+
+            setState(state) {
+                switch(state) {
+                    case 'thinking':
+                        this.light.color.setHex(0xffeb3b);
+                        this.core.material.emissive.setHex(0xffeb3b);
+                        break;
+                    case 'processing':
+                        this.light.color.setHex(0x2196f3);
+                        this.core.material.emissive.setHex(0x2196f3);
+                        break;
+                    case 'responding':
+                        this.light.color.setHex(0x06ffa5);
+                        this.core.material.emissive.setHex(0x06ffa5);
+                        break;
+                    default:
+                        this.light.color.setHex(0x8338ec);
+                        this.core.material.emissive.setHex(0x8338ec);
+                }
+            }
+        }
+
+        // Visualization Manager
+        class Visualization3D {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.agents = new Map();
+                
+                this.init();
+            }
+
+            init() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000033, 20, 100);
+
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    60, 
+                    window.innerWidth / window.innerHeight, 
+                    0.1, 
+                    1000
+                );
+                this.camera.position.set(15, 10, 20);
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true 
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+
+                // Controls
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.target.set(0, 3, 0);
+                this.controls.update();
+
+                // Lighting
+                this.setupLighting();
+
+                // Environment
+                this.createEnvironment();
+                
+                // Entities
+                this.createEntities();
+
+                // Events
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                mainLight.position.set(10, 20, 10);
+                mainLight.castShadow = true;
+                this.scene.add(mainLight);
+
+                const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+                fillLight.position.set(-10, 10, -10);
+                this.scene.add(fillLight);
+            }
+
+            createEnvironment() {
+                // Platform
+                const platformGeometry = new THREE.CylinderGeometry(20, 20, 0.5, 64);
+                const platformMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a2e,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.receiveShadow = true;
+                platform.position.y = -0.25;
+                this.scene.add(platform);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(40, 40, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+                
+                // Particles
+                this.createParticles();
+            }
+
+            createParticles() {
+                const particleCount = 300;
+                const positions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    const radius = 10 + Math.random() * 20;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = (Math.random() - 0.5) * Math.PI;
+                    
+                    positions[i] = radius * Math.cos(theta) * Math.cos(phi);
+                    positions[i + 1] = radius * Math.sin(phi) + 10;
+                    positions[i + 2] = radius * Math.sin(theta) * Math.cos(phi);
+                }
+                
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const material = new THREE.PointsMaterial({
+                    color: 0x4488ff,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.particles = new THREE.Points(geometry, material);
+                this.scene.add(this.particles);
+            }
+
+            createEntities() {
+                // User
+                this.createUser();
+                
+                // AI Companion
+                this.ai = new AICompanion(this.scene, new THREE.Vector3(0, 3, 0));
+            }
+
+            createUser() {
+                const group = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.6, 2.5, 16);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3b82f6,
+                    roughness: 0.5,
+                    metalness: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1.25;
+                body.castShadow = true;
+                group.add(body);
+
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xfdbcb4,
+                    roughness: 0.8
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 3;
+                head.castShadow = true;
+                group.add(head);
+
+                // Light
+                const light = new THREE.PointLight(0x3b82f6, 1, 10);
+                light.position.y = 4;
+                group.add(light);
+
+                group.position.set(-10, 0, 0);
+                this.scene.add(group);
+                
+                this.user = { group, body, head, light };
+            }
+
+            getOrCreateAgent(agentName) {
+                if (!this.agents.has(agentName)) {
+                    const agent = new Agent3D(
+                        this.scene, 
+                        agentName, 
+                        new THREE.Vector3(0, 0, 0),
+                        this.ai.group.position
+                    );
+                    
+                    // Set unique orbit parameters
+                    agent.orbitRadius = 4 + (this.agents.size % 3) * 0.5;
+                    agent.orbitAngle = (this.agents.size / 8) * Math.PI * 2;
+                    
+                    this.agents.set(agentName, agent);
+                }
+                
+                return this.agents.get(agentName);
+            }
+
+            showUserMessage(content) {
+                this.showMessage('user', content);
+                this.createDataFlow(this.user.group.position, this.ai.group.position, 0x3b82f6);
+                this.ai.setState('thinking');
+            }
+
+            showAssistantMessage(content) {
+                this.showMessage('assistant', content);
+                this.createDataFlow(this.ai.group.position, this.user.group.position, 0x8338ec);
+                this.ai.setState('responding');
+                
+                setTimeout(() => {
+                    this.ai.setState('idle');
+                }, 2000);
+            }
+
+            showHistoricalAgent(agentName, result) {
+                const agent = this.getOrCreateAgent(agentName);
+                agent.showHistorical(result);
+            }
+
+            async transitionAgentToLive(agentName, apiCall) {
+                const agent = this.getOrCreateAgent(agentName);
+                
+                // Show loading state
+                agent.transitionToLoading();
+                
+                // Show API status
+                document.getElementById('api-status').classList.add('active');
+                
+                try {
+                    // Make API call
+                    const result = await apiCall();
+                    
+                    // Transition to live
+                    agent.transitionToLive(result);
+                    
+                    document.getElementById('api-status').classList.remove('active');
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    document.getElementById('api-status').classList.remove('active');
+                }
+            }
+
+            showMessage(role, content) {
+                const display = document.getElementById('message-display');
+                const roleEl = document.getElementById('message-role');
+                const contentEl = document.getElementById('message-content');
+                
+                roleEl.textContent = role;
+                roleEl.className = `message-role ${role}`;
+                contentEl.textContent = content.substring(0, 200) + 
+                    (content.length > 200 ? '...' : '');
+                
+                display.classList.add('visible');
+                
+                setTimeout(() => {
+                    display.classList.remove('visible');
+                }, 4000);
+            }
+
+            createDataFlow(start, end, color) {
+                const points = [];
+                const segments = 50;
+                
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = start.x + (end.x - start.x) * t;
+                    const y = 3 + Math.sin(t * Math.PI) * 2;
+                    const z = start.z + (end.z - start.z) * t;
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0,
+                    linewidth: 3,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                this.scene.add(line);
+                
+                // Animate
+                let progress = 0;
+                const animate = () => {
+                    progress += 0.02;
+                    material.opacity = Math.min(progress * 2, 1);
+                    
+                    if (progress >= 1) {
+                        setTimeout(() => {
+                            const fadeOut = () => {
+                                material.opacity -= 0.02;
+                                if (material.opacity > 0) {
+                                    requestAnimationFrame(fadeOut);
+                                } else {
+                                    this.scene.remove(line);
+                                }
+                            };
+                            fadeOut();
+                        }, 500);
+                    } else {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+            }
+
+            clearAgents() {
+                this.agents.forEach(agent => agent.remove());
+                this.agents.clear();
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            render() {
+                if (this.particles) {
+                    this.particles.rotation.y += 0.0002;
+                }
+                
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Conversation Panel Manager
+        class ConversationPanel {
+            constructor() {
+                this.panel = document.getElementById('conversation-panel');
+                this.content = document.getElementById('conversation-content');
+                this.header = document.getElementById('conversation-header');
+                this.messageMap = new Map();
+                this.isDragging = false;
+                this.isMinimized = false;
+                this.dragOffset = { x: 0, y: 0 };
+                
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                // Dragging
+                this.header.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    this.dragOffset.x = e.clientX - this.panel.offsetLeft;
+                    this.dragOffset.y = e.clientY - this.panel.offsetTop;
+                    this.panel.style.cursor = 'grabbing';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isDragging) return;
+                    
+                    const x = e.clientX - this.dragOffset.x;
+                    const y = e.clientY - this.dragOffset.y;
+                    
+                    this.panel.style.left = `${x}px`;
+                    this.panel.style.top = `${y}px`;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    this.isDragging = false;
+                    this.panel.style.cursor = '';
+                });
+
+                // Panel controls
+                document.getElementById('minimize-btn').addEventListener('click', () => {
+                    this.toggleMinimize();
+                });
+
+                document.getElementById('close-panel-btn').addEventListener('click', () => {
+                    this.hide();
+                });
+
+                document.getElementById('transcript-btn').addEventListener('click', () => {
+                    this.toggle();
+                });
+            }
+
+            show() {
+                this.panel.classList.add('active');
+            }
+
+            hide() {
+                this.panel.classList.remove('active');
+            }
+
+            toggle() {
+                this.panel.classList.toggle('active');
+            }
+
+            toggleMinimize() {
+                this.isMinimized = !this.isMinimized;
+                this.panel.classList.toggle('minimized');
+                document.getElementById('minimize-btn').textContent = this.isMinimized ? '+' : '−';
+            }
+
+            addMessage(role, content, messageId) {
+                const messageEl = document.createElement('div');
+                messageEl.className = 'conv-message';
+                messageEl.id = `conv-msg-${messageId}`;
+                
+                const headerEl = document.createElement('div');
+                headerEl.className = 'conv-message-header';
+                
+                const roleEl = document.createElement('span');
+                roleEl.className = `conv-message-role ${role}`;
+                roleEl.textContent = role;
+                
+                headerEl.appendChild(roleEl);
+                
+                const contentEl = document.createElement('div');
+                contentEl.className = `conv-message-content ${role}`;
+                contentEl.textContent = content;
+                
+                messageEl.appendChild(headerEl);
+                messageEl.appendChild(contentEl);
+                
+                this.content.appendChild(messageEl);
+                this.messageMap.set(messageId, { element: messageEl, role, content });
+                
+                // Auto scroll
+                this.content.scrollTop = this.content.scrollHeight;
+                
+                return messageEl;
+            }
+
+            addResponseContainer(messageId) {
+                const container = document.createElement('div');
+                container.className = 'conv-message';
+                container.id = `conv-msg-${messageId}`;
+                
+                const headerEl = document.createElement('div');
+                headerEl.className = 'conv-message-header';
+                
+                const roleEl = document.createElement('span');
+                roleEl.className = 'conv-message-role assistant';
+                roleEl.textContent = 'assistant';
+                
+                headerEl.appendChild(roleEl);
+                container.appendChild(headerEl);
+                
+                const responseContainer = document.createElement('div');
+                responseContainer.className = 'response-container';
+                
+                container.appendChild(responseContainer);
+                this.content.appendChild(container);
+                
+                this.messageMap.set(messageId, { 
+                    element: container, 
+                    responseContainer,
+                    showingLive: false 
+                });
+                
+                return responseContainer;
+            }
+
+            addHistoricalResponse(messageId, content) {
+                const data = this.messageMap.get(messageId);
+                if (!data || !data.responseContainer) return;
+                
+                const historicalEl = document.createElement('div');
+                historicalEl.className = 'conv-message-content assistant response-historical';
+                historicalEl.textContent = content;
+                
+                const indicator = document.createElement('span');
+                indicator.className = 'version-indicator historical';
+                indicator.textContent = 'Original';
+                historicalEl.appendChild(indicator);
+                
+                data.responseContainer.appendChild(historicalEl);
+                data.historicalEl = historicalEl;
+                data.historicalContent = content;
+                
+                // Auto scroll
+                this.content.scrollTop = this.content.scrollHeight;
+            }
+
+            addLiveResponse(messageId, content) {
+                const data = this.messageMap.get(messageId);
+                if (!data || !data.responseContainer) return;
+                
+                // Create live response element
+                const liveEl = document.createElement('div');
+                liveEl.className = 'conv-message-content assistant response-live';
+                liveEl.textContent = content;
+                
+                const indicator = document.createElement('span');
+                indicator.className = 'version-indicator live';
+                indicator.textContent = 'Live';
+                liveEl.appendChild(indicator);
+                
+                // Add toggle button
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'version-toggle';
+                toggleBtn.textContent = 'Show Original';
+                toggleBtn.onclick = () => this.toggleVersion(messageId);
+                liveEl.appendChild(toggleBtn);
+                
+                data.responseContainer.appendChild(liveEl);
+                data.liveEl = liveEl;
+                data.liveContent = content;
+                
+                // Transition effect
+                setTimeout(() => {
+                    if (data.historicalEl) {
+                        data.historicalEl.classList.add('faded');
+                    }
+                    liveEl.classList.add('visible');
+                    data.showingLive = true;
+                }, 100);
+                
+                // Auto scroll
+                this.content.scrollTop = this.content.scrollHeight;
+            }
+
+            toggleVersion(messageId) {
+                const data = this.messageMap.get(messageId);
+                if (!data || !data.liveEl || !data.historicalEl) return;
+                
+                data.showingLive = !data.showingLive;
+                
+                if (data.showingLive) {
+                    data.historicalEl.classList.add('faded');
+                    data.liveEl.classList.add('visible');
+                    data.liveEl.querySelector('.version-toggle').textContent = 'Show Original';
+                } else {
+                    data.historicalEl.classList.remove('faded');
+                    data.liveEl.classList.remove('visible');
+                    data.liveEl.querySelector('.version-toggle').textContent = 'Show Live';
+                }
+            }
+
+            highlightMessage(messageId) {
+                const data = this.messageMap.get(messageId);
+                if (!data) return;
+                
+                // Remove previous highlights
+                this.content.querySelectorAll('.conv-message').forEach(el => {
+                    el.style.background = '';
+                });
+                
+                // Highlight current
+                data.element.style.background = 'rgba(6, 255, 165, 0.1)';
+                data.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Remove highlight after delay
+                setTimeout(() => {
+                    data.element.style.background = '';
+                }, 2000);
+            }
+
+            clear() {
+                this.content.innerHTML = '';
+                this.messageMap.clear();
+            }
+        }
+
+        // Enhanced Conversation Manager
+        class ConversationManager {
+            constructor(conversationPanel) {
+                this.conversationPanel = conversationPanel;
+                this.conversation = [];
+                this.currentIndex = 0;
+                this.apiKey = null;
+                this.apiEndpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.conversationHistory = [];
+                this.responseMap = new Map();
+            }
+
+            loadConversation(data, apiKey) {
+                this.conversation = data.conversation || [];
+                this.currentIndex = 0;
+                this.apiKey = apiKey;
+                this.conversationHistory = [];
+                this.responseMap.clear();
+                
+                document.getElementById('conversation-info').textContent = 
+                    `${data.appName || 'Conversation'} - ${this.conversation.length} messages`;
+                
+                // Load all messages into panel
+                this.conversationPanel.clear();
+                this.preloadConversation();
+                
+                this.updateCounter();
+            }
+
+            preloadConversation() {
+                let responseIndex = 0;
+                
+                this.conversation.forEach((msg, index) => {
+                    if (msg.role === 'user') {
+                        this.conversationPanel.addMessage('user', msg.content, `user-${index}`);
+                    } else if (msg.role === 'assistant') {
+                        const messageId = `assistant-${responseIndex}`;
+                        this.conversationPanel.addResponseContainer(messageId);
+                        this.conversationPanel.addHistoricalResponse(messageId, msg.content);
+                        this.responseMap.set(index, messageId);
+                        responseIndex++;
+                    } else if (msg.role === 'system') {
+                        this.conversationPanel.addMessage('system', msg.content, `system-${index}`);
+                    }
+                });
+            }
+
+            async processCurrentMessage(visualization) {
+                const message = this.conversation[this.currentIndex];
+                if (!message) return false;
+
+                // Highlight current message in panel
+                if (message.role === 'user') {
+                    this.conversationPanel.highlightMessage(`user-${this.currentIndex}`);
+                } else if (message.role === 'assistant') {
+                    const messageId = this.responseMap.get(this.currentIndex);
+                    if (messageId) {
+                        this.conversationPanel.highlightMessage(messageId);
+                    }
+                } else if (message.role === 'system') {
+                    this.conversationPanel.highlightMessage(`system-${this.currentIndex}`);
+                }
+
+                if (message.role === 'user') {
+                    visualization.showUserMessage(message.content);
+                    this.conversationHistory.push({ role: 'user', content: message.content });
+                    
+                    // Look ahead for agent calls
+                    const upcomingAgents = this.getUpcomingAgents();
+                    
+                    // If API key exists, prepare for live calls
+                    if (this.apiKey && upcomingAgents.length > 0) {
+                        // Make API call
+                        const apiPromise = this.makeAPICall(message.content);
+                        
+                        // Process each agent
+                        for (const agentName of upcomingAgents) {
+                            await visualization.transitionAgentToLive(agentName, async () => {
+                                const response = await apiPromise;
+                                
+                                // Add live response to panel
+                                const assistantIndex = this.findNextAssistantMessage();
+                                if (assistantIndex !== -1) {
+                                    const messageId = this.responseMap.get(assistantIndex);
+                                    if (messageId && response.assistant_response) {
+                                        this.conversationPanel.addLiveResponse(
+                                            messageId, 
+                                            response.assistant_response
+                                        );
+                                    }
+                                }
+                                
+                                return { 
+                                    agent: agentName, 
+                                    result: response.agent_logs || 'Live result'
+                                };
+                            });
+                        }
+                    }
+                } else if (message.role === 'assistant') {
+                    visualization.showAssistantMessage(message.content);
+                    this.conversationHistory.push({ role: 'assistant', content: message.content });
+                } else if (message.role === 'system') {
+                    // Show historical agent state first
+                    const match = message.content.match(/Performed (\w+) and got result: (.*)/);
+                    if (match) {
+                        visualization.showHistoricalAgent(match[1], match[2]);
+                    }
+                }
+
+                this.currentIndex++;
+                this.updateCounter();
+                
+                return this.currentIndex < this.conversation.length;
+            }
+
+            findNextAssistantMessage() {
+                for (let i = this.currentIndex + 1; i < this.conversation.length; i++) {
+                    if (this.conversation[i].role === 'assistant') {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+
+            getUpcomingAgents() {
+                const agents = [];
+                
+                for (let i = this.currentIndex + 1; i < this.conversation.length; i++) {
+                    const msg = this.conversation[i];
+                    
+                    if (msg.role === 'system' && msg.content.includes('Performed')) {
+                        const match = msg.content.match(/Performed (\w+)/);
+                        if (match) {
+                            agents.push(match[1]);
+                        }
+                    } else if (msg.role === 'user') {
+                        break;
+                    }
+                }
+                
+                return agents;
+            }
+
+            async makeAPICall(userInput) {
+                const response = await fetch(this.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: userInput,
+                        conversation_history: this.conversationHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                return await response.json();
+            }
+
+            updateCounter() {
+                document.getElementById('message-counter').textContent = 
+                    `Message: ${this.currentIndex + 1}/${this.conversation.length}`;
+            }
+
+            reset() {
+                this.currentIndex = 0;
+                this.conversationHistory = [];
+                this.updateCounter();
+            }
+        }
+
+        // Visualization Manager
+        class Visualization3D {
+            constructor(voiceManager) {
+                this.voiceManager = voiceManager;
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.agents = new Map();
+                
+                this.init();
+            }
+
+            // ... (init and other methods remain the same until getOrCreateAgent)
+
+            getOrCreateAgent(agentName) {
+                if (!this.agents.has(agentName)) {
+                    const agent = new Agent3D(
+                        this.scene, 
+                        agentName, 
+                        new THREE.Vector3(0, 0, 0),
+                        this.ai.group.position,
+                        this.voiceManager
+                    );
+                    
+                    // Set unique orbit parameters
+                    agent.orbitRadius = 4 + (this.agents.size % 3) * 0.5;
+                    agent.orbitAngle = (this.agents.size / 8) * Math.PI * 2;
+                    
+                    this.agents.set(agentName, agent);
+                }
+                
+                return this.agents.get(agentName);
+            }
+
+            // ... (rest of methods remain the same)
+        }
+
+        // Main Application
+        class App {
+            constructor() {
+                this.voiceManager = new VoiceManager();
+                this.visualization = new Visualization3D(this.voiceManager);
+                this.conversationPanel = new ConversationPanel();
+                this.conversationManager = new ConversationManager(this.conversationPanel, this.voiceManager);
+                this.isPlaying = false;
+                
+                this.setupEventListeners();
+                this.animate();
+            }
+
+            setupEventListeners() {
+                // File upload
+                const uploadArea = document.getElementById('upload-area');
+                const fileInput = document.getElementById('file-input');
+                
+                uploadArea.addEventListener('click', () => fileInput.click());
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        this.handleFile(e.dataTransfer.files[0]);
+                    }
+                });
+                
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.handleFile(e.target.files[0]);
+                    }
+                });
+
+                // Controls
+                document.getElementById('play-pause-btn').addEventListener('click', () => {
+                    this.togglePlayback();
+                });
+                
+                document.getElementById('next-btn').addEventListener('click', () => {
+                    this.nextMessage();
+                });
+                
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    this.reset();
+                });
+            }
+
+            async handleFile(file) {
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    
+                    if (!data.conversation || !Array.isArray(data.conversation)) {
+                        throw new Error('Invalid conversation format');
+                    }
+                    
+                    const apiKey = document.getElementById('api-key-input').value;
+                    this.conversationManager.loadConversation(data, apiKey);
+                    
+                    document.getElementById('upload-interface').style.display = 'none';
+                    document.getElementById('control-panel').classList.add('active');
+                    
+                    this.reset();
+                    
+                } catch (error) {
+                    alert('Error loading file: ' + error.message);
+                }
+            }
+
+            togglePlayback() {
+                this.isPlaying = !this.isPlaying;
+                document.getElementById('play-pause-btn').textContent = 
+                    this.isPlaying ? '⏸️' : '▶️';
+                
+                if (this.isPlaying) {
+                    this.playNext();
+                }
+            }
+
+            async playNext() {
+                if (!this.isPlaying) return;
+                
+                const hasMore = await this.conversationManager.processCurrentMessage(this.visualization);
+                
+                if (hasMore) {
+                    setTimeout(() => this.playNext(), 4000);
+                } else {
+                    this.isPlaying = false;
+                    document.getElementById('play-pause-btn').textContent = '▶️';
+                }
+            }
+
+            async nextMessage() {
+                await this.conversationManager.processCurrentMessage(this.visualization);
+            }
+
+            reset() {
+                this.isPlaying = false;
+                document.getElementById('play-pause-btn').textContent = '▶️';
+                this.conversationManager.reset();
+                this.visualization.clearAgents();
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                this.visualization.render();
+            }
+        }
+
+        // Start
+        const app = new App();
+    </script>
+</body>
+</html>

@@ -35,20 +35,33 @@
             width: 100%;
             height: 100%;
             touch-action: none;
+            z-index: 1;
+        }
+
+        /* Header Section */
+        .header-section {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px;
+            pointer-events: none;
         }
 
         .world-ui {
-            position: absolute;
-            top: env(safe-area-inset-top, 20px);
-            left: env(safe-area-inset-left, 20px);
-            z-index: 1001;
             pointer-events: none;
         }
 
         .world-title {
-            font-size: 2.5em;
+            font-size: 2em;
             font-weight: 100;
-            letter-spacing: 0.15em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
             background: linear-gradient(45deg, #742774, #4a90e2, #22a7f0);
             background-size: 400% 100%;
@@ -56,7 +69,7 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
             animation: shimmer 8s ease-in-out infinite;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
 
         @keyframes shimmer {
@@ -65,28 +78,125 @@
         }
 
         .world-description {
-            font-size: 1.1em;
-            color: rgba(255, 255, 255, 0.7);
-            max-width: 400px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
         }
 
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .status-indicator {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            font-size: 0.85em;
+        }
+
+        .status-text {
+            color: #ffd700;
+            font-weight: 500;
+        }
+
+        .metrics-toggle {
+            background: rgba(40, 167, 69, 0.8);
+            padding: 8px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            border: none;
+            color: white;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .metrics-toggle:hover {
+            background: rgba(40, 167, 69, 1);
+            transform: translateY(-2px);
+        }
+
+        /* Conversation Display Area */
+        .conversation-area {
+            position: fixed;
+            top: 100px;
+            left: 20px;
+            right: 20px;
+            bottom: 140px;
+            z-index: 50;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+            pointer-events: none;
+        }
+
+        .speech-bubble {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s, transform 0.5s;
+            pointer-events: auto;
+            overflow-y: auto;
+            max-height: 100%;
+        }
+
+        .speech-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .speech-bubble h3 {
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .speech-bubble.teacher {
+            background: rgba(116, 39, 116, 0.95);
+            color: white;
+            grid-column: 1 / 3;
+        }
+
+        .speech-bubble.student-original {
+            background: rgba(229, 114, 0, 0.95);
+            color: white;
+        }
+
+        .speech-bubble.student-live {
+            background: rgba(34, 167, 240, 0.95);
+            color: white;
+        }
+
+        /* Bottom Controls */
         .controls-panel {
-            position: absolute;
-            bottom: env(safe-area-inset-bottom, 20px);
+            position: fixed;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
             border: 2px solid rgba(116, 39, 116, 0.5);
             border-radius: 20px;
-            padding: 20px;
+            padding: 15px 20px;
             backdrop-filter: blur(10px);
-            z-index: 1002;
+            z-index: 100;
             display: flex;
             gap: 15px;
             align-items: center;
             flex-wrap: wrap;
             max-width: 90%;
-            pointer-events: auto;
         }
 
         .control-button {
@@ -101,7 +211,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            pointer-events: auto;
+            font-size: 0.9em;
         }
 
         .control-button:hover {
@@ -145,8 +255,139 @@
             border-radius: 10px;
             font-weight: 500;
             color: #ffd700;
+            font-size: 0.9em;
         }
 
+        .auto-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            border-radius: 22px;
+            transition: 0.4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.4s;
+        }
+
+        input:checked + .slider {
+            background-color: #742774;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(18px);
+        }
+
+        /* Metrics Panel */
+        .metrics-panel {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid rgba(40, 167, 69, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            width: 350px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        .metrics-panel.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .metrics-title {
+            font-size: 1.3em;
+            color: #28a745;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metric-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid #28a745;
+        }
+
+        .metric-label {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #ffd700;
+            line-height: 1.4;
+        }
+
+        .metric-sublabel {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 3px;
+        }
+
+        .productivity-chart {
+            margin-top: 20px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .export-metrics-btn {
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        /* Overlays */
         .upload-overlay {
             position: fixed;
             top: 0;
@@ -221,186 +462,12 @@
             padding: 5px;
         }
 
-        /* Speech bubbles */
-        .speech-bubble {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.95);
-            color: #333;
-            padding: 15px 20px;
-            border-radius: 20px;
-            max-width: 300px;
-            font-size: 0.9em;
-            line-height: 1.4;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.5s, transform 0.5s;
-            pointer-events: none;
-            z-index: 1005;
-        }
-
-        .speech-bubble.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .speech-bubble.teacher {
-            background: rgba(116, 39, 116, 0.9);
-            color: white;
-        }
-
-        .speech-bubble.teacher::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 30px;
-            width: 0;
-            height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-top: 10px solid rgba(116, 39, 116, 0.9);
-        }
-
-        .speech-bubble.student-original {
-            background: rgba(229, 114, 0, 0.9);
-            color: white;
-        }
-
-        .speech-bubble.student-original::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            right: 30px;
-            width: 0;
-            height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-top: 10px solid rgba(229, 114, 0, 0.9);
-        }
-
-        .speech-bubble.student-live {
-            background: rgba(34, 167, 240, 0.9);
-            color: white;
-        }
-
-        .speech-bubble.student-live::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            right: 30px;
-            width: 0;
-            height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-top: 10px solid rgba(34, 167, 240, 0.9);
-        }
-
-        .auto-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 16px;
-            border-radius: 10px;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 46px;
-            height: 24px;
-        }
-
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            border-radius: 24px;
-            transition: 0.4s;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            border-radius: 50%;
-            transition: 0.4s;
-        }
-
-        input:checked + .slider {
-            background-color: #742774;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(22px);
-        }
-
-        .loading {
+        .api-config-hint {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            text-align: center;
-            font-size: 1.2em;
-            color: rgba(255, 255, 255, 0.8);
-            font-weight: 200;
-            letter-spacing: 0.1em;
-            z-index: 2000;
-        }
-
-        .loading::after {
-            content: '';
-            display: block;
-            width: 60px;
-            height: 60px;
-            margin: 30px auto;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #742774;
-            border-radius: 50%;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .status-indicator {
-            position: absolute;
-            top: env(safe-area-inset-top, 20px);
-            right: env(safe-area-inset-right, 20px);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px 20px;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            z-index: 1001;
-        }
-
-        .status-text {
-            color: #ffd700;
-            font-weight: 500;
-        }
-
-        .api-config-hint {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             padding: 30px;
             border-radius: 20px;
             border: 2px solid rgba(116, 39, 116, 0.5);
@@ -441,135 +508,89 @@
             font-weight: 600;
         }
 
-        /* Productivity Metrics Panel */
-        .metrics-panel {
-            position: absolute;
-            top: env(safe-area-inset-top, 80px);
-            right: env(safe-area-inset-right, 20px);
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid rgba(40, 167, 69, 0.5);
-            border-radius: 20px;
-            padding: 20px;
-            max-width: 350px;
-            backdrop-filter: blur(10px);
-            z-index: 1003;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
         }
 
-        .metrics-panel.visible {
-            opacity: 1;
-            visibility: visible;
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 60px;
+            margin: 30px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #742774;
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
         }
 
-        .metrics-title {
-            font-size: 1.4em;
-            color: #28a745;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
-        .metric-item {
-            margin: 10px 0;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            border-left: 3px solid #28a745;
-        }
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .conversation-area {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+            }
 
-        .metric-label {
-            font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 5px;
-        }
-
-        .metric-value {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #ffd700;
-        }
-
-        .metric-sublabel {
-            font-size: 0.8em;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 3px;
-        }
-
-        .productivity-chart {
-            margin-top: 20px;
-            height: 150px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .chart-bar {
-            position: absolute;
-            bottom: 0;
-            width: 30px;
-            background: linear-gradient(to top, #28a745, #3dd058);
-            border-radius: 5px 5px 0 0;
-            transition: height 0.5s ease;
-        }
-
-        .export-metrics-btn {
-            width: 100%;
-            margin-top: 15px;
-        }
-
-        .metrics-toggle {
-            position: absolute;
-            top: env(safe-area-inset-top, 20px);
-            right: env(safe-area-inset-right, 280px);
-            background: rgba(40, 167, 69, 0.8);
-            padding: 8px 16px;
-            border-radius: 10px;
-            cursor: pointer;
-            z-index: 1001;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
-
-        .metrics-toggle:hover {
-            background: rgba(40, 167, 69, 1);
-            transform: translateY(-2px);
+            .speech-bubble.teacher {
+                grid-column: 1;
+            }
         }
 
         @media (max-width: 768px) {
-            .world-title {
-                font-size: 1.8em;
+            .header-section {
+                flex-direction: column;
+                height: auto;
+                gap: 10px;
             }
-            
-            .world-description {
-                font-size: 0.9em;
+
+            .world-title {
+                font-size: 1.5em;
+            }
+
+            .header-controls {
+                align-self: flex-end;
+            }
+
+            .conversation-area {
+                top: 120px;
+                bottom: 180px;
+                left: 10px;
+                right: 10px;
             }
 
             .controls-panel {
-                bottom: env(safe-area-inset-bottom, 10px);
-                padding: 15px;
+                bottom: 10px;
+                padding: 10px;
                 gap: 10px;
             }
 
             .control-button {
                 padding: 8px 15px;
-                font-size: 0.9em;
+                font-size: 0.85em;
             }
 
             .metrics-panel {
+                width: calc(100% - 20px);
                 right: 10px;
                 left: 10px;
-                max-width: none;
             }
 
-            .metrics-toggle {
-                right: env(safe-area-inset-right, 20px);
-                top: env(safe-area-inset-top, 60px);
+            .speech-bubble {
+                padding: 15px;
+                font-size: 0.9em;
             }
         }
     </style>
@@ -577,20 +598,41 @@
 <body>
     <div id="three-container"></div>
     
-    <div class="world-ui">
-        <h1 class="world-title">TEACHER-LEARNER ACTIVITY</h1>
-        <p class="world-description">Watch conversations come to life in 3D space</p>
+    <!-- Header Section -->
+    <div class="header-section">
+        <div class="world-ui">
+            <h1 class="world-title">TEACHER-LEARNER ACTIVITY</h1>
+            <p class="world-description">Watch conversations come to life in 3D space</p>
+        </div>
+        
+        <div class="header-controls">
+            <div class="status-indicator">
+                <span class="status-text" id="status-text">Ready to load conversation</span>
+            </div>
+            <button class="metrics-toggle" id="metrics-toggle">
+                <i class="fas fa-chart-line"></i>
+                <span>Productivity</span>
+            </button>
+        </div>
     </div>
     
-    <div class="status-indicator">
-        <span class="status-text" id="status-text">Ready to load conversation</span>
+    <!-- Conversation Display Area -->
+    <div class="conversation-area">
+        <div id="teacher-bubble" class="speech-bubble teacher">
+            <h3>Teacher (User) Input</h3>
+            <div id="teacher-content"></div>
+        </div>
+        <div id="student-original-bubble" class="speech-bubble student-original">
+            <h3>Original Response</h3>
+            <div id="student-original-content"></div>
+        </div>
+        <div id="student-live-bubble" class="speech-bubble student-live">
+            <h3>Live AI Response</h3>
+            <div id="student-live-content"></div>
+        </div>
     </div>
-
-    <div class="metrics-toggle" id="metrics-toggle">
-        <i class="fas fa-chart-line"></i>
-        <span>Productivity Metrics</span>
-    </div>
-
+    
+    <!-- Metrics Panel -->
     <div class="metrics-panel" id="metrics-panel">
         <h3 class="metrics-title">
             <i class="fas fa-chart-bar"></i>
@@ -630,6 +672,7 @@
         </button>
     </div>
     
+    <!-- Bottom Controls -->
     <div class="controls-panel">
         <button id="upload-btn" class="control-button">
             <i class="fas fa-upload"></i> Upload Conversation
@@ -655,6 +698,7 @@
         </div>
     </div>
     
+    <!-- Upload Overlay -->
     <div class="upload-overlay" id="upload-overlay">
         <div class="upload-panel">
             <button class="close-upload" id="close-upload">&times;</button>
@@ -671,6 +715,7 @@
         </div>
     </div>
     
+    <!-- API Configuration -->
     <div class="api-config-hint" id="api-config">
         <h3>API Configuration Required</h3>
         <p>Please enter your API details for live responses:</p>
@@ -678,10 +723,6 @@
         <input type="password" id="api-key" placeholder="API Key">
         <button id="save-api-config">Save Configuration</button>
     </div>
-    
-    <div id="teacher-bubble" class="speech-bubble teacher"></div>
-    <div id="student-original-bubble" class="speech-bubble student-original"></div>
-    <div id="student-live-bubble" class="speech-bubble student-live"></div>
     
     <div class="loading" id="loading">Initializing classroom...</div>
 
@@ -1107,33 +1148,7 @@
                     this.studentLive.position.y = this.studentLive.userData.baseY + Math.sin(time * 0.4 + 2) * 0.05;
                 }
                 
-                // Update speech bubble positions
-                this.updateSpeechBubblePositions();
-                
                 this.renderer.render(this.scene, this.camera);
-            }
-            
-            updateSpeechBubblePositions() {
-                // Convert 3D positions to 2D screen positions
-                const updateBubblePosition = (character, bubble, yOffset = 5) => {
-                    if (!character || !bubble) return;
-                    
-                    const position = new THREE.Vector3();
-                    character.getWorldPosition(position);
-                    position.y += yOffset;
-                    
-                    const screenPosition = position.project(this.camera);
-                    const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
-                    const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
-                    
-                    bubble.style.left = `${x}px`;
-                    bubble.style.top = `${y}px`;
-                    bubble.style.transform = 'translate(-50%, -100%)';
-                };
-                
-                updateBubblePosition(this.teacher, this.teacherBubble);
-                updateBubblePosition(this.studentOriginal, this.studentOriginalBubble);
-                updateBubblePosition(this.studentLive, this.studentLiveBubble);
             }
             
             handleResize() {
@@ -1440,9 +1455,9 @@
                 
                 if (message.role === 'user') {
                     // Teacher speaks
-                    this.showSpeechBubble(this.teacherBubble, message.content);
-                    this.hideSpeechBubble(this.studentOriginalBubble);
-                    this.hideSpeechBubble(this.studentLiveBubble);
+                    this.showSpeechBubble('teacher-content', message.content);
+                    this.hideSpeechBubble('student-original-content');
+                    this.hideSpeechBubble('student-live-content');
                     this.updateStatus('Teacher speaking...');
                     
                     this.currentIndex++;
@@ -1456,8 +1471,7 @@
                     this.updateStatus('Students responding...');
                     
                     // Show original response
-                    this.showSpeechBubble(this.studentOriginalBubble, message.content);
-                    this.hideSpeechBubble(this.teacherBubble);
+                    this.showSpeechBubble('student-original-content', message.content);
                     
                     // Make live API call
                     try {
@@ -1467,11 +1481,11 @@
                         if (lastUserMessage) {
                             const liveResponse = await this.makeLiveApiCall(lastUserMessage, historyUpToNow);
                             const liveContent = liveResponse.assistant_response || liveResponse.text || 'No response';
-                            this.showSpeechBubble(this.studentLiveBubble, liveContent);
+                            this.showSpeechBubble('student-live-content', liveContent);
                         }
                     } catch (error) {
                         console.error('API call error:', error);
-                        this.showSpeechBubble(this.studentLiveBubble, 'Error: Could not generate response');
+                        this.showSpeechBubble('student-live-content', 'Error: Could not generate response');
                     }
                     
                     this.currentIndex++;
@@ -1526,13 +1540,19 @@
                 return await response.json();
             }
             
-            showSpeechBubble(bubble, text) {
-                bubble.textContent = text.length > 150 ? text.substring(0, 150) + '...' : text;
-                bubble.classList.add('visible');
+            showSpeechBubble(contentId, text) {
+                const contentElement = document.getElementById(contentId);
+                const bubbleElement = contentElement.parentElement;
+                
+                contentElement.textContent = text;
+                bubbleElement.classList.add('visible');
             }
             
-            hideSpeechBubble(bubble) {
-                bubble.classList.remove('visible');
+            hideSpeechBubble(contentId) {
+                const contentElement = document.getElementById(contentId);
+                const bubbleElement = contentElement.parentElement;
+                
+                bubbleElement.classList.remove('visible');
             }
             
             resetConversation() {
@@ -1542,9 +1562,9 @@
                 this.nextBtn.disabled = true;
                 this.resetBtn.disabled = true;
                 
-                this.hideSpeechBubble(this.teacherBubble);
-                this.hideSpeechBubble(this.studentOriginalBubble);
-                this.hideSpeechBubble(this.studentLiveBubble);
+                this.hideSpeechBubble('teacher-content');
+                this.hideSpeechBubble('student-original-content');
+                this.hideSpeechBubble('student-live-content');
                 
                 this.updateStatus('Ready to start');
                 this.updateProgress();
