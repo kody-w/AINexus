@@ -1,0 +1,2574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Hobbiton Trailer Park</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #8B7355, #228B22, #FFD700, #FF6347);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes shimmer {
+            0%, 100% { 
+                background-position: 0% 50%; 
+                filter: hue-rotate(0deg);
+            }
+            50% { 
+                background-position: 100% 50%;
+                filter: hue-rotate(30deg);
+            }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid transparent;
+            border-image: linear-gradient(45deg, #8B7355, #228B22, #FFD700) 1;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #FFD700, #228B22);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #90EE90;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(139, 115, 85, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(139, 115, 85, 0.5);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #8B7355, #654321);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 100px;
+            margin: 30px auto;
+            border: 2px solid transparent;
+            border-top-color: #228B22;
+            border-radius: 50%;
+            animation: quantum-spin 1s ease-in-out infinite;
+        }
+
+        @keyframes quantum-spin {
+            0% { 
+                transform: rotate(0deg) scale(1);
+                border-top-color: #228B22;
+            }
+            50% { 
+                transform: rotate(180deg) scale(1.2);
+                border-top-color: #FFD700;
+            }
+            100% { 
+                transform: rotate(360deg) scale(1);
+                border-top-color: #228B22;
+            }
+        }
+
+        .info-panel {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 250px;
+        }
+
+        .info-title {
+            color: #FFD700;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .info-content {
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+            
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+
+            .info-panel {
+                display: none;
+            }
+        }
+
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    
+    <div class="look-area" id="look-area"></div>
+    
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">HOBBITON TRAILER PARK</h1>
+        <p class="world-description" id="world-description">Where the Shire meets Route 66. Home to Garrett Califano and his merry band of hobbit-trailer dwellers.</p>
+    </div>
+    
+    <div class="info-panel" id="info-panel">
+        <div class="info-title">Welcome, Traveler!</div>
+        <div class="info-content">
+            Explore our unique community where Middle-earth charm meets American road culture. Visit Garrett's tower, warm yourself by the campfires, or discover the hidden hobbit holes!
+        </div>
+    </div>
+    
+    <div class="controls-hint" id="controls-hint">WASD: Move | Mouse: Look | Click: Travel | Space: Jump | Q/E: Fly Up/Down</div>
+    
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+    
+    <div class="loading" id="loading">Materializing the magical trailer park...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'yourusername';
+        const REPO_NAME = 'nexus-worlds';
+        const BRANCH = 'main';
+        
+        // World configuration
+        const DEFAULT_WORLD_ATTRIBUTES = {
+            name: "Hobbiton Trailer Park",
+            description: "Where the Shire meets Route 66. Home to Garrett Califano and his merry band of hobbit-trailer dwellers.",
+            ambientColor: 0xF5DEB3,
+            fogColor: 0xE0D5B7,
+            groundColor: 0x7CFC00,
+            skyTopColor: 0x87CEEB,
+            skyBottomColor: 0xFFE4B5,
+            primaryColor: 0x8B7355,
+            secondaryColor: 0x228B22,
+            tertiaryColor: 0xFFD700,
+            emissiveColor: 0xFF6347,
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0x90EE90,
+            portalColor2: 0xFFD700,
+            particleCount: 500,
+            cameraHeight: 1.8,
+            fogNear: 5,
+            fogFar: 200,
+            enablePhysics: true,
+            enableFlying: true,
+            gravity: 0.5,
+            jumpForce: 0.35
+        };
+        
+        // Shader definitions
+        const skyVertexShader = `
+            varying vec3 vWorldPosition;
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const skyFragmentShader = `
+            uniform vec3 topColor;
+            uniform vec3 bottomColor;
+            uniform float offset;
+            uniform float exponent;
+            varying vec3 vWorldPosition;
+            void main() {
+                float h = normalize(vWorldPosition + offset).y;
+                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+            }
+        `;
+        
+        const portalVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const portalFragmentShader = `
+            uniform float time;
+            uniform vec3 color1;
+            uniform vec3 color2;
+            uniform float distortion;
+            varying vec2 vUv;
+            
+            float noise(vec2 p) {
+                return sin(p.x * 10.0) * sin(p.y * 10.0);
+            }
+            
+            void main() {
+                vec2 center = vUv - 0.5;
+                float dist = length(center);
+                float angle = atan(center.y, center.x);
+                
+                float spiral = sin(dist * 20.0 - time * 3.0 + angle * 5.0);
+                
+                vec2 distortedUV = vUv;
+                if (distortion > 0.0) {
+                    distortedUV += sin(time + vUv * 10.0) * 0.02 * distortion;
+                }
+                
+                float n = noise(distortedUV * 10.0 + time);
+                
+                vec3 color = mix(color1, color2, spiral * 0.5 + 0.5);
+                color += n * 0.1;
+                
+                float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+                alpha *= 0.8 + sin(time * 2.0 + dist * 10.0) * 0.2;
+                
+                gl_FragColor = vec4(color, alpha);
+            }
+        `;
+        
+        const fireShader = {
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float time;
+                varying vec2 vUv;
+                
+                vec3 mod289(vec3 x) {
+                    return x - floor(x * (1.0 / 289.0)) * 289.0;
+                }
+                
+                vec2 mod289(vec2 x) {
+                    return x - floor(x * (1.0 / 289.0)) * 289.0;
+                }
+                
+                vec3 permute(vec3 x) {
+                    return mod289(((x*34.0)+1.0)*x);
+                }
+                
+                float snoise(vec2 v) {
+                    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+                    vec2 i  = floor(v + dot(v, C.yy) );
+                    vec2 x0 = v -   i + dot(i, C.xx);
+                    vec2 i1;
+                    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+                    vec4 x12 = x0.xyxy + C.xxzz;
+                    x12.xy -= i1;
+                    i = mod289(i);
+                    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+                    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+                    m = m*m ;
+                    m = m*m ;
+                    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+                    vec3 h = abs(x) - 0.5;
+                    vec3 ox = floor(x + 0.5);
+                    vec3 a0 = x - ox;
+                    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+                    vec3 g;
+                    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+                    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+                    return 130.0 * dot(m, g);
+                }
+                
+                void main() {
+                    vec2 uv = vUv;
+                    float strength = uv.y;
+                    
+                    float t = time * 2.0;
+                    float displacement = snoise(vec2(uv.x * 3.0, uv.y * 3.0 - t));
+                    
+                    strength += displacement * 0.3;
+                    strength = clamp(strength, 0.0, 1.0);
+                    
+                    vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), strength);
+                    color = mix(vec3(0.0, 0.0, 0.0), color, strength * 2.0);
+                    
+                    gl_FragColor = vec4(color, strength);
+                }
+            `
+        };
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        class WorldNavigator {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.structures = [];
+                this.effects = [];
+                this.npcs = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+                
+                this.moveSpeed = DEFAULT_WORLD_ATTRIBUTES.moveSpeed;
+                this.lookSpeed = DEFAULT_WORLD_ATTRIBUTES.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false, q: false, e: false, ' ': false };
+                this.rotation = { x: 0, y: 0 };
+                this.velocity = new THREE.Vector3();
+                this.canJump = true;
+                
+                this.isMobile = isMobile;
+                this.isIOS = isIOS;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+                
+                // Audio system
+                this.audioContext = null;
+                this.audioNodes = {};
+                
+                this.initAudio = function() {
+                    try {
+                        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        
+                        // Master gain
+                        this.audioNodes.masterGain = this.audioContext.createGain();
+                        this.audioNodes.masterGain.gain.setValueAtTime(0.7, this.audioContext.currentTime);
+                        
+                        // Create reverb
+                        const reverbConvolver = this.audioContext.createConvolver();
+                        const reverbLength = 3;
+                        const sampleRate = this.audioContext.sampleRate;
+                        const reverbBuffer = this.audioContext.createBuffer(2, reverbLength * sampleRate, sampleRate);
+                        
+                        for (let channel = 0; channel < 2; channel++) {
+                            const channelData = reverbBuffer.getChannelData(channel);
+                            for (let i = 0; i < channelData.length; i++) {
+                                channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / channelData.length, 2);
+                            }
+                        }
+                        
+                        reverbConvolver.buffer = reverbBuffer;
+                        this.audioNodes.reverb = reverbConvolver;
+                        reverbConvolver.connect(this.audioNodes.masterGain);
+                        
+                        // Create nature + campfire ambience
+                        const natureOsc = this.audioContext.createOscillator();
+                        const natureGain = this.audioContext.createGain();
+                        const natureFilter = this.audioContext.createBiquadFilter();
+                        
+                        natureOsc.type = 'sine';
+                        natureOsc.frequency.setValueAtTime(150, this.audioContext.currentTime);
+                        
+                        natureFilter.type = 'lowpass';
+                        natureFilter.frequency.setValueAtTime(600, this.audioContext.currentTime);
+                        natureFilter.Q.setValueAtTime(2, this.audioContext.currentTime);
+                        
+                        natureGain.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+                        
+                        // Campfire crackle
+                        const crackleBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 2, this.audioContext.sampleRate);
+                        const crackleData = crackleBuffer.getChannelData(0);
+                        for (let i = 0; i < crackleData.length; i++) {
+                            crackleData[i] = (Math.random() * 2 - 1) * 0.2 * (Math.random() > 0.98 ? 3 : 1);
+                        }
+                        
+                        const crackleSource = this.audioContext.createBufferSource();
+                        crackleSource.buffer = crackleBuffer;
+                        crackleSource.loop = true;
+                        
+                        const crackleGain = this.audioContext.createGain();
+                        crackleGain.gain.setValueAtTime(0.03, this.audioContext.currentTime);
+                        
+                        // Connect audio chain
+                        natureOsc.connect(natureFilter);
+                        natureFilter.connect(natureGain);
+                        crackleSource.connect(crackleGain);
+                        
+                        natureGain.connect(this.audioNodes.reverb);
+                        crackleGain.connect(this.audioNodes.reverb);
+                        
+                        this.audioNodes.masterGain.connect(this.audioContext.destination);
+                        
+                        natureOsc.start();
+                        crackleSource.start();
+                        
+                        this.audioNodes.ambient = natureOsc;
+                        this.audioNodes.ambientGain = natureGain;
+                        this.audioNodes.crackle = crackleSource;
+                        
+                        // Resume on interaction
+                        document.addEventListener('click', () => {
+                            if (this.audioContext.state === 'suspended') {
+                                this.audioContext.resume();
+                            }
+                        }, { once: true });
+                        
+                    } catch (e) {
+                        console.log('Web Audio API not supported');
+                    }
+                };
+                
+                this.audioUpdate = function(time) {
+                    if (!this.audioContext) return;
+                    
+                    if (this.audioNodes.ambient) {
+                        const modulation = Math.sin(time * 0.05) * 0.2 + 0.8;
+                        this.audioNodes.ambientGain.gain.setValueAtTime(0.05 * modulation, this.audioContext.currentTime);
+                    }
+                };
+                
+                this.initAudio();
+                
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+            
+            async init() {
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 2000);
+                
+                document.getElementById('world-title').textContent = DEFAULT_WORLD_ATTRIBUTES.name.toUpperCase();
+                document.getElementById('world-description').textContent = DEFAULT_WORLD_ATTRIBUTES.description;
+                
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createEnvironment();
+                this.createDetailedStructures();
+                this.createEffects();
+                this.createNPCs();
+                this.createPortals();
+                this.setupEventListeners();
+                
+                // Physics system
+                this.physicsEnabled = true;
+                this.gravity = DEFAULT_WORLD_ATTRIBUTES.gravity;
+                this.jumpForce = DEFAULT_WORLD_ATTRIBUTES.jumpForce;
+                
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                    
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter';
+                    }
+                }
+                
+                this.animate();
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(DEFAULT_WORLD_ATTRIBUTES.fogColor, DEFAULT_WORLD_ATTRIBUTES.fogNear, DEFAULT_WORLD_ATTRIBUTES.fogFar);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+                this.camera.position.set(0, DEFAULT_WORLD_ATTRIBUTES.cameraHeight, 15);
+                
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoft;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 1.2;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+            
+            setupLighting() {
+                // Warm ambient light
+                const ambientLight = new THREE.AmbientLight(DEFAULT_WORLD_ATTRIBUTES.ambientColor, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Main sun
+                const dirLight = new THREE.DirectionalLight(0xFFE4B5, 1.2);
+                dirLight.position.set(50, 100, 50);
+                dirLight.castShadow = true;
+                dirLight.shadow.camera.near = 0.1;
+                dirLight.shadow.camera.far = 300;
+                dirLight.shadow.camera.left = -150;
+                dirLight.shadow.camera.right = 150;
+                dirLight.shadow.camera.top = 150;
+                dirLight.shadow.camera.bottom = -150;
+                dirLight.shadow.mapSize.width = 4096;
+                dirLight.shadow.mapSize.height = 4096;
+                this.scene.add(dirLight);
+                
+                // Hemisphere light for natural colors
+                const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x8B7355, 0.5);
+                this.scene.add(hemiLight);
+            }
+            
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    this.worlds = data.tree
+                        .filter(item => 
+                            item.type === 'blob' && 
+                            item.path.endsWith('.html') && 
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('hobbiton_trailer_park')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+                    
+                    // Always include portal to hub
+                    this.worlds.unshift({
+                        name: "Nexus Hub",
+                        description: "Return to the central hub of all worlds",
+                        url: "https://raw.githubusercontent.com/" + REPO_OWNER + "/" + REPO_NAME + "/" + BRANCH + "/index.html"
+                    });
+                    
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+                    
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+            
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "A mystical underground realm" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds" },
+                    { name: "Neon City", description: "Cyberpunk metropolis" },
+                    { name: "Ancient Temple", description: "Lost ruins of a forgotten civilization" }
+                ];
+            }
+            
+            createEnvironment() {
+                // Create rolling hills terrain
+                const groundGeometry = new THREE.PlaneGeometry(400, 400, 150, 150);
+                const vertices = groundGeometry.attributes.position.array;
+                
+                // Create Shire-like rolling hills
+                for (let i = 0; i < vertices.length; i += 3) {
+                    const x = vertices[i];
+                    const y = vertices[i + 1];
+                    let height = 0;
+                    
+                    // Large rolling hills
+                    height += Math.sin(x * 0.005) * Math.cos(y * 0.005) * 15;
+                    height += Math.sin(x * 0.01) * Math.cos(y * 0.008) * 8;
+                    height += Math.sin(x * 0.02) * Math.cos(y * 0.015) * 3;
+                    
+                    // Small bumps
+                    height += Math.sin(x * 0.1) * Math.cos(y * 0.1) * 0.5;
+                    
+                    vertices[i + 2] = height;
+                }
+                groundGeometry.computeVertexNormals();
+                
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3CB371,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+                
+                // Add grass patches
+                for (let i = 0; i < 100; i++) {
+                    const patchGeometry = new THREE.CircleGeometry(Math.random() * 3 + 1, 8);
+                    const patchMaterial = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color().setHSL(0.3, 0.8, 0.3 + Math.random() * 0.2),
+                        roughness: 0.9
+                    });
+                    const patch = new THREE.Mesh(patchGeometry, patchMaterial);
+                    patch.position.set(
+                        (Math.random() - 0.5) * 200,
+                        0.01,
+                        (Math.random() - 0.5) * 200
+                    );
+                    patch.rotation.x = -Math.PI / 2;
+                    patch.receiveShadow = true;
+                    this.scene.add(patch);
+                }
+                
+                // Sky dome
+                const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+                const skyMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        topColor: { value: new THREE.Color(DEFAULT_WORLD_ATTRIBUTES.skyTopColor) },
+                        bottomColor: { value: new THREE.Color(DEFAULT_WORLD_ATTRIBUTES.skyBottomColor) },
+                        offset: { value: 33 },
+                        exponent: { value: 0.6 }
+                    },
+                    vertexShader: skyVertexShader,
+                    fragmentShader: skyFragmentShader,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+                
+                // Trees
+                for (let i = 0; i < 50; i++) {
+                    const treeGroup = new THREE.Group();
+                    
+                    // Tree trunk
+                    const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 4 + Math.random() * 2, 8);
+                    const trunkMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B4513,
+                        roughness: 0.9
+                    });
+                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                    trunk.position.y = 2;
+                    trunk.castShadow = true;
+                    trunk.receiveShadow = true;
+                    
+                    // Tree crown
+                    const crownGeometry = new THREE.SphereGeometry(3 + Math.random() * 2, 8, 6);
+                    const crownMaterial = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color().setHSL(0.25, 0.8, 0.3 + Math.random() * 0.1),
+                        roughness: 0.9
+                    });
+                    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+                    crown.position.y = 5 + Math.random();
+                    crown.castShadow = true;
+                    crown.receiveShadow = true;
+                    
+                    treeGroup.add(trunk);
+                    treeGroup.add(crown);
+                    
+                    treeGroup.position.set(
+                        (Math.random() - 0.5) * 180,
+                        0,
+                        (Math.random() - 0.5) * 180
+                    );
+                    
+                    // Keep trees away from center
+                    if (treeGroup.position.length() < 30) {
+                        treeGroup.position.normalize().multiplyScalar(30 + Math.random() * 20);
+                    }
+                    
+                    this.scene.add(treeGroup);
+                }
+                
+                // Create a small pond
+                const pondGeometry = new THREE.CircleGeometry(15, 32);
+                const pondMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1E90FF,
+                    transparent: true,
+                    opacity: 0.8,
+                    roughness: 0.1,
+                    metalness: 0.5
+                });
+                const pond = new THREE.Mesh(pondGeometry, pondMaterial);
+                pond.rotation.x = -Math.PI / 2;
+                pond.position.set(40, 0.1, -30);
+                pond.receiveShadow = true;
+                this.scene.add(pond);
+                
+                // Fireflies
+                const fireflyGeometry = new THREE.BufferGeometry();
+                const fireflyCount = DEFAULT_WORLD_ATTRIBUTES.particleCount;
+                const fireflyPositions = new Float32Array(fireflyCount * 3);
+                const fireflyColors = new Float32Array(fireflyCount * 3);
+                const fireflyPhases = new Float32Array(fireflyCount);
+                
+                for (let i = 0; i < fireflyCount; i++) {
+                    fireflyPositions[i * 3] = (Math.random() - 0.5) * 150;
+                    fireflyPositions[i * 3 + 1] = Math.random() * 20 + 1;
+                    fireflyPositions[i * 3 + 2] = (Math.random() - 0.5) * 150;
+                    
+                    const color = new THREE.Color().setHSL(0.15, 1, 0.7);
+                    fireflyColors[i * 3] = color.r;
+                    fireflyColors[i * 3 + 1] = color.g;
+                    fireflyColors[i * 3 + 2] = color.b;
+                    
+                    fireflyPhases[i] = Math.random() * Math.PI * 2;
+                }
+                
+                fireflyGeometry.setAttribute('position', new THREE.BufferAttribute(fireflyPositions, 3));
+                fireflyGeometry.setAttribute('color', new THREE.BufferAttribute(fireflyColors, 3));
+                
+                const fireflyMaterial = new THREE.PointsMaterial({
+                    size: 0.3,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.particles = new THREE.Points(fireflyGeometry, fireflyMaterial);
+                this.particles.userData.phases = fireflyPhases;
+                this.scene.add(this.particles);
+                
+                // Particle animation
+                this.particleSystem = {
+                    update: (delta) => {
+                        const positions = this.particles.geometry.attributes.position.array;
+                        const phases = this.particles.userData.phases;
+                        const time = this.clock.getElapsedTime();
+                        
+                        for (let i = 0; i < fireflyCount; i++) {
+                            const phase = phases[i];
+                            positions[i * 3] += Math.sin(time + phase) * 0.02;
+                            positions[i * 3 + 1] += Math.sin(time * 2 + phase) * 0.01;
+                            positions[i * 3 + 2] += Math.cos(time + phase) * 0.02;
+                            
+                            const intensity = Math.sin(time * 3 + phase) * 0.5 + 0.5;
+                            this.particles.material.opacity = 0.3 + intensity * 0.7;
+                        }
+                        this.particles.geometry.attributes.position.needsUpdate = true;
+                    }
+                };
+            }
+            
+            createDetailedStructures() {
+                this.structures = [];
+                
+                // 1. Garrett's Keeper Tower (center piece)
+                const towerGroup = new THREE.Group();
+                
+                // Tower base
+                const towerBaseGeometry = new THREE.CylinderGeometry(6, 8, 3, 12);
+                const towerBaseMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B7355,
+                    roughness: 0.9
+                });
+                const towerBase = new THREE.Mesh(towerBaseGeometry, towerBaseMaterial);
+                towerBase.position.y = 1.5;
+                towerBase.castShadow = true;
+                towerBase.receiveShadow = true;
+                towerGroup.add(towerBase);
+                
+                // Tower middle
+                const towerMiddleGeometry = new THREE.CylinderGeometry(5, 6, 8, 8);
+                const towerMiddleMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xD2691E,
+                    roughness: 0.8
+                });
+                const towerMiddle = new THREE.Mesh(towerMiddleGeometry, towerMiddleMaterial);
+                towerMiddle.position.y = 7;
+                towerMiddle.castShadow = true;
+                towerMiddle.receiveShadow = true;
+                towerGroup.add(towerMiddle);
+                
+                // Tower top (with beaver tail flag!)
+                const towerTopGeometry = new THREE.ConeGeometry(6, 4, 8);
+                const towerTopMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.7
+                });
+                const towerTop = new THREE.Mesh(towerTopGeometry, towerTopMaterial);
+                towerTop.position.y = 13;
+                towerTop.castShadow = true;
+                towerGroup.add(towerTop);
+                
+                // Add windows
+                for (let i = 0; i < 4; i++) {
+                    const windowGeometry = new THREE.BoxGeometry(1, 1.5, 0.1);
+                    const windowMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xFFD700,
+                        emissive: 0xFFD700,
+                        emissiveIntensity: 0.5
+                    });
+                    const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                    const angle = (i / 4) * Math.PI * 2;
+                    window.position.x = Math.cos(angle) * 5.5;
+                    window.position.z = Math.sin(angle) * 5.5;
+                    window.position.y = 7;
+                    window.rotation.y = -angle;
+                    towerGroup.add(window);
+                }
+                
+                // Tower Door
+                const towerDoorGeometry = new THREE.BoxGeometry(2, 3, 0.1);
+                const towerDoorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x654321,
+                    roughness: 0.9
+                });
+                const towerDoor = new THREE.Mesh(towerDoorGeometry, towerDoorMaterial);
+                towerDoor.position.set(0, 1.5, 8);
+                towerGroup.add(towerDoor);
+                
+                // Add sign
+                const signGeometry = new THREE.BoxGeometry(4, 2, 0.2);
+                const signMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xF5DEB3,
+                    roughness: 0.8
+                });
+                const sign = new THREE.Mesh(signGeometry, signMaterial);
+                sign.position.set(0, 4, 8.2);
+                towerGroup.add(sign);
+                
+                towerGroup.position.set(0, 0, -5);
+                towerGroup.userData = { name: "Garrett's Tower", type: "main" };
+                this.structures.push(towerGroup);
+                this.scene.add(towerGroup);
+                
+                // Tower light
+                const towerLight = new THREE.PointLight(0xFFD700, 1, 30);
+                towerLight.position.set(0, 10, -5);
+                towerLight.castShadow = true;
+                this.scene.add(towerLight);
+                
+                // 2. Vintage Airstream Trailer
+                const trailerGroup = new THREE.Group();
+                
+                // Trailer body
+                const trailerBodyGeometry = new THREE.BoxGeometry(8, 3, 4);
+                trailerBodyGeometry.translate(0, 1.5, 0);
+                const trailerBodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xC0C0C0,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                const trailerBody = new THREE.Mesh(trailerBodyGeometry, trailerBodyMaterial);
+                trailerBody.castShadow = true;
+                trailerBody.receiveShadow = true;
+                trailerGroup.add(trailerBody);
+                
+                // Rounded ends
+                const endGeometry = new THREE.SphereGeometry(2, 8, 8);
+                endGeometry.scale(0.5, 1, 1);
+                const endMaterial = trailerBodyMaterial.clone();
+                
+                const frontEnd = new THREE.Mesh(endGeometry, endMaterial);
+                frontEnd.position.set(4, 1.5, 0);
+                trailerGroup.add(frontEnd);
+                
+                const backEnd = new THREE.Mesh(endGeometry, endMaterial);
+                backEnd.position.set(-4, 1.5, 0);
+                trailerGroup.add(backEnd);
+                
+                // Windows
+                for (let i = 0; i < 3; i++) {
+                    const windowGeometry = new THREE.BoxGeometry(1.5, 1, 0.1);
+                    const windowMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x87CEEB,
+                        transparent: true,
+                        opacity: 0.7,
+                        metalness: 0.5
+                    });
+                    const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                    window.position.set(-2 + i * 2, 2, 2.05);
+                    trailerGroup.add(window);
+                }
+                
+                // Awning
+                const awningGeometry = new THREE.BoxGeometry(8, 0.2, 3);
+                const awningMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFF6347,
+                    roughness: 0.9
+                });
+                const awning = new THREE.Mesh(awningGeometry, awningMaterial);
+                awning.position.set(0, 3.2, 2.5);
+                awning.rotation.x = -0.2;
+                trailerGroup.add(awning);
+                
+                // Wheels
+                for (let i = 0; i < 2; i++) {
+                    const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16);
+                    const wheelMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x333333,
+                        roughness: 0.8
+                    });
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(-2 + i * 4, 0.5, 2.3);
+                    trailerGroup.add(wheel);
+                }
+                
+                trailerGroup.position.set(25, 0, 15);
+                trailerGroup.rotation.y = -0.3;
+                trailerGroup.userData = { name: "Silver Bullet Trailer", type: "dwelling" };
+                this.structures.push(trailerGroup);
+                this.scene.add(trailerGroup);
+                
+                // 3. Hobbit Hole
+                const hobbitHoleGroup = new THREE.Group();
+                
+                // Hill mound
+                const hillGeometry = new THREE.SphereGeometry(8, 16, 16);
+                hillGeometry.scale(1, 0.7, 1);
+                const hillMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.95
+                });
+                const hill = new THREE.Mesh(hillGeometry, hillMaterial);
+                hill.position.y = -2;
+                hobbitHoleGroup.add(hill);
+                
+                // Round door
+                const doorFrameGeometry = new THREE.TorusGeometry(2.5, 0.3, 8, 16);
+                const doorFrameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.8
+                });
+                const doorFrame = new THREE.Mesh(doorFrameGeometry, doorFrameMaterial);
+                doorFrame.position.set(0, 2, 7.5);
+                hobbitHoleGroup.add(doorFrame);
+                
+                // Round hobbit door
+                const hobbitDoorGeometry = new THREE.CircleGeometry(2.2, 32);
+                const hobbitDoorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.9
+                });
+                const hobbitDoor = new THREE.Mesh(hobbitDoorGeometry, hobbitDoorMaterial);
+                hobbitDoor.position.set(0, 2, 7.6);
+                hobbitHoleGroup.add(hobbitDoor);
+                
+                // Door knob
+                const knobGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+                const knobMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFFD700,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                const knob = new THREE.Mesh(knobGeometry, knobMaterial);
+                knob.position.set(0.8, 2, 7.8);
+                hobbitHoleGroup.add(knob);
+                
+                // Windows
+                for (let i = 0; i < 2; i++) {
+                    const windowGeometry = new THREE.CircleGeometry(0.8, 16);
+                    const windowMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xFFD700,
+                        emissive: 0xFFD700,
+                        emissiveIntensity: 0.3
+                    });
+                    const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                    window.position.set(-3 + i * 6, 2.5, 7.2);
+                    hobbitHoleGroup.add(window);
+                }
+                
+                hobbitHoleGroup.position.set(-30, 0, -20);
+                hobbitHoleGroup.userData = { name: "Cozy Hobbit Hole", type: "dwelling" };
+                this.structures.push(hobbitHoleGroup);
+                this.scene.add(hobbitHoleGroup);
+                
+                // 4. Campfire Circle
+                const campfireGroup = new THREE.Group();
+                
+                // Stone circle
+                for (let i = 0; i < 12; i++) {
+                    const stoneGeometry = new THREE.BoxGeometry(1.5, 1, 1);
+                    const stoneMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x696969,
+                        roughness: 0.95
+                    });
+                    const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+                    const angle = (i / 12) * Math.PI * 2;
+                    stone.position.x = Math.cos(angle) * 3;
+                    stone.position.z = Math.sin(angle) * 3;
+                    stone.position.y = 0.5;
+                    stone.rotation.y = angle;
+                    stone.castShadow = true;
+                    stone.receiveShadow = true;
+                    campfireGroup.add(stone);
+                }
+                
+                // Fire pit
+                const pitGeometry = new THREE.CylinderGeometry(1.5, 1, 0.5, 8);
+                const pitMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    roughness: 0.9
+                });
+                const pit = new THREE.Mesh(pitGeometry, pitMaterial);
+                pit.position.y = 0.25;
+                campfireGroup.add(pit);
+                
+                // Fire (animated)
+                const fireGeometry = new THREE.PlaneGeometry(2, 3);
+                const fireMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 }
+                    },
+                    vertexShader: fireShader.vertexShader,
+                    fragmentShader: fireShader.fragmentShader,
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                });
+                
+                // Create multiple fire planes for volume
+                for (let i = 0; i < 4; i++) {
+                    const fire = new THREE.Mesh(fireGeometry, fireMaterial);
+                    fire.position.y = 1.5;
+                    fire.rotation.y = (i / 4) * Math.PI;
+                    campfireGroup.add(fire);
+                }
+                
+                // Log seats
+                for (let i = 0; i < 4; i++) {
+                    const logGeometry = new THREE.CylinderGeometry(0.5, 0.5, 4, 8);
+                    const logMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B4513,
+                        roughness: 0.9
+                    });
+                    const log = new THREE.Mesh(logGeometry, logMaterial);
+                    const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+                    log.position.x = Math.cos(angle) * 5;
+                    log.position.z = Math.sin(angle) * 5;
+                    log.position.y = 0.5;
+                    log.rotation.y = angle + Math.PI / 2;
+                    log.rotation.z = Math.PI / 2;
+                    log.castShadow = true;
+                    log.receiveShadow = true;
+                    campfireGroup.add(log);
+                }
+                
+                campfireGroup.position.set(15, 0, -25);
+                campfireGroup.userData = { 
+                    name: "Community Campfire", 
+                    type: "gathering",
+                    fireMaterial: fireMaterial
+                };
+                this.structures.push(campfireGroup);
+                this.scene.add(campfireGroup);
+                
+                // Campfire light
+                const fireLight = new THREE.PointLight(0xFF6347, 2, 20);
+                fireLight.position.set(15, 2, -25);
+                fireLight.castShadow = true;
+                fireLight.userData = {
+                    baseIntensity: 2,
+                    animationType: 'flicker'
+                };
+                this.scene.add(fireLight);
+                
+                // 5. Picnic Area
+                const picnicGroup = new THREE.Group();
+                
+                // Picnic table
+                const tableTopGeometry = new THREE.BoxGeometry(6, 0.3, 3);
+                const tableMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const tableTop = new THREE.Mesh(tableTopGeometry, tableMaterial);
+                tableTop.position.y = 2;
+                tableTop.castShadow = true;
+                tableTop.receiveShadow = true;
+                picnicGroup.add(tableTop);
+                
+                // Table legs
+                for (let x = -2; x <= 2; x += 4) {
+                    for (let z = -1; z <= 1; z += 2) {
+                        const legGeometry = new THREE.BoxGeometry(0.3, 2, 0.3);
+                        const leg = new THREE.Mesh(legGeometry, tableMaterial);
+                        leg.position.set(x, 1, z);
+                        leg.castShadow = true;
+                        picnicGroup.add(leg);
+                    }
+                }
+                
+                // Benches
+                for (let z = -2; z <= 2; z += 4) {
+                    const benchGeometry = new THREE.BoxGeometry(5, 0.2, 0.8);
+                    const bench = new THREE.Mesh(benchGeometry, tableMaterial);
+                    bench.position.set(0, 1, z);
+                    bench.castShadow = true;
+                    bench.receiveShadow = true;
+                    picnicGroup.add(bench);
+                }
+                
+                // Umbrella
+                const poleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 4, 8);
+                const poleMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x696969,
+                    metalness: 0.5
+                });
+                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                pole.position.y = 4;
+                picnicGroup.add(pole);
+                
+                const umbrellaGeometry = new THREE.ConeGeometry(3, 1.5, 8);
+                const umbrellaMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFF6347,
+                    side: THREE.DoubleSide
+                });
+                const umbrella = new THREE.Mesh(umbrellaGeometry, umbrellaMaterial);
+                umbrella.position.y = 5.5;
+                picnicGroup.add(umbrella);
+                
+                picnicGroup.position.set(-20, 0, 25);
+                picnicGroup.userData = { name: "Picnic Spot", type: "gathering" };
+                this.structures.push(picnicGroup);
+                this.scene.add(picnicGroup);
+                
+                // 6. Garden Area
+                const gardenGroup = new THREE.Group();
+                
+                // Garden beds
+                for (let i = 0; i < 3; i++) {
+                    const bedGeometry = new THREE.BoxGeometry(4, 0.5, 2);
+                    const bedMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B4513,
+                        roughness: 0.95
+                    });
+                    const bed = new THREE.Mesh(bedGeometry, bedMaterial);
+                    bed.position.set(i * 5 - 5, 0.25, 0);
+                    bed.castShadow = true;
+                    bed.receiveShadow = true;
+                    gardenGroup.add(bed);
+                    
+                    // Plants
+                    for (let j = 0; j < 5; j++) {
+                        const plantGeometry = new THREE.ConeGeometry(0.3, 1, 6);
+                        const plantMaterial = new THREE.MeshStandardMaterial({
+                            color: new THREE.Color().setHSL(0.3, 0.8, 0.4 + Math.random() * 0.2),
+                            roughness: 0.8
+                        });
+                        const plant = new THREE.Mesh(plantGeometry, plantMaterial);
+                        plant.position.set(
+                            i * 5 - 5 + (Math.random() - 0.5) * 3,
+                            1,
+                            (Math.random() - 0.5) * 1.5
+                        );
+                        gardenGroup.add(plant);
+                    }
+                }
+                
+                // Scarecrow
+                const scarecrowGroup = new THREE.Group();
+                
+                // Body (pole)
+                const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 3, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const body= new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1.5;
+                scarecrowGroup.add(body);
+                
+                // Arms (crossbar)
+                const armsGeometry = new THREE.BoxGeometry(3, 0.2, 0.2);
+                const arms = new THREE.Mesh(armsGeometry, bodyMaterial);
+                arms.position.y = 2.5;
+                scarecrowGroup.add(arms);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xF5DEB3,
+                    roughness: 0.8
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 3.2;
+                scarecrowGroup.add(head);
+                
+                // Hat
+                const hatGeometry = new THREE.ConeGeometry(0.7, 0.8, 8);
+                const hatMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+                hat.position.y = 3.7;
+                scarecrowGroup.add(hat);
+                
+                scarecrowGroup.position.set(8, 0, 0);
+                gardenGroup.add(scarecrowGroup);
+                
+                gardenGroup.position.set(35, 0, -10);
+                gardenGroup.userData = { name: "Community Garden", type: "utility" };
+                this.structures.push(gardenGroup);
+                this.scene.add(gardenGroup);
+                
+                // 7. Small RV
+                const rvGroup = new THREE.Group();
+                
+                // RV body
+                const rvBodyGeometry = new THREE.BoxGeometry(6, 3.5, 3);
+                const rvBodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFFF8DC,
+                    roughness: 0.7
+                });
+                const rvBody = new THREE.Mesh(rvBodyGeometry, rvBodyMaterial);
+                rvBody.position.y = 1.75;
+                rvBody.castShadow = true;
+                rvBody.receiveShadow = true;
+                rvGroup.add(rvBody);
+                
+                // Cab
+                const cabGeometry = new THREE.BoxGeometry(2, 2.5, 3);
+                const cabMaterial = rvBodyMaterial.clone();
+                const cab = new THREE.Mesh(cabGeometry, cabMaterial);
+                cab.position.set(4, 1.25, 0);
+                rvGroup.add(cab);
+                
+                // Windshield
+                const windshieldGeometry = new THREE.BoxGeometry(0.1, 1.5, 2.5);
+                const windshieldMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x87CEEB,
+                    transparent: true,
+                    opacity: 0.6,
+                    metalness: 0.5
+                });
+                const windshield = new THREE.Mesh(windshieldGeometry, windshieldMaterial);
+                windshield.position.set(5.05, 1.5, 0);
+                rvGroup.add(windshield);
+                
+                // Stripes
+                for (let i = 0; i < 2; i++) {
+                    const stripeGeometry = new THREE.BoxGeometry(8.1, 0.3, 0.05);
+                    const stripeMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xFF6347,
+                        roughness: 0.8
+                    });
+                    const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+                    stripe.position.set(0, 2 + i * 0.5, 1.55);
+                    rvGroup.add(stripe);
+                }
+                
+                // Wheels
+                for (let i = 0; i < 4; i++) {
+                    const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+                    const wheelMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x333333,
+                        roughness: 0.8
+                    });
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(-2 + (i % 2) * 4, 0.4, 1.8 * (i < 2 ? 1 : -1));
+                    rvGroup.add(wheel);
+                }
+                
+                rvGroup.position.set(-15, 0, 35);
+                rvGroup.rotation.y = 0.4;
+                rvGroup.userData = { name: "Wanderer's RV", type: "dwelling" };
+                this.structures.push(rvGroup);
+                this.scene.add(rvGroup);
+                
+                // 8. Outdoor Kitchen
+                const kitchenGroup = new THREE.Group();
+                
+                // Counter
+                const counterGeometry = new THREE.BoxGeometry(5, 1, 2);
+                const counterMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B7355,
+                    roughness: 0.8
+                });
+                const counter = new THREE.Mesh(counterGeometry, counterMaterial);
+                counter.position.y = 0.5;
+                counter.castShadow = true;
+                counter.receiveShadow = true;
+                kitchenGroup.add(counter);
+                
+                // Grill
+                const grillGeometry = new THREE.BoxGeometry(1.5, 0.5, 1.5);
+                const grillMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                const grill = new THREE.Mesh(grillGeometry, grillMaterial);
+                grill.position.set(-1, 1.25, 0);
+                kitchenGroup.add(grill);
+                
+                // Grill grates
+                const grateGeometry = new THREE.BoxGeometry(1.4, 0.05, 1.4);
+                const grateMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x222222,
+                    metalness: 0.9,
+                    roughness: 0.4
+                });
+                const grate = new THREE.Mesh(grateGeometry, grateMaterial);
+                grate.position.set(-1, 1.55, 0);
+                kitchenGroup.add(grate);
+                
+                // Sink
+                const sinkGeometry = new THREE.BoxGeometry(1, 0.3, 0.8);
+                const sinkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xC0C0C0,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                const sink = new THREE.Mesh(sinkGeometry, sinkMaterial);
+                sink.position.set(1, 1.1, 0);
+                kitchenGroup.add(sink);
+                
+                // Faucet
+                const faucetGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8);
+                const faucetMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xC0C0C0,
+                    metalness: 0.9,
+                    roughness: 0.2
+                });
+                const faucet = new THREE.Mesh(faucetGeometry, faucetMaterial);
+                faucet.position.set(1, 1.5, -0.3);
+                kitchenGroup.add(faucet);
+                
+                // Roof
+                const roofGeometry = new THREE.BoxGeometry(6, 0.2, 3);
+                const roofMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = 3;
+                roof.rotation.z = 0.1;
+                kitchenGroup.add(roof);
+                
+                // Support posts
+                for (let x = -2.5; x <= 2.5; x += 5) {
+                    for (let z = -1; z <= 1; z += 2) {
+                        const postGeometry = new THREE.CylinderGeometry(0.15, 0.15, 3, 8);
+                        const post = new THREE.Mesh(postGeometry, roofMaterial);
+                        post.position.set(x, 1.5, z);
+                        kitchenGroup.add(post);
+                    }
+                }
+                
+                kitchenGroup.position.set(0, 0, 20);
+                kitchenGroup.userData = { name: "Outdoor Kitchen", type: "utility" };
+                this.structures.push(kitchenGroup);
+                this.scene.add(kitchenGroup);
+                
+                // 9. Welcome Sign at entrance
+                const signGroup = new THREE.Group();
+                
+                // Sign posts
+                for (let x = -3; x <= 3; x += 6) {
+                    const postGeometry = new THREE.CylinderGeometry(0.3, 0.3, 4, 8);
+                    const postMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B4513,
+                        roughness: 0.9
+                    });
+                    const post = new THREE.Mesh(postGeometry, postMaterial);
+                    post.position.set(x, 2, 0);
+                    post.castShadow = true;
+                    signGroup.add(post);
+                }
+                
+                // Sign board
+                const signBoardGeometry = new THREE.BoxGeometry(7, 2.5, 0.3);
+                const signBoardMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xDEB887,
+                    roughness: 0.8
+                });
+                const signBoard = new THREE.Mesh(signBoardGeometry, signBoardMaterial);
+                signBoard.position.y = 3.5;
+                signBoard.castShadow = true;
+                signBoard.receiveShadow = true;
+                signGroup.add(signBoard);
+                
+                // Text background
+                const textBgGeometry = new THREE.BoxGeometry(6.5, 2, 0.05);
+                const textBgMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.7
+                });
+                const textBg = new THREE.Mesh(textBgGeometry, textBgMaterial);
+                textBg.position.set(0, 3.5, 0.2);
+                signGroup.add(textBg);
+                
+                signGroup.position.set(0, 0, 45);
+                signGroup.userData = { name: "Welcome Sign", type: "decoration" };
+                this.structures.push(signGroup);
+                this.scene.add(signGroup);
+                
+                // 10. String lights between structures
+                const lightsGroup = new THREE.Group();
+                
+                // Create string light path
+                const lightPositions = [
+                    new THREE.Vector3(0, 8, -5),     // From tower
+                    new THREE.Vector3(15, 6, -25),   // To campfire
+                    new THREE.Vector3(25, 5, 15),    // To trailer
+                    new THREE.Vector3(-20, 5, 25),   // To picnic
+                    new THREE.Vector3(-30, 6, -20),  // To hobbit hole
+                    new THREE.Vector3(0, 8, -5)      // Back to tower
+                ];
+                
+                // Create light bulbs along paths
+                for (let i = 0; i < lightPositions.length - 1; i++) {
+                    const start = lightPositions[i];
+                    const end = lightPositions[i + 1];
+                    const bulbCount = 10;
+                    
+                    for (let j = 0; j <= bulbCount; j++) {
+                        const t = j / bulbCount;
+                        const position = new THREE.Vector3().lerpVectors(start, end, t);
+                        
+                        // Bulb
+                        const bulbGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                        const bulbMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xFFD700,
+                            emissive: 0xFFD700,
+                            emissiveIntensity: 0.5
+                        });
+                        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+                        bulb.position.copy(position);
+                        bulb.position.y += Math.sin(t * Math.PI) * 0.5; // Sag effect
+                        lightsGroup.add(bulb);
+                        
+                        // Small light
+                        const light = new THREE.PointLight(0xFFD700, 0.3, 5);
+                        light.position.copy(bulb.position);
+                        lightsGroup.add(light);
+                    }
+                }
+                
+                this.scene.add(lightsGroup);
+            }
+            
+            createEffects() {
+                this.effects = [];
+                
+                // Smoke effect for campfire
+                const smokeGroup = new THREE.Group();
+                const smokeParticles = [];
+                
+                for (let i = 0; i < 30; i++) {
+                    const smokeGeometry = new THREE.SphereGeometry(0.5 + Math.random() * 0.5, 8, 8);
+                    const smokeMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x666666,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const smoke = new THREE.Mesh(smokeGeometry, smokeMaterial);
+                    smoke.position.set(
+                        (Math.random() - 0.5) * 2,
+                        Math.random() * 5,
+                        (Math.random() - 0.5) * 2
+                    );
+                    smoke.userData = {
+                        velocity: new THREE.Vector3(
+                            (Math.random() - 0.5) * 0.02,
+                            0.05 + Math.random() * 0.05,
+                            (Math.random() - 0.5) * 0.02
+                        ),
+                        life: Math.random()
+                    };
+                    smokeParticles.push(smoke);
+                    smokeGroup.add(smoke);
+                }
+                
+                smokeGroup.position.set(15, 0, -25);
+                smokeGroup.update = function(time, delta) {
+                    smokeParticles.forEach(particle => {
+                        particle.position.add(particle.userData.velocity);
+                        particle.material.opacity = 0.3 * (1 - particle.position.y / 10);
+                        particle.scale.setScalar(1 + particle.position.y / 10);
+                        
+                        if (particle.position.y > 10) {
+                            particle.position.set(
+                                (Math.random() - 0.5) * 2,
+                                0,
+                                (Math.random() - 0.5) * 2
+                            );
+                        }
+                    });
+                };
+                
+                this.effects.push(smokeGroup);
+                this.scene.add(smokeGroup);
+                
+                // Birds
+                const birdGroup = new THREE.Group();
+                
+                for (let i = 0; i < 5; i++) {
+                    const birdGeometry = new THREE.ConeGeometry(0.2, 0.8, 4);
+                    const birdMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x333333,
+                        roughness: 0.8
+                    });
+                    const bird = new THREE.Mesh(birdGeometry, birdMaterial);
+                    bird.rotation.x = Math.PI / 2;
+                    
+                    const birdContainer = new THREE.Group();
+                    birdContainer.add(bird);
+                    birdContainer.position.set(
+                        (Math.random() - 0.5) * 100,
+                        20 + Math.random() * 20,
+                        (Math.random() - 0.5) * 100
+                    );
+                    birdContainer.userData = {
+                        speed: 5 + Math.random() * 5,
+                        radius: 30 + Math.random() * 20,
+                        offset: Math.random() * Math.PI * 2
+                    };
+                    
+                    birdGroup.add(birdContainer);
+                }
+                
+                birdGroup.update = function(time) {
+                    this.children.forEach((bird, i) => {
+                        const data = bird.userData;
+                        const angle = time * 0.5 * (data.speed / 10) + data.offset;
+                        bird.position.x = Math.cos(angle) * data.radius;
+                        bird.position.z = Math.sin(angle) * data.radius;
+                        bird.rotation.y = -angle + Math.PI / 2;
+                        bird.position.y = 20 + Math.sin(time * 2 + i) * 3;
+                    });
+                };
+                
+                this.effects.push(birdGroup);
+                this.scene.add(birdGroup);
+                
+                // Falling leaves
+                const leavesGroup = new THREE.Group();
+                const leaves = [];
+                
+                for (let i = 0; i < 50; i++) {
+                    const leafGeometry = new THREE.PlaneGeometry(0.3, 0.5);
+                    const leafMaterial = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color().setHSL(0.1, 0.8, 0.4 + Math.random() * 0.2),
+                        side: THREE.DoubleSide,
+                        roughness: 0.8
+                    });
+                    const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+                    leaf.position.set(
+                        (Math.random() - 0.5) * 100,
+                        20 + Math.random() * 30,
+                        (Math.random() - 0.5) * 100
+                    );
+                    leaf.rotation.set(
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI,
+                        Math.random() * Math.PI
+                    );
+                    leaf.userData = {
+                        velocity: new THREE.Vector3(
+                            (Math.random() - 0.5) * 0.05,
+                            -0.05 - Math.random() * 0.05,
+                            (Math.random() - 0.5) * 0.05
+                        ),
+                        rotationSpeed: new THREE.Vector3(
+                            (Math.random() - 0.5) * 0.05,
+                            (Math.random() - 0.5) * 0.05,
+                            (Math.random() - 0.5) * 0.05
+                        )
+                    };
+                    leaves.push(leaf);
+                    leavesGroup.add(leaf);
+                }
+                
+                leavesGroup.update = function(time, delta) {
+                    leaves.forEach(leaf => {
+                        leaf.position.add(leaf.userData.velocity);
+                        leaf.rotation.x += leaf.userData.rotationSpeed.x;
+                        leaf.rotation.y += leaf.userData.rotationSpeed.y;
+                        leaf.rotation.z += leaf.userData.rotationSpeed.z;
+                        
+                        // Swaying motion
+                        leaf.position.x += Math.sin(time * 2 + leaf.position.y) * 0.02;
+                        
+                        // Reset when hits ground
+                        if (leaf.position.y < 0) {
+                            leaf.position.y = 30 + Math.random() * 20;
+                            leaf.position.x = (Math.random() - 0.5) * 100;
+                            leaf.position.z = (Math.random() - 0.5) * 100;
+                        }
+                    });
+                };
+                
+                this.effects.push(leavesGroup);
+                this.scene.add(leavesGroup);
+            }
+            
+            createNPCs() {
+                this.npcs = [];
+                
+                // Garrett Califano - The Keeper
+                const garrettGroup = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.6, 2, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x4682B4,
+                    roughness: 0.8
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1;
+                garrettGroup.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.35, 8, 8);
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFFE4C4,
+                    roughness: 0.7
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 2.3;
+                garrettGroup.add(head);
+                
+                // Blonde hair
+                const hairGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+                const hairMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFFD700,
+                    roughness: 0.9
+                });
+                const hair = new THREE.Mesh(hairGeometry, hairMaterial);
+                hair.position.y = 2.4;
+                hair.scale.y = 0.8;
+                garrettGroup.add(hair);
+                
+                // Beaver tail!
+                const tailGeometry = new THREE.BoxGeometry(0.8, 0.2, 1.5);
+                const tailMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9
+                });
+                const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+                tail.position.set(0, 0.5, -0.8);
+                tail.rotation.x = -0.3;
+                garrettGroup.add(tail);
+                
+                // Arms
+                for (let side = -1; side <= 1; side += 2) {
+                    const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8);
+                    const arm = new THREE.Mesh(armGeometry, headMaterial);
+                    arm.position.set(side * 0.6, 1.5, 0);
+                    arm.rotation.z = side * 0.3;
+                    garrettGroup.add(arm);
+                }
+                
+                // Name tag
+                const tagGeometry = new THREE.BoxGeometry(1, 0.5, 0.1);
+                const tagMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xFFFFFF,
+                    emissive: 0xFFFFFF,
+                    emissiveIntensity: 0.2
+                });
+                const tag = new THREE.Mesh(tagGeometry, tagMaterial);
+                tag.position.set(0, 2.8, 0.5);
+                garrettGroup.add(tag);
+                
+                garrettGroup.position.set(0, 0, 5);
+                garrettGroup.userData = {
+                    name: "Garrett Califano",
+                    title: "Keeper of the Park",
+                    basePosition: new THREE.Vector3(0, 0, 5),
+                    wanderRadius: 10,
+                    speed: 0.02
+                };
+                
+                garrettGroup.update = function(time) {
+                    // Make Garrett wander around
+                    const angle = time * this.userData.speed;
+                    this.position.x = this.userData.basePosition.x + Math.sin(angle) * this.userData.wanderRadius;
+                    this.position.z = this.userData.basePosition.z + Math.cos(angle) * this.userData.wanderRadius;
+                    this.rotation.y = -angle + Math.PI;
+                    
+                    // Wave animation
+                    const rightArm = this.children[4];
+                    if (rightArm) {
+                        rightArm.rotation.z = 0.3 + Math.sin(time * 3) * 0.3;
+                    }
+                };
+                
+                this.npcs.push(garrettGroup);
+                this.scene.add(garrettGroup);
+                
+                // Other NPCs (hobbit-trailer residents)
+                const residentColors = [0xFF6347, 0x32CD32, 0x9370DB, 0xFFB6C1];
+                const residentNames = ["Bilbo Airstream", "Frodo Wheeler", "Sam Campfire", "Merry Roadtrip"];
+                
+                for (let i = 0; i < 4; i++) {
+                    const residentGroup = new THREE.Group();
+                    
+                    // Simple body
+                    const resBodyGeometry = new THREE.CylinderGeometry(0.4, 0.5, 1.5, 8);
+                    const resBodyMaterial = new THREE.MeshStandardMaterial({
+                        color: residentColors[i],
+                        roughness: 0.8
+                    });
+                    const resBody = new THREE.Mesh(resBodyGeometry, resBodyMaterial);
+                    resBody.position.y = 0.75;
+                    residentGroup.add(resBody);
+                    
+                    // Head
+                    const resHeadGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+                    const resHead = new THREE.Mesh(resHeadGeometry, headMaterial);
+                    resHead.position.y = 1.8;
+                    residentGroup.add(resHead);
+                    
+                    // Hat
+                    const hatGeometry = new THREE.ConeGeometry(0.35, 0.5, 8);
+                    const hatMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x228B22,
+                        roughness: 0.9
+                    });
+                    const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+                    hat.position.y = 2.2;
+                    residentGroup.add(hat);
+                    
+                    // Position around camp
+                    const angle = (i / 4) * Math.PI * 2;
+                    residentGroup.position.set(
+                        Math.cos(angle) * 20,
+                        0,
+                        Math.sin(angle) * 20
+                    );
+                    
+                    residentGroup.userData = {
+                        name: residentNames[i],
+                        idle: true,
+                        animOffset: i * 1.5
+                    };
+                    
+                    residentGroup.update = function(time) {
+                        // Idle animation
+                        this.position.y = Math.sin(time + this.userData.animOffset) * 0.1;
+                        this.rotation.y = Math.sin(time * 0.5 + this.userData.animOffset) * 0.2;
+                    };
+                    
+                    this.npcs.push(residentGroup);
+                    this.scene.add(residentGroup);
+                }
+            }
+            
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 6);
+                const portalRadius = 60;
+                
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i];
+                    const angle = (i / numPortals) * Math.PI * 2 - Math.PI / 2;
+                    
+                    const portalGroup = new THREE.Group();
+                    
+                    // Portal platform (stone circle)
+                    const platformGeometry = new THREE.CylinderGeometry(5, 5, 0.5, 16);
+                    const platformMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x696969,
+                        roughness: 0.95
+                    });
+                    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                    platform.receiveShadow = true;
+                    platform.castShadow = true;
+                    portalGroup.add(platform);
+                    
+                    // Stone pillars
+                    for (let j = 0; j < 2; j++) {
+                        const pillarGeometry = new THREE.BoxGeometry(1, 6, 1);
+                        const pillar = new THREE.Mesh(pillarGeometry, platformMaterial);
+                        pillar.position.set(j === 0 ? -3 : 3, 3, 0);
+                        pillar.castShadow = true;
+                        portalGroup.add(pillar);
+                    }
+                    
+                    // Portal arch
+                    const archGeometry = new THREE.TorusGeometry(3.5, 0.4, 8, 16, Math.PI);
+                    const archMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B7355,
+                        roughness: 0.8
+                    });
+                    const arch = new THREE.Mesh(archGeometry, archMaterial);
+                    arch.position.y = 6;
+                    arch.rotation.z = Math.PI;
+                    portalGroup.add(arch);
+                    
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(3, 64);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(DEFAULT_WORLD_ATTRIBUTES.portalColor1) },
+                            color2: { value: new THREE.Color(DEFAULT_WORLD_ATTRIBUTES.portalColor2) },
+                            distortion: { value: 1 }
+                        },
+                        vertexShader: portalVertexShader,
+                        fragmentShader: portalFragmentShader,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.y = 3.5;
+                    
+                    // Portal particles
+                    const particleCount = 100;
+                    const particleGeometry = new THREE.BufferGeometry();
+                    const particlePositions = new Float32Array(particleCount * 3);
+                    
+                    for (let j = 0; j < particleCount; j++) {
+                        const pAngle = (j / particleCount) * Math.PI * 2;
+                        const radius = 3.5 + Math.random() * 1;
+                        particlePositions[j * 3] = Math.cos(pAngle) * radius;
+                        particlePositions[j * 3 + 1] = 3.5 + Math.sin(pAngle) * radius;
+                        particlePositions[j * 3 + 2] = (Math.random() - 0.5) * 0.5;
+                    }
+                    
+                    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+                    
+                    const particleMaterial = new THREE.PointsMaterial({
+                        color: 0xFFFFFF,
+                        size: 0.1,
+                        transparent: true,
+                        opacity: 0.8,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const particles = new THREE.Points(particleGeometry, particleMaterial);
+                    portalGroup.add(particles);
+                    
+                    // Position portal
+                    portalGroup.position.x = Math.cos(angle) * portalRadius;
+                    portalGroup.position.z = Math.sin(angle) * portalRadius;
+                    portalGroup.rotation.y = -angle + Math.PI;
+                    
+                    // Portal light
+                    const portalLight = new THREE.PointLight(DEFAULT_WORLD_ATTRIBUTES.portalColor1, 1.5, 15);
+                    portalLight.position.copy(portalGroup.position);
+                    portalLight.position.y = 3.5;
+                    this.scene.add(portalLight);
+                    
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: portalLight,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`,
+                        particles: particles
+                    };
+                    
+                    portalGroup.add(portal);
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+            
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+            
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = true;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = true;
+                        e.preventDefault();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = false;
+                    }
+                    if (e.key === ' ') {
+                        this.keys[' '] = false;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+                        
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+            
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+                
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+                    
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+                
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+                
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+                    
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+                
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+            
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+            
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                
+                // Apply damping
+                if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                    this.velocity.x *= 0.9;
+                    this.velocity.z *= 0.9;
+                }
+                
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        
+                        if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                            this.velocity.add(moveForward);
+                            this.velocity.add(moveRight);
+                        } else {
+                            this.camera.position.add(moveForward);
+                            this.camera.position.add(moveRight);
+                        }
+                    }
+                } else {
+                    if (this.keys.w) {
+                        if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                            this.velocity.add(forward.multiplyScalar(this.moveSpeed));
+                        } else {
+                            this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.s) {
+                        if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                            this.velocity.add(forward.multiplyScalar(-this.moveSpeed));
+                        } else {
+                            this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.a) {
+                        if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                            this.velocity.add(right.multiplyScalar(-this.moveSpeed));
+                        } else {
+                            this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                        }
+                    }
+                    if (this.keys.d) {
+                        if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                            this.velocity.add(right.multiplyScalar(this.moveSpeed));
+                        } else {
+                            this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                        }
+                    }
+                    
+                    // Vertical movement
+                    if (DEFAULT_WORLD_ATTRIBUTES.enableFlying) {
+                        if (this.keys.q) this.camera.position.y -= this.moveSpeed;
+                        if (this.keys.e) this.camera.position.y += this.moveSpeed;
+                    }
+                    
+                    // Jumping
+                    if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics && this.keys[' '] && this.canJump) {
+                        this.velocity.y = DEFAULT_WORLD_ATTRIBUTES.jumpForce;
+                        this.canJump = false;
+                    }
+                }
+                
+                // Apply physics
+                if (DEFAULT_WORLD_ATTRIBUTES.enablePhysics) {
+                    this.velocity.y -= DEFAULT_WORLD_ATTRIBUTES.gravity * 0.01;
+                    this.camera.position.add(this.velocity);
+                    
+                    // Ground collision
+                    if (this.camera.position.y < DEFAULT_WORLD_ATTRIBUTES.cameraHeight) {
+                        this.camera.position.y = DEFAULT_WORLD_ATTRIBUTES.cameraHeight;
+                        this.velocity.y = 0;
+                        this.canJump = true;
+                    }
+                }
+                
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+            
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+                
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+                        
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+                        
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                        
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+            
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Activating portal magic...';
+                    
+                    // Transition effect
+                    const transitionDuration = 1500;
+                    const startTime = Date.now();
+                    
+                    const transitionEffect = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = elapsed / transitionDuration;
+                        
+                        if (progress >= 1) {
+                            clearInterval(transitionEffect);
+                            this.loadNewWorld(url);
+                        } else {
+                            this.renderer.domElement.style.filter = `hue-rotate(${progress * 360}deg) blur(${progress * 10}px)`;
+                            this.renderer.domElement.style.opacity = 1 - progress * 0.5;
+                        }
+                    }, 16);
+                    
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Portal malfunction. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            async loadNewWorld(url) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+                    
+                    let htmlContent = await response.text();
+                    
+                    // Create inheritance params
+                    const params = new URLSearchParams();
+                    params.set('from', 'hobbiton_trailer_park.html');
+                    params.set('fromName', DEFAULT_WORLD_ATTRIBUTES.name);
+                    
+                    const inheritanceParams = params.toString();
+                    
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+                    
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+                    
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                    <\/script>`;
+                    
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+                    
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    window.location.href = blobUrl;
+                    
+                } catch (error) {
+                    console.error('Error loading world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to establish connection.';
+                    this.renderer.domElement.style.filter = 'none';
+                    this.renderer.domElement.style.opacity = '1';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                const delta = this.clock.getDelta();
+                
+                this.updateMovement();
+                this.updateHover();
+                
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        
+                        const intensity = 1 + Math.sin(time * 2 + index) * 0.3;
+                        portal.userData.light.intensity = intensity;
+                        
+                        if (portal.userData.particles) {
+                            portal.userData.particles.rotation.z = time * 0.5;
+                        }
+                    }
+                    
+                    portal.rotation.z = Math.sin(time * 0.5 + index) * 0.05;
+                });
+                
+                // Animate particles
+                if (this.particles) {
+                    this.particles.rotation.y = time * 0.05;
+                    
+                    if (this.particleSystem) {
+                        this.particleSystem.update(delta);
+                    }
+                }
+                
+                // Animate structures
+                this.structures.forEach((structure) => {
+                    // Animate campfire
+                    if (structure.userData.name === "Community Campfire" && structure.userData.fireMaterial) {
+                        structure.userData.fireMaterial.uniforms.time.value = time;
+                    }
+                });
+                
+                // Animate effects
+                this.effects.forEach((effect) => {
+                    if (effect.update) {
+                        effect.update(time, delta);
+                    }
+                });
+                
+                // Animate NPCs
+                this.npcs.forEach((npc) => {
+                    if (npc.update) {
+                        npc.update(time);
+                    }
+                });
+                
+                // Update audio
+                if (this.audioUpdate) {
+                    this.audioUpdate(time);
+                }
+                
+                // Animate lights
+                this.scene.traverse((child) => {
+                    if (child.isLight && child.userData.animationType === 'flicker') {
+                        child.intensity = child.userData.baseIntensity * (0.7 + Math.random() * 0.3);
+                        if (child.color) {
+                            const hue = 0.08 + Math.random() * 0.02;
+                            child.color.setHSL(hue, 0.8, 0.5);
+                        }
+                    }
+                });
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize world
+        window.addEventListener('DOMContentLoaded', () => {
+            const navigator = new WorldNavigator();
+            navigator.init();
+        });
+        
+        // Prevent pull-to-refresh on mobile
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+            
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+    </script>
+</body>
+</html>
