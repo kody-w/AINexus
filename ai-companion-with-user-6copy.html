@@ -1,0 +1,3221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion - Unified Agent Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Split Layout */
+        #three-container {
+            position: relative;
+            width: 100%;
+            height: 50vh;
+            cursor: grab;
+        }
+
+        #three-container:active {
+            cursor: grabbing;
+        }
+
+        #bottom-container {
+            position: relative;
+            width: 100%;
+            height: 50vh;
+            background: rgba(0, 0, 0, 0.95);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        /* Voice Queue Indicator */
+        .voice-queue-indicator {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            border-radius: 10px;
+            padding: 10px 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
+
+        .voice-queue-indicator.visible {
+            display: block;
+        }
+
+        .voice-queue-title {
+            color: #06ffa5;
+            font-size: 12px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .voice-queue-item {
+            font-size: 11px;
+            color: #ccc;
+            margin: 2px 0;
+            padding-left: 10px;
+            opacity: 0.7;
+        }
+
+        .voice-queue-item.speaking {
+            color: #06ffa5;
+            opacity: 1;
+            font-weight: bold;
+        }
+
+        /* Upload Interface */
+        .upload-interface {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(6, 255, 165, 0.5);
+            border-radius: 20px;
+            padding: 40px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .upload-interface h2 {
+            color: #06ffa5;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .upload-area {
+            border: 3px dashed rgba(6, 255, 165, 0.3);
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: rgba(6, 255, 165, 0.6);
+            background: rgba(6, 255, 165, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #06ffa5;
+            background: rgba(6, 255, 165, 0.1);
+            transform: scale(1.02);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* API Key Input */
+        .api-key-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .api-key-status {
+            font-size: 12px;
+            margin-top: 5px;
+            color: #06ffa5;
+            opacity: 0.8;
+        }
+
+        /* Azure TTS Config */
+        .azure-tts-config {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border: 1px solid rgba(6, 255, 165, 0.2);
+        }
+
+        .azure-tts-config h3 {
+            color: #06ffa5;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .azure-tts-input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            margin-top: 5px;
+            font-size: 12px;
+        }
+
+        .azure-tts-status {
+            font-size: 11px;
+            margin-top: 5px;
+            color: #06ffa5;
+            opacity: 0.8;
+        }
+
+        /* HUD - Now positioned relative to top container */
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .hud-text {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        /* Control Panel - Now at bottom of screen */
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            padding: 15px 30px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+            flex-direction: row;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .control-panel.active {
+            display: flex;
+        }
+
+        .control-button {
+            background: rgba(6, 255, 165, 0.1);
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            border-radius: 50%;
+            color: #06ffa5;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 16px;
+        }
+
+        .control-button:hover {
+            background: rgba(6, 255, 165, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Message Display - Now positioned relative to top container */
+        .message-display {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 600px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .message-display.visible {
+            opacity: 1;
+        }
+
+        .message-role {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .message-role.user { color: #3b82f6; }
+        .message-role.assistant { color: #8338ec; }
+        .message-role.system { color: #ff6a00; }
+
+        /* API Status - Now positioned relative to top container */
+        .api-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+            border: 1px solid rgba(6, 255, 165, 0.3);
+        }
+
+        .api-status.active {
+            display: flex;
+        }
+
+        .api-status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #06ffa5;
+            animation: apiPulse 1.5s infinite;
+        }
+
+        @keyframes apiPulse {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+        }
+
+        .api-status-text {
+            color: #06ffa5;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Enhanced Floating Conversation Panel - Now in bottom container */
+        .conversation-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 300px;
+            bottom: 80px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            resize: horizontal;
+            overflow: auto;
+        }
+
+        .conversation-panel.active {
+            display: flex;
+        }
+
+        .conversation-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .conversation-header h3 {
+            color: #06ffa5;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .conversation-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .panel-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .panel-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Three-column layout for conversations */
+        .conversation-columns {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 0.3fr;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.2);
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .conversation-columns.show-original {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .conversation-column {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .conversation-column:last-child {
+            border-right: none;
+        }
+
+        .column-header {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .column-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .column-header.user {
+            color: #3b82f6;
+        }
+
+        .column-header.live {
+            color: #06ffa5;
+        }
+
+        .column-header.original {
+            color: #e57200;
+        }
+
+        .toggle-indicator {
+            float: right;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        .column-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .column-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .column-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .column-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .conv-message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease;
+            position: relative;
+        }
+
+        .conv-message.connected::before {
+            content: '';
+            position: absolute;
+            left: -15px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, 
+                transparent 0%, 
+                rgba(6, 255, 165, 0.6) 20%, 
+                rgba(6, 255, 165, 0.6) 80%, 
+                transparent 100%);
+            border-radius: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .conv-message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .conv-message-role {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .conv-message-role.user {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .conv-message-role.assistant, .conv-message-role.original {
+            background: rgba(229, 114, 0, 0.2);
+            color: #fb923c;
+        }
+
+        .conv-message-role.live {
+            background: rgba(6, 255, 165, 0.2);
+            color: #06ffa5;
+        }
+
+        .conv-message-role.system {
+            background: rgba(255, 106, 0, 0.2);
+            color: #fb923c;
+        }
+
+        .conv-message-content {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .conv-message-content.user {
+            border-left: 3px solid #3b82f6;
+        }
+
+        .conv-message-content.assistant, .conv-message-content.original {
+            border-left: 3px solid #e57200;
+        }
+
+        .conv-message-content.live {
+            border-left: 3px solid #06ffa5;
+        }
+
+        .conv-message-content.system {
+            border-left: 3px solid #ff6a00;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* Collapsible system messages - now collapsed by default */
+        .conv-message-content.system {
+            max-height: 60px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .conv-message-content.system.expanded {
+            max-height: none;
+        }
+
+        .conv-message-content.system:not(.expanded)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background: linear-gradient(transparent, rgba(255, 255, 255, 0.05));
+        }
+
+        .expand-button {
+            margin-top: 5px;
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #06ffa5;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .expand-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Connection lines between related messages */
+        .message-connection-line {
+            position: absolute;
+            background: linear-gradient(90deg, 
+                rgba(6, 255, 165, 0.4) 0%, 
+                rgba(6, 255, 165, 0.2) 50%, 
+                rgba(6, 255, 165, 0.4) 100%);
+            height: 2px;
+            border-radius: 1px;
+            animation: connectionPulse 2s ease-in-out infinite;
+            z-index: 1;
+        }
+
+        @keyframes connectionPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Minimize state */
+        .conversation-panel.minimized {
+            height: auto;
+        }
+
+        .conversation-panel.minimized .conversation-columns {
+            display: none;
+        }
+
+        .upload-button {
+            background: linear-gradient(135deg, #06ffa5, #00cc88);
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .upload-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        /* Agent Status Display - Now positioned in bottom container */
+        .agent-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            max-width: 250px;
+            display: none;
+        }
+
+        .agent-status.visible {
+            display: block;
+        }
+
+        .agent-status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+
+        .agent-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .agent-status-indicator.historical {
+            background: #666;
+        }
+
+        .agent-status-indicator.loading {
+            background: #ffeb3b;
+            animation: pulse 1s infinite;
+        }
+
+        .agent-status-indicator.live {
+            background: #06ffa5;
+            box-shadow: 0 0 10px #06ffa5;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Voice Controls - Now positioned in bottom container */
+        .voice-controls {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
+
+        .voice-controls.active {
+            display: block;
+        }
+
+        .voice-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .voice-button {
+            background: rgba(6, 255, 165, 0.1);
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            border-radius: 50%;
+            color: #06ffa5;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .voice-button:hover {
+            background: rgba(6, 255, 165, 0.2);
+            transform: scale(1.1);
+        }
+
+        .voice-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            box-shadow: 0 0 15px rgba(6, 255, 165, 0.5);
+        }
+
+        .voice-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            width: 100%;
+        }
+
+        .voice-select option {
+            background: #1a1a2e;
+        }
+
+        .voice-status {
+            font-size: 12px;
+            color: #06ffa5;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        /* Speaking indicator */
+        .speaking-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(6, 255, 165, 0.3);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 300;
+        }
+
+        .speaking-indicator.active {
+            display: flex;
+        }
+
+        .speaking-bars {
+            display: flex;
+            gap: 3px;
+            height: 30px;
+            align-items: center;
+        }
+
+        .speaking-bar {
+            width: 4px;
+            background: #06ffa5;
+            border-radius: 2px;
+            animation: soundWave 1s ease-in-out infinite;
+        }
+
+        .speaking-bar:nth-child(1) { animation-delay: 0s; }
+        .speaking-bar:nth-child(2) { animation-delay: 0.1s; }
+        .speaking-bar:nth-child(3) { animation-delay: 0.2s; }
+        .speaking-bar:nth-child(4) { animation-delay: 0.3s; }
+        .speaking-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes soundWave {
+            0%, 100% { height: 10px; }
+            50% { height: 30px; }
+        }
+
+        .speaking-text {
+            color: #06ffa5;
+            font-size: 14px;
+        }
+
+        /* TTS Control in messages */
+        .tts-control {
+            margin-top: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.7;
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .tts-control:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .tts-control i {
+            margin-right: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container">
+        <!-- HUD -->
+        <div class="hud">
+            <div class="hud-text" id="conversation-info">No conversation loaded</div>
+            <div class="hud-text" id="message-counter">Message: 0/0</div>
+        </div>
+
+        <!-- Voice Queue Indicator -->
+        <div class="voice-queue-indicator" id="voice-queue-indicator">
+            <div class="voice-queue-title">Voice Queue</div>
+            <div id="voice-queue-list"></div>
+        </div>
+
+        <!-- Message Display -->
+        <div class="message-display" id="message-display">
+            <div class="message-role" id="message-role"></div>
+            <div class="message-content" id="message-content"></div>
+        </div>
+
+        <!-- API Status -->
+        <div class="api-status" id="api-status">
+            <div class="api-status-icon"></div>
+            <div class="api-status-text">Calling Live API...</div>
+        </div>
+    </div>
+    
+    <div id="bottom-container">
+        <!-- Enhanced Conversation Panel with User-Live-Original Layout -->
+        <div class="conversation-panel" id="conversation-panel">
+            <div class="conversation-header" id="conversation-header">
+                <h3>Conversation Transcript</h3>
+                <div class="conversation-controls">
+                    <button class="panel-button" id="minimize-btn" title="Minimize">−</button>
+                    <button class="panel-button" id="close-panel-btn" title="Close">×</button>
+                </div>
+            </div>
+            <div class="conversation-columns">
+                <div class="conversation-column">
+                    <div class="column-header user">User</div>
+                    <div class="column-content" id="user-content"></div>
+                </div>
+                <div class="conversation-column">
+                    <div class="column-header live">Real Time Response</div>
+                    <div class="column-content" id="live-content"></div>
+                </div>
+                <div class="conversation-column">
+                    <div class="column-header original">Original Response <span class="toggle-indicator">▶</span></div>
+                    <div class="column-content" id="original-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent Status -->
+        <div class="agent-status" id="agent-status">
+            <h4 style="color: #06ffa5; margin-bottom: 10px; font-size: 14px;">Agent Activity</h4>
+            <div id="agent-status-list"></div>
+        </div>
+
+        <!-- Voice Controls -->
+        <div class="voice-controls" id="voice-controls">
+            <div class="voice-toggle">
+                <button class="voice-button" id="voice-toggle-btn" title="Toggle Voice">
+                    🔊
+                </button>
+                <span style="color: #06ffa5; font-size: 13px;">Text-to-Speech</span>
+            </div>
+            <select class="voice-select" id="voice-select">
+                <option value="en-US-JennyNeural">Jenny (Female - Assistant)</option>
+                <option value="en-US-GuyNeural">Guy (Male - User)</option>
+                <option value="en-US-AriaNeural">Aria (Female - Assistant)</option>
+                <option value="en-US-DavisNeural">Davis (Male - User)</option>
+                <option value="en-US-AmberNeural">Amber (Female - Assistant)</option>
+                <option value="en-US-JasonNeural">Jason (Male - User)</option>
+                <option value="en-GB-SoniaNeural">Sonia (British Female)</option>
+                <option value="en-GB-RyanNeural">Ryan (British Male)</option>
+            </select>
+            <div class="voice-status" id="voice-status">Voice: Off</div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel" id="control-panel">
+            <button class="control-button" id="play-pause-btn" title="Play/Pause">▶️</button>
+            <button class="control-button" id="prev-btn" title="Previous">⏮️</button>
+            <button class="control-button" id="next-btn" title="Next">⏭️</button>
+            <button class="control-button" id="reset-btn" title="Reset">🔄</button>
+            <button class="control-button" id="transcript-btn" title="Show Transcript">📜</button>
+            <button class="control-button" id="voice-btn" title="Voice Controls">🎤</button>
+        </div>
+    </div>
+    
+    <!-- Upload Interface -->
+    <div class="upload-interface" id="upload-interface">
+        <h2>Upload Conversation Transcript</h2>
+        <div class="upload-area" id="upload-area">
+            <div style="font-size: 48px;">📁</div>
+            <p>Drag & drop your conversation JSON file here</p>
+            <p style="font-size: 12px; opacity: 0.7;">or click to browse</p>
+        </div>
+        <input type="file" id="file-input" class="file-input" accept=".json">
+        
+        <div class="api-key-container">
+            <label style="font-size: 14px;">API Key (optional for live comparison)</label>
+            <input type="password" class="api-key-input" id="api-key-input" 
+                   placeholder="Enter your API key">
+            <div class="api-key-status" id="api-key-status"></div>
+        </div>
+        
+        <!-- Azure TTS Configuration -->
+        <div class="azure-tts-config">
+            <h3>🔊 Azure Text-to-Speech Configuration</h3>
+            <label style="font-size: 12px; color: #ccc;">Azure Speech API Key:</label>
+            <input type="password" class="azure-tts-input" id="azure-tts-key" 
+                   placeholder="Enter Azure Speech API key" 
+                   value="d7drbPhJ5IlXpMnDL35jJFMJjW2L7ZIidcb1EqKRu52MrHWwvTksJQQJ99BDACHYHv6XJ3w3AAAAACOGFGu8">
+            <label style="font-size: 12px; color: #ccc; margin-top: 10px;">Azure Region:</label>
+            <input type="text" class="azure-tts-input" id="azure-tts-region" 
+                   placeholder="e.g., eastus2" value="eastus2">
+            <div class="azure-tts-status" id="azure-tts-status">Voice synthesis ready</div>
+        </div>
+        
+        <button class="upload-button" onclick="document.getElementById('file-input').click()">
+            Choose File
+        </button>
+    </div>
+
+    <!-- Speaking Indicator -->
+    <div class="speaking-indicator" id="speaking-indicator">
+        <div class="speaking-bars">
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+            <div class="speaking-bar"></div>
+        </div>
+        <div class="speaking-text">Speaking...</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Azure Speech SDK -->
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    
+    <script>
+        // Simple OrbitControls
+        class OrbitControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.target = new THREE.Vector3();
+                
+                this.minDistance = 5;  // Reduced from 10 to allow closer zoom
+                this.maxDistance = 30;  // Reduced from 50 for more focused view
+                this.minPolarAngle = 0;
+                this.maxPolarAngle = Math.PI * 0.45;
+                
+                this.rotateSpeed = 1.0;
+                this.zoomSpeed = 1.2;
+                
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                
+                this.scale = 1;
+                
+                this.rotateStart = new THREE.Vector2();
+                this.rotateEnd = new THREE.Vector2();
+                this.rotateDelta = new THREE.Vector2();
+                
+                this.isUserInteracting = false;
+                
+                this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this), false);
+                this.domElement.addEventListener('wheel', this.onMouseWheel.bind(this), false);
+                
+                this.update();
+            }
+            
+            onMouseDown(event) {
+                event.preventDefault();
+                this.isUserInteracting = true;
+                
+                this.rotateStart.set(event.clientX, event.clientY);
+                
+                document.addEventListener('mousemove', this.onMouseMove.bind(this), false);
+                document.addEventListener('mouseup', this.onMouseUp.bind(this), false);
+            }
+            
+            onMouseMove(event) {
+                if (!this.isUserInteracting) return;
+                
+                event.preventDefault();
+                
+                this.rotateEnd.set(event.clientX, event.clientY);
+                this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
+                
+                const element = this.domElement;
+                
+                this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
+                this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+                
+                this.rotateStart.copy(this.rotateEnd);
+                
+                this.update();
+            }
+            
+            onMouseUp() {
+                this.isUserInteracting = false;
+                document.removeEventListener('mousemove', this.onMouseMove.bind(this), false);
+                document.removeEventListener('mouseup', this.onMouseUp.bind(this), false);
+            }
+            
+            onMouseWheel(event) {
+                event.preventDefault();
+                
+                if (event.deltaY < 0) {
+                    this.scale /= this.zoomSpeed;
+                } else {
+                    this.scale *= this.zoomSpeed;
+                }
+                
+                this.update();
+            }
+            
+            update() {
+                const offset = new THREE.Vector3();
+                offset.copy(this.camera.position).sub(this.target);
+                
+                this.spherical.setFromVector3(offset);
+                
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                
+                this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
+                this.spherical.makeSafe();
+                
+                this.spherical.radius *= this.scale;
+                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+                
+                offset.setFromSpherical(this.spherical);
+                
+                this.camera.position.copy(this.target).add(offset);
+                this.camera.lookAt(this.target);
+                
+                this.sphericalDelta.set(0, 0, 0);
+                this.scale = 1;
+            }
+        }
+
+        // Voice Queue Manager
+        class VoiceQueue {
+            constructor() {
+                this.queue = [];
+                this.isProcessing = false;
+                this.currentItem = null;
+                this.queueIndicator = document.getElementById('voice-queue-indicator');
+                this.queueList = document.getElementById('voice-queue-list');
+            }
+
+            add(text, role, callback) {
+                const item = {
+                    id: Date.now() + Math.random(),
+                    text,
+                    role,
+                    callback,
+                    status: 'pending'
+                };
+                
+                this.queue.push(item);
+                this.updateQueueDisplay();
+                
+                if (!this.isProcessing) {
+                    this.processNext();
+                }
+                
+                return item.id;
+            }
+
+            async processNext() {
+                if (this.queue.length === 0) {
+                    this.isProcessing = false;
+                    this.updateQueueDisplay();
+                    return;
+                }
+
+                this.isProcessing = true;
+                this.currentItem = this.queue.shift();
+                this.currentItem.status = 'speaking';
+                this.updateQueueDisplay();
+
+                try {
+                    if (this.currentItem.callback) {
+                        await this.currentItem.callback(this.currentItem.text, this.currentItem.role);
+                    }
+                } catch (error) {
+                    console.error('Voice queue error:', error);
+                }
+
+                this.currentItem = null;
+                
+                // Small delay between items
+                setTimeout(() => {
+                    this.processNext();
+                }, 500);
+            }
+
+            updateQueueDisplay() {
+                if (this.queue.length === 0 && !this.currentItem) {
+                    this.queueIndicator.classList.remove('visible');
+                    return;
+                }
+
+                this.queueIndicator.classList.add('visible');
+                this.queueList.innerHTML = '';
+
+                if (this.currentItem) {
+                    const speakingItem = document.createElement('div');
+                    speakingItem.className = 'voice-queue-item speaking';
+                    speakingItem.textContent = `▶ ${this.currentItem.role}: ${this.currentItem.text.substring(0, 30)}...`;
+                    this.queueList.appendChild(speakingItem);
+                }
+
+                this.queue.slice(0, 3).forEach((item, index) => {
+                    const queueItem = document.createElement('div');
+                    queueItem.className = 'voice-queue-item';
+                    queueItem.textContent = `${index + 1}. ${item.role}: ${item.text.substring(0, 30)}...`;
+                    this.queueList.appendChild(queueItem);
+                });
+
+                if (this.queue.length > 3) {
+                    const moreItem = document.createElement('div');
+                    moreItem.className = 'voice-queue-item';
+                    moreItem.textContent = `... and ${this.queue.length - 3} more`;
+                    this.queueList.appendChild(moreItem);
+                }
+            }
+
+            clear() {
+                this.queue = [];
+                this.currentItem = null;
+                this.isProcessing = false;
+                this.updateQueueDisplay();
+            }
+        }
+
+        // Enhanced Azure Voice Manager with Queue
+        class AzureVoiceManager {
+            constructor() {
+                this.isEnabled = false;
+                this.isSpeaking = false;
+                this.speechConfig = null;
+                this.synthesizer = null;
+                this.voiceSelectElement = document.getElementById('voice-select');
+                this.voiceStatusElement = document.getElementById('voice-status');
+                this.speakingIndicator = document.getElementById('speaking-indicator');
+                this.isSdkLoaded = false;
+                
+                // Initialize voice queue
+                this.voiceQueue = new VoiceQueue();
+                
+                // Load Azure configuration from input fields
+                this.azureKey = document.getElementById('azure-tts-key').value;
+                this.azureRegion = document.getElementById('azure-tts-region').value;
+                
+                // Voice mappings for different roles
+                this.voiceMap = {
+                    user: ['en-US-GuyNeural', 'en-US-DavisNeural', 'en-US-JasonNeural', 'en-GB-RyanNeural'],
+                    assistant: ['en-US-JennyNeural', 'en-US-AriaNeural', 'en-US-AmberNeural', 'en-GB-SoniaNeural'],
+                    original: ['en-US-JennyNeural', 'en-US-AriaNeural', 'en-US-AmberNeural', 'en-GB-SoniaNeural'],
+                    live: ['en-US-JennyNeural', 'en-US-AriaNeural', 'en-US-AmberNeural', 'en-GB-SoniaNeural'],
+                    system: ['en-US-AriaNeural']
+                };
+                
+                this.currentVoices = {
+                    user: 'en-US-GuyNeural',
+                    assistant: 'en-US-JennyNeural',
+                    original: 'en-US-JennyNeural',
+                    live: 'en-US-JennyNeural',
+                    system: 'en-US-AriaNeural'
+                };
+                
+                this.checkSdkLoaded();
+                this.setupControls();
+            }
+            
+            checkSdkLoaded() {
+                if (window.SpeechSDK) {
+                    this.isSdkLoaded = true;
+                    this.initializeAzureSpeech();
+                } else {
+                    // Check again after a delay
+                    setTimeout(() => this.checkSdkLoaded(), 100);
+                }
+            }
+            
+            async initializeAzureSpeech() {
+                if (!window.SpeechSDK || !this.azureKey) {
+                    console.warn('Azure Speech SDK not loaded or no API key provided');
+                    return;
+                }
+                
+                try {
+                    this.speechConfig = window.SpeechSDK.SpeechConfig.fromSubscription(
+                        this.azureKey,
+                        this.azureRegion
+                    );
+                    this.speechConfig.speechSynthesisVoiceName = this.currentVoices.assistant;
+                    console.log('Azure Speech SDK initialized successfully');
+                    document.getElementById('azure-tts-status').textContent = 'Voice synthesis ready ✓';
+                    document.getElementById('azure-tts-status').style.color = '#06ffa5';
+                } catch (error) {
+                    console.error('Failed to initialize Azure Speech SDK:', error);
+                    document.getElementById('azure-tts-status').textContent = 'Voice synthesis error';
+                    document.getElementById('azure-tts-status').style.color = '#ff6a00';
+                }
+            }
+            
+            setupControls() {
+                const voiceToggleBtn = document.getElementById('voice-toggle-btn');
+                const voiceBtn = document.getElementById('voice-btn');
+                const voiceControls = document.getElementById('voice-controls');
+                
+                voiceToggleBtn.addEventListener('click', () => {
+                    this.toggle();
+                });
+                
+                voiceBtn.addEventListener('click', () => {
+                    voiceControls.classList.toggle('active');
+                });
+                
+                // Voice selection change
+                this.voiceSelectElement.addEventListener('change', (e) => {
+                    const selectedVoice = e.target.value;
+                    // Update all assistant-type voices
+                    this.currentVoices.assistant = selectedVoice;
+                    this.currentVoices.original = selectedVoice;
+                    this.currentVoices.live = selectedVoice;
+                    
+                    // Update user-type voices if it's a male voice
+                    if (this.voiceMap.user.includes(selectedVoice)) {
+                        this.currentVoices.user = selectedVoice;
+                    }
+                });
+                
+                // Update Azure config when changed
+                document.getElementById('azure-tts-key').addEventListener('change', (e) => {
+                    this.azureKey = e.target.value;
+                    this.initializeAzureSpeech();
+                });
+                
+                document.getElementById('azure-tts-region').addEventListener('change', (e) => {
+                    this.azureRegion = e.target.value;
+                    this.initializeAzureSpeech();
+                });
+            }
+            
+            toggle() {
+                this.isEnabled = !this.isEnabled;
+                const voiceToggleBtn = document.getElementById('voice-toggle-btn');
+                
+                if (this.isEnabled) {
+                    voiceToggleBtn.classList.add('active');
+                    this.voiceStatusElement.textContent = 'Voice: On';
+                    this.voiceStatusElement.style.color = '#06ffa5';
+                } else {
+                    voiceToggleBtn.classList.remove('active');
+                    this.voiceStatusElement.textContent = 'Voice: Off';
+                    this.voiceStatusElement.style.color = '#999';
+                    this.stop();
+                }
+            }
+            
+            // Queue a speech request
+            queueSpeak(text, role = 'assistant') {
+                if (!this.isEnabled || !text) return;
+                
+                // For assistant messages, only speak the first sentence
+                if (role === 'assistant' || role === 'original' || role === 'live') {
+                    text = this.getFirstSentences(text, 1);
+                }
+                
+                // Clean text for speech
+                text = this.cleanTextForSpeech(text);
+                if (!text) return;
+                
+                // Add to queue with the actual speak method as callback
+                this.voiceQueue.add(text, role, (text, role) => this.speak(text, role));
+            }
+            
+            async speak(text, role = 'assistant') {
+                this.isSpeaking = true;
+                this.speakingIndicator.classList.add('active');
+                
+                const voiceName = this.currentVoices[role] || this.currentVoices.assistant;
+                
+                try {
+                    if (this.speechConfig && window.SpeechSDK) {
+                        await this.speakWithAzure(text, voiceName);
+                    } else {
+                        // Fallback to browser TTS
+                        await this.speakWithBrowser(text, role);
+                    }
+                } catch (error) {
+                    console.error('TTS error:', error);
+                } finally {
+                    this.isSpeaking = false;
+                    this.speakingIndicator.classList.remove('active');
+                }
+            }
+            
+            async speakWithAzure(text, voiceName) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Update voice name in config
+                        this.speechConfig.speechSynthesisVoiceName = voiceName;
+                        
+                        // Create audio config for default speaker
+                        const audioConfig = window.SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                        
+                        // Create synthesizer
+                        this.synthesizer = new window.SpeechSDK.SpeechSynthesizer(
+                            this.speechConfig,
+                            audioConfig
+                        );
+                        
+                        // Speak
+                        this.synthesizer.speakTextAsync(
+                            text,
+                            result => {
+                                if (result.reason === window.SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                    console.log('Azure TTS completed successfully');
+                                    resolve();
+                                } else {
+                                    console.error('Speech synthesis canceled:', result.reason);
+                                    reject(new Error('Speech synthesis failed'));
+                                }
+                                this.synthesizer.close();
+                                this.synthesizer = null;
+                            },
+                            error => {
+                                console.error('Azure TTS error:', error);
+                                reject(error);
+                                if (this.synthesizer) {
+                                    this.synthesizer.close();
+                                    this.synthesizer = null;
+                                }
+                            }
+                        );
+                    } catch (error) {
+                        console.error('Failed to use Azure TTS:', error);
+                        reject(error);
+                    }
+                });
+            }
+            
+            async speakWithBrowser(text, role) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        
+                        // Adjust voice properties based on role
+                        if (role === 'user') {
+                            utterance.pitch = 0.9;
+                            utterance.rate = 1.0;
+                        } else if (role === 'assistant' || role === 'original' || role === 'live') {
+                            utterance.pitch = 1.1;
+                            utterance.rate = 0.95;
+                        } else {
+                            utterance.pitch = 1.0;
+                            utterance.rate = 1.0;
+                        }
+                        
+                        utterance.volume = 1.0;
+                        
+                        // Try to find a matching voice
+                        const voices = window.speechSynthesis.getVoices();
+                        const preferredVoice = voices.find(v => 
+                            v.lang.startsWith('en') && 
+                            (role === 'user' ? v.name.includes('Male') : v.name.includes('Female'))
+                        );
+                        
+                        if (preferredVoice) {
+                            utterance.voice = preferredVoice;
+                        }
+                        
+                        utterance.onend = () => resolve();
+                        utterance.onerror = (error) => reject(error);
+                        
+                        window.speechSynthesis.speak(utterance);
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+            
+            cleanTextForSpeech(text) {
+                // Remove HTML tags
+                text = text.replace(/<[^>]*>/g, '');
+                
+                // Remove URLs
+                text = text.replace(/https?:\/\/[^\s]+/g, 'link');
+                
+                // Remove code blocks
+                text = text.replace(/```[\s\S]*?```/g, 'code block');
+                
+                // Remove special characters
+                text = text.replace(/[*_~`]/g, '');
+                
+                // Remove extra whitespace
+                text = text.replace(/\s+/g, ' ');
+                
+                return text.trim();
+            }
+            
+            getFirstSentences(text, count = 1) {
+                // Clean the text first
+                text = this.cleanTextForSpeech(text);
+                
+                // For count = 1, find the first period and stop there
+                if (count === 1) {
+                    const firstPeriodIndex = text.indexOf('.');
+                    if (firstPeriodIndex > 0) {
+                        return text.substring(0, firstPeriodIndex + 1).trim();
+                    }
+                    // If no period found, take first 100 characters
+                    return text.substring(0, 100).trim() + '...';
+                }
+                
+                // For multiple sentences, use the regex approach
+                const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+                return sentences.slice(0, count).join(' ').trim();
+            }
+            
+            stop() {
+                // Clear the queue
+                this.voiceQueue.clear();
+                
+                if (this.synthesizer) {
+                    this.synthesizer.close();
+                    this.synthesizer = null;
+                }
+                
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                }
+                
+                this.isSpeaking = false;
+                this.speakingIndicator.classList.remove('active');
+            }
+        }
+
+        // Unified Agent that transitions from historical to live
+        class Agent3D {
+            constructor(scene, name, position, aiPosition) {
+                this.scene = scene;
+                this.name = name;
+                this.position = position;
+                this.aiPosition = aiPosition;
+                this.group = new THREE.Group();
+                this.color = this.getAgentColor(name);
+                this.state = 'inactive';
+                this.orbitRadius = 3;  // Reduced from 4 for tighter orbits
+                this.orbitSpeed = 0.5 + Math.random() * 0.3;
+                this.orbitAngle = Math.random() * Math.PI * 2;
+                
+                this.create();
+            }
+
+            getAgentColor(name) {
+                const colors = {
+                    'HackerNewsAgent': 0xff6600,
+                    'Dynamics365CRUD': 0x0078d4,
+                    'ManageMemory': 0x9b59b6,
+                    'LocalTimeAgent': 0x3498db,
+                    'PowerPoint': 0xd35400,
+                    'WikipediaAgent': 0x2ecc71,
+                    'EmailDrafting': 0xe74c3c,
+                    'CodeReview': 0x1abc9c
+                };
+                return colors[name] || 0x95a5a6;
+            }
+
+            create() {
+                // Agent crystal
+                const geometry = new THREE.OctahedronGeometry(0.6, 0);
+                this.material = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    roughness: 0.1,
+                    metalness: 0.9,
+                    transparent: true,
+                    opacity: 0
+                });
+                this.mesh = new THREE.Mesh(geometry, this.material);
+                this.mesh.castShadow = true;
+                this.group.add(this.mesh);
+
+                // Inner glow
+                const glowGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+                this.glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x444444,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                this.glow = new THREE.Mesh(glowGeometry, this.glowMaterial);
+                this.group.add(this.glow);
+
+                // Outer ring (for loading state)
+                const ringGeometry = new THREE.TorusGeometry(1, 0.1, 16, 32);
+                this.ringMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffeb3b,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                this.ring = new THREE.Mesh(ringGeometry, this.ringMaterial);
+                this.ring.rotation.x = Math.PI / 2;
+                this.group.add(this.ring);
+
+                // Label
+                this.createLabel();
+
+                // Energy connection to AI
+                this.createEnergyConnection();
+
+                this.scene.add(this.group);
+                
+                // Start orbiting
+                this.startOrbit();
+            }
+
+            createLabel() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const context = canvas.getContext('2d');
+                
+                this.labelCanvas = canvas;
+                this.labelContext = context;
+                
+                this.updateLabel();
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                this.labelTexture = texture;
+                const spriteMaterial = new THREE.SpriteMaterial({ 
+                    map: texture,
+                    transparent: true,
+                    opacity: 0
+                });
+                this.labelSprite = new THREE.Sprite(spriteMaterial);
+                this.labelSprite.scale.set(2, 0.5, 1);
+                this.labelSprite.position.y = 1.5;
+                this.group.add(this.labelSprite);
+            }
+
+            updateLabel() {
+                const ctx = this.labelContext;
+                ctx.clearRect(0, 0, 256, 64);
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, 256, 64);
+                
+                ctx.fillStyle = this.state === 'live' ? '#06ffa5' : 
+                               this.state === 'loading' ? '#ffeb3b' : 
+                               this.state === 'historical' ? '#999' : '#666';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, 128, 40);
+                
+                if (this.labelTexture) {
+                    this.labelTexture.needsUpdate = true;
+                }
+            }
+
+            createEnergyConnection() {
+                // Dynamic energy beam to AI
+                const points = [];
+                for (let i = 0; i <= 20; i++) {
+                    points.push(new THREE.Vector3(0, 0, 0));
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                this.beamMaterial = new THREE.LineBasicMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0,
+                    linewidth: 2,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.energyBeam = new THREE.Line(geometry, this.beamMaterial);
+                this.scene.add(this.energyBeam);
+            }
+
+            startOrbit() {
+                const animate = () => {
+                    if (this.state === 'inactive') {
+                        requestAnimationFrame(animate);
+                        return;
+                    }
+                    
+                    // Orbit around AI
+                    this.orbitAngle += this.orbitSpeed * 0.01;
+                    const x = Math.cos(this.orbitAngle) * this.orbitRadius;
+                    const z = Math.sin(this.orbitAngle) * this.orbitRadius;
+                    
+                    this.group.position.set(
+                        this.aiPosition.x + x,
+                        this.aiPosition.y + Math.sin(Date.now() * 0.001) * 0.3,
+                        this.aiPosition.z + z
+                    );
+                    
+                    // Update energy beam
+                    this.updateEnergyBeam();
+                    
+                    // Rotate agent
+                    this.mesh.rotation.y += 0.02;
+                    this.mesh.rotation.x += 0.01;
+                    
+                    // Loading ring animation
+                    if (this.state === 'loading') {
+                        this.ring.rotation.z += 0.05;
+                    }
+                    
+                    requestAnimationFrame(animate);
+                };
+                animate();
+            }
+
+            updateEnergyBeam() {
+                const positions = this.energyBeam.geometry.attributes.position;
+                const start = this.group.position;
+                const end = this.aiPosition;
+                
+                for (let i = 0; i <= 20; i++) {
+                    const t = i / 20;
+                    const wave = Math.sin(t * Math.PI * 2 + Date.now() * 0.003) * 0.3;
+                    
+                    positions.setXYZ(
+                        i,
+                        start.x + (end.x - start.x) * t,
+                        start.y + (end.y - start.y) * t + wave,
+                        start.z + (end.z - start.z) * t
+                    );
+                }
+                
+                positions.needsUpdate = true;
+                }
+
+            showHistorical(result) {
+                this.state = 'historical';
+                this.updateAgentStatus('historical');
+                
+                // Fade in with grey color
+                const fadeIn = () => {
+                    const startTime = Date.now();
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / 1000, 1);
+                        
+                        this.material.opacity = progress * 0.6;
+                        this.glowMaterial.opacity = progress * 0.1;
+                        this.labelSprite.material.opacity = progress;
+                        this.beamMaterial.opacity = progress * 0.3;
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            // Send data packet
+                            this.sendDataPacket(0x666666);
+                        }
+                    };
+                    animate();
+                };
+                fadeIn();
+                
+                this.updateLabel();
+            }
+
+            transitionToLoading() {
+                this.state = 'loading';
+                this.updateAgentStatus('loading');
+                
+                // Color transition and loading ring
+                const startTime = Date.now();
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 500, 1);
+                    
+                    // Interpolate color from grey to yellow
+                    this.material.color.lerpColors(
+                        new THREE.Color(0x444444),
+                        new THREE.Color(0xffeb3b),
+                        progress
+                    );
+                    this.glowMaterial.color.copy(this.material.color);
+                    
+                    // Show loading ring
+                    this.ringMaterial.opacity = progress * 0.8;
+                    
+                    // Pulse effect
+                    const pulse = Math.sin(Date.now() * 0.005) * 0.1 + 0.9;
+                    this.glow.scale.setScalar(pulse);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+                
+                this.updateLabel();
+            }
+
+            transitionToLive(result) {
+                this.state = 'live';
+                this.updateAgentStatus('live');
+                
+                // Burst effect when transitioning to live
+                this.createBurstEffect();
+                
+                // Color transition from loading to live
+                const startTime = Date.now();
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1000, 1);
+                    
+                    // Interpolate to agent color
+                    this.material.color.lerpColors(
+                        new THREE.Color(0xffeb3b),
+                        new THREE.Color(this.color),
+                        progress
+                    );
+                    this.glowMaterial.color.copy(this.material.color);
+                    
+                    // Update opacity
+                    this.material.opacity = 0.6 + progress * 0.2;
+                    this.glowMaterial.opacity = 0.1 + progress * 0.2;
+                    this.beamMaterial.opacity = 0.3 + progress * 0.4;
+                    this.beamMaterial.color = new THREE.Color(this.color);
+                    
+                    // Hide loading ring
+                    this.ringMaterial.opacity = (1 - progress) * 0.8;
+                    
+                    // Scale effect
+                    const scale = 1 + Math.sin(progress * Math.PI) * 0.3;
+                    this.mesh.scale.setScalar(scale);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        // Send live data
+                        this.sendDataPacket(this.color);
+                    }
+                };
+                animate();
+                
+                this.updateLabel();
+            }
+
+            createBurstEffect() {
+                // Create expanding ring burst
+                const burstGeometry = new THREE.RingGeometry(0.5, 2, 32);
+                const burstMaterial = new THREE.MeshBasicMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0.8,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const burst = new THREE.Mesh(burstGeometry, burstMaterial);
+                burst.position.copy(this.group.position);
+                burst.rotation.x = Math.PI / 2;
+                this.scene.add(burst);
+                
+                // Animate burst
+                const startTime = Date.now();
+                const animateBurst = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1000, 1);
+                    
+                    burst.scale.setScalar(1 + progress * 3);
+                    burstMaterial.opacity = 0.8 * (1 - progress);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animateBurst);
+                    } else {
+                        this.scene.remove(burst);
+                    }
+                };
+                animateBurst();
+            }
+
+            sendDataPacket(color) {
+                // Create data packet
+                const packetGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const packetMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending
+                });
+                const packet = new THREE.Mesh(packetGeometry, packetMaterial);
+                packet.position.copy(this.group.position);
+                this.scene.add(packet);
+                
+                // Animate to AI
+                const startPos = this.group.position.clone();
+                const endPos = this.aiPosition.clone();
+                const startTime = Date.now();
+                
+                const animatePacket = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / 1500, 1);
+                    
+                    // Curved path
+                    const t = progress;
+                    packet.position.lerpVectors(startPos, endPos, t);
+                    packet.position.y += Math.sin(t * Math.PI) * 2;
+                    
+                    // Trail effect
+                    const trail = packet.clone();
+                    trail.scale.setScalar(0.5);
+                    trail.material = trail.material.clone();
+                    trail.material.opacity = 0.3;
+                    this.scene.add(trail);
+                    
+                    setTimeout(() => {
+                        this.scene.remove(trail);
+                    }, 200);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animatePacket);
+                    } else {
+                        this.scene.remove(packet);
+                    }
+                };
+                animatePacket();
+            }
+
+            updateAgentStatus(status) {
+                const statusList = document.getElementById('agent-status-list');
+                let item = document.getElementById(`status-${this.name}`);
+                
+                if (!item) {
+                    item = document.createElement('div');
+                    item.id = `status-${this.name}`;
+                    item.className = 'agent-status-item';
+                    item.innerHTML = `
+                        <div class="agent-status-indicator ${status}"></div>
+                        <span>${this.name}</span>
+                    `;
+                    statusList.appendChild(item);
+                    document.getElementById('agent-status').classList.add('visible');
+                } else {
+                    const indicator = item.querySelector('.agent-status-indicator');
+                    indicator.className = `agent-status-indicator ${status}`;
+                }
+            }
+
+            remove() {
+                this.scene.remove(this.group);
+                this.scene.remove(this.energyBeam);
+                
+                const statusItem = document.getElementById(`status-${this.name}`);
+                if (statusItem) statusItem.remove();
+                
+                if (document.getElementById('agent-status-list').children.length === 0) {
+                    document.getElementById('agent-status').classList.remove('visible');
+                }
+            }
+        }
+
+        // AI Companion
+        class AICompanion {
+            constructor(scene, position) {
+                this.scene = scene;
+                this.position = position;
+                this.group = new THREE.Group();
+                
+                this.create();
+            }
+
+            create() {
+                // Main core
+                const geometry = new THREE.IcosahedronGeometry(1.5, 1);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    roughness: 0.2,
+                    metalness: 0.8,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.castShadow = true;
+                this.group.add(this.mesh);
+
+                // Inner core
+                const coreGeometry = new THREE.OctahedronGeometry(0.7, 0);
+                const coreMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.5
+                });
+                this.core = new THREE.Mesh(coreGeometry, coreMaterial);
+                this.group.add(this.core);
+
+                // Light
+                this.light = new THREE.PointLight(0x8338ec, 2, 15);
+                this.group.add(this.light);
+
+                // Energy field
+                const fieldGeometry = new THREE.SphereGeometry(2.5, 32, 32);
+                const fieldMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x8338ec,
+                    transparent: true,
+                    opacity: 0.05,
+                    side: THREE.BackSide,
+                    blending: THREE.AdditiveBlending
+                });
+                this.energyField = new THREE.Mesh(fieldGeometry, fieldMaterial);
+                this.group.add(this.energyField);
+
+                this.group.position.copy(this.position);
+                this.scene.add(this.group);
+                
+                this.animate();
+            }
+
+            animate() {
+                const time = Date.now() * 0.001;
+                
+                this.mesh.rotation.x = time * 0.5;
+                this.mesh.rotation.y = time * 0.3;
+                this.core.rotation.x = -time * 0.7;
+                this.core.rotation.y = time * 0.9;
+                
+                const pulse = Math.sin(time * 2) * 0.1;
+                this.energyField.scale.setScalar(1 + pulse);
+                
+                requestAnimationFrame(() => this.animate());
+            }
+
+            setState(state) {
+                switch(state) {
+                    case 'thinking':
+                        this.light.color.setHex(0xffeb3b);
+                        this.core.material.emissive.setHex(0xffeb3b);
+                        break;
+                    case 'processing':
+                        this.light.color.setHex(0x2196f3);
+                        this.core.material.emissive.setHex(0x2196f3);
+                        break;
+                    case 'responding':
+                        this.light.color.setHex(0x06ffa5);
+                        this.core.material.emissive.setHex(0x06ffa5);
+                        break;
+                    default:
+                        this.light.color.setHex(0x8338ec);
+                        this.core.material.emissive.setHex(0x8338ec);
+                }
+            }
+        }
+
+        // Visualization Manager
+        class Visualization3D {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.agents = new Map();
+                
+                this.init();
+            }
+
+            init() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000033, 10, 50);  // Reduced fog distances
+
+                // Camera - positioned much closer and centered
+                this.camera = new THREE.PerspectiveCamera(
+                    45,  // Increased FOV from 35 to 45
+                    window.innerWidth / (window.innerHeight / 2),
+                    0.1, 
+                    1000
+                );
+                this.camera.position.set(-15, 8, 15);  // Much closer than before (-40, 15, 30)
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true 
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight / 2);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+
+                // Controls - now centered on the action
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.target.set(0, 2, 0);  // Center target instead of far left
+                this.controls.minDistance = 5;
+                this.controls.maxDistance = 30;
+                this.controls.maxPolarAngle = Math.PI * 0.45;
+                this.controls.update();
+
+                // Lighting
+                this.setupLighting();
+
+                // Environment
+                this.createEnvironment();
+                
+                // Entities
+                this.createEntities();
+
+                // Events
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                mainLight.position.set(10, 20, 10);
+                mainLight.castShadow = true;
+                mainLight.target.position.set(0, 0, 0);
+                this.scene.add(mainLight);
+                this.scene.add(mainLight.target);
+
+                const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+                fillLight.position.set(-10, 10, -10);
+                fillLight.target.position.set(0, 0, 0);
+                this.scene.add(fillLight);
+                this.scene.add(fillLight.target);
+            }
+
+            createEnvironment() {
+                // Platform - now centered
+                const platformGeometry = new THREE.CylinderGeometry(8, 8, 0.5, 64);  // Smaller platform
+                const platformMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a2e,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.receiveShadow = true;
+                platform.position.set(0, -0.25, 0);
+                this.scene.add(platform);
+
+                // Grid - now centered
+                const gridHelper = new THREE.GridHelper(16, 16, 0x444444, 0x222222);  // Smaller grid
+                gridHelper.position.set(0, 0, 0);
+                this.scene.add(gridHelper);
+                
+                // Particles
+                this.createParticles();
+            }
+
+            createParticles() {
+                const particleCount = 100;  // Reduced from 150
+                const positions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    const radius = 3 + Math.random() * 7;  // Smaller radius range
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = (Math.random() - 0.5) * Math.PI;
+                    
+                    // Centered particles
+                    positions[i] = radius * Math.cos(theta) * Math.cos(phi);
+                    positions[i + 1] = radius * Math.sin(phi) + 5;
+                    positions[i + 2] = radius * Math.sin(theta) * Math.cos(phi);
+                }
+                
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const material = new THREE.PointsMaterial({
+                    color: 0x4488ff,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.particles = new THREE.Points(geometry, material);
+                this.scene.add(this.particles);
+            }
+
+            createEntities() {
+                // User - positioned closer to center
+                this.createUser();
+                
+                // AI Companion - centered
+                this.ai = new AICompanion(this.scene, new THREE.Vector3(0, 3, 0));
+            }
+
+            createUser() {
+                const group = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.6, 2.5, 16);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3b82f6,
+                    roughness: 0.5,
+                    metalness: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 1.25;
+                body.castShadow = true;
+                group.add(body);
+
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xfdbcb4,
+                    roughness: 0.8
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.y = 3;
+                head.castShadow = true;
+                group.add(head);
+
+                // Light
+                const light = new THREE.PointLight(0x3b82f6, 1, 10);
+                light.position.y = 4;
+                group.add(light);
+
+                group.position.set(-6, 0, 0);  // Much closer to center than before (-48)
+                this.scene.add(group);
+                
+                this.user = { group, body, head, light };
+            }
+
+            getOrCreateAgent(agentName) {
+                if (!this.agents.has(agentName)) {
+                    const agent = new Agent3D(
+                        this.scene, 
+                        agentName, 
+                        new THREE.Vector3(0, 0, 0),
+                        this.ai.group.position
+                    );
+                    
+                    // Set unique orbit parameters
+                    agent.orbitRadius = 2.5 + (this.agents.size % 3) * 0.5;  // Smaller orbits
+                    agent.orbitAngle = (this.agents.size / 8) * Math.PI * 2;
+                    
+                    this.agents.set(agentName, agent);
+                }
+                
+                return this.agents.get(agentName);
+            }
+
+            showUserMessage(content) {
+                this.showMessage('user', content);
+                this.createDataFlow(this.user.group.position, this.ai.group.position, 0x3b82f6);
+                this.ai.setState('thinking');
+            }
+
+            showAssistantMessage(content) {
+                this.showMessage('assistant', content);
+                this.createDataFlow(this.ai.group.position, this.user.group.position, 0x8338ec);
+                this.ai.setState('responding');
+                
+                setTimeout(() => {
+                    this.ai.setState('idle');
+                }, 2000);
+            }
+
+            showHistoricalAgent(agentName, result) {
+                const agent = this.getOrCreateAgent(agentName);
+                agent.showHistorical(result);
+            }
+
+            async transitionAgentToLive(agentName, apiCall) {
+                const agent = this.getOrCreateAgent(agentName);
+                
+                // Show loading state
+                agent.transitionToLoading();
+                
+                // Show API status
+                document.getElementById('api-status').classList.add('active');
+                
+                try {
+                    // Make API call
+                    const result = await apiCall();
+                    
+                    // Transition to live
+                    agent.transitionToLive(result);
+                    
+                    document.getElementById('api-status').classList.remove('active');
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    document.getElementById('api-status').classList.remove('active');
+                }
+            }
+
+            showMessage(role, content) {
+                const display = document.getElementById('message-display');
+                const roleEl = document.getElementById('message-role');
+                const contentEl = document.getElementById('message-content');
+                
+                roleEl.textContent = role;
+                roleEl.className = `message-role ${role}`;
+                contentEl.textContent = content.substring(0, 200) + 
+                    (content.length > 200 ? '...' : '');
+                
+                display.classList.add('visible');
+                
+                setTimeout(() => {
+                    display.classList.remove('visible');
+                }, 4000);
+            }
+
+            createDataFlow(start, end, color) {
+                const points = [];
+                const segments = 50;
+                
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = start.x + (end.x - start.x) * t;
+                    const y = 3 + Math.sin(t * Math.PI) * 2;
+                    const z = start.z + (end.z - start.z) * t;
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0,
+                    linewidth: 3,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                this.scene.add(line);
+                
+                // Animate
+                let progress = 0;
+                const animate = () => {
+                    progress += 0.02;
+                    material.opacity = Math.min(progress * 2, 1);
+                    
+                    if (progress >= 1) {
+                        setTimeout(() => {
+                            const fadeOut = () => {
+                                material.opacity -= 0.02;
+                                if (material.opacity > 0) {
+                                    requestAnimationFrame(fadeOut);
+                                } else {
+                                    this.scene.remove(line);
+                                }
+                            };
+                            fadeOut();
+                        }, 500);
+                    } else {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+            }
+
+            clearAgents() {
+                this.agents.forEach(agent => agent.remove());
+                this.agents.clear();
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / (window.innerHeight / 2);
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight / 2);
+            }
+
+            render() {
+                if (this.particles) {
+                    this.particles.rotation.y += 0.0002;
+                }
+                
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Enhanced Conversation Panel Manager with User-Live-Original Layout
+        class ConversationPanel {
+            constructor() {
+                this.panel = document.getElementById('conversation-panel');
+                this.userContent = document.getElementById('user-content');
+                this.originalContent = document.getElementById('original-content');
+                this.liveContent = document.getElementById('live-content');
+                this.header = document.getElementById('conversation-header');
+                this.messageMap = new Map();
+                this.isDragging = false;
+                this.isMinimized = false;
+                this.isOriginalCollapsed = true; // Start with original collapsed
+                this.dragOffset = { x: 0, y: 0 };
+                this.messageGroups = new Map(); // Track connected messages
+                
+                this.setupEventListeners();
+                this.setupColumnHeaders();
+            }
+
+            setupEventListeners() {
+                // Dragging
+                this.header.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    const rect = this.panel.getBoundingClientRect();
+                    this.dragOffset.x = e.clientX - rect.left;
+                    this.dragOffset.y = e.clientY - rect.top;
+                    this.panel.style.cursor = 'grabbing';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isDragging) return;
+                    
+                    const x = e.clientX - this.dragOffset.x;
+                    const y = e.clientY - this.dragOffset.y;
+                    
+                    // Keep within bottom container bounds
+                    const bottomContainer = document.getElementById('bottom-container');
+                    const bottomRect = bottomContainer.getBoundingClientRect();
+                    const panelRect = this.panel.getBoundingClientRect();
+                    
+                    const maxX = bottomRect.width - panelRect.width - 20;
+                    const maxY = bottomRect.height - panelRect.height - 80;
+                    
+                    this.panel.style.left = `${Math.max(20, Math.min(x, maxX))}px`;
+                    this.panel.style.top = `${Math.max(20, Math.min(y, maxY))}px`;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    this.isDragging = false;
+                    this.panel.style.cursor = '';
+                });
+
+                // Panel controls
+                document.getElementById('minimize-btn').addEventListener('click', () => {
+                    this.toggleMinimize();
+                });
+
+                document.getElementById('close-panel-btn').addEventListener('click', () => {
+                    this.hide();
+                });
+
+                document.getElementById('transcript-btn').addEventListener('click', () => {
+                    this.toggle();
+                });
+            }
+
+            setupColumnHeaders() {
+                // Make the conversation columns container
+                const columnsContainer = this.panel.querySelector('.conversation-columns');
+                
+                // Update the HTML structure for column headers
+                const columns = this.panel.querySelectorAll('.conversation-column');
+                columns[0].classList.add('user');
+                columns[1].classList.add('live');
+                columns[2].classList.add('original');
+                
+                // Add click handler to original column header
+                const originalHeader = columns[2].querySelector('.column-header');
+                
+                originalHeader.addEventListener('click', () => {
+                    this.toggleOriginalColumn();
+                });
+                
+                // Apply initial collapsed state
+                if (this.isOriginalCollapsed) {
+                    columnsContainer.classList.remove('show-original');
+                }
+            }
+
+            toggleOriginalColumn() {
+                this.isOriginalCollapsed = !this.isOriginalCollapsed;
+                const columnsContainer = this.panel.querySelector('.conversation-columns');
+                const originalHeader = this.panel.querySelector('.column-header.original');
+                
+                if (this.isOriginalCollapsed) {
+                    columnsContainer.classList.remove('show-original');
+                    originalHeader.innerHTML = `Original Response <span class="toggle-indicator">▶</span>`;
+                } else {
+                    columnsContainer.classList.add('show-original');
+                    originalHeader.innerHTML = `Original Response <span class="toggle-indicator">◀</span>`;
+                }
+            }
+
+            show() {
+                this.panel.classList.add('active');
+            }
+
+            hide() {
+                this.panel.classList.remove('active');
+            }
+
+            toggle() {
+                this.panel.classList.toggle('active');
+            }
+
+            toggleMinimize() {
+                this.isMinimized = !this.isMinimized;
+                this.panel.classList.toggle('minimized');
+                document.getElementById('minimize-btn').textContent = this.isMinimized ? '+' : '−';
+            }
+
+            createMessageGroup(userMessageId) {
+                if (!this.messageGroups.has(userMessageId)) {
+                    this.messageGroups.set(userMessageId, {
+                        user: null,
+                        original: [],
+                        live: []
+                    });
+                }
+                return this.messageGroups.get(userMessageId);
+            }
+
+            addUserMessage(content, messageId) {
+                const messageEl = this.createMessageElement('user', content, messageId);
+                this.userContent.appendChild(messageEl);
+                this.userContent.scrollTop = this.userContent.scrollHeight;
+                
+                // Create a new message group for this user message
+                const group = this.createMessageGroup(messageId);
+                group.user = messageEl;
+                messageEl.classList.add('connected');
+                
+                // Draw connection lines
+                this.drawConnectionLines(messageId);
+            }
+
+            addOriginalMessage(content, messageId) {
+                const messageEl = this.createMessageElement('original', content, messageId);
+                this.originalContent.appendChild(messageEl);
+                this.originalContent.scrollTop = this.originalContent.scrollHeight;
+                
+                // Find the associated user message group
+                const userMessageId = this.findCurrentUserMessageId();
+                if (userMessageId) {
+                    const group = this.messageGroups.get(userMessageId);
+                    if (group) {
+                        group.original.push(messageEl);
+                        messageEl.classList.add('connected');
+                        this.drawConnectionLines(userMessageId);
+                    }
+                }
+            }
+
+            addLiveMessage(content, messageId) {
+                const messageEl = this.createMessageElement('live', content, messageId);
+                this.liveContent.appendChild(messageEl);
+                this.liveContent.scrollTop = this.liveContent.scrollHeight;
+                
+                // Find the associated user message group
+                const userMessageId = this.findCurrentUserMessageId();
+                if (userMessageId) {
+                    const group = this.messageGroups.get(userMessageId);
+                    if (group) {
+                        group.live.push(messageEl);
+                        messageEl.classList.add('connected');
+                        this.drawConnectionLines(userMessageId);
+                    }
+                }
+            }
+
+            findCurrentUserMessageId() {
+                // Find the most recent user message ID
+                let latestUserId = null;
+                for (const [id, data] of this.messageMap) {
+                    if (data.role === 'user' && id.startsWith('user-')) {
+                        latestUserId = id;}
+                }
+                return latestUserId;
+            }
+
+            addSystemMessage(content, messageId, column = 'original') {
+                const messageEl = this.createMessageElement('system', content, messageId, true);
+                
+                if (column === 'original') {
+                    this.originalContent.appendChild(messageEl);
+                    this.originalContent.scrollTop = this.originalContent.scrollHeight;
+                } else if (column === 'live') {
+                    this.liveContent.appendChild(messageEl);
+                    this.liveContent.scrollTop = this.liveContent.scrollHeight;
+                }
+                
+                // Connect system messages to their group
+                const userMessageId = this.findCurrentUserMessageId();
+                if (userMessageId) {
+                    const group = this.messageGroups.get(userMessageId);
+                    if (group) {
+                        if (column === 'original') {
+                            group.original.push(messageEl);
+                        } else {
+                            group.live.push(messageEl);
+                        }
+                        messageEl.classList.add('connected');
+                        this.drawConnectionLines(userMessageId);
+                    }
+                }
+            }
+
+            createMessageElement(role, content, messageId, isCollapsible = false) {
+                const messageEl = document.createElement('div');
+                messageEl.className = 'conv-message';
+                messageEl.id = `conv-msg-${messageId}`;
+                
+                const headerEl = document.createElement('div');
+                headerEl.className = 'conv-message-header';
+                
+                const roleEl = document.createElement('span');
+                roleEl.className = `conv-message-role ${role}`;
+                roleEl.textContent = role.charAt(0).toUpperCase() + role.slice(1);
+                
+                headerEl.appendChild(roleEl);
+                
+                const contentEl = document.createElement('div');
+                contentEl.className = `conv-message-content ${role}`;
+                
+                // For system messages, make them collapsed by default
+                if (role === 'system') {
+                    // Always start collapsed for system messages
+                    const expandBtn = document.createElement('button');
+                    expandBtn.className = 'expand-button';
+                    expandBtn.textContent = 'Expand';
+                    
+                    contentEl.innerHTML = this.formatContent(content);
+                    
+                    expandBtn.addEventListener('click', () => {
+                        if (contentEl.classList.contains('expanded')) {
+                            contentEl.classList.remove('expanded');
+                            expandBtn.textContent = 'Expand';
+                        } else {
+                            contentEl.classList.add('expanded');
+                            expandBtn.textContent = 'Collapse';
+                        }
+                    });
+                    
+                    messageEl.appendChild(headerEl);
+                    messageEl.appendChild(contentEl);
+                    messageEl.appendChild(expandBtn);
+                } else {
+                    contentEl.innerHTML = this.formatContent(content);
+                    messageEl.appendChild(headerEl);
+                    messageEl.appendChild(contentEl);
+                }
+                
+                this.messageMap.set(messageId, { element: messageEl, role, content });
+                
+                return messageEl;
+            }
+
+            drawConnectionLines(userMessageId) {
+                // Remove existing connection lines for this group
+                const existingLines = this.panel.querySelectorAll(`.connection-line-${userMessageId}`);
+                existingLines.forEach(line => line.remove());
+                
+                const group = this.messageGroups.get(userMessageId);
+                if (!group || !group.user) return;
+                
+                const userElement = group.user;
+                const userRect = userElement.getBoundingClientRect();
+                const panelRect = this.panel.getBoundingClientRect();
+                
+                // Draw lines to live messages
+                group.live.forEach((liveElement, index) => {
+                    const liveRect = liveElement.getBoundingClientRect();
+                    this.createConnectionLine(userRect, liveRect, panelRect, `${userMessageId}-live-${index}`, '#06ffa5');
+                });
+                
+                // Draw lines to original messages if they exist
+                group.original.forEach((originalElement, index) => {
+                    const originalRect = originalElement.getBoundingClientRect();
+                    this.createConnectionLine(userRect, originalRect, panelRect, `${userMessageId}-original-${index}`, '#e57200');
+                });
+            }
+
+            createConnectionLine(startRect, endRect, panelRect, id, color) {
+                const line = document.createElement('div');
+                line.className = `message-connection-line connection-line-${id.split('-')[0]}`;
+                line.style.position = 'absolute';
+                line.style.background = `linear-gradient(90deg, ${color}40 0%, ${color}80 50%, ${color}40 100%)`;
+                line.style.height = '2px';
+                line.style.borderRadius = '1px';
+                line.style.zIndex = '1';
+                line.style.pointerEvents = 'none';
+                
+                const startY = startRect.top - panelRect.top + startRect.height / 2;
+                const endY = endRect.top - panelRect.top + endRect.height / 2;
+                const startX = startRect.right - panelRect.left;
+                const endX = endRect.left - panelRect.left;
+                
+                const width = Math.abs(endX - startX);
+                line.style.width = `${width}px`;
+                line.style.left = `${Math.min(startX, endX)}px`;
+                line.style.top = `${(startY + endY) / 2}px`;
+                
+                this.panel.appendChild(line);
+                
+                // Add pulsing animation
+                line.style.animation = 'connectionPulse 2s ease-in-out infinite';
+            }
+
+            formatContent(text, isTableContent = false) {
+                // Prevent recursive table formatting
+                if (isTableContent) {
+                    return this.formatBasicContent(text);
+                }
+                
+                // First check if this is a table (contains pipes and dashes)
+                if (text.includes('|') && text.includes('---')) {
+                    return this.formatTable(text);
+                }
+                
+                // Check if it's already HTML
+                if (text.includes('<table>') || text.includes('<a href=')) {
+                    return text;
+                }
+                
+                return this.formatBasicContent(text);
+            }
+            
+            formatBasicContent(text) {
+                // Escape HTML first
+                let formatted = text.replace(/&/g, '&amp;')
+                                   .replace(/</g, '&lt;')
+                                   .replace(/>/g, '&gt;')
+                                   .replace(/"/g, '&quot;')
+                                   .replace(/'/g, '&#039;');
+                
+                // Fix broken URLs with &; in them
+                formatted = formatted.replace(/&amp;;/g, '&');
+                
+                // Convert full URLs to clickable links (including complex Dynamics URLs)
+                formatted = formatted.replace(
+                    /(https?:\/\/[^\s<>"']+)/gi,
+                    (match) => {
+                        // Clean up the URL
+                        let url = match.replace(/&amp;/g, '&');
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer">View Record</a>`;
+                    }
+                );
+                
+                // Convert markdown-style links [text](url)
+                formatted = formatted.replace(
+                    /\[([^\]]+)\]\(([^)]+)\)/g,
+                    (match, text, url) => {
+                        // Clean up the URL
+                        url = url.replace(/&amp;/g, '&');
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+                    }
+                );
+                
+                // Basic markdown formatting
+                formatted = formatted
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+                
+                return formatted;
+            }
+            
+            formatTable(text) {
+                const lines = text.split('\n');
+                let html = '<table style="width: 100%; border-collapse: collapse; margin: 10px 0;">';
+                let inTable = false;
+                let headerProcessed = false;
+                
+                for (let line of lines) {
+                    if (line.includes('|')) {
+                        if (!inTable) {
+                            inTable = true;
+                        }
+                        
+                        // Skip separator lines
+                        if (line.includes('---')) {
+                            continue;
+                        }
+                        
+                        const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+                        
+                        if (!headerProcessed) {
+                            html += '<thead><tr>';
+                            cells.forEach(cell => {
+                                html += `<th style="border: 1px solid rgba(255,255,255,0.2); padding: 8px; text-align: left; background: rgba(255,255,255,0.1);">${this.formatCellContent(cell)}</th>`;
+                            });
+                            html += '</tr></thead><tbody>';
+                            headerProcessed = true;
+                        } else {
+                            html += '<tr>';
+                            cells.forEach(cell => {
+                                html += `<td style="border: 1px solid rgba(255,255,255,0.2); padding: 8px;">${this.formatCellContent(cell)}</td>`;
+                            });
+                            html += '</tr>';
+                        }
+                    } else if (inTable) {
+                        // End of table
+                        break;
+                    }
+                }
+                
+                html += '</tbody></table>';
+                
+                // Add any remaining text after the table
+                const remainingText = lines.slice(lines.findIndex(l => !l.includes('|'))).join('\n');
+                if (remainingText.trim()) {
+                    html += '<br>' + this.formatBasicContent(remainingText);
+                }
+                
+                return html;
+            }
+            
+            formatCellContent(content) {
+                // Clean up URLs in cells
+                content = content.replace(/&amp;/g, '&');
+                
+                // Convert URLs to links
+                content = content.replace(
+                    /(https?:\/\/[^\s<>"']+)/gi,
+                    (match) => {
+                        let url = match;
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer">View</a>`;
+                    }
+                );
+                
+                return content;
+            }
+
+            highlightMessage(messageId) {
+                const data = this.messageMap.get(messageId);
+                if (!data) return;
+                
+                // Remove previous highlights
+                this.panel.querySelectorAll('.conv-message').forEach(el => {
+                    el.style.background = '';
+                });
+                
+                // Highlight current
+                data.element.style.background = 'rgba(6, 255, 165, 0.1)';
+                data.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Remove highlight after delay
+                setTimeout(() => {
+                    data.element.style.background = '';
+                }, 2000);
+            }
+
+            clear() {
+                this.userContent.innerHTML = '';
+                this.originalContent.innerHTML = '';
+                this.liveContent.innerHTML = '';
+                this.messageMap.clear();
+                this.messageGroups.clear();
+                
+                // Remove all connection lines
+                const lines = this.panel.querySelectorAll('.message-connection-line');
+                lines.forEach(line => line.remove());
+            }
+        }
+
+        // Enhanced Conversation Manager with Azure Voice
+        class ConversationManager {
+            constructor(conversationPanel, voiceManager) {
+                this.conversationPanel = conversationPanel;
+                this.voiceManager = voiceManager;
+                this.conversation = [];
+                this.currentIndex = 0;
+                this.apiKey = null;
+                this.apiEndpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.conversationHistory = [];
+                this.responseMap = new Map();
+                this.processingMessage = false;
+            }
+
+            loadConversation(data, apiKey) {
+                this.conversation = data.conversation || [];
+                this.currentIndex = 0;
+                this.apiKey = apiKey;
+                this.conversationHistory = [];
+                this.responseMap.clear();
+                this.processingMessage = false;
+                
+                document.getElementById('conversation-info').textContent = 
+                    `${data.appName || 'Conversation'} - ${this.conversation.length} messages`;
+                
+                // Clear panel
+                this.conversationPanel.clear();
+                
+                this.updateCounter();
+            }
+
+            async processCurrentMessage(visualization) {
+                if (this.processingMessage) return false;
+                
+                const message = this.conversation[this.currentIndex];
+                if (!message) return false;
+
+                this.processingMessage = true;
+
+                try {
+                    if (message.role === 'user') {
+                        // Add to user column
+                        this.conversationPanel.addUserMessage(message.content, `user-${this.currentIndex}`);
+                        
+                        visualization.showUserMessage(message.content);
+                        this.conversationHistory.push({ role: 'user', content: message.content });
+                        
+                        // Queue the user message for speech
+                        if (this.voiceManager.isEnabled) {
+                            this.voiceManager.queueSpeak(message.content, 'user');
+                        }
+                        
+                        // Process the rest of the messages until the next user message
+                        await this.processResponseMessages(visualization);
+                        
+                    } else if (message.role === 'assistant') {
+                        // Add to original column
+                        this.conversationPanel.addOriginalMessage(message.content, `assistant-${this.currentIndex}`);
+                        
+                        visualization.showAssistantMessage(message.content);
+                        this.conversationHistory.push({ role: 'assistant', content: message.content });
+                        
+                        // Queue the assistant message for speech
+                        if (this.voiceManager.isEnabled) {
+                            this.voiceManager.queueSpeak(message.content, 'original');
+                        }
+                    } else if (message.role === 'system') {
+                        // Add to original column
+                        this.conversationPanel.addSystemMessage(message.content, `system-${this.currentIndex}`, 'original');
+                        
+                        // Show historical agent state
+                        const match = message.content.match(/Performed (\w+) and got result: (.*)/);
+                        if (match) {
+                            visualization.showHistoricalAgent(match[1], match[2]);
+                        }
+                        
+                        // Don't speak system messages to avoid interrupting flow
+                    }
+
+                    this.currentIndex++;
+                    this.updateCounter();
+                    
+                } finally {
+                    this.processingMessage = false;
+                }
+                
+                return this.currentIndex < this.conversation.length;
+            }
+
+            async processResponseMessages(visualization) {
+                // Look ahead to process all messages until the next user message
+                const upcomingMessages = [];
+                const upcomingAgents = [];
+                let assistantMessage = null;
+                
+                for (let i = this.currentIndex + 1; i < this.conversation.length; i++) {
+                    const msg = this.conversation[i];
+                    
+                    if (msg.role === 'user') {
+                        break;
+                    } else if (msg.role === 'assistant') {
+                        assistantMessage = msg;
+                        upcomingMessages.push(msg);
+                    } else if (msg.role === 'system' && msg.content.includes('Performed')) {
+                        const match = msg.content.match(/Performed (\w+)/);
+                        if (match) {
+                            upcomingAgents.push(match[1]);
+                        }
+                        upcomingMessages.push(msg);
+                    }
+                }
+                
+                // Show the assistant message immediately
+                if (assistantMessage) {
+                    this.currentIndex++;
+                    this.conversationPanel.addOriginalMessage(assistantMessage.content, `assistant-${this.currentIndex}`);
+                    visualization.showAssistantMessage(assistantMessage.content);
+                    this.conversationHistory.push({ role: 'assistant', content: assistantMessage.content });
+                    
+                    if (this.voiceManager.isEnabled) {
+                        this.voiceManager.queueSpeak(assistantMessage.content, 'original');
+                    }
+                }
+                
+                // Process system messages
+                for (const msg of upcomingMessages) {
+                    if (msg.role === 'system') {
+                        this.currentIndex++;
+                        this.conversationPanel.addSystemMessage(msg.content, `system-${this.currentIndex}`, 'original');
+                        
+                        const match = msg.content.match(/Performed (\w+) and got result: (.*)/);
+                        if (match) {
+                            visualization.showHistoricalAgent(match[1], match[2]);
+                        }
+                    }
+                }
+                
+                // If API key exists and we have agents, make the live call
+                if (this.apiKey && upcomingAgents.length > 0) {
+                    // Get the user message for the API call
+                    let userIndex = this.currentIndex;
+                    for (let i = this.currentIndex; i >= 0; i--) {
+                        if (this.conversation[i] && this.conversation[i].role === 'user') {
+                            userIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    const userMessage = this.conversation[userIndex];
+                    if (!userMessage) return;
+                    
+                    try {
+                        // Make API call
+                        const apiPromise = this.makeAPICall(userMessage.content);
+                        
+                        // Process each agent
+                        for (const agentName of upcomingAgents) {
+                            await visualization.transitionAgentToLive(agentName, async () => {
+                                const response = await apiPromise;
+                                
+                                // Add live response to panel
+                                if (response && response.assistant_response) {
+                                    this.conversationPanel.addLiveMessage(
+                                        response.assistant_response,
+                                        `live-${this.currentIndex}`
+                                    );
+                                    
+                                    // Queue the live response for speech
+                                    if (this.voiceManager.isEnabled) {
+                                        this.voiceManager.queueSpeak(response.assistant_response, 'live');
+                                    }
+                                }
+                                
+                                // Add agent logs as system messages in live column
+                                if (response && response.agent_logs) {
+                                    // Parse agent logs if they're in JSON format
+                                    let agentLogsText = response.agent_logs;
+                                    if (typeof agentLogsText === 'object') {
+                                        agentLogsText = JSON.stringify(agentLogsText, null, 2);
+                                    }
+                                    
+                                    // Add system message showing what agent was called
+                                    this.conversationPanel.addSystemMessage(
+                                        `Performed ${agentName} and got result: ${agentLogsText}`,
+                                        `live-system-${this.currentIndex}-${agentName}`,
+                                        'live'
+                                    );
+                                }
+                                
+                                return { 
+                                    agent: agentName, 
+                                    result: response && response.agent_logs ? response.agent_logs : 'Live result'
+                                };
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Error processing live API call:', error);
+                    }
+                }
+                
+                this.updateCounter();
+            }
+
+            async makeAPICall(userInput) {
+                const response = await fetch(this.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: userInput,
+                        conversation_history: this.conversationHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                return await response.json();
+            }
+
+            updateCounter() {
+                document.getElementById('message-counter').textContent = 
+                    `Message: ${this.currentIndex + 1}/${this.conversation.length}`;
+            }
+
+            reset() {
+                this.currentIndex = 0;
+                this.conversationHistory = [];
+                this.processingMessage = false;
+                this.updateCounter();
+            }
+        }
+
+        // API Key Manager
+        class APIKeyManager {
+            constructor() {
+                this.storageKey = 'ai-companion-api-key';
+                this.input = document.getElementById('api-key-input');
+                this.status = document.getElementById('api-key-status');
+                
+                this.loadStoredKey();
+                this.setupEventListeners();
+            }
+
+            loadStoredKey() {
+                const storedKey = localStorage.getItem(this.storageKey);
+                if (storedKey) {
+                    this.input.value = storedKey;
+                    this.status.textContent = 'API key loaded from storage';
+                }
+            }
+
+            setupEventListeners() {
+                this.input.addEventListener('input', (e) => {
+                    const key = e.target.value;
+                    if (key) {
+                        localStorage.setItem(this.storageKey, key);
+                        this.status.textContent = 'API key saved';
+                    } else {
+                        localStorage.removeItem(this.storageKey);
+                        this.status.textContent = '';
+                    }
+                });
+            }
+
+            getKey() {
+                return this.input.value;
+            }
+        }
+
+        // Main Application
+        class App {
+            constructor() {
+                this.voiceManager = new AzureVoiceManager();
+                this.visualization = new Visualization3D();
+                this.conversationPanel = new ConversationPanel();
+                this.conversationManager = new ConversationManager(this.conversationPanel, this.voiceManager);
+                this.apiKeyManager = new APIKeyManager();
+                this.isPlaying = false;
+                
+                this.setupEventListeners();
+                this.animate();
+            }
+
+            setupEventListeners() {
+                // File upload
+                const uploadArea = document.getElementById('upload-area');
+                const fileInput = document.getElementById('file-input');
+                
+                uploadArea.addEventListener('click', () => fileInput.click());
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        this.handleFile(e.dataTransfer.files[0]);
+                    }
+                });
+                
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.handleFile(e.target.files[0]);
+                    }
+                });
+
+                // Controls
+                document.getElementById('play-pause-btn').addEventListener('click', () => {
+                    this.togglePlayback();
+                });
+                
+                document.getElementById('prev-btn').addEventListener('click', () => {
+                    // TODO: Implement previous message
+                });
+                
+                document.getElementById('next-btn').addEventListener('click', () => {
+                    this.nextMessage();
+                });
+                
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    this.reset();
+                });
+                
+                document.getElementById('voice-btn').addEventListener('click', () => {
+                    document.getElementById('voice-controls').classList.toggle('active');
+                });
+            }
+
+            async handleFile(file) {
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    
+                    if (!data.conversation || !Array.isArray(data.conversation)) {
+                        throw new Error('Invalid conversation format');
+                    }
+                    
+                    const apiKey = this.apiKeyManager.getKey();
+                    this.conversationManager.loadConversation(data, apiKey);
+                    
+                    document.getElementById('upload-interface').style.display = 'none';
+                    document.getElementById('control-panel').classList.add('active');
+                    document.getElementById('voice-controls').classList.add('active');
+                    
+                    // Show conversation panel by default
+                    this.conversationPanel.show();
+                    
+                    this.reset();
+                    
+                } catch (error) {
+                    alert('Error loading file: ' + error.message);
+                }
+            }
+
+            togglePlayback() {
+                this.isPlaying = !this.isPlaying;
+                document.getElementById('play-pause-btn').textContent = 
+                    this.isPlaying ? '⏸️' : '▶️';
+                
+                if (this.isPlaying) {
+                    this.playNext();
+                }
+            }
+
+            async playNext() {
+                if (!this.isPlaying) return;
+                
+                const hasMore = await this.conversationManager.processCurrentMessage(this.visualization);
+                
+                if (hasMore) {
+                    // Shorter delay since voice queue handles timing
+                    setTimeout(() => this.playNext(), 1500);
+                } else {
+                    this.isPlaying = false;
+                    document.getElementById('play-pause-btn').textContent = '▶️';
+                }
+            }
+
+            async nextMessage() {
+                await this.conversationManager.processCurrentMessage(this.visualization);
+            }
+
+            reset() {
+                this.isPlaying = false;
+                document.getElementById('play-pause-btn').textContent = '▶️';
+                this.conversationManager.reset();
+                this.visualization.clearAgents();
+                this.voiceManager.stop();
+                this.conversationPanel.clear();
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                this.visualization.render();
+            }
+        }
+
+        // Wait for Azure Speech SDK to load before starting the app
+        window.addEventListener('load', () => {
+            // Start the application
+            const app = new App();
+        });
+    </script>
+</body>
+</html>
