@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Nexus Hub - GPS World Explorer</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>Nexus Hub - World Explorer</title>
 
     <style>
         * {
@@ -139,11 +138,12 @@
             box-shadow: 0 0 50px rgba(255, 0, 0, 0.3);
         }
 
-        .scene-recorder-content h3 {
+.scene-recorder-content h3 {
             margin: 0 0 20px 0;
             font-size: 24px;
             background: linear-gradient(45deg, #ff0000, #ff6b6b);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
         }
@@ -409,90 +409,6 @@
             margin: 0 15px;
         }
 
-        /* Map View */
-        #map-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            display: none;
-        }
-
-        #map-container.active {
-            display: block;
-        }
-
-        #map {
-            width: 100%;
-            height: 100%;
-        }
-
-        .map-overlay {
-            position: absolute;
-            top: env(safe-area-inset-top, 20px);
-            left: env(safe-area-inset-left, 20px);
-            right: env(safe-area-inset-right, 20px);
-            z-index: 1000;
-            pointer-events: none;
-        }
-
-        .map-title {
-            font-size: 2em;
-            font-weight: 300;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            background-size: 400% 100%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: shimmer 8s ease-in-out infinite;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Location Setter */
-        .location-setter {
-            position: fixed;
-            top: env(safe-area-inset-top, 80px);
-            left: env(safe-area-inset-left, 20px);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px 25px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            z-index: 1001;
-            display: none;
-            pointer-events: auto;
-        }
-
-        .location-setter.active {
-            display: block;
-        }
-
-        .location-setter button {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 15px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 0 5px;
-        }
-
-        .location-setter button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
-        }
-
-        .location-setter button.cancel {
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
         /* Portal Manager */
         .portal-manager {
             position: fixed;
@@ -560,6 +476,7 @@
             font-size: 24px;
             background: linear-gradient(45deg, #00ffff, #0088ff);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
         }
@@ -740,7 +657,7 @@
             margin: 0 0 20px 0;
             font-size: 24px;
             background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -1135,6 +1052,7 @@
             font-size: 20px;
             background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -1254,63 +1172,16 @@
             50% { background-position: 100% 50%; }
         }
 
-        /* GPS Status */
-        .gps-status {
+        /* World Scanner Styles */
+        .scanner-button {
             position: fixed;
-            top: env(safe-area-inset-top, 80px);
-            right: env(safe-area-inset-right, 20px);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px 20px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            z-index: 1001;
-            pointer-events: auto;
-        }
-
-        .gps-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #888;
-            transition: all 0.3s ease;
-        }
-
-        .gps-indicator.active {
-            background: #00ff00;
-            box-shadow: 0 0 10px #00ff00;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .gps-text {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.9em;
-        }
-
-        .gps-accuracy {
-            color: #06ffa5;
-            font-size: 0.8em;
-        }
-
-        /* View Toggle Button */
-        .view-toggle {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 150px);
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 290px);
             right: calc(env(safe-area-inset-right, 30px));
             width: 60px;
             height: 60px;
-            background: rgba(138, 56, 236, 0.3);
+            background: rgba(255, 106, 0, 0.3);
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(138, 56, 236, 0.5);
+            border: 2px solid rgba(255, 106, 0, 0.5);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -1318,109 +1189,305 @@
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 1002;
-            box-shadow: 0 0 20px rgba(138, 56, 236, 0.3);
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
         }
 
-        .view-toggle:hover {
-            background: rgba(138, 56, 236, 0.5);
+        .scanner-button:hover {
+            background: rgba(255, 106, 0, 0.5);
             transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(138, 56, 236, 0.5);
+            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
         }
 
-        .view-toggle-icon {
+        .scanner-button svg {
             width: 28px;
             height: 28px;
             color: white;
         }
 
-        /* World Portal Markers */
-        .world-marker {
-            width: 40px;
-            height: 40px;
-            background: radial-gradient(circle, rgba(138, 56, 236, 0.8), rgba(255, 0, 110, 0.8));
-            border: 3px solid rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(138, 56, 236, 0.6);
-            animation: markerPulse 2s infinite;
-            cursor: pointer;
+        .world-scanner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            z-index: 3000;
+            display: none;
+        }
+
+        .world-scanner.active {
+            display: block;
+        }
+
+        .scanner-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #scanner-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            flex-direction: column;
+            pointer-events: none;
         }
 
-        @keyframes markerPulse {
-            0% { transform: scale(1); box-shadow: 0 0 20px rgba(138, 56, 236, 0.6); }
-            50% { transform: scale(1.1); box-shadow: 0 0 30px rgba(138, 56, 236, 0.8); }
-            100% { transform: scale(1); box-shadow: 0 0 20px rgba(138, 56, 236, 0.6); }
+        .scanner-frame {
+            width: 250px;
+            height: 250px;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            position: relative;
         }
 
-        .world-marker-popup {
+        .scanner-frame::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            border-radius: 20px;
+            opacity: 0.5;
+            animation: pulse 2s infinite;
+        }
+
+        .scanner-instruction {
+            margin-top: 20px;
+            color: white;
+            font-size: 18px;
             text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
         }
 
-        .popup-title {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #8338ec;
+        .scanner-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
         }
 
-        .popup-description {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .popup-distance {
-            font-size: 0.8em;
-            color: #06ffa5;
-            margin-bottom: 10px;
-        }
-
-        .enter-world-btn {
+        .capture-btn, .cancel-scan-btn {
             background: linear-gradient(45deg, #ff006e, #8338ec);
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 18px;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
         }
 
-        .enter-world-btn:hover {
+        .capture-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
         }
 
-        .enter-world-btn:disabled {
-            background: #666;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+        .cancel-scan-btn {
+            background: rgba(255, 255, 255, 0.2);
         }
 
-        /* Location Permission Modal */
-        .permission-modal {
+        .world-creation-form {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.9);
+            z-index: 3001;
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .form-container {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .form-container h2 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip:text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .anchor-preview {
+            width: 100%;
+            max-width: 300px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin: 0 auto 20px;
+            display: block;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .form-container input,
+        .form-container textarea,
+        .form-container select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+        }
+
+        .form-container input::placeholder,
+        .form-container textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .create-world-btn {
+            width: 100%;
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 15px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .create-world-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+        }
+
+        .form-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .form-close-btn:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .download-json-btn {
+            background: linear-gradient(45deg, #3a86ff, #8338ec);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .download-json-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(58, 134, 255, 0.4);
+        }
+
+        /* QR Code Share Button */
+        .share-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 80px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .share-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+        }
+
+        .share-button.multiplayer {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: rgba(0, 255, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .share-icon {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+
+        /* QR Code Modal */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2001;
+            align-items: center;
+            justify-content: center;
             backdrop-filter: blur(5px);
         }
 
-        .permission-modal.hidden {
-            display: none;
+        .qr-modal.show {
+            display: flex;
         }
 
-        .permission-content {
+        .qr-modal-content {
             background: rgba(20, 20, 40, 0.95);
             border: 2px solid rgba(255, 255, 255, 0.2);
             border-radius: 20px;
@@ -1428,56 +1495,96 @@
             max-width: 400px;
             width: 90%;
             text-align: center;
+            position: relative;
             box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
         }
 
-        .permission-icon {
-            font-size: 60px;
-            margin-bottom: 20px;
+        .qr-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
         }
 
-        .permission-title {
+        .qr-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .qr-modal h3 {
+            margin: 0 0 20px 0;
             font-size: 24px;
-            margin-bottom: 15px;
             background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .permission-description {
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 25px;
-            line-height: 1.5;
+        .multiplayer-info {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 0.9em;
+            color: #06ffa5;
         }
 
-        .permission-buttons {
+        #qr-code-container {
+            margin: 20px auto;
             display: flex;
-            gap: 15px;
             justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
         }
 
-        .permission-btn {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
-            color: #000;
+        #qr-code-container canvas,
+        #qr-code-container img {
+            border-radius: 10px;
+        }
+
+        .qr-url {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            word-break: break-all;
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-family: monospace;
+        }
+
+        .copy-url-btn {
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            color: white;
             border: none;
-            padding: 12px 30px;
+            padding: 12px 24px;
             border-radius: 25px;
             font-weight: bold;
-            font-size: 16px;
             cursor: pointer;
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        .permission-btn:hover {
+        .copy-url-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
         }
 
-        .permission-btn.manual {
-            background: linear-gradient(45deg, #8338ec, #3a86ff);
-            color: white;
+        .copy-url-btn.copied {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
         }
 
         .world-ui {
@@ -1540,7 +1647,7 @@
         /* Multiplayer Status */
         .multiplayer-status {
             position: fixed;
-            top: env(safe-area-inset-top, 140px);
+            top: env(safe-area-inset-top, 80px);
             right: env(safe-area-inset-right, 20px);
             background: rgba(0, 0, 0, 0.8);
             padding: 10px 20px;
@@ -1759,412 +1866,10 @@
             100% { transform: translateX(100px); }
         }
 
-        /* World Scanner Styles */
-        .scanner-button {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 290px);
-            right: calc(env(safe-area-inset-right, 30px));
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 106, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 106, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1002;
-            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
-        }
-
-        .scanner-button:hover {
-            background: rgba(255, 106, 0, 0.5);
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
-        }
-
-        .scanner-button svg {
-            width: 28px;
-            height: 28px;
-            color: white;
-        }
-
-        .world-scanner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: black;
-            z-index: 3000;
-            display: none;
-        }
-
-        .world-scanner.active {
-            display: block;
-        }
-
-        .scanner-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-
-        #scanner-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .scanner-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            pointer-events: none;
-        }
-
-        .scanner-frame {
-            width: 250px;
-            height: 250px;
-            border: 3px solid rgba(255, 255, 255, 0.5);
-            border-radius: 20px;
-            position: relative;
-        }
-
-        .scanner-frame::before {
-            content: '';
-            position: absolute;
-            top: -3px;
-            left: -3px;
-            right: -3px;
-            bottom: -3px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            border-radius: 20px;
-            opacity: 0.5;
-            animation: pulse 2s infinite;
-        }
-
-        .scanner-instruction {
-            margin-top: 20px;
-            color: white;
-            font-size: 18px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px 20px;
-            border-radius: 20px;
-        }
-
-        .scanner-controls {
-            position: absolute;
-            bottom: 30px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            pointer-events: auto;
-        }
-
-        .capture-btn, .cancel-scan-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .capture-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
-        }
-
-        .cancel-scan-btn {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .world-creation-form {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 3001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .form-container {
-            background: rgba(20, 20, 40, 0.95);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 20px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
-        }
-
-        .form-container h2 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            -webkit-background-clip:text;
-            -webkit-text-fill-color: transparent;
-            text-align: center;
-        }
-
-        .anchor-preview {
-            width: 100%;
-            max-width: 300px;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 10px;
-            margin: 0 auto 20px;
-            display: block;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .form-container input,
-        .form-container textarea,
-        .form-container select {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            color: white;
-            font-size: 16px;
-        }
-
-        .form-container input::placeholder,
-        .form-container textarea::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .create-world-btn {
-            width: 100%;
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
-            color: #000;
-            border: none;
-            padding: 15px;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .create-world-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
-        }
-
-        .form-close-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 30px;
-            cursor: pointer;
-            color: #fff;
-            transition: all 0.3s;
-        }
-
-        .form-close-btn:hover {
-            color: #ff006e;
-            transform: rotate(90deg);
-        }
-
-        .download-json-btn {
-            background: linear-gradient(45deg, #3a86ff, #8338ec);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 10px;
-            width: 100%;
-        }
-
-        .download-json-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(58, 134, 255, 0.4);
-        }
-
-        /* QR Code Share Button */
-        .share-button {
-            position: fixed;
-            bottom: calc(env(safe-area-inset-bottom, 30px) + 80px);
-            right: calc(env(safe-area-inset-right, 30px));
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1000;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-        }
-
-        .share-button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
-        }
-
-        .share-button.multiplayer {
-            background: rgba(0, 255, 0, 0.2);
-            border-color: rgba(0, 255, 0, 0.5);
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-        }
-
-        .share-icon {
-            width: 24px;
-            height: 24px;
-            color: white;
-        }
-
-        /* QR Code Modal */
-        .qr-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 2001;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(5px);
-        }
-
-        .qr-modal.show {
-            display: flex;
-        }
-
-        .qr-modal-content {
-            background: rgba(20, 20, 40, 0.95);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 20px;
-            padding: 30px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            position: relative;
-            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
-        }
-
-        .qr-close {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 30px;
-            cursor: pointer;
-            color: #fff;
-            transition: all 0.3s;
-        }
-
-        .qr-close:hover {
-            color: #ff006e;
-            transform: rotate(90deg);
-        }
-
-        .qr-modal h3 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
-            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .multiplayer-info {
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid rgba(0, 255, 0, 0.3);
-            border-radius: 10px;
-            padding: 10px;
-            margin: 15px 0;
-            font-size: 0.9em;
-            color: #06ffa5;
-        }
-
-        #qr-code-container {
-            margin: 20px auto;
-            display: flex;
-            justify-content: center;
-            padding: 20px;
-            background: white;
-            border-radius: 15px;
-        }
-
-        #qr-code-container canvas,
-        #qr-code-container img {
-            border-radius: 10px;
-        }
-
-        .qr-url {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
-            word-break: break-all;
-            margin: 20px 0;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            font-family: monospace;
-        }
-
-        .copy-url-btn {
-            background: linear-gradient(45deg, #ff006e, #8338ec);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .copy-url-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.4);
-        }
-
-        .copy-url-btn.copied {
-            background: linear-gradient(45deg, #06ffa5, #00ff88);
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         @media (max-width: 768px) {
@@ -2196,8 +1901,7 @@
                 height: 100vh;
                 height: -webkit-fill-available;
             }
-        }
-    </style>
+        }</style>
 </head>
 <body>
     <div id="three-container"></div>
@@ -2208,34 +1912,6 @@
         <span style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-left: 10px;">
             LS: Move | RS: Look | A: Enter Portal
         </span>
-    </div>
-
-    <!-- Map Container -->
-    <div id="map-container">
-        <div id="map"></div>
-        <div class="map-overlay">
-            <h1 class="map-title">GPS WORLD MAP</h1>
-        </div>
-        <div class="location-setter" id="location-setter">
-            <p>Click on the map to set your reference location</p>
-            <button class="confirm" id="confirm-location">Confirm Location</button>
-            <button class="cancel" id="cancel-location">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Location Permission Modal -->
-    <div class="permission-modal" id="permission-modal">
-        <div class="permission-content">
-            <div class="permission-icon">📍</div>
-            <h2 class="permission-title">Choose Your Location</h2>
-            <p class="permission-description">
-                Set up your world's location. You can use your current GPS location or manually select a point on the map.
-            </p>
-            <div class="permission-buttons">
-                <button class="permission-btn" id="enable-location-btn">Use My Location</button>
-                <button class="permission-btn manual" id="manual-location-btn">Choose on Map</button>
-            </div>
-        </div>
     </div>
 
     <!-- Scene Recorder Button -->
@@ -2410,13 +2086,6 @@
         <span class="origin-world" id="origin-world-name">Origin</span>
     </div>
 
-    <!-- GPS Status -->
-    <div class="gps-status" id="gps-status">
-        <div class="gps-indicator" id="gps-indicator"></div>
-        <span class="gps-text" id="gps-text">GPS: Acquiring...</span>
-        <span class="gps-accuracy" id="gps-accuracy"></span>
-    </div>
-
     <!-- Multiplayer Status -->
     <div class="multiplayer-status" id="multiplayer-status">
         <div class="status-indicator" id="status-indicator"></div>
@@ -2424,14 +2093,6 @@
         <div class="player-count">
             <span id="player-count">1</span> players
         </div>
-    </div>
-
-    <!-- View Toggle Button -->
-    <div class="view-toggle" id="view-toggle">
-        <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-        </svg>
     </div>
 
     <!-- AI Companion Button -->
@@ -2516,7 +2177,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Add FontLoader to THREE namespace
         THREE.FontLoader = class FontLoader extends THREE.Loader {
@@ -2679,20 +2339,6 @@
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
 
-        // Default reference location (can be overridden by user)
-        let REFERENCE_LOCATION = {
-            lat: 33.8405,  // Default coordinates
-            lng: -84.5140,
-            name: "Custom Location"
-        };
-
-        // World spawn configuration
-        const WORLD_SPAWN_CONFIG = {
-            minDistance: 50,    // Minimum distance in meters from reference point
-            maxDistance: 500,   // Maximum distance in meters from reference point
-            interactionRadius: 30  // How close you need to be to interact with a portal (meters)
-        };
-
         // Default world attributes
         const DEFAULT_WORLD_ATTRIBUTES = {
             name: "Nexus Hub",
@@ -2742,15 +2388,6 @@
 
             inherited.sourceWorld = params.get('from') || null;
             inherited.sourceWorldName = params.get('fromName') || null;
-
-            // Check for location parameters
-            if (params.has('lat') && params.has('lng')) {
-                REFERENCE_LOCATION.lat = parseFloat(params.get('lat'));
-                REFERENCE_LOCATION.lng = parseFloat(params.get('lng'));
-                if (params.has('locationName')) {
-                    REFERENCE_LOCATION.name = params.get('locationName');
-                }
-            }
 
             // Visual attributes only (no moveSpeed)
             if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
@@ -2887,7 +2524,6 @@
                             x: this.world.rotation.x,
                             y: this.world.rotation.y
                         },
-                        location: REFERENCE_LOCATION,
                         worldAttributes: CURRENT_WORLD
                     }
                 });
@@ -3203,7 +2839,6 @@
                 const exportData = {
                     version: '1.0',
                     exportDate: new Date().toISOString(),
-                    location: REFERENCE_LOCATION,
                     scenes: Array.from(this.savedScenes.values())
                 };
 
@@ -3367,16 +3002,11 @@
                 allPortals.forEach((portal, index) => {
                     const portalItem = document.createElement('div');
                     portalItem.className = 'portal-item';
-                    
-                    const location = portal.location || this.world.worldLocations.get(portal.name);
-                    const locationText = location ? 
-                        `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : 
-                        'Dynamic location';
 
                     portalItem.innerHTML = `
                         <div class="portal-item-info">
                             <div class="portal-item-name">${portal.emoji || '🌀'} ${portal.name}</div>
-                            <div class="portal-item-location">${locationText}</div>
+                            <div class="portal-item-location">Portal ${index + 1}</div>
                         </div>
                         <div class="portal-item-actions">
                             <button class="portal-action-btn enter" onclick="window.worldNavigator.portalManager.fastTravel('${portal.url || portal.raw_url || '#'}', '${portal.name}')">Enter</button>
@@ -3416,7 +3046,6 @@
                 const exportData = {
                     version: "1.0",
                     exportDate: new Date().toISOString(),
-                    referenceLocation: REFERENCE_LOCATION,
                     portals: []
                 };
 
@@ -3426,7 +3055,6 @@
                         name: portal.userData.name,
                         description: portal.userData.description,
                         emoji: portal.userData.world.emoji || '🌀',
-                        location: portal.userData.location,
                         url: portal.userData.url,
                         // Include visual properties from the captured world
                         worldAttributes: {
@@ -3483,7 +3111,6 @@
                             name: portalData.name,
                             description: portalData.description,
                             emoji: portalData.emoji || '🌀',
-                            location: portalData.location,
                             url: portalData.url || '#', // Placeholder URL if not provided
                             isCustom: true,
                             anchorImage: portalData.anchorImage,
@@ -3524,7 +3151,6 @@
                     name: worldData.name,
                     description: worldData.description,
                     emoji: worldData.emoji || '🌀',
-                    location: worldData.location,
                     url: worldData.url || '#',
                     isCustom: true,
                     anchorImage: worldData.anchorImage,
@@ -3915,7 +3541,7 @@
             }
         }
 
-        // World Creator Class (unchanged)
+        // World Creator Class
         class WorldCreator {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -3925,7 +3551,6 @@
                 this.newWorldData = {
                     name: '',
                     description: '',
-                    location: null,
                     anchorImage: null,
                     createdBy: null,
                     timestamp: null,
@@ -3986,13 +3611,6 @@
 
                 // Store captured image
                 this.scannedImage = canvas.toDataURL('image/jpeg', 0.8);
-
-                // Get current GPS location
-                this.newWorldData.location = {
-                    lat: this.world.gpsManager.currentLocation.lat,
-                    lng: this.world.gpsManager.currentLocation.lng,
-                    accuracy: this.world.gpsManager.accuracy
-                };
 
                 // Stop scanner
                 this.stopScanning();
@@ -4068,11 +3686,9 @@
                     description: description,
                     template: template,
                     emoji: emoji,
-                    location: this.newWorldData.location,
                     anchorImage: this.scannedImage,
                     createdBy: this.world.multiplayer?.peer?.id || 'anonymous',
                     createdAt: new Date().toISOString(),
-                    referenceLocation: REFERENCE_LOCATION,
                     worldAttributes: {
                         ...CURRENT_WORLD,
                         name: name,
@@ -4132,9 +3748,6 @@
                         <strong>${this.newWorldData.name}</strong><br>
                         ${this.newWorldData.description}
                     </p>
-                    <p style="color: rgba(255, 255, 255, 0.7); text-align: center;">
-                        Location: ${this.newWorldData.location.lat.toFixed(6)}, ${this.newWorldData.location.lng.toFixed(6)}
-                    </p>
                     <button class="download-json-btn" onclick="window.worldNavigator.worldCreator.downloadWorldJSON()">
                         💾 Download World Data (JSON)
                     </button>
@@ -4148,7 +3761,7 @@
             }
         }
 
-        // Main AI Manager Class (unchanged except for integration with replay controls)
+        // Main AI Manager Class
         class AIManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -4945,493 +4558,7 @@
             }
         }
 
-        // GPS Manager Class (unchanged)
-        class GPSManager {
-            constructor(worldInstance) {
-                this.world = worldInstance;
-                this.watchId = null;
-                this.currentLocation = null;
-                this.accuracy = null;
-                this.lastUpdate = 0;
-                this.updateInterval = 5000; // Update every 5 seconds
-                this.manualMode = false;
-
-                this.gpsIndicator = document.getElementById('gps-indicator');
-                this.gpsText = document.getElementById('gps-text');
-                this.gpsAccuracy = document.getElementById('gps-accuracy');
-
-                this.hasPermission = false;
-            }
-
-            async requestPermission() {
-                const permissionModal = document.getElementById('permission-modal');
-                const enableBtn = document.getElementById('enable-location-btn');
-                const manualBtn = document.getElementById('manual-location-btn');
-
-                return new Promise((resolve) => {
-                    enableBtn.addEventListener('click', async () => {
-                        permissionModal.classList.add('hidden');
-
-                        try {
-                            // Request location permission
-                            const position = await this.getCurrentPosition();
-                            this.hasPermission = true;
-
-                            // Update reference location to current position
-                            REFERENCE_LOCATION.lat = position.coords.latitude;
-                            REFERENCE_LOCATION.lng = position.coords.longitude;
-                            REFERENCE_LOCATION.name = "My Location";
-
-                            resolve(true);
-                        } catch (error) {
-                            console.error('Location permission denied:', error);
-                            this.updateStatus('GPS: Disabled', false);
-                            resolve(false);
-                        }
-                    });
-
-                    manualBtn.addEventListener('click', () => {
-                        permissionModal.classList.add('hidden');
-                        this.manualMode = true;
-                        this.updateStatus('GPS: Manual Mode', true);
-
-                        // Show map in location setting mode
-                        this.world.mapManager.showMapForLocationSetting();
-                        resolve(true);
-                    });
-                });
-            }
-
-            getCurrentPosition() {
-                return new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
-                });
-            }
-
-            startTracking() {
-                if (this.manualMode) {
-                    this.updateStatus('GPS: Manual Mode', true);
-                    this.currentLocation = REFERENCE_LOCATION;
-                    return;
-                }
-
-                if (!navigator.geolocation) {
-                    console.error('Geolocation not supported');
-                    this.updateStatus('GPS: Not Supported', false);
-                    return;
-                }
-
-                this.updateStatus('GPS: Acquiring...', false);
-
-                // Initial position
-                navigator.geolocation.getCurrentPosition(
-                    (position) => this.handlePosition(position),
-                    (error) => this.handleError(error),
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-
-                // Watch position
-                this.watchId = navigator.geolocation.watchPosition(
-                    (position) => this.handlePosition(position),
-                    (error) => this.handleError(error),
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0,
-                        distanceFilter: 5 // Update when moved 5 meters
-                    }
-                );
-            }
-
-            handlePosition(position) {
-                this.currentLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                this.accuracy = position.coords.accuracy;
-
-                this.updateStatus('GPS: Active', true);
-                this.gpsAccuracy.textContent = `±${Math.round(this.accuracy)}m`;
-
-                // Update world portals based on location
-                if (this.world) {
-                    this.world.updatePortalDistances(this.currentLocation);
-
-                    // Update map if active
-                    if (this.world.mapManager && this.world.mapManager.isActive) {
-                        this.world.mapManager.updateUserLocation(this.currentLocation);
-                    }
-                }
-
-                this.lastUpdate = Date.now();
-            }
-
-            handleError(error) {
-                console.error('GPS Error:', error);
-
-                switch(error.code) {
-                    case error.PERMISSION_DENIED:
-                        this.updateStatus('GPS: Permission Denied', false);
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        this.updateStatus('GPS: Position Unavailable', false);
-                        break;
-                    case error.TIMEOUT:
-                        this.updateStatus('GPS: Timeout', false);
-                        break;
-                    default:
-                        this.updateStatus('GPS: Error', false);
-                }
-            }
-
-            updateStatus(text, active) {
-                this.gpsText.textContent = text;
-                this.gpsIndicator.classList.toggle('active', active);
-            }
-
-            getDistanceToReference() {
-                if (!this.currentLocation) return null;
-                return this.calculateDistance(
-                    this.currentLocation.lat,
-                    this.currentLocation.lng,
-                    REFERENCE_LOCATION.lat,
-                    REFERENCE_LOCATION.lng
-                );
-            }
-
-            calculateDistance(lat1, lon1, lat2, lon2) {
-                const R = 6371e3; // Earth radius in meters
-                const φ1 = lat1 * Math.PI / 180;
-                const φ2 = lat2 * Math.PI / 180;
-                const Δφ = (lat2 - lat1) * Math.PI / 180;
-                const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                          Math.cos(φ1) * Math.cos(φ2) *
-                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-                return R * c; // Distance in meters
-            }
-
-            stopTracking() {
-                if (this.watchId) {
-                    navigator.geolocation.clearWatch(this.watchId);
-                    this.watchId = null;
-                }
-            }
-        }
-
-        // Map Manager Class (unchanged)
-        class MapManager {
-            constructor(worldInstance) {
-                this.world = worldInstance;
-                this.map = null;
-                this.userMarker = null;
-                this.worldMarkers = new Map();
-                this.isActive = false;
-                this.mapContainer = document.getElementById('map-container');
-                this.viewToggle = document.getElementById('view-toggle');
-                this.locationSetter = document.getElementById('location-setter');
-                this.isSettingLocation = false;
-                this.tempMarker = null;
-
-                this.setupToggle();
-                this.setupLocationSetter();
-            }
-
-            setupToggle() {
-                this.viewToggle.addEventListener('click', () => {
-                    if (!this.isSettingLocation) {
-                        this.toggleView();
-                    }
-                });
-            }
-
-            setupLocationSetter() {
-                document.getElementById('confirm-location').addEventListener('click', () => {
-                    this.confirmLocation();
-                });
-
-                document.getElementById('cancel-location').addEventListener('click', () => {
-                    this.cancelLocationSetting();
-                });
-            }
-
-            showMapForLocationSetting() {
-                this.isSettingLocation = true;
-                this.showMap();
-                this.locationSetter.classList.add('active');
-
-                // Add click handler for setting location
-                this.map.on('click', (e) => {
-                    if (this.isSettingLocation) {
-                        this.setTempLocation(e.latlng);
-                    }
-                });
-            }
-
-            setTempLocation(latlng) {
-                // Remove existing temp marker
-                if (this.tempMarker) {
-                    this.map.removeLayer(this.tempMarker);
-                }
-
-                // Create new temp marker
-                const tempIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<div style="
-                        width: 50px;
-                        height: 50px;
-                        background: radial-gradient(circle, rgba(255, 0, 110, 0.8), rgba(138, 56, 236, 0.8));
-                        border: 3px solid white;
-                        border-radius: 50%;
-                        box-shadow: 0 0 30px rgba(255, 0, 110, 0.8);
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 24px;
-                    ">📍</div>`,
-                    iconSize: [50, 50],
-                    iconAnchor: [25, 25]
-                });
-
-                this.tempMarker = L.marker([latlng.lat, latlng.lng], { icon: tempIcon })
-                    .addTo(this.map);
-
-                // Store temp location
-                this.tempLocation = latlng;
-            }
-
-            confirmLocation() {
-                if (!this.tempLocation) return;
-
-                // Update reference location
-                REFERENCE_LOCATION.lat = this.tempLocation.lat;
-                REFERENCE_LOCATION.lng = this.tempLocation.lng;
-                REFERENCE_LOCATION.name = "Custom Location";
-
-                // Update GPS manager
-                if (this.world.gpsManager) {
-                    this.world.gpsManager.currentLocation = REFERENCE_LOCATION;
-                    this.world.gpsManager.updateStatus('GPS: Manual Location Set', true);
-                }
-
-                // Regenerate world locations based on new reference
-                this.world.generateWorldLocations();
-                this.world.updatePortalDistances(REFERENCE_LOCATION);
-
-                // Clean up
-                this.isSettingLocation = false;
-                this.locationSetter.classList.remove('active');
-                if (this.tempMarker) {
-                    this.map.removeLayer(this.tempMarker);
-                }
-
-                // Add permanent marker for reference location
-                this.addReferenceMarker();
-
-                // Show notification
-                this.world.showNotification('Location set successfully!');
-            }
-
-            cancelLocationSetting() {
-                this.isSettingLocation = false;
-                this.locationSetter.classList.remove('active');
-                if (this.tempMarker) {
-                    this.map.removeLayer(this.tempMarker);
-                }
-                this.hideMap();
-            }
-
-            toggleView() {
-                this.isActive = !this.isActive;
-
-                if (this.isActive) {
-                    this.showMap();
-                } else {
-                    this.hideMap();
-                }
-            }
-
-            showMap() {
-                this.mapContainer.classList.add('active');
-
-                if (!this.map) {
-                    this.initializeMap();
-                }
-
-                // Update view toggle icon
-                this.viewToggle.innerHTML = `
-                    <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <polyline points="9 11 12 14 15 11"></polyline>
-                        <line x1="12" y1="14" x2="12" y2="7"></line>
-                    </svg>
-                `;
-            }
-
-            hideMap() {
-                this.mapContainer.classList.remove('active');
-
-                // Update view toggle icon
-                this.viewToggle.innerHTML = `
-                    <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                        <circle cx="12" cy="10" r="3"></circle>
-                    </svg>
-                `;
-            }
-
-            initializeMap() {
-                // Initialize Leaflet map
-                this.map = L.map('map').setView([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], 16);
-
-                // Add dark theme tile layer
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                    subdomains: 'abcd',
-                    maxZoom: 19
-                }).addTo(this.map);
-
-                // Add reference location marker
-                this.addReferenceMarker();
-            }
-
-            addReferenceMarker() {
-                const referenceIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<div style="
-                        width: 50px;
-                        height: 50px;
-                        background: radial-gradient(circle, rgba(6, 255, 165, 0.8), rgba(58, 134, 255, 0.8));
-                        border: 3px solid white;
-                        border-radius: 50%;
-                        box-shadow: 0 0 30px rgba(6, 255, 165, 0.8);
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 24px;
-                    ">🏠</div>`,
-                    iconSize: [50, 50],
-                    iconAnchor: [25, 25]
-                });
-
-                L.marker([REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng], { icon: referenceIcon })
-                    .addTo(this.map)
-                    .bindPopup(`<b>${REFERENCE_LOCATION.name}</b><br>The origin point of all worlds`)
-                    .openPopup();
-            }
-
-            updateUserLocation(location) {
-                if (!this.map) return;
-
-                // Update or create user marker
-                if (this.userMarker) {
-                    this.userMarker.setLatLng([location.lat, location.lng]);
-                } else {
-                    const userIcon = L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div style="
-                            width: 30px;
-                            height: 30px;
-                            background: radial-gradient(circle, rgba(0, 255, 0, 0.8), rgba(0, 255, 0, 0.4));
-                            border: 3px solid white;
-                            border-radius: 50%;
-                            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
-                            animation: pulse 2s infinite;
-                        "></div>`,
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                    });
-
-                    this.userMarker = L.marker([location.lat, location.lng], { icon: userIcon })
-                        .addTo(this.map)
-                        .bindPopup('<b>You are here</b>');
-                }
-
-                // Center map on user if first update
-                if (this.isActive && !this.hasCentered) {
-                    this.map.setView([location.lat, location.lng], 17);
-                    this.hasCentered = true;
-                }
-            }
-
-            addWorldMarker(world, location) {
-                if (!this.map) return;
-
-                const worldIcon = L.divIcon({
-                    className: 'world-marker',
-                    html: world.emoji || '🌀',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
-                });
-
-                const marker = L.marker([location.lat, location.lng], { icon: worldIcon })
-                    .addTo(this.map);
-
-                // Create popup content
-                const popupContent = `
-                    <div class="world-marker-popup">
-                        <div class="popup-title">${world.name}</div>
-                        <div class="popup-description">${world.description || 'A mysterious world awaits...'}</div>
-                        <div class="popup-distance" id="distance-${world.name.replace(/\s+/g, '-')}">Calculating distance...</div>
-                        <button class="enter-world-btn" id="enter-${world.name.replace(/\s+/g, '-')}" disabled>Too far away</button>
-                    </div>
-                `;
-
-                marker.bindPopup(popupContent);
-
-                // Store marker reference
-                this.worldMarkers.set(world.name, {
-                    marker: marker,
-                    world: world,
-                    location: location
-                });
-
-                // Handle popup events
-                marker.on('popupopen', () => {
-                    const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
-                    if (enterBtn && world.distance <= WORLD_SPAWN_CONFIG.interactionRadius) {
-                        enterBtn.disabled = false;
-                        enterBtn.textContent = 'Enter World';
-                        enterBtn.addEventListener('click', () => {
-                            this.world.enterWorld(world.url || world.raw_url);
-                        });
-                    }
-                });
-            }
-
-            updateWorldDistances(distances) {
-                distances.forEach(({ world, distance }) => {
-                    const distanceEl = document.getElementById(`distance-${world.name.replace(/\s+/g, '-')}`);
-                    if (distanceEl) {
-                        distanceEl.textContent = `${Math.round(distance)}m away`;
-                    }
-
-                    const enterBtn = document.getElementById(`enter-${world.name.replace(/\s+/g, '-')}`);
-                    if (enterBtn) {
-                        if (distance <= WORLD_SPAWN_CONFIG.interactionRadius) {
-                            enterBtn.disabled = false;
-                            enterBtn.textContent = 'Enter World';
-                        } else {
-                            enterBtn.disabled = true;
-                            enterBtn.textContent = 'Too far away';
-                        }
-                    }
-                });
-            }
-        }
-
-        // Multiplayer Manager Class (unchanged)
+        // Multiplayer Manager Class
         class MultiplayerManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -5788,13 +4915,10 @@
             }
 
             updateShareUrl() {
-                // Update QR code to include host parameter and location
+                // Update QR code to include host parameter
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
                 const params = new URLSearchParams({
-                    host: this.roomId,
-                    lat: REFERENCE_LOCATION.lat,
-                    lng: REFERENCE_LOCATION.lng,
-                    locationName: REFERENCE_LOCATION.name
+                    host: this.roomId
                 });
                 const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
 
@@ -5941,17 +5065,12 @@
                 this.gamepadButtonStates = {};
 
                 // Managers
-                this.gpsManager = null;
-                this.mapManager = null;
                 this.multiplayer = null;
                 this.aiManager = null;
                 this.worldCreator = null;
                 this.taskManager = null;
                 this.portalManager = null;
                 this.sceneRecorder = null;
-
-                // World locations cache
-                this.worldLocations = new Map();
 
                 if (this.isIOS) {
                     document.body.addEventListener('touchmove', (e) => {
@@ -5963,19 +5082,6 @@
             }
 
             async init() {
-                // Initialize map manager early
-                this.mapManager = new MapManager(this);
-
-                // Initialize GPS
-                this.gpsManager = new GPSManager(this);
-                const hasPermission = await this.gpsManager.requestPermission();
-
-                if (!hasPermission) {
-                    console.warn('GPS permission denied, using default locations');
-                }
-
-                this.gpsManager.startTracking();
-
                 if (this.inheritedAttributes.sourceWorldName) {
                     const originDiv = document.getElementById('world-origin');
                     const originName = document.getElementById('origin-world-name');
@@ -5995,7 +5101,6 @@
                 this.setupLighting();
                 await this.loadWorlds();
                 this.createEnvironment();
-                this.generateWorldLocations();
                 this.createPortals();
                 this.setupEventListeners();
                 this.setupQRCode();
@@ -6038,8 +5143,7 @@
                 return {
                     worldName: CURRENT_WORLD.name,
                     position: this.camera.position,
-                    rotation: this.camera.rotation,
-                    location: REFERENCE_LOCATION
+                    rotation: this.camera.rotation
                 };
             }
 
@@ -6155,48 +5259,6 @@
                     { name: "Ancient Ruins", description: "Explore the remnants of a lost civilization", emoji: "🏛️" },
                     { name: "Ocean Depths", description: "An underwater realm of bioluminescent wonders", emoji: "🌊" }
                 ];
-            }
-
-            generateWorldLocations() {
-                // Clear existing markers
-                this.worldLocations.clear();
-                if (this.mapManager) {
-                    this.mapManager.worldMarkers.forEach((marker) => {
-                        if (marker.marker && this.mapManager.map) {
-                            this.mapManager.map.removeLayer(marker.marker);
-                        }
-                    });
-                    this.mapManager.worldMarkers.clear();
-                }
-
-                const numWorlds = this.worlds.length;
-
-                this.worlds.forEach((world, index) => {
-                    // Generate locations in a spiral pattern around the reference point
-                    const angle = (index / numWorlds) * Math.PI * 2;
-                    const distance = WORLD_SPAWN_CONFIG.minDistance + 
-                                   (WORLD_SPAWN_CONFIG.maxDistance - WORLD_SPAWN_CONFIG.minDistance) * 
-                                   (index / numWorlds);
-
-                    // Calculate offset in meters and convert to lat/lng
-                    const offsetX = Math.cos(angle) * distance;
-                    const offsetY = Math.sin(angle) * distance;
-
-                    // Convert meters to degrees (approximate)
-                    const metersPerDegreeLat = 111320;
-                    const metersPerDegreeLng = metersPerDegreeLat * Math.cos(REFERENCE_LOCATION.lat * Math.PI / 180);
-
-                    const lat = REFERENCE_LOCATION.lat + (offsetY / metersPerDegreeLat);
-                    const lng = REFERENCE_LOCATION.lng + (offsetX / metersPerDegreeLng);
-
-                    const location = { lat, lng };
-                    this.worldLocations.set(world.name, location);
-
-                    // Add marker to map
-                    if (this.mapManager) {
-                        this.mapManager.addWorldMarker(world, location);
-                    }
-                });
             }
 
             createEnvironment() {
@@ -6387,8 +5449,6 @@
                         url: world.url || world.raw_url || '#',
                         name: world.name,
                         description: world.description || `Enter the ${world.name} world`,
-                        location: world.location || this.worldLocations.get(world.name),
-                        distance: 0,
                         accessible: true // Always accessible in teleport mode
                     };
 
@@ -6410,55 +5470,11 @@
                 }
             }
 
-            updatePortalDistances(userLocation) {
-                const distances = [];
-
-                this.portals.forEach(portal => {
-                    const worldLocation = portal.userData.location;
-                    if (!worldLocation || !userLocation) return;
-
-                    const distance = this.gpsManager.calculateDistance(
-                        userLocation.lat,
-                        userLocation.lng,
-                        worldLocation.lat,
-                        worldLocation.lng
-                    );
-
-                    portal.userData.distance = distance;
-                    // In teleport mode, all portals are always accessible
-                    portal.userData.accessible = true;
-
-                    // Keep visual at full brightness
-                    if (portal.userData.material) {
-                        portal.userData.material.uniforms.accessible.value = 0.8;
-                    }
-
-                    if (portal.userData.light) {
-                        portal.userData.light.intensity = 1;
-                    }
-
-                    distances.push({
-                        world: portal.userData.world,
-                        distance: distance
-                    });
-                });
-
-                // Update map markers
-                if (this.mapManager) {
-                    this.mapManager.updateWorldDistances(distances);
-                }
-            }
-
             buildInheritanceParams() {
                 const params = new URLSearchParams();
 
                 params.set('from', window.location.pathname.split('/').pop() || 'index.html');
                 params.set('fromName', CURRENT_WORLD.name);
-
-                // Include location parameters
-                params.set('lat', REFERENCE_LOCATION.lat.toString());
-                params.set('lng', REFERENCE_LOCATION.lng.toString());
-                params.set('locationName', REFERENCE_LOCATION.name);
 
                 // Visual attributes
                 params.set('lookSpeed', this.lookSpeed.toString());
@@ -6488,25 +5504,17 @@
 
                 let worldUrl;
                 if (this.multiplayer && this.multiplayer.isHost) {
-                    // Host URL includes room ID and location
+                    // Host URL includes room ID
                     const params = new URLSearchParams({
-                        host: this.multiplayer.roomId,
-                        lat: REFERENCE_LOCATION.lat,
-                        lng: REFERENCE_LOCATION.lng,
-                        locationName: REFERENCE_LOCATION.name
+                        host: this.multiplayer.roomId
                     });
                     worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                 } else if (hostId) {
                     // Already in multiplayer session
                     worldUrl = window.location.href;
                 } else {
-                    // Single player URL with location
-                    const params = new URLSearchParams({
-                        lat: REFERENCE_LOCATION.lat,
-                        lng: REFERENCE_LOCATION.lng,
-                        locationName: REFERENCE_LOCATION.name
-                    });
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
+                    // Single player URL
+                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
                 }
 
                 qrUrlElement.textContent = worldUrl;
@@ -6516,10 +5524,7 @@
                     // Update URL if multiplayer is active
                     if (this.multiplayer && this.multiplayer.roomId) {
                         const params = new URLSearchParams({
-                            host: this.multiplayer.roomId,
-                            lat: REFERENCE_LOCATION.lat,
-                            lng: REFERENCE_LOCATION.lng,
-                            locationName: REFERENCE_LOCATION.name
+                            host: this.multiplayer.roomId
                         });
                         const multiplayerUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
                         qrUrlElement.textContent = multiplayerUrl;
@@ -6710,12 +5715,12 @@
 
                 // B button (button 1) for toggle map view
                 if (gp.buttons[1].pressed && !this.gamepadButtonStates.b) {
-                    this.mapManager.toggleView();
+                    // Map functionality removed
                 }
 
                 // X button (button 2) for AI companion
                 if (gp.buttons[2].pressed && !this.gamepadButtonStates.x) {
-                    this.aiCompanionButton.click();
+                    this.companionButton.click();
                 }
 
                 // Y button (button 3) for toggle share/QR
@@ -7004,11 +6009,6 @@
 
                         this.tooltipTitle.textContent = portal.userData.name;
                         this.tooltipDescription.textContent = portal.userData.description;
-
-                        // Show distance but don't restrict access
-                        if (portal.userData.distance > 0) {
-                            this.tooltipDescription.textContent += ` (${Math.round(portal.userData.distance)}m away - Teleport Enabled)`;
-                        }
 
                         this.tooltip.classList.add('visible');
 
