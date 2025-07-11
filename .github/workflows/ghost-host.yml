@@ -24,6 +24,9 @@ jobs:
         cat > ghost-host.js << 'EOF'
         const puppeteer = require('puppeteer');
         
+        // Helper function to wait
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
         (async () => {
           const browser = await puppeteer.launch({
             headless: 'new',
@@ -32,6 +35,11 @@ jobs:
           
           const page = await browser.newPage();
           
+          // Enable console logging from the page
+          page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+          page.on('error', err => console.error('PAGE ERROR:', err));
+          page.on('pageerror', err => console.error('PAGE ERROR:', err));
+          
           // Create a permanent room
           const permanentRoomId = 'nexus-permanent-world';
           const worldUrl = `https://kody-w.github.io/AINexus/index.html?host=${permanentRoomId}`;
@@ -39,46 +47,111 @@ jobs:
           console.log('Ghost host connecting to:', worldUrl);
           
           // Navigate to your world
-          await page.goto(worldUrl, { waitUntil: 'networkidle2' });
+          await page.goto(worldUrl, { 
+            waitUntil: 'networkidle2',
+            timeout: 60000 // 60 second timeout
+          });
+          
+          console.log('Page loaded, waiting for world to initialize...');
           
           // Wait for world to initialize
-          await page.waitForTimeout(5000);
+          await wait(10000); // Wait 10 seconds
+          
+          // Check if world navigator exists
+          const worldExists = await page.evaluate(() => {
+            return typeof window.worldNavigator !== 'undefined';
+          });
+          
+          if (worldExists) {
+            console.log('World navigator found! Ghost host is active.');
+          } else {
+            console.log('Warning: World navigator not found, but continuing...');
+          }
           
           // Initialize as host
           await page.evaluate(() => {
             console.log('Ghost host initializing...');
-            // The page should automatically create a PeerJS connection with the permanentRoomId
+            if (window.worldNavigator && window.worldNavigator.multiplayer) {
+              console.log('Multiplayer active:', window.worldNavigator.multiplayer.isHost);
+              console.log('Room ID:', window.worldNavigator.multiplayer.roomId);
+            }
           });
           
           console.log('Ghost host active. Keeping world alive...');
           
+          let heartbeatCount = 0;
+          
           // Periodically move to keep connection active
-          setInterval(async () => {
+          const heartbeatInterval = setInterval(async () => {
             try {
-              await page.evaluate(() => {
-                // Simulate small movement
-                if (window.worldNavigator && window.worldNavigator.camera) {
-                  window.worldNavigator.camera.position.x += (Math.random() - 0.5) * 0.1;
-                  window.worldNavigator.camera.position.z += (Math.random() - 0.5) * 0.1;
+              heartbeatCount++;
+              
+              const status = await page.evaluate(() => {
+                let statusInfo = {
+                  hasNavigator: false,
+                  hasMultiplayer: false,
+                  isHost: false,
+                  roomId: null,
+                  playerCount: 0,
+                  position: null
+                };
+                
+                if (window.worldNavigator) {
+                  statusInfo.hasNavigator = true;
                   
-                  // Broadcast the update if multiplayer is active
-                  if (window.worldNavigator.multiplayer) {
-                    window.worldNavigator.multiplayer.broadcastPlayerUpdate();
+                  if (window.worldNavigator.camera) {
+                    // Simulate small movement
+                    window.worldNavigator.camera.position.x += (Math.random() - 0.5) * 0.1;
+                    window.worldNavigator.camera.position.z += (Math.random() - 0.5) * 0.1;
+                    
+                    statusInfo.position = {
+                      x: window.worldNavigator.camera.position.x,
+                      y: window.worldNavigator.camera.position.y,
+                      z: window.worldNavigator.camera.position.z
+                    };
                   }
                   
-                  console.log('Ghost host heartbeat at', new Date().toISOString());
+                  if (window.worldNavigator.multiplayer) {
+                    statusInfo.hasMultiplayer = true;
+                    statusInfo.isHost = window.worldNavigator.multiplayer.isHost;
+                    statusInfo.roomId = window.worldNavigator.multiplayer.roomId;
+                    statusInfo.playerCount = window.worldNavigator.multiplayer.connections ? 
+                      window.worldNavigator.multiplayer.connections.size + 1 : 1;
+                    
+                    // Broadcast the update
+                    window.worldNavigator.multiplayer.broadcastPlayerUpdate();
+                  }
                 }
+                
+                return statusInfo;
               });
+              
+              console.log(`Heartbeat #${heartbeatCount} at ${new Date().toISOString()}`);
+              console.log('Status:', JSON.stringify(status, null, 2));
+              
             } catch (e) {
-              console.log('Movement error:', e);
+              console.log('Heartbeat error:', e.message);
             }
           }, 30000); // Every 30 seconds
           
           // Keep alive for 5 hours 50 minutes (GitHub Actions max is 6 hours)
-          await page.waitForTimeout(5 * 60 * 60 * 1000 + 50 * 60 * 1000);
+          const sessionDuration = 5 * 60 * 60 * 1000 + 50 * 60 * 1000;
+          console.log(`Session will run for ${sessionDuration / 1000 / 60} minutes`);
           
-          console.log('Ghost host session ending');
+          await wait(sessionDuration);
+          
+          console.log('Ghost host session ending gracefully');
+          clearInterval(heartbeatInterval);
+          
+          // Final status check
+          await page.evaluate(() => {
+            if (window.worldNavigator && window.worldNavigator.multiplayer) {
+              console.log('Final player count:', window.worldNavigator.multiplayer.connections.size + 1);
+            }
+          });
+          
           await browser.close();
+          console.log('Ghost host disconnected');
         })();
         EOF
         
