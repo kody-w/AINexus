@@ -1,0 +1,85 @@
+name: Ghost Host - Keep Worlds Alive
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ghost-host:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install Puppeteer
+      run: npm install puppeteer
+    
+    - name: Run Ghost Host
+      run: |
+        cat > ghost-host.js << 'EOF'
+        const puppeteer = require('puppeteer');
+        
+        (async () => {
+          const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          });
+          
+          const page = await browser.newPage();
+          
+          // Create a permanent room
+          const permanentRoomId = 'nexus-permanent-world';
+          const worldUrl = `https://kody-w.github.io/AINexus/index.html?host=${permanentRoomId}`;
+          
+          console.log('Ghost host connecting to:', worldUrl);
+          
+          // Navigate to your world
+          await page.goto(worldUrl, { waitUntil: 'networkidle2' });
+          
+          // Wait for world to initialize
+          await page.waitForTimeout(5000);
+          
+          // Initialize as host
+          await page.evaluate(() => {
+            console.log('Ghost host initializing...');
+            // The page should automatically create a PeerJS connection with the permanentRoomId
+          });
+          
+          console.log('Ghost host active. Keeping world alive...');
+          
+          // Periodically move to keep connection active
+          setInterval(async () => {
+            try {
+              await page.evaluate(() => {
+                // Simulate small movement
+                if (window.worldNavigator && window.worldNavigator.camera) {
+                  window.worldNavigator.camera.position.x += (Math.random() - 0.5) * 0.1;
+                  window.worldNavigator.camera.position.z += (Math.random() - 0.5) * 0.1;
+                  
+                  // Broadcast the update if multiplayer is active
+                  if (window.worldNavigator.multiplayer) {
+                    window.worldNavigator.multiplayer.broadcastPlayerUpdate();
+                  }
+                  
+                  console.log('Ghost host heartbeat at', new Date().toISOString());
+                }
+              });
+            } catch (e) {
+              console.log('Movement error:', e);
+            }
+          }, 30000); // Every 30 seconds
+          
+          // Keep alive for 5 hours 50 minutes (GitHub Actions max is 6 hours)
+          await page.waitForTimeout(5 * 60 * 60 * 1000 + 50 * 60 * 1000);
+          
+          console.log('Ghost host session ending');
+          await browser.close();
+        })();
+        EOF
+        
+        node ghost-host.js
