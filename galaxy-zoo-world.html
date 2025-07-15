@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Zoo Image Gallery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .galaxy-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            max-width: 350px;
+            z-index: 1002;
+            display: none;
+        }
+
+        .galaxy-info.active {
+            display: block;
+        }
+
+        .galaxy-info h3 {
+            color: #06ffa5;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .galaxy-info .classification {
+            margin: 10px 0;
+        }
+
+        .classification-bar {
+            background: rgba(255, 255, 255, 0.1);
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .classification-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+
+        .classification-fill.spiral { background: linear-gradient(90deg, #0099ff, #00ffff); }
+        .classification-fill.elliptical { background: linear-gradient(90deg, #ff0044, #ff8800); }
+        .classification-fill.edge { background: linear-gradient(90deg, #00ff88, #88ff00); }
+        .classification-fill.merger { background: linear-gradient(90deg, #ff00ff, #8800ff); }
+
+        .galaxy-sdss-link {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .galaxy-sdss-link a {
+            color: #06ffa5;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+
+        .galaxy-sdss-link a:hover {
+            text-decoration: underline;
+        }
+
+        .data-controls {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1002;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .control-btn.active {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            font-weight: bold;
+        }
+
+        .portal-return {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1003;
+        }
+
+        .portal-return:hover {
+            background: rgba(138, 56, 236, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.5);
+        }
+
+        .loading-progress {
+            margin-top: 20px;
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #06ffa5, #00ff88);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            padding: 20px 40px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            z-index: 2001;
+        }
+
+        .view-mode-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1002;
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        .mode-btn.active {
+            background: rgba(6, 255, 165, 0.3);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title">Galaxy Zoo Gallery</h1>
+        <p class="world-description">Explore real galaxy images from the Sloan Digital Sky Survey. Each frame contains an actual telescope image with citizen science classifications.</p>
+    </div>
+
+    <div class="loading" id="loading">
+        Loading galaxy images...
+        <div class="loading-progress">
+            <div class="loading-bar" id="loading-bar"></div>
+        </div>
+    </div>
+
+    <div class="error-message" id="error-message">
+        <h3>Unable to Load Galaxy Data</h3>
+        <p>Using sample galaxies for demonstration.</p>
+    </div>
+
+    <div class="galaxy-info" id="galaxy-info">
+        <h3 id="galaxy-name">Galaxy ID</h3>
+        <div class="classification">
+            <div>Smooth/Elliptical: <span id="elliptical-percent">0%</span></div>
+            <div class="classification-bar">
+                <div class="classification-fill elliptical" id="elliptical-bar"></div>
+            </div>
+        </div>
+        <div class="classification">
+            <div>Features/Spiral: <span id="spiral-percent">0%</span></div>
+            <div class="classification-bar">
+                <div class="classification-fill spiral" id="spiral-bar"></div>
+            </div>
+        </div>
+        <div class="classification">
+            <div>Star/Artifact: <span id="star-percent">0%</span></div>
+            <div class="classification-bar">
+                <div class="classification-fill edge" id="star-bar"></div>
+            </div>
+        </div>
+        <div style="margin-top: 15px; font-size: 0.8em; color: rgba(255, 255, 255, 0.6);">
+            <div>RA: <span id="galaxy-ra">0</span></div>
+            <div>Dec: <span id="galaxy-dec">0</span></div>
+            <div>Classifications: <span id="classification-count">0</span></div>
+        </div>
+        <div class="galaxy-sdss-link">
+            <a id="sdss-link" href="#" target="_blank">View in SDSS Explorer →</a>
+        </div>
+    </div>
+
+    <div class="data-controls">
+        <button class="control-btn active" id="view-all">View All</button>
+        <button class="control-btn" id="view-spiral">Spirals Only</button>
+        <button class="control-btn" id="view-elliptical">Ellipticals Only</button>
+        <button class="control-btn" id="load-real">Load Real Data</button>
+    </div>
+
+    <div class="view-mode-toggle">
+        <button class="mode-btn active" id="mode-gallery">Gallery</button>
+        <button class="mode-btn" id="mode-sphere">Sphere</button>
+        <button class="mode-btn" id="mode-spiral">Spiral</button>
+    </div>
+
+    <div class="portal-return" id="portal-return" title="Return to Nexus Hub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+            <path d="M3 12h18m-9-9l9 9-9 9"/>
+        </svg>
+    </div>
+
+    <div class="controls-hint">Use WASD to move, Mouse to look around, Click on galaxy images to see their data</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Sample Galaxy Zoo data with real SDSS image URLs
+        const SAMPLE_GALAXIES = [
+            {
+                id: "587722982834675780",
+                ra: 184.836,
+                dec: 47.5675,
+                classifications: { smooth: 0.05, features: 0.91, star: 0.04 },
+                votes: 37
+            },
+            {
+                id: "587724198277799976",
+                ra: 185.879,
+                dec: 47.3028,
+                classifications: { smooth: 0.82, features: 0.15, star: 0.03 },
+                votes: 42
+            },
+            {
+                id: "587725075090096253",
+                ra: 186.346,
+                dec: 47.1234,
+                classifications: { smooth: 0.12, features: 0.85, star: 0.03 },
+                votes: 55
+            },
+            {
+                id: "587726033267122294",
+                ra: 185.234,
+                dec: 46.9876,
+                classifications: { smooth: 0.65, features: 0.30, star: 0.05 },
+                votes: 28
+            },
+            {
+                id: "587729227151704160",
+                ra: 184.567,
+                dec: 47.8901,
+                classifications: { smooth: 0.08, features: 0.88, star: 0.04 },
+                votes: 63
+            }
+        ];
+
+        class GalaxyImageWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.galaxyFrames = [];
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.selectedGalaxy = null;
+                this.clock = new THREE.Clock();
+
+                // Movement controls
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                this.isPointerLocked = false;
+
+                // Data
+                this.galaxyData = [];
+                this.currentFilter = 'all';
+                this.viewMode = 'gallery';
+                this.loadedImages = 0;
+                this.totalImages = 0;
+
+                // Texture loader
+                this.textureLoader = new THREE.TextureLoader();
+                this.textureLoader.crossOrigin = 'anonymous';
+            }
+
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createEnvironment();
+                await this.loadGalaxyData();
+                this.createGalaxyGallery();
+                this.setupEventListeners();
+
+                document.getElementById('loading').style.display = 'none';
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000011, 10, 200);
+
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(0, 5, 20);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 0.8;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+
+                // Gallery lighting
+                const spotLight1 = new THREE.SpotLight(0xffffff, 1);
+                spotLight1.position.set(0, 30, 0);
+                spotLight1.angle = Math.PI / 3;
+                spotLight1.penumbra = 0.5;
+                spotLight1.decay = 2;
+                spotLight1.distance = 100;
+                this.scene.add(spotLight1);
+
+                // Colored accent lights
+                const light1 = new THREE.PointLight(0x0099ff, 0.5, 50);
+                light1.position.set(20, 10, 20);
+                this.scene.add(light1);
+
+                const light2 = new THREE.PointLight(0xff0099, 0.5, 50);
+                light2.position.set(-20, 10, -20);
+                this.scene.add(light2);
+            }
+
+            createEnvironment() {
+                // Starfield background
+                const starGeometry = new THREE.BufferGeometry();
+                const starCount = 5000;
+                const positions = new Float32Array(starCount * 3);
+
+                for (let i = 0; i < starCount * 3; i += 3) {
+                    const radius = 100 + Math.random() * 200;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI;
+
+                    positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                    positions[i + 2] = radius * Math.cos(phi);
+                }
+
+                starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const starMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 0.5,
+                    transparent: true,
+                    opacity: 0.8
+                });
+
+                const stars = new THREE.Points(starGeometry, starMaterial);
+                this.scene.add(stars);
+
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(200, 200);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x111122,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = -2;
+                this.scene.add(floor);
+            }
+
+            async loadGalaxyData() {
+                try {
+                    // Try to load real data from Galaxy Zoo
+                    // For now, use sample data with SDSS URLs
+                    this.galaxyData = SAMPLE_GALAXIES;
+                    this.totalImages = this.galaxyData.length;
+                    console.log(`Loading ${this.galaxyData.length} galaxy images`);
+                } catch (error) {
+                    console.error('Error loading galaxy data:', error);
+                    this.showError();
+                }
+            }
+
+            getSDSSImageUrl(galaxyId) {
+                // Convert Galaxy Zoo ID to SDSS image URL
+                // These are 424x424 pixel cutout images from SDSS
+                return `https://skyserver.sdss.org/dr17/SkyServerWS/ImgCutout/getjpeg?TaskName=Skyserver.Chart.Image&ra=${this.galaxyData.find(g => g.id === galaxyId)?.ra || 185}&dec=${this.galaxyData.find(g => g.id === galaxyId)?.dec || 47}&scale=0.2&width=424&height=424&opt=G`;
+            }
+
+            createGalaxyGallery() {
+                this.clearGallery();
+
+                switch (this.viewMode) {
+                    case 'gallery':
+                        this.createGridLayout();
+                        break;
+                    case 'sphere':
+                        this.createSphereLayout();
+                        break;
+                    case 'spiral':
+                        this.createSpiralLayout();
+                        break;
+                }
+            }
+
+            createGridLayout() {
+                const spacing = 8;
+                const columns = 5;
+                let loadedCount = 0;
+
+                this.galaxyData.forEach((galaxy, index) => {
+                    const row = Math.floor(index / columns);
+                    const col = index % columns;
+
+                    const x = (col - columns / 2) * spacing;
+                    const z = (row - 2) * spacing;
+                    const y = 5;
+
+                    this.createGalaxyFrame(galaxy, new THREE.Vector3(x, y, z));
+                });
+            }
+
+            createSphereLayout() {
+                const radius = 30;
+
+                this.galaxyData.forEach((galaxy, index) => {
+                    const phi = Math.acos(1 - 2 * index / this.galaxyData.length);
+                    const theta = Math.PI * (1 + Math.sqrt(5)) * index;
+
+                    const x = radius * Math.sin(phi) * Math.cos(theta);
+                    const y = radius * Math.sin(phi) * Math.sin(theta) + 5;
+                    const z = radius * Math.cos(phi);
+
+                    this.createGalaxyFrame(galaxy, new THREE.Vector3(x, y, z), true);
+                });
+            }
+
+            createSpiralLayout() {
+                const spiralRadius = 5;
+                const spiralHeight = 3;
+                const spiralTurns = 3;
+
+                this.galaxyData.forEach((galaxy, index) => {
+                    const t = index / this.galaxyData.length;
+                    const angle = t * Math.PI * 2 * spiralTurns;
+                    const radius = spiralRadius + t * 20;
+
+                    const x = radius * Math.cos(angle);
+                    const y = 5 + t * spiralHeight;
+                    const z = radius * Math.sin(angle);
+
+                    this.createGalaxyFrame(galaxy, new THREE.Vector3(x, y, z));
+                });
+            }
+
+            createGalaxyFrame(galaxy, position, lookAtCenter = false) {
+                const group = new THREE.Group();
+                group.position.copy(position);
+
+                // Create frame
+                const frameGeometry = new THREE.BoxGeometry(5.2, 5.2, 0.2);
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x222244,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                group.add(frame);
+
+                // Create image plane
+                const imageGeometry = new THREE.PlaneGeometry(5, 5);
+                const imageMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x111111,
+                    metalness: 0,
+                    roughness: 1
+                });
+                const imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+                imagePlane.position.z = 0.11;
+                group.add(imagePlane);
+
+                // Load galaxy image
+                const imageUrl = this.getSDSSImageUrl(galaxy.id);
+                this.textureLoader.load(
+                    imageUrl,
+                    (texture) => {
+                        texture.minFilter = THREE.LinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+                        imagePlane.material = new THREE.MeshStandardMaterial({
+                            map: texture,
+                            metalness: 0,
+                            roughness: 1
+                        });
+                        this.updateLoadingProgress();
+                    },
+                    undefined,
+                    (error) => {
+                        console.error(`Failed to load image for galaxy ${galaxy.id}`, error);
+                        // Fallback to colored plane based on classification
+                        const primaryType = this.getPrimaryType(galaxy);
+                        imagePlane.material = new THREE.MeshStandardMaterial({
+                            color: this.getTypeColor(primaryType),
+                            metalness: 0.3,
+                            roughness: 0.7
+                        });
+                        this.updateLoadingProgress();
+                    }
+                );
+
+                // Add glow based on classification
+                const primaryType = this.getPrimaryType(galaxy);
+                const glowColor = this.getTypeColor(primaryType);
+                const light = new THREE.PointLight(glowColor, 0.5, 10);
+                light.position.z = 2;
+                group.add(light);
+
+                // Add info text
+                this.addGalaxyLabel(group, galaxy);
+
+                // Store data
+                imagePlane.userData = {
+                    galaxy: galaxy,
+                    group: group,
+                    light: light
+                };
+
+                if (lookAtCenter) {
+                    group.lookAt(0, 5, 0);
+                }
+
+                this.galaxyFrames.push(imagePlane);
+                this.scene.add(group);
+            }
+
+            addGalaxyLabel(group, galaxy) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, 256, 64);
+
+                ctx.font = '20px Arial';
+                ctx.fillStyle = '#06ffa5';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Galaxy ${galaxy.id.slice(-6)}`, 128, 25);
+
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(`${galaxy.votes} classifications`, 128, 45);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(4, 1, 1);
+                sprite.position.y = -3.5;
+                group.add(sprite);
+            }
+
+            getPrimaryType(galaxy) {
+                const types = Object.entries(galaxy.classifications);
+                return types.sort((a, b) => b[1] - a[1])[0][0];
+            }
+
+            getTypeColor(type) {
+                const colors = {
+                    smooth: 0xff6600,
+                    features: 0x0099ff,
+                    star: 0x00ff88
+                };
+                return colors[type] || 0xffffff;
+            }
+
+            updateLoadingProgress() {
+                this.loadedImages++;
+                const progress = (this.loadedImages / this.totalImages) * 100;
+                const loadingBar = document.getElementById('loading-bar');
+                if (loadingBar) {
+                    loadingBar.style.width = `${progress}%`;
+                }
+            }
+
+            clearGallery() {
+                this.galaxyFrames.forEach(frame => {
+                    if (frame.parent) {
+                        this.scene.remove(frame.parent);
+                    }
+                });
+                this.galaxyFrames = [];
+                this.loadedImages = 0;
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                // Mouse movement
+                window.addEventListener('mousemove', (e) => {
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * 0.002;
+                        this.rotation.x -= e.movementY * 0.002;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+
+                // Click for selection
+                window.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.selectGalaxy();
+                    }
+                });
+
+                // Pointer lock
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                // Keyboard
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                // Filter controls
+                document.getElementById('view-all').addEventListener('click', () => this.filterGalaxies('all'));
+                document.getElementById('view-spiral').addEventListener('click', () => this.filterGalaxies('features'));
+                document.getElementById('view-elliptical').addEventListener('click', () => this.filterGalaxies('smooth'));
+
+                // Load real data button
+                document.getElementById('load-real').addEventListener('click', () => {
+                    this.loadRealGalaxyData();
+                });
+
+                // View mode buttons
+                document.getElementById('mode-gallery').addEventListener('click', () => this.setViewMode('gallery'));
+                document.getElementById('mode-sphere').addEventListener('click', () => this.setViewMode('sphere'));
+                document.getElementById('mode-spiral').addEventListener('click', () => this.setViewMode('spiral'));
+
+                // Return portal
+                document.getElementById('portal-return').addEventListener('click', () => {
+                    window.location.href = 'index.html';
+                });
+            }
+
+            setViewMode(mode) {
+                this.viewMode = mode;
+                
+                // Update button states
+                document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`mode-${mode}`).classList.add('active');
+                
+                // Recreate gallery
+                this.createGalaxyGallery();
+            }
+
+            selectGalaxy() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.galaxyFrames);
+
+                if (intersects.length > 0) {
+                    const galaxy = intersects[0].object.userData.galaxy;
+                    this.showGalaxyInfo(galaxy);
+                    
+                    // Highlight selected
+                    if (this.selectedGalaxy) {
+                        this.selectedGalaxy.userData.light.intensity = 0.5;
+                    }
+                    this.selectedGalaxy = intersects[0].object;
+                    this.selectedGalaxy.userData.light.intensity = 2;
+                }
+            }
+
+            showGalaxyInfo(galaxy) {
+                document.getElementById('galaxy-info').classList.add('active');
+                document.getElementById('galaxy-name').textContent = `Galaxy ${galaxy.id}`;
+                
+                // Update classification bars
+                const types = ['elliptical', 'spiral', 'star'];
+                const mapping = { elliptical: 'smooth', spiral: 'features', star: 'star' };
+                
+                types.forEach(type => {
+                    const value = galaxy.classifications[mapping[type]] || 0;
+                    const percent = (value * 100).toFixed(1);
+                    document.getElementById(`${type}-percent`).textContent = `${percent}%`;
+                    document.getElementById(`${type}-bar`).style.width = `${percent}%`;
+                });
+
+                document.getElementById('galaxy-ra').textContent = galaxy.ra.toFixed(3);
+                document.getElementById('galaxy-dec').textContent = galaxy.dec.toFixed(3);
+                document.getElementById('classification-count').textContent = galaxy.votes;
+                
+                // Update SDSS link
+                const sdssLink = document.getElementById('sdss-link');
+                sdssLink.href = `https://skyserver.sdss.org/dr17/VisualTools/explore/summary?ra=${galaxy.ra}&dec=${galaxy.dec}`;
+            }
+
+            filterGalaxies(type) {
+                this.currentFilter = type;
+
+                // Update button states
+                document.querySelectorAll('.control-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`view-${type === 'features' ? 'spiral' : type === 'smooth' ? 'elliptical' : type}`).classList.add('active');
+
+                // Show/hide galaxies
+                this.galaxyFrames.forEach(frame => {
+                    const galaxy = frame.userData.galaxy;
+                    const primaryType = this.getPrimaryType(galaxy);
+                    const visible = type === 'all' || primaryType === type;
+                    frame.parent.visible = visible;
+                });
+            }
+
+            async loadRealGalaxyData() {
+                // This would connect to the real Galaxy Zoo API
+                // For demonstration, we'll add more sample galaxies
+                const moreGalaxies = [
+                    {
+                        id: "587731186739863668",
+                        ra: 186.123,
+                        dec: 47.456,
+                        classifications: { smooth: 0.15, features: 0.80, star: 0.05 },
+                        votes: 71
+                    },
+                    {
+                        id: "587732703088410679",
+                        ra: 185.789,
+                        dec: 46.123,
+                        classifications: { smooth: 0.75, features: 0.20, star: 0.05 },
+                        votes: 45
+                    }
+                ];
+
+                this.galaxyData.push(...moreGalaxies);
+                this.totalImages = this.galaxyData.length;
+                this.createGalaxyGallery();
+            }
+
+            showError() {
+                const errorMsg = document.getElementById('error-message');
+                errorMsg.style.display = 'block';
+                setTimeout(() => {
+                    errorMsg.style.display = 'none';
+                }, 3000);
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                const speed = 0.15;
+                if (this.keys.w) this.camera.position.add(forward.multiplyScalar(speed));
+                if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-speed));
+                if (this.keys.a) this.camera.position.add(right.multiplyScalar(-speed));
+                if (this.keys.d) this.camera.position.add(right.multiplyScalar(speed));
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+
+                this.updateMovement();
+
+                // Gentle floating animation
+                this.galaxyFrames.forEach((frame, index) => {
+                    if (frame.parent && frame.parent.visible) {
+                        frame.parent.position.y += Math.sin(time * 0.5 + index) * 0.001;
+                        frame.parent.rotation.y = Math.sin(time * 0.2 + index) * 0.05;
+                    }
+                });
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize world
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new GalaxyImageWorld();
+            world.init();
+        });
+    </script>
+</body>
+</html>
