@@ -1874,8 +1874,7 @@
 
         @media (max-width: 768px) {
             .world-title {
-                font-size: 2em;
-            }
+                font-size: 2em;}
 
             .world-description {
                 font-size: 1em;
@@ -2338,6 +2337,9 @@
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
         const REPO_NAME = 'AINexus'; // Replace with your repository name
         const BRANCH = 'main';
+        
+        // GitHub Pages URL base
+        const GITHUB_PAGES_BASE = `https://${REPO_OWNER}.github.io/${REPO_NAME}/`;
 
         // Default world attributes
         const DEFAULT_WORLD_ATTRIBUTES = {
@@ -3009,7 +3011,7 @@
                             <div class="portal-item-location">Portal ${index + 1}</div>
                         </div>
                         <div class="portal-item-actions">
-                            <button class="portal-action-btn enter" onclick="window.worldNavigator.portalManager.fastTravel('${portal.url || portal.raw_url || '#'}', '${portal.name}')">Enter</button>
+                            <button class="portal-action-btn enter" onclick="window.worldNavigator.portalManager.fastTravel('${portal.pages_url || portal.url || portal.raw_url || '#'}', '${portal.name}')">Enter</button>
                             ${portal.isCustom ? `<button class="portal-action-btn delete" onclick="window.worldNavigator.portalManager.removePortal('${portal.id}')">Remove</button>` : ''}
                         </div>
                     `;
@@ -3017,7 +3019,7 @@
                     // Make the entire item clickable for fast travel
                     portalItem.onclick = (e) => {
                         if (!e.target.classList.contains('portal-action-btn')) {
-                            this.fastTravel(portal.url || portal.raw_url || '#', portal.name);
+                            this.fastTravel(portal.pages_url || portal.url || portal.raw_url || '#', portal.name);
                         }
                     };
                     
@@ -5206,6 +5208,7 @@
                             name: this.formatWorldName(item.path),
                             url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
                             raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            pages_url: `${GITHUB_PAGES_BASE}${item.path}`,
                             emoji: this.getWorldEmoji(item.path)
                         }));
 
@@ -5446,7 +5449,7 @@
                         world: world,
                         material: portalMaterial,
                         light: light,
-                        url: world.url || world.raw_url || '#',
+                        url: world.pages_url || world.url || world.raw_url || '#',
                         name: world.name,
                         description: world.description || `Enter the ${world.name} world`,
                         accessible: true // Always accessible in teleport mode
@@ -6044,45 +6047,24 @@
 
             async enterWorld(url) {
                 try {
-                    document.getElementById('loading').style.display = 'block';
-                    document.getElementById('loading').innerHTML = 'Entering new world...';
-
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to load world (${response.status})`);
-                    }
-
-                    let htmlContent = await response.text();
-
+                    console.log('Entering world with URL:', url);
+                    
+                    // Simply navigate to the GitHub Pages URL
                     const inheritanceParams = this.buildInheritanceParams();
-
+                    
                     // If in multiplayer, preserve the host parameter
                     const urlParams = new URLSearchParams(window.location.search);
                     const hostId = urlParams.get('host');
                     if (hostId) {
                         inheritanceParams += `&host=${hostId}`;
                     }
-
-                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
-
-                    const inheritanceData = {
-                        params: inheritanceParams,
-                        timestamp: Date.now()
-                    };
-                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
-
-                    const paramScript = `<script>
-                        window.INJECTED_PARAMS = '?${inheritanceParams}';
-                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
-                        console.log('Injected params:', window.INJECTED_PARAMS);
-                    <\/script>`;
-
-                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
-
-                    const blob = new Blob([htmlContent], { type: 'text/html' });
-                    const blobUrl = URL.createObjectURL(blob);
-
-                    window.location.href = blobUrl;
+                    
+                    // Build the final URL with parameters
+                    const separator = url.includes('?') ? '&' : '?';
+                    const finalUrl = `${url}${separator}${inheritanceParams}`;
+                    
+                    console.log('Navigating to:', finalUrl);
+                    window.location.href = finalUrl;
 
                 } catch (error) {
                     console.error('Error entering world:', error);
