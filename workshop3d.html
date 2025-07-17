@@ -1,0 +1,2439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assembly Line Inspector - 3D World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* HUD UI Elements */
+        .hud-top {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #00d4ff, #0099ff, #00d4ff);
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-subtitle {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+
+        .control-panel h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .control-btn {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .control-btn:hover {
+            background: rgba(0, 212, 255, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .control-btn.active {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .control-btn.emergency {
+            background: rgba(255, 51, 51, 0.3);
+            border-color: rgba(255, 51, 51, 0.5);
+        }
+
+        .control-btn.emergency:hover {
+            background: rgba(255, 51, 51, 0.5);
+            box-shadow: 0 5px 15px rgba(255, 51, 51, 0.3);
+        }
+
+        /* Knowledge Base Panel */
+        .knowledge-panel {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 106, 0, 0.3);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .knowledge-panel h3 {
+            color: #ff6a00;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .knowledge-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .knowledge-item.active {
+            border-color: #ff6a00;
+            box-shadow: 0 0 10px rgba(255, 106, 0, 0.3);
+        }
+
+        /* Station Info Panel */
+        .station-info {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 1002;
+            backdrop-filter: blur(10px);
+            display: none;
+            max-width: 600px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .station-info.active {
+            display: block;
+        }
+
+        .station-info h4 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        .station-info p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+
+        /* Kaizen Modal */
+        .kaizen-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 40, 0.98);
+            border: 3px solid rgba(255, 51, 51, 0.5);
+            border-radius: 20px;
+            padding: 30px;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 0 50px rgba(255, 51, 51, 0.3);
+        }
+
+        .kaizen-modal.active {
+            display: block;
+            animation: scaleIn 0.3s ease;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: translate(-50%, -50%) scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .kaizen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .kaizen-header h3 {
+            color: #ff3333;
+            font-size: 1.5em;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .close-btn:hover {
+            color: #ff3333;
+            transform: rotate(90deg);
+        }
+
+        .kaizen-chat {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-message.user {
+            background: rgba(0, 212, 255, 0.2);
+            margin-left: 20%;
+            text-align: right;
+        }
+
+        .chat-message.assistant {
+            background: rgba(255, 106, 0, 0.2);
+            margin-right: 20%;
+        }
+
+        .kaizen-input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        .kaizen-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .kaizen-send {
+            background: #00d4ff;
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .kaizen-send:hover {
+            transform: scale(1.05);
+        }
+
+        /* Controls hint */
+        .controls-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 25px;
+            color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        /* Loading screen */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.5em;
+            color: rgba(255, 255, 255, 0.6);
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        /* Status display */
+        .status-display {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            z-index: 1000;
+        }
+
+        .status-text {
+            color: #00d4ff;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ff00;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            z-index: 2001;
+            animation: slideIn 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .conversation-selector {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            border-radius: 15px;
+            padding: 15px;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            max-width: 250px;
+        }
+
+        .conversation-selector h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .conversation-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #00d4ff;
+            transform: translateX(5px);
+        }
+
+        .conversation-item.active {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <!-- HUD Elements -->
+    <div class="hud-top">
+        <h1 class="world-title">AI ASSEMBLY LINE INSPECTOR</h1>
+        <p class="world-subtitle">Walk through conversations • Inspect each step • Apply Kaizen improvements</p>
+    </div>
+
+    <!-- Conversation Selector -->
+    <div class="conversation-selector">
+        <h3>📁 Select Conversation</h3>
+        <div id="conversation-list"></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <h3>🎮 Assembly Controls</h3>
+        <button class="control-btn" id="play-btn">▶️ Start Line</button>
+        <button class="control-btn" id="pause-btn">⏸️ Pause Line</button>
+        <button class="control-btn" id="step-btn">⏭️ Step Forward</button>
+        <button class="control-btn" id="reset-btn">🔄 Reset Line</button>
+        <button class="control-btn emergency" id="stop-btn">🛑 STOP - Issue Found</button>
+    </div>
+
+    <!-- Knowledge Base Panel -->
+    <div class="knowledge-panel">
+        <h3>📚 Active Knowledge</h3>
+        <div id="knowledge-list">
+            <div class="knowledge-item active">
+                <strong>Email Verification</strong><br>
+                Always verify @microsoft.com domain
+            </div>
+            <div class="knowledge-item">
+                <strong>Large Data Sets</strong><br>
+                Implement pagination for 50+ records
+            </div>
+        </div>
+    </div>
+
+    <!-- Station Info Display -->
+    <div class="station-info" id="station-info">
+        <h4 id="station-title">Station Information</h4>
+        <p id="station-content"></p>
+    </div>
+
+    <!-- Kaizen Intervention Modal -->
+    <div class="kaizen-modal" id="kaizen-modal">
+        <div class="kaizen-header">
+            <h3>🔧 Kaizen Intervention</h3>
+            <button class="close-btn" id="close-kaizen">&times;</button>
+        </div>
+        <div class="kaizen-chat" id="kaizen-chat"></div>
+        <div class="kaizen-input-area">
+            <input type="text" class="kaizen-input" id="kaizen-input" placeholder="Describe the issue...">
+            <button class="kaizen-send" id="kaizen-send">Send</button>
+        </div>
+    </div>
+
+    <!-- Status Display -->
+    <div class="status-display">
+        <div class="status-text">
+            <span class="status-indicator"></span>
+            <span id="status-message">Assembly Line Ready</span>
+        </div>
+    </div>
+
+    <!-- Controls Hint -->
+    <div class="controls-hint">
+        Use WASD to move • Mouse to look • E to interact • Space to jump
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">Initializing Assembly Line...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Add FontLoader to THREE namespace
+        THREE.FontLoader = class FontLoader extends THREE.Loader {
+            constructor(manager) {
+                super(manager);
+            }
+
+            load(url, onLoad, onProgress, onError) {
+                const scope = this;
+                const loader = new THREE.FileLoader(this.manager);
+                loader.setPath(this.path);
+                loader.setRequestHeader(this.requestHeader);
+                loader.setWithCredentials(this.withCredentials);
+                loader.load(url, function(text) {
+                    try {
+                        const json = JSON.parse(text);
+                        const font = scope.parse(json);
+                        if (onLoad) onLoad(font);
+                    } catch (e) {
+                        console.warn('THREE.FontLoader: typeface.js support is being deprecated. Use typeface.json instead.');
+                        if (onError) onError(e);
+                    }
+                }, onProgress, onError);
+            }
+
+            parse(json) {
+                return new THREE.Font(json);
+            }
+        };
+
+        // Add Font class
+        THREE.Font = class Font {
+            constructor(data) {
+                this.type = 'Font';
+                this.data = data;
+            }
+
+            generateShapes(text, size = 100) {
+                const shapes = [];
+                const paths = createPaths(text, size, this.data);
+
+                for (let p = 0, pl = paths.length; p < pl; p++) {
+                    Array.prototype.push.apply(shapes, paths[p].toShapes());
+                }
+
+                return shapes;
+            }
+        };
+
+        // Add TextGeometry
+        THREE.TextGeometry = class TextGeometry extends THREE.ExtrudeGeometry {
+            constructor(text, parameters = {}) {
+                const font = parameters.font;
+
+                if (!font || !font.data) {
+                    console.error('THREE.TextGeometry: font parameter is not an instance of THREE.Font.');
+                    super();
+                    return;
+                }
+
+                const shapes = font.generateShapes(text, parameters.size);
+
+                parameters.depth = parameters.height !== undefined ? parameters.height : 50;
+
+                if (parameters.bevelThickness === undefined) parameters.bevelThickness = 10;
+                if (parameters.bevelSize === undefined) parameters.bevelSize = 8;
+                if (parameters.bevelEnabled === undefined) parameters.bevelEnabled = false;
+
+                super(shapes, parameters);
+
+                this.type = 'TextGeometry';
+            }
+        };
+
+        // Helper function for font paths
+        function createPaths(text, size, data) {
+            const chars = Array.from(text);
+            const scale = size / data.resolution;
+            const line_height = (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * scale;
+
+            const paths = [];
+
+            let offsetX = 0, offsetY = 0;
+
+            for (let i = 0; i < chars.length; i++) {
+                const char = chars[i];
+
+                if (char === '\n') {
+                    offsetX = 0;
+                    offsetY -= line_height;
+                } else {
+                    const ret = createPath(char, scale, offsetX, offsetY, data);
+                    if (ret) {
+                        offsetX += ret.offsetX;
+                        paths.push(ret.path);
+                    }
+                }
+            }
+
+            return paths;
+        }
+
+        function createPath(char, scale, offsetX, offsetY, data) {
+            const glyph = data.glyphs[char] || data.glyphs['?'];
+
+            if (!glyph) {
+                console.error('THREE.Font: character "' + char + '" does not exists in font family ' + data.familyName + '.');
+                return;
+            }
+
+            const path = new THREE.ShapePath();
+
+            let x, y, cpx, cpy, cpx1, cpy1, cpx2, cpy2;
+
+            if (glyph.o) {
+                const outline = glyph._cachedOutline || (glyph._cachedOutline = glyph.o.split(' '));
+
+                for (let i = 0, l = outline.length; i < l;) {
+                    const action = outline[i++];
+
+                    switch (action) {
+                        case 'm': // moveTo
+                            x = outline[i++] * scale + offsetX;
+                            y = outline[i++] * scale + offsetY;
+                            path.moveTo(x, y);
+                            break;
+
+                        case 'l': // lineTo
+                            x = outline[i++] * scale + offsetX;
+                            y = outline[i++] * scale + offsetY;
+                            path.lineTo(x, y);
+                            break;
+
+                        case 'q': // quadraticCurveTo
+                            cpx = outline[i++] * scale + offsetX;
+                            cpy = outline[i++] * scale + offsetY;
+                            cpx1 = outline[i++] * scale + offsetX;
+                            cpy1 = outline[i++] * scale + offsetY;
+                            path.quadraticCurveTo(cpx1, cpy1, cpx, cpy);
+                            break;
+
+                        case 'b': // bezierCurveTo
+                            cpx = outline[i++] * scale + offsetX;
+                            cpy = outline[i++] * scale + offsetY;
+                            cpx1 = outline[i++] * scale + offsetX;
+                            cpy1 = outline[i++] * scale + offsetY;
+                            cpx2 = outline[i++] * scale + offsetX;
+                            cpy2 = outline[i++] * scale + offsetY;
+                            path.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, cpx, cpy);
+                            break;
+                    }
+                }
+            }
+
+            return { offsetX: glyph.ha * scale, path: path };
+        }
+
+        // Sample conversation data
+        const conversations = [
+            {
+                id: 'conv1',
+                name: 'Latest SP Request',
+                timestamp: '2025-06-12T14:12:40.346Z',
+                app: 'Dynamics 365',
+                steps: [
+                    {
+                        type: 'user',
+                        content: 'Get my latest sp',
+                        timestamp: '2025-06-12T14:12:40.346Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'Dynamics365CRUD',
+                        operation: 'Fetching opportunities',
+                        timestamp: '2025-06-12T14:12:41.346Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: `Here's your latest SP (opportunity) with a true future estimated close date:
+
+🏆 Latest Opportunity
+Name: New Snowmobile Launch - Phase 1
+Estimated Close Date: June 12, 2025
+Estimated Value: $142,061
+Status: In Progress`,
+                        systemResult: {
+                            "@odata.context": "https://org4e42157d.crm.dynamics.com/api/data/v9.2/$metadata#opportunities",
+                            "value": [{
+                                "statuscode": 1,
+                                "name": "New Snowmobile Launch - Phase 1",
+                                "estimatedvalue": 142061.0,
+                                "estimatedclosedate": "2025-06-12"
+                            }]
+                        },
+                        timestamp: '2025-06-12T14:12:42.346Z'
+                    }
+                ]
+            },
+            {
+                id: 'conv2',
+                name: 'Business Questions',
+                timestamp: '2025-03-30T14:53:53.989Z',
+                app: 'MAC',
+                steps: [
+                    {
+                        type: 'user',
+                        content: 'get_business_questions',
+                        timestamp: '2025-03-30T14:53:53.989Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'SeerIntegration',
+                        operation: 'Retrieving business questions',
+                        timestamp: '2025-03-30T14:53:54.989Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: 'Here are business questions for the MINTEL CRM migration project...',
+                        timestamp: '2025-03-30T14:53:56.989Z'
+                    }
+                ]
+            }
+        ];
+
+        class AssemblyLineWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.clock = new THREE.Clock();
+                this.font = null;
+                
+                // Movement
+                this.moveSpeed = 0.15;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+                this.rotation = { x: 0, y: 0 };
+                this.velocity = new THREE.Vector3();
+                this.canJump = true;
+                
+                // Assembly line
+                this.stations = [];
+                this.currentConversation = null;
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                // 3D elements
+                this.companion = null;
+                this.conveyorBelts = [];
+                this.workpieces = [];
+                this.monitors = [];
+                this.agents = new Map(); // Store agent workers
+                this.floatingTexts = []; // Store 3D text elements
+                
+                // UI state
+                this.selectedStation = null;
+                this.kaizenMode = false;
+                
+                // Mobile detection
+                this.isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+                
+                this.init();
+            }
+
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                await this.loadFont();
+                this.createEnvironment();
+                this.createAssemblyLine();
+                this.createAICompanion();
+                this.setupEventListeners();
+                this.loadConversations();
+                
+                // Hide loading after a delay
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1500);
+                
+                this.animate();
+            }
+
+            async loadFont() {
+                return new Promise((resolve) => {
+                    const loader = new THREE.FontLoader();
+                    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+                        this.font = font;
+                        resolve();
+                    });
+                });
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x0a0a0a, 10, 200);
+                
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(0, 5, 20);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+                
+                // Main directional light
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(10, 30, 10);
+                dirLight.castShadow = true;
+                dirLight.shadow.camera.near = 0.1;
+                dirLight.shadow.camera.far = 100;
+                dirLight.shadow.camera.left = -50;
+                dirLight.shadow.camera.right = 50;
+                dirLight.shadow.camera.top = 50;
+                dirLight.shadow.camera.bottom = -50;
+                this.scene.add(dirLight);
+                
+                // Factory lights
+                for (let i = 0; i < 5; i++) {
+                    const pointLight = new THREE.PointLight(0x00d4ff, 0.5, 20);
+                    pointLight.position.set(i * 20 - 40, 10, 0);
+                    this.scene.add(pointLight);
+                }
+            }
+
+            createEnvironment() {
+                // Factory floor
+                const floorGeometry = new THREE.PlaneGeometry(200, 100);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+                
+                // Grid lines on floor
+                const gridHelper = new THREE.GridHelper(200, 40, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+                
+                // Factory walls
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a,
+                    roughness: 0.9
+                });
+                
+                // Back wall
+                const backWall = new THREE.Mesh(
+                    new THREE.PlaneGeometry(200, 40),
+                    wallMaterial
+                );
+                backWall.position.set(0, 20, -50);
+                this.scene.add(backWall);
+                
+                // Side walls
+                const sideWallGeometry = new THREE.PlaneGeometry(100, 40);
+                const leftWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+                leftWall.position.set(-100, 20, 0);
+                leftWall.rotation.y = Math.PI / 2;
+                this.scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+                rightWall.position.set(100, 20, 0);
+                rightWall.rotation.y = -Math.PI / 2;
+                this.scene.add(rightWall);
+                
+                // Ceiling with industrial beams
+                for (let i = 0; i < 10; i++) {
+                    const beamGeometry = new THREE.BoxGeometry(200, 1, 2);
+                    const beamMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x333333,
+                        metalness: 0.8,
+                        roughness: 0.3
+                    });
+                    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+                    beam.position.set(0, 30, i * 10 - 45);
+                    this.scene.add(beam);
+                }
+                
+                // Add some pipes and industrial details
+                const pipeMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x666666,
+                    metalness: 0.9,
+                    roughness: 0.2
+                });
+                
+                for (let i = 0; i < 5; i++) {
+                    const pipeGeometry = new THREE.CylinderGeometry(0.5, 0.5, 40);
+                    const pipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+                    pipe.position.set(-90 + i * 45, 20, -45);
+                    this.scene.add(pipe);
+                }
+            }
+
+            createAssemblyLine() {
+                // Create conveyor belt
+                const beltGeometry = new THREE.BoxGeometry(150, 0.5, 8);
+                const beltMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                
+                const conveyorBelt = new THREE.Mesh(beltGeometry, beltMaterial);
+                conveyorBelt.position.set(0, 1, 0);
+                this.scene.add(conveyorBelt);
+                this.conveyorBelts.push(conveyorBelt);
+                
+                // Add belt texture animation
+                const beltTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+                beltTexture.wrapS = THREE.RepeatWrapping;
+                beltTexture.repeat.set(50, 1);
+                beltMaterial.map = beltTexture;
+                
+                // Create assembly stations
+                const stationCount = 5;
+                for (let i = 0; i < stationCount; i++) {
+                    const station = this.createStation(i);
+                    station.position.x = (i - 2) * 30;
+                    this.scene.add(station);
+                    this.stations.push(station);
+                }
+            }
+
+            createStation(index) {
+                const stationGroup = new THREE.Group();
+                
+                // Station platform
+                const platformGeometry = new THREE.BoxGeometry(20, 2, 15);
+                const platformMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a3e,
+                    metalness: 0.5,
+                    roughness: 0.5
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.y = 1;
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                stationGroup.add(platform);
+                
+                // Station frame
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x00d4ff,
+                    emissive: 0x00d4ff,
+                    emissiveIntensity: 0.2,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                
+                // Vertical supports
+                for (let i = 0; i < 4; i++) {
+                    const supportGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15);
+                    const support = new THREE.Mesh(supportGeometry, frameMaterial);
+                    support.position.set(
+                        i < 2 ? -8 : 8,
+                        7.5,
+                        i % 2 === 0 ? -5 : 5
+                    );
+                    stationGroup.add(support);
+                }
+                
+                // Top frame
+                const topFrameGeometry = new THREE.BoxGeometry(18, 0.5, 12);
+                const topFrame = new THREE.Mesh(topFrameGeometry, frameMaterial);
+                topFrame.position.y = 15;
+                stationGroup.add(topFrame);
+                
+                // Monitor screen
+                const monitorGeometry = new THREE.BoxGeometry(12, 8, 0.5);
+                const monitorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x000000,
+                    emissive: 0x001122,
+                    emissiveIntensity: 0.5
+                });
+                const monitor = new THREE.Mesh(monitorGeometry, monitorMaterial);
+                monitor.position.set(0, 10, -6);
+                stationGroup.add(monitor);
+                this.monitors.push(monitor);
+                
+                // Status light
+                const lightGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+                const lightMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x00ff00,
+                    emissive: 0x00ff00,
+                    emissiveIntensity: 0.8
+                });
+                const statusLight = new THREE.Mesh(lightGeometry, lightMaterial);
+                statusLight.position.set(0, 16, 0);
+                stationGroup.add(statusLight);
+                
+                // Add point light for glow effect
+                const pointLight = new THREE.PointLight(0x00ff00, 0.5, 10);
+                pointLight.position.copy(statusLight.position);
+                stationGroup.add(pointLight);
+                
+                // Station number with 3D text
+                const stationNumber = this.create3DText(`Station ${index + 1}`, {
+                    size: 0.8,
+                    height: 0.1,
+                    color: 0x00d4ff
+                });
+                if (stationNumber) {
+                    stationNumber.position.set(0, 18, 0);
+                    stationGroup.add(stationNumber);
+                }
+                
+                // Add floating symbol for station type
+                const symbol = this.createStationSymbol(index);
+                symbol.position.set(0, 20, 0);
+                stationGroup.add(symbol);
+                
+                // Store references
+                stationGroup.userData = {
+                    index: index,
+                    statusLight: statusLight,
+                    lightMaterial: lightMaterial,
+                    pointLight: pointLight,
+                    monitor: monitor,
+                    symbol: symbol
+                };
+                
+                return stationGroup;
+            }
+
+            createStationSymbol(index) {
+                const symbolGroup = new THREE.Group();
+                
+                // Different symbols for different station types - using basic Unicode
+                const symbols = ['USER', 'PROCESS', 'AI', 'DATA', 'CHECK'];
+                const colors = [0x00d4ff, 0xff6a00, 0x8338ec, 0xffaa00, 0x00ff88];
+                
+                // Create 3D symbol representation
+                const symbolText = this.create3DText(symbols[index % symbols.length], {
+                    size: 1.5,
+                    height: 0.3,
+                    color: colors[index % colors.length]
+                });
+                
+                if (symbolText) {
+                    symbolGroup.add(symbolText);
+                }
+                
+                // Add rotating animation reference
+                symbolGroup.userData = { baseY: 20 };
+                
+                return symbolGroup;
+            }
+
+            create3DText(text, options = {}) {
+                if (!this.font) return null;
+                
+                const {
+                    size = 1,
+                    height = 0.2,
+                    color = 0xffffff,
+                    emissive = true
+                } = options;
+                
+                const geometry = new THREE.TextGeometry(text, {
+                    font: this.font,
+                    size: size,
+                    height: height,
+                    curveSegments: 12,
+                    bevelEnabled: true,
+                    bevelThickness: 0.03,
+                    bevelSize: 0.02,
+                    bevelSegments: 8
+                });
+                
+                geometry.center();
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    emissive: emissive ? color : 0x000000,
+                    emissiveIntensity: emissive ? 0.3 : 0,
+                    metalness: 0.5,
+                    roughness: 0.3
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                return mesh;
+            }
+
+            createAICompanion() {
+                const companionGroup = new THREE.Group();
+                
+                // Companion body (floating orb)
+                const orbGeometry = new THREE.SphereGeometry(1, 32, 32);
+                const orbMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const orb = new THREE.Mesh(orbGeometry, orbMaterial);
+                companionGroup.add(orb);
+                
+                // Inner glow
+                const glowGeometry = new THREE.SphereGeometry(1.2, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x8338ec,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                companionGroup.add(glow);
+                
+                // Point light for companion
+                const companionLight = new THREE.PointLight(0x8338ec, 2, 15);
+                companionGroup.add(companionLight);
+                
+                // Particle ring around companion
+                const particleCount = 50;
+                const particleGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = (i / particleCount) * Math.PI * 2;
+                    positions[i * 3] = Math.cos(angle) * 2;
+                    positions[i * 3 + 1] = 0;
+                    positions[i * 3 + 2] = Math.sin(angle) * 2;
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x00d4ff,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                companionGroup.add(particles);
+                
+                // Position companion
+                companionGroup.position.set(-10, 8, 10);
+                
+                // Store references
+                companionGroup.userData = {
+                    orb: orb,
+                    glow: glow,
+                    particles: particles,
+                    light: companionLight,
+                    tools: new THREE.Group() // For holding tools
+                };
+                
+                companionGroup.add(companionGroup.userData.tools);
+                
+                this.companion = companionGroup;
+                this.scene.add(this.companion);
+            }
+
+            createAgentWorker(agentName, stationPosition) {
+                const agentGroup = new THREE.Group();
+                
+                // Agent representations based on type
+                const agentConfigs = {
+                    'Dynamics365CRUD': {
+                        color: 0x0078d4, // Microsoft blue
+                        symbol: 'DATABASE',
+                        tool: 'database'
+                    },
+                    'SeerIntegration': {
+                        color: 0xff6b00,
+                        symbol: 'SEARCH',
+                        tool: 'magnifier'
+                    },
+                    'EmailDrafting': {
+                        color: 0x00bcf2,
+                        symbol: 'EMAIL',
+                        tool: 'envelope'
+                    },
+                    'PowerPoint': {
+                        color: 0xd24726,
+                        symbol: 'SLIDES',
+                        tool: 'slides'
+                    }
+                };
+                
+                const config = agentConfigs[agentName] || {
+                    color: 0x666666,
+                    symbol: 'AGENT',
+                    tool: 'gear'
+                };
+                
+                // Create agent body (smaller companion-like orb)
+                const agentGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+                const agentMaterial = new THREE.MeshStandardMaterial({
+                    color: config.color,
+                    emissive: config.color,
+                    emissiveIntensity: 0.4,
+                    metalness: 0.6,
+                    roughness: 0.3
+                });
+                const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial);
+                agentGroup.add(agentMesh);
+                
+                // Add agent light
+                const agentLight = new THREE.PointLight(config.color, 1, 8);
+                agentGroup.add(agentLight);
+                
+                // Create tool based on type
+                const tool = this.createAgentTool(config.tool, config.color);
+                tool.position.set(0.8, 0, 0);
+                agentGroup.add(tool);
+                
+                // Add floating label
+                const label = this.create3DText(agentName, {
+                    size: 0.3,
+                    height: 0.05,
+                    color: config.color
+                });
+                if (label) {
+                    label.position.set(0, 1.2, 0);
+                    agentGroup.add(label);
+                }
+                
+                // Position at station
+                agentGroup.position.copy(stationPosition);
+                agentGroup.position.y = 5;
+                agentGroup.position.z += 3;
+                
+                agentGroup.userData = {
+                    mesh: agentMesh,
+                    tool: tool,
+                    light: agentLight,
+                    config: config,
+                    working: false
+                };
+                
+                return agentGroup;
+            }
+
+            createAgentTool(toolType, color) {
+                const toolGroup = new THREE.Group();
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                
+                switch (toolType) {
+                    case 'database':
+                        // Create cylinder stack for database
+                        for (let i = 0; i < 3; i++) {
+                            const cylinder = new THREE.Mesh(
+                                new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16),
+                                material
+                            );
+                            cylinder.position.y = i * 0.15;
+                            toolGroup.add(cylinder);
+                        }
+                        break;
+                        
+                    case 'magnifier':
+                        // Create magnifying glass
+                        const handle = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.05, 0.05, 0.5),
+                            material
+                        );
+                        handle.rotation.z = Math.PI / 4;
+                        toolGroup.add(handle);
+                        
+                        const lens = new THREE.Mesh(
+                            new THREE.TorusGeometry(0.2, 0.05, 8, 16),
+                            material
+                        );
+                        lens.position.set(0.25, 0.25, 0);
+                        toolGroup.add(lens);
+                        break;
+                        
+                    case 'envelope':
+                        // Create envelope shape
+                        const envelope = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.4, 0.3, 0.02),
+                            material
+                        );
+                        toolGroup.add(envelope);
+                        break;
+                        
+                    case 'slides':
+                        // Create slide representation
+                        const slide = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.4, 0.3, 0.05),
+                            material
+                        );
+                        toolGroup.add(slide);
+                        break;
+                        
+                    default:
+                        // Create gear
+                        const gear = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8),
+                            material
+                        );
+                        toolGroup.add(gear);
+                }
+                
+                return toolGroup;
+            }
+
+            createWorkpiece(stepData) {
+                const workpieceGroup = new THREE.Group();
+                
+                // Create a box to represent the conversation step
+                const geometry = new THREE.BoxGeometry(3, 2, 3);
+                const material = new THREE.MeshStandardMaterial({
+                    color: stepData.type === 'user' ? 0x00d4ff : 
+                           stepData.type === 'processing' ? 0xff6a00 : 0x00ff88,
+                    metalness: 0.5,
+                    roughness: 0.3
+                });
+                
+                const box = new THREE.Mesh(geometry, material);
+                box.castShadow = true;
+                box.receiveShadow = true;
+                workpieceGroup.add(box);
+                
+                // Add floating text showing step content preview
+                const preview = stepData.content ? 
+                    stepData.content.substring(0, 20) + '...' : 
+                    stepData.operation || 'Processing';
+                    
+                const label = this.create3DText(preview, {
+                    size: 0.3,
+                    height: 0.05,
+                    color: 0xffffff
+                });
+                if (label) {
+                    label.position.set(0, 1.5, 1.6);
+                    workpieceGroup.add(label);
+                }
+                
+                // Add type symbol
+                const symbols = {
+                    'user': 'USER',
+                    'processing': 'PROCESS',
+                    'assistant': 'AI'
+                };
+                
+                const symbol = this.create3DText(symbols[stepData.type] || '?', {
+                    size: 0.6,
+                    height: 0.1,
+                    color: material.color
+                });
+                if (symbol) {
+                    symbol.position.set(0, 0, 1.6);
+                    workpieceGroup.add(symbol);
+                }
+                
+                // Add glow effect
+                const glowLight = new THREE.PointLight(material.color, 0.5, 5);
+                glowLight.position.y = 1;
+                workpieceGroup.add(glowLight);
+                
+                workpieceGroup.userData = stepData;
+                
+                return workpieceGroup;
+            }
+
+            createFloatingStatusText(text, position, color = 0x00d4ff) {
+                const textMesh = this.create3DText(text, {
+                    size: 0.5,
+                    height: 0.1,
+                    color: color
+                });
+                
+                if (textMesh) {
+                    textMesh.position.copy(position);
+                    textMesh.position.y += 3;
+                    
+                    // Add to scene and track for cleanup
+                    this.scene.add(textMesh);
+                    this.floatingTexts.push({
+                        mesh: textMesh,
+                        createdAt: Date.now(),
+                        duration: 3000
+                    });
+                    
+                    // Floating animation
+                    const startY = textMesh.position.y;
+                    textMesh.userData = {
+                        startY: startY,
+                        floatSpeed: 0.5
+                    };
+                }
+                
+                return textMesh;
+            }
+
+            loadConversations() {
+                const listEl = document.getElementById('conversation-list');
+                listEl.innerHTML = '';
+                
+                conversations.forEach(conv => {
+                    const item = document.createElement('div');
+                    item.className = 'conversation-item';
+                    item.innerHTML = `
+                        <strong>${conv.name}</strong><br>
+                        <small>${conv.app} • ${conv.steps.length} steps</small>
+                    `;
+                    item.onclick = () => this.selectConversation(conv);
+                    listEl.appendChild(item);
+                });
+            }
+
+            selectConversation(conversation) {
+                this.currentConversation = conversation;
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                // Update UI
+                document.querySelectorAll('.conversation-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                event.currentTarget.classList.add('active');
+                
+                // Clear existing workpieces and agents
+                this.workpieces.forEach(wp => {
+                    this.scene.remove(wp);
+                });
+                this.workpieces = [];
+                
+                this.agents.forEach(agent => {
+                    this.scene.remove(agent);
+                });
+                this.agents.clear();
+                
+                // Create workpieces for each step
+                conversation.steps.forEach((step, index) => {
+                    const workpiece = this.createWorkpiece(step);
+                    workpiece.position.set(-60 + index * 30, 3, 0);
+                    workpiece.visible = false;
+                    this.scene.add(workpiece);
+                    this.workpieces.push(workpiece);
+                });
+                
+                this.updateStatus('Conversation loaded: ' + conversation.name);
+                this.showNotification('Conversation loaded. Press Play to start inspection.');
+            }
+
+            startAssemblyLine() {
+                if (!this.currentConversation) {
+                    this.showNotification('Please select a conversation first');
+                    return;
+                }
+                
+                this.isPlaying = true;
+                this.isPaused = false;
+                document.getElementById('play-btn').classList.add('active');
+                
+                this.updateStatus('Assembly line running');
+                this.processNextStep();
+            }
+
+            pauseAssemblyLine() {
+                this.isPaused = !this.isPaused;
+                document.getElementById('pause-btn').classList.toggle('active', this.isPaused);
+                
+                if (!this.isPaused && this.isPlaying) {
+                    this.processNextStep();
+                }
+            }
+
+            stepForward() {
+                if (!this.currentConversation || this.currentStep >= this.currentConversation.steps.length) return;
+                
+                this.isPaused = true;
+                this.processNextStep();
+            }
+
+            resetAssemblyLine() {
+                this.isPlaying = false;
+                this.isPaused = false;
+                this.currentStep = 0;
+                
+                // Hide all workpieces
+                this.workpieces.forEach(wp => {
+                    wp.visible = false;
+                    wp.position.x = -60 + this.workpieces.indexOf(wp) * 30;
+                });
+                
+                // Remove all agents
+                this.agents.forEach(agent => {
+                    this.scene.remove(agent);
+                });
+                this.agents.clear();
+                
+                // Reset station lights
+                this.stations.forEach(station => {
+                    const data = station.userData;
+                    data.lightMaterial.color.setHex(0x00ff00);
+                    data.lightMaterial.emissive.setHex(0x00ff00);
+                    data.pointLight.color.setHex(0x00ff00);
+                });
+                
+                // Clear floating texts
+                this.floatingTexts.forEach(text => {
+                    this.scene.remove(text.mesh);
+                });
+                this.floatingTexts = [];
+                
+                document.getElementById('play-btn').classList.remove('active');
+                document.getElementById('pause-btn').classList.remove('active');
+                
+                this.updateStatus('Assembly line reset');
+            }
+
+            processNextStep() {
+                if (!this.isPlaying || this.isPaused || !this.currentConversation) return;
+                
+                if (this.currentStep >= this.currentConversation.steps.length) {
+                    this.completeAssembly();
+                    return;
+                }
+                
+                const step = this.currentConversation.steps[this.currentStep];
+                const workpiece = this.workpieces[this.currentStep];
+                const station = this.stations[this.currentStep % this.stations.length];
+                
+                // Show workpiece
+                workpiece.visible = true;
+                
+                // Create floating status text
+                this.createFloatingStatusText(
+                    `Step ${this.currentStep + 1}: ${step.type.toUpperCase()}`,
+                    station.position,
+                    step.type === 'user' ? 0x00d4ff :
+                    step.type === 'processing' ? 0xff6a00 : 0x00ff88
+                );
+                
+                // Move workpiece to station
+                const startX = workpiece.position.x;
+                const targetX = station.position.x;
+                let progress = 0;
+                
+                const moveAnimation = setInterval(() => {
+                    progress += 0.02;
+                    if (progress >= 1) {
+                        progress = 1;
+                        clearInterval(moveAnimation);
+                        this.processAtStation(station, step);
+                    }
+                    
+                    workpiece.position.x = startX + (targetX - startX) * progress;
+                }, 16);
+            }
+
+            processAtStation(station, step) {
+                const data = station.userData;
+                
+                // Change station light to processing
+                data.lightMaterial.color.setHex(0xff6a00);
+                data.lightMaterial.emissive.setHex(0xff6a00);
+                data.pointLight.color.setHex(0xff6a00);
+                
+                // Show step info
+                this.showStationInfo(station, step);
+                
+                // Animate companion
+                this.animateCompanionToStation(station, step);
+                
+                // If processing step, create agent worker
+                if (step.type === 'processing' && step.agent) {
+                    const agent = this.createAgentWorker(step.agent, station.position);
+                    this.scene.add(agent);
+                    this.agents.set(step.agent, agent);
+                    
+                    // Animate agent working
+                    this.animateAgentWorking(agent, step);
+                }
+                
+                // Process for 3 seconds
+                setTimeout(() => {
+                    // Change light to complete
+                    data.lightMaterial.color.setHex(0x00ff00);
+                    data.lightMaterial.emissive.setHex(0x00ff00);
+                    data.pointLight.color.setHex(0x00ff00);
+                    
+                    // Create completion text
+                    this.createFloatingStatusText('✅ Complete', station.position, 0x00ff88);
+                    
+                    this.currentStep++;
+                    
+                    if (!this.isPaused) {
+                        this.processNextStep();
+                    }
+                }, 3000);
+            }
+
+            showStationInfo(station, step) {
+                const infoPanel = document.getElementById('station-info');
+                const title = document.getElementById('station-title');
+                const content = document.getElementById('station-content');
+                
+                title.textContent = `Station ${station.userData.index + 1}: ${step.type.toUpperCase()}`;
+                
+                let contentText = '';
+                if (step.type === 'user') {
+                    contentText = `User Input: "${step.content}"`;
+                } else if (step.type === 'processing') {
+                    contentText = `Processing with ${step.agent}\nOperation: ${step.operation}`;
+                } else if (step.type === 'assistant') {
+                    contentText = `AI Response: ${step.content.substring(0, 200)}...`;
+                }
+                
+                content.textContent = contentText;
+                infoPanel.classList.add('active');
+                
+                setTimeout(() => {
+                    infoPanel.classList.remove('active');
+                }, 3000);
+            }
+
+            animateCompanionToStation(station, step) {
+                if (!this.companion) return;
+                
+                const targetPos = new THREE.Vector3(
+                    station.position.x,
+                    8,
+                    station.position.z + 10
+                );
+                
+                // Clear previous tools
+                const toolsGroup = this.companion.userData.tools;
+                while (toolsGroup.children.length > 0) {
+                    toolsGroup.remove(toolsGroup.children[0]);
+                }
+                
+                // Add appropriate tool based on step type
+                if (step.type === 'processing') {
+                    const tool = this.createCompanionTool(step.agent);
+                    if (tool) {
+                        toolsGroup.add(tool);
+                    }
+                } else if (step.type === 'user') {
+                    // Add listening indicator
+                    const earSymbol = this.create3DText('👂', {
+                        size: 0.5,
+                        height: 0.1,
+                        color: 0x00d4ff
+                    });
+                    if (earSymbol) {
+                        earSymbol.position.set(1.5, 0, 0);
+                        toolsGroup.add(earSymbol);
+                    }
+                } else if (step.type === 'assistant') {
+                    // Add speaking indicator
+                    const speechSymbol = this.create3DText('💬', {
+                        size: 0.5,
+                        height: 0.1,
+                        color: 0x00ff88
+                    });
+                    if (speechSymbol) {
+                        speechSymbol.position.set(1.5, 0, 0);
+                        toolsGroup.add(speechSymbol);
+                    }
+                }
+                
+                // Smooth movement animation
+                const startPos = this.companion.position.clone();
+                let progress = 0;
+                
+                const moveAnimation = setInterval(() => {
+                    progress += 0.05;
+                    if (progress >= 1) {
+                        progress = 1;
+                        clearInterval(moveAnimation);
+                    }
+                    
+                    this.companion.position.lerpVectors(startPos, targetPos, progress);
+                }, 16);
+            }
+
+            createCompanionTool(agentName) {
+                const toolGroup = new THREE.Group();
+                
+                // Create clipboard for inspection
+                const clipboardGeometry = new THREE.BoxGeometry(0.8, 1, 0.1);
+                const clipboardMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8b6914,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                const clipboard = new THREE.Mesh(clipboardGeometry, clipboardMaterial);
+                clipboard.position.set(1.5, 0, 0);
+                clipboard.rotation.z = -Math.PI / 8;
+                toolGroup.add(clipboard);
+                
+                // Add paper on clipboard
+                const paperGeometry = new THREE.BoxGeometry(0.7, 0.9, 0.01);
+                const paperMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.1
+                });
+                const paper = new THREE.Mesh(paperGeometry, paperMaterial);
+                paper.position.set(0, 0, 0.06);
+                clipboard.add(paper);
+                
+                // Add checkmark or X based on inspection
+                const checkSymbol = this.create3DText('✓', {
+                    size: 0.3,
+                    height: 0.02,
+                    color: 0x00ff00
+                });
+                if (checkSymbol) {
+                    checkSymbol.position.set(0, 0.2, 0.07);
+                    clipboard.add(checkSymbol);
+                }
+                
+                return toolGroup;
+            }
+
+            animateAgentWorking(agent, step) {
+                const agentData = agent.userData;
+                agentData.working = true;
+                
+                // Create working animation
+                let workProgress = 0;
+                const workAnimation = setInterval(() => {
+                    workProgress += 0.05;
+                    
+                    // Rotate tool
+                    agentData.tool.rotation.y = workProgress * Math.PI * 2;
+                    
+                    // Bob up and down
+                    agent.position.y = 5 + Math.sin(workProgress * Math.PI * 4) * 0.3;
+                    
+                    // Pulse light
+                    agentData.light.intensity = 1 + Math.sin(workProgress * Math.PI * 8) * 0.5;
+                    
+                    // Create data particles
+                    if (workProgress % 0.2 < 0.05) {
+                        this.createDataParticle(agent.position, step.type);
+                    }
+                    
+                    if (workProgress >= 1) {
+                        clearInterval(workAnimation);
+                        agentData.working = false;
+                    }
+                }, 50);
+            }
+
+            createDataParticle(position, type) {
+                const particleGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                const particleMaterial = new THREE.MeshBasicMaterial({
+                    color: type === 'processing' ? 0xff6a00 : 0x00d4ff,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                particle.position.copy(position);
+                particle.position.x += (Math.random() - 0.5) * 2;
+                particle.position.z += (Math.random() - 0.5) * 2;
+                
+                this.scene.add(particle);
+                
+                // Animate particle floating up and fading
+                let particleLife = 0;
+                const particleAnimation = setInterval(() => {
+                    particleLife += 0.02;
+                    particle.position.y += 0.1;
+                    particle.material.opacity = 0.8 * (1 - particleLife);
+                    particle.scale.setScalar(1 - particleLife * 0.5);
+                    
+                    if (particleLife >= 1) {
+                        clearInterval(particleAnimation);
+                        this.scene.remove(particle);
+                        particle.geometry.dispose();
+                        particle.material.dispose();
+                    }
+                }, 16);
+            }
+
+            completeAssembly() {
+                this.isPlaying = false;
+                document.getElementById('play-btn').classList.remove('active');
+                
+                this.updateStatus('Assembly complete!');
+                this.showNotification('Conversation inspection complete!');
+                
+                // Celebration animation
+                this.stations.forEach((station, index) => {
+                    setTimeout(() => {
+                        const data = station.userData;
+                        data.lightMaterial.color.setHex(0x00ff88);
+                        data.lightMaterial.emissive.setHex(0x00ff88);
+                        data.pointLight.color.setHex(0x00ff88);
+                        
+                        // Create celebration particles
+                        this.createCelebrationParticles(station.position);
+                    }, index * 100);
+                });
+                
+                // Create completion summary text
+                const summaryText = this.create3DText('INSPECTION COMPLETE!', {
+                    size: 2,
+                    height: 0.3,
+                    color: 0x00ff88
+                });
+                if (summaryText) {
+                    summaryText.position.set(0, 25, 0);
+                    this.scene.add(summaryText);
+                    
+                    // Remove after 5 seconds
+                    setTimeout(() => {
+                        this.scene.remove(summaryText);
+                        summaryText.geometry.dispose();
+                        summaryText.material.dispose();
+                    }, 5000);
+                }
+            }
+
+            createCelebrationParticles(position) {
+                const particleCount = 20;
+                const particles = [];
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const particleGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                    const particleMaterial = new THREE.MeshBasicMaterial({
+                        color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
+                        transparent: true,
+                        opacity: 1
+                    });
+                    
+                    const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                    particle.position.copy(position);
+                    particle.position.y += 5;
+                    
+                    particle.velocity = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.5,
+                        Math.random() * 0.5 + 0.5,
+                        (Math.random() - 0.5) * 0.5
+                    );
+                    
+                    this.scene.add(particle);
+                    particles.push(particle);
+                }
+                
+                // Animate particles
+                let time = 0;
+                const animateParticles = setInterval(() => {
+                    time += 0.016;
+                    
+                    particles.forEach(particle => {
+                        particle.position.add(particle.velocity);
+                        particle.velocity.y -= 0.02; // gravity
+                        particle.material.opacity = 1 - time;
+                        particle.rotation.x += 0.1;
+                        particle.rotation.y += 0.1;
+                    });
+                    
+                    if (time >= 1) {
+                        clearInterval(animateParticles);
+                        particles.forEach(particle => {
+                            this.scene.remove(particle);
+                            particle.geometry.dispose();
+                            particle.material.dispose();
+                        });
+                    }
+                }, 16);
+            }
+
+            openKaizenIntervention() {
+                if (!this.currentConversation || !this.isPlaying) {
+                    this.showNotification('Start the assembly line first');
+                    return;
+                }
+                
+                this.pauseAssemblyLine();
+                this.kaizenMode = true;
+                
+                const modal = document.getElementById('kaizen-modal');
+                modal.classList.add('active');
+                
+                const chat = document.getElementById('kaizen-chat');
+                chat.innerHTML = `
+                    <div class="chat-message assistant">
+                        <strong>Kaizen System:</strong><br>
+                        You've identified an issue at Step ${this.currentStep + 1}. 
+                        Please describe what needs improvement.
+                    </div>
+                `;
+                
+                // Change current station light to red
+                if (this.currentStep < this.stations.length) {
+                    const station = this.stations[this.currentStep % this.stations.length];
+                    const data = station.userData;
+                    data.lightMaterial.color.setHex(0xff0000);
+                    data.lightMaterial.emissive.setHex(0xff0000);
+                    data.pointLight.color.setHex(0xff0000);
+                    
+                    // Create warning symbol
+                    const warningSymbol = this.create3DText('WARNING!', {
+                        size: 2,
+                        height: 0.3,
+                        color: 0xff0000
+                    });
+                    if (warningSymbol) {
+                        warningSymbol.position.copy(station.position);
+                        warningSymbol.position.y = 25;
+                        this.scene.add(warningSymbol);
+                        
+                        // Store for cleanup
+                        station.userData.warningSymbol = warningSymbol;
+                    }
+                }
+            }
+
+            closeKaizenIntervention() {
+                this.kaizenMode = false;
+                document.getElementById('kaizen-modal').classList.remove('active');
+                
+                // Reset station light and remove warning
+                if (this.currentStep < this.stations.length) {
+                    const station = this.stations[this.currentStep % this.stations.length];
+                    const data = station.userData;
+                    data.lightMaterial.color.setHex(0xff6a00);
+                    data.lightMaterial.emissive.setHex(0xff6a00);
+                    data.pointLight.color.setHex(0xff6a00);
+                    
+                    if (data.warningSymbol) {
+                        this.scene.remove(data.warningSymbol);
+                        data.warningSymbol.geometry.dispose();
+                        data.warningSymbol.material.dispose();
+                        delete data.warningSymbol;
+                    }
+                }
+            }
+
+            sendKaizenMessage() {
+                const input = document.getElementById('kaizen-input');
+                const message = input.value.trim();
+                if (!message) return;
+                
+                const chat = document.getElementById('kaizen-chat');
+                
+                // Add user message
+                const userMsg = document.createElement('div');
+                userMsg.className = 'chat-message user';
+                userMsg.innerHTML = `<strong>You:</strong><br>${message}`;
+                chat.appendChild(userMsg);
+                
+                // Simulate AI response
+                setTimeout(() => {
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'chat-message assistant';
+                    aiMsg.innerHTML = `<strong>AI Assistant:</strong><br>
+                        I understand the issue. Would you like me to adjust the ${this.currentConversation.steps[this.currentStep].agent} 
+                        parameters or modify the processing approach?`;
+                    chat.appendChild(aiMsg);
+                    chat.scrollTop = chat.scrollHeight;
+                }, 1000);
+                
+                input.value = '';
+                chat.scrollTop = chat.scrollHeight;
+            }
+
+            updateStatus(message) {
+                document.getElementById('status-message').textContent = message;
+            }
+
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                // Control buttons
+                document.getElementById('play-btn').onclick = () => this.startAssemblyLine();
+                document.getElementById('pause-btn').onclick = () => this.pauseAssemblyLine();
+                document.getElementById('step-btn').onclick = () => this.stepForward();
+                document.getElementById('reset-btn').onclick = () => this.resetAssemblyLine();
+                document.getElementById('stop-btn').onclick = () => this.openKaizenIntervention();
+                
+                // Kaizen modal
+                document.getElementById('close-kaizen').onclick = () => this.closeKaizenIntervention();
+                document.getElementById('kaizen-send').onclick = () => this.sendKaizenMessage();
+                document.getElementById('kaizen-input').onkeypress = (e) => {
+                    if (e.key === 'Enter') this.sendKaizenMessage();
+                };
+                
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = true;
+                    }
+                    
+                    if (key === 'e' && this.selectedStation) {
+                        this.interactWithStation(this.selectedStation);
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) {
+                        this.keys[key] = false;
+                    }
+                });
+                
+                // Mouse controls
+                let isPointerLocked = false;
+                
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (!isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                document.getElementById('mobile-controls').classList.add('show');
+                document.querySelector('.controls-hint').textContent = 'Touch & drag to look • Use joystick to move';
+                
+                // Touch look controls
+                let touchStartX = 0;
+                let touchStartY = 0;
+                
+                this.renderer.domElement.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                });
+                
+                this.renderer.domElement.addEventListener('touchmove', (e) => {
+                    const deltaX = e.touches[0].clientX - touchStartX;
+                    const deltaY = e.touches[0].clientY - touchStartY;
+                    
+                    this.rotation.y -= deltaX * this.lookSpeed;
+                    this.rotation.x -= deltaY * this.lookSpeed;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                });
+                
+                // Joystick controls
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+                let joystickActive = false;
+                
+                joystick.addEventListener('touchstart', (e) => {
+                    joystickActive = true;
+                    this.updateJoystick(e.touches[0], joystick, handle);
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    if (joystickActive) {
+                        this.updateJoystick(e.touches[0], joystick, handle);
+                    }
+                });
+                
+                joystick.addEventListener('touchend', () => {
+                    joystickActive = false;
+                    handle.style.transform = 'translate(-50%, -50%)';
+                    this.keys.w = false;
+                    this.keys.s = false;
+                    this.keys.a = false;
+                    this.keys.d = false;
+                });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+                
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                // Convert to movement keys
+                const threshold = maxDistance * 0.3;
+                this.keys.w = deltaY < -threshold;
+                this.keys.s = deltaY > threshold;
+                this.keys.a = deltaX < -threshold;
+                this.keys.d = deltaX > threshold;
+            }
+
+            updateMovement() {
+                const delta = this.clock.getDelta();
+                
+                // Apply gravity
+                this.velocity.y -= 9.8 * delta;
+                
+                // Movement
+                const moveVector = new THREE.Vector3();
+                
+                if (this.keys.w) moveVector.z -= 1;
+                if (this.keys.s) moveVector.z += 1;
+                if (this.keys.a) moveVector.x -= 1;
+                if (this.keys.d) moveVector.x += 1;
+                
+                moveVector.normalize();
+                moveVector.multiplyScalar(this.moveSpeed * (this.keys.shift ? 2 : 1));
+                
+                // Apply rotation to movement
+                moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.rotation.y);
+                
+                this.camera.position.x += moveVector.x;
+                this.camera.position.z += moveVector.z;
+                
+                // Jumping
+                if (this.keys.space && this.canJump) {
+                    this.velocity.y = 5;
+                    this.canJump = false;
+                }
+                
+                // Apply velocity
+                this.camera.position.y += this.velocity.y * delta;
+                
+                // Ground collision
+                if (this.camera.position.y < 5) {
+                    this.camera.position.y = 5;
+                    this.velocity.y = 0;
+                    this.canJump = true;
+                }
+                
+                // Update camera rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            checkStationProximity() {
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                const intersects = raycaster.intersectObjects(this.stations, true);
+                
+                if (intersects.length > 0) {
+                    const nearestStation = intersects[0].object.parent;
+                    if (nearestStation !== this.selectedStation) {
+                        this.selectedStation = nearestStation;
+                        this.showNotification('Press E to interact with station');
+                    }
+                } else {
+                    this.selectedStation = null;
+                }
+            }
+
+            interactWithStation(station) {
+                const index = station.userData.index;
+                if (this.currentConversation && index < this.currentConversation.steps.length) {
+                    const step = this.currentConversation.steps[index];
+                    this.showStationInfo(station, step);
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const time = this.clock.getElapsedTime();
+                
+                // Update movement
+                this.updateMovement();
+                
+                // Check station proximity
+                this.checkStationProximity();
+                
+                // Animate companion
+                if (this.companion) {
+                    const data = this.companion.userData;
+                    
+                    // Float animation
+                    this.companion.position.y = 8 + Math.sin(time * 2) * 0.5;
+                    
+                    // Rotate particles
+                    data.particles.rotation.y = time * 0.5;
+                    
+                    // Pulse glow
+                    data.glow.scale.setScalar(1.2 + Math.sin(time * 3) * 0.1);
+                    data.light.intensity = 2 + Math.sin(time * 4) * 0.5;
+                    
+                    // Rotate tools
+                    data.tools.rotation.y = time * 0.5;
+                }
+                
+                // Animate conveyor belt texture
+                this.conveyorBelts.forEach(belt => {
+                    if (belt.material.map) {
+                        belt.material.map.offset.x += 0.01;
+                    }
+                });
+                
+                // Animate workpieces
+                this.workpieces.forEach((wp, index) => {
+                    if (wp.visible) {
+                        wp.rotation.y = time + index;
+                        wp.children.forEach(child => {
+                            if (child.type === 'PointLight') {
+                                child.intensity = 0.5 + Math.sin(time * 3 + index) * 0.2;
+                            }
+                        });
+                    }
+                });
+                
+                // Animate station monitors
+                this.monitors.forEach((monitor, index) => {
+                    if (this.isPlaying && index === this.currentStep % this.stations.length) {
+                        // Create scanning line effect on active monitor
+                        monitor.material.emissiveIntensity = 0.5 + Math.sin(time * 10) * 0.3;
+                    } else {
+                        monitor.material.emissiveIntensity = 0.2;
+                    }
+                });
+                
+                // Animate station symbols
+                this.stations.forEach(station => {
+                    const symbol = station.userData.symbol;
+                    if (symbol) {
+                        symbol.rotation.y = time;
+                        symbol.position.y = symbol.userData.baseY + Math.sin(time * 2) * 0.5;
+                    }
+                });
+                
+                // Update floating texts
+                this.floatingTexts = this.floatingTexts.filter(textObj => {
+                    const age = Date.now() - textObj.createdAt;
+                    if (age > textObj.duration) {
+                        this.scene.remove(textObj.mesh);
+                        textObj.mesh.geometry.dispose();
+                        textObj.mesh.material.dispose();
+                        return false;
+                    }
+                    
+                    // Float up animation
+                    textObj.mesh.position.y += 0.02;
+                    textObj.mesh.material.opacity = 1 - (age / textObj.duration);
+                    
+                    return true;
+                });
+                
+                // Animate agents
+                this.agents.forEach(agent => {
+                    if (!agent.userData.working) {
+                        // Idle animation
+                        agent.position.y = 5 + Math.sin(time * 1.5) * 0.2;
+                        agent.userData.mesh.rotation.y = time * 0.5;
+                    }
+                });
+                
+                // Make 3D text face camera
+                this.scene.traverse((child) => {
+                    if (child.type === 'Mesh' && child.geometry.type === 'TextGeometry') {
+                        child.lookAt(this.camera.position);
+                    }
+                });
+                
+                // Render scene
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize the world when DOM is loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new AssemblyLineWorld();
+        });
+    </script>
+</body>
+</html>

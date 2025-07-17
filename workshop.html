@@ -1,0 +1,2260 @@
+<div class="conversation-selector">
+            <h3>📁 Select Conversation to Inspect</h3>
+            <div class="conversation-list" id="conversationList">
+                <!-- Conversations will be loaded here -->
+            </div>
+        </div><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion Assembly Line Inspector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .knowledge-base {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .knowledge-base h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .knowledge-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .knowledge-tab {
+            background: none;
+            border: none;
+            color: #888;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+
+        .knowledge-tab:hover {
+            color: #fff;
+        }
+
+        .knowledge-tab.active {
+            color: #00d4ff;
+            border-bottom-color: #00d4ff;
+        }
+
+        .knowledge-content {
+            display: none;
+        }
+
+        .knowledge-content.active {
+            display: block;
+        }
+
+        .knowledge-item {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .knowledge-item:hover {
+            border-color: #666;
+        }
+
+        .knowledge-item.active {
+            border-color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        .knowledge-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .knowledge-item-title {
+            font-weight: bold;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .knowledge-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .knowledge-btn {
+            background: none;
+            border: 1px solid #444;
+            color: #888;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .knowledge-btn:hover {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+
+        .knowledge-btn.delete:hover {
+            border-color: #ff3333;
+            color: #ff3333;
+        }
+
+        .knowledge-item-content {
+            color: #ccc;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .knowledge-item-meta {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .add-knowledge-btn {
+            background: #00d4ff;
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .add-knowledge-btn:hover {
+            background: #0099ff;
+            transform: translateY(-1px);
+        }
+
+        .knowledge-form {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .knowledge-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #00d4ff;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .form-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .form-btn.save {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .form-btn.cancel {
+            background: #444;
+            color: #fff;
+        }
+
+        .form-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .context-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff6600;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .context-preview {
+            background: #1a1a1a;
+            border: 1px solid #ff6600;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .context-preview h4 {
+            color: #ff6600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .context-preview-item {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .context-preview-item strong {
+            color: #00d4ff;
+        }
+
+        .conversation-selector {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .conversation-selector h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+        }
+
+        .conversation-list {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .conversation-card {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .conversation-card:hover {
+            border-color: #00d4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .conversation-card.active {
+            border-color: #00d4ff;
+            background: #003366;
+        }
+
+        .conversation-card h4 {
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .conversation-card p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .assembly-line {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .assembly-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .control-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-btn:hover {
+            background: #3a3a3a;
+            border-color: #00d4ff;
+        }
+
+        .control-btn.active {
+            background: #00d4ff;
+            color: #000;
+            border-color: #00d4ff;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .control-btn.emergency {
+            background: #ff3333;
+            border-color: #ff3333;
+            color: #fff;
+            animation: emergencyPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes emergencyPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.7); }
+            50% { box-shadow: 0 0 20px 10px rgba(255, 51, 51, 0); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #2a2a2a;
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .step-counter {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .assembly-stage {
+            position: relative;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .companion-container {
+            position: absolute;
+            left: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+        }
+
+        .companion {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+            animation: float 3s ease-in-out infinite;
+            position: relative;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .companion::before {
+            content: '';
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.3), transparent);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.2; }
+        }
+
+        .companion-icon {
+            font-size: 2.5rem;
+            z-index: 1;
+        }
+
+        .work-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 150px;
+        }
+
+        .user-command {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            width: 100%;
+            max-width: 600px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.5s forwards;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-command h4 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-command p {
+            color: #fff;
+            line-height: 1.6;
+        }
+
+        .processing-visualization {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            opacity: 0;
+            animation: fadeIn 0.5s forwards 0.3s;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .processing-step {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+
+        .processing-step.active {
+            opacity: 1;
+            border-color: #00d4ff;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .processing-step i {
+            font-size: 2rem;
+            color: #00d4ff;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .processing-step p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .arrow {
+            color: #444;
+            font-size: 1.5rem;
+        }
+
+        .agent-output {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+            width: 100%;
+            max-width: 800px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.5s forwards 0.6s;
+        }
+
+        .agent-output h4 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .output-content {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #ccc;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #ff3333;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            animation: livePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .live-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            animation: liveDot 2s ease-in-out infinite;
+        }
+
+        @keyframes liveDot {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        .comparison-mode {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .comparison-panel h5 {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .comparison-panel.transcript {
+            border-color: #666;
+        }
+
+        .comparison-panel.transcript h5 {
+            color: #888;
+        }
+
+        .comparison-panel.live {
+            border-color: #00d4ff;
+        }
+
+        .comparison-panel.live h5 {
+            color: #00d4ff;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #444;
+            border-radius: 50%;
+            border-top-color: #00d4ff;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .processing-animation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            position: relative;
+        }
+
+        .processing-animation .gears {
+            display: flex;
+            gap: 20px;
+            position: relative;
+        }
+
+        .gear {
+            width: 60px;
+            height: 60px;
+            border: 8px solid #00d4ff;
+            border-radius: 50%;
+            position: relative;
+            animation: spin 3s linear infinite;
+        }
+
+        .gear:nth-child(2) {
+            animation-direction: reverse;
+            animation-duration: 2.5s;
+        }
+
+        .gear:nth-child(3) {
+            animation-duration: 3.5s;
+        }
+
+        .gear::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #00d4ff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .gear::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 6px dotted #00d4ff;
+            border-radius: 50%;
+            top: -6px;
+            left: -6px;
+            opacity: 0.3;
+        }
+
+        .data-flow {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            top: 50%;
+            animation: dataFlow 2s linear infinite;
+        }
+
+        @keyframes dataFlow {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(100%); }
+        }
+
+        .function-status {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .status-message {
+            color: #00d4ff;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            animation: fadeInOut 1.5s ease-in-out infinite;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .status-details {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .progress-indicators {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .progress-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+            transition: all 0.3s ease;
+        }
+
+        .progress-dot.active {
+            background: #00d4ff;
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+        }
+
+        .progress-dot.complete {
+            background: #00ff88;
+        }
+
+        .response-preview {
+            background: #0a0a0a;
+            border: 1px solid #00d4ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            position: relative;
+            overflow: hidden;
+            animation: slideInUp 0.5s ease;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .response-preview::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            animation: scanLine 2s linear infinite;
+        }
+
+        @keyframes scanLine {
+            to { left: 100%; }
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .response-header h5 {
+            color: #00d4ff;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .response-timer {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .response-data {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #ccc;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .typing-indicator {
+            display: inline-flex;
+            gap: 4px;
+            padding: 10px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00d4ff;
+            animation: typingBounce 1.4s ease-in-out infinite;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        .network-activity {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 15px;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            animation: networkPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes networkPulse {
+            0%, 100% { 
+                border-color: rgba(0, 212, 255, 0.3);
+                box-shadow: none;
+            }
+            50% { 
+                border-color: rgba(0, 212, 255, 0.6);
+                box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+            }
+        }
+
+        .network-icon {
+            width: 8px;
+            height: 8px;
+            background: #00d4ff;
+            border-radius: 50%;
+            animation: networkBlink 1s ease-in-out infinite;
+        }
+
+        @keyframes networkBlink {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .network-text {
+            color: #00d4ff;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #444;
+        }
+
+        .kaizen-intervention {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border: 2px solid #ff3333;
+            border-radius: 12px;
+            padding: 30px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .kaizen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .kaizen-header h3 {
+            color: #ff3333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kaizen-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .kaizen-close:hover {
+            color: #fff;
+        }
+
+        .kaizen-context {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .kaizen-context h4 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        .kaizen-chat {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .kaizen-message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .kaizen-message.user {
+            background: #003366;
+            margin-left: 20%;
+            text-align: right;
+        }
+
+        .kaizen-message.assistant {
+            background: #2a2a2a;
+            margin-right: 20%;
+        }
+
+        .kaizen-message .sender {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .kaizen-message.kaizen-note {
+            background: #442200;
+            border: 1px solid #ff6600;
+            text-align: center;
+            font-style: italic;
+            color: #ff9933;
+        }
+
+        .kaizen-input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        .kaizen-input {
+            flex: 1;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .kaizen-input:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        .kaizen-send {
+            background: #00d4ff;
+            border: none;
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .kaizen-send:hover {
+            background: #0099ff;
+            transform: translateY(-1px);
+        }
+
+        .kaizen-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+
+        .kaizen-action-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .kaizen-action-btn:hover {
+            background: #3a3a3a;
+            border-color: #00d4ff;
+        }
+
+        .kaizen-action-btn.primary {
+            background: #00d4ff;
+            color: #000;
+            border-color: #00d4ff;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI Companion Assembly Line Inspector</h1>
+            <p>Replay and inspect AI companion conversations step by step</p>
+        </div>
+
+        <div class="knowledge-base">
+            <h3>
+                <span>📚 Assembly Line Knowledge Base</span>
+                <button class="add-knowledge-btn" onclick="toggleKnowledgeForm()">+ Add Knowledge</button>
+            </h3>
+            
+            <div class="knowledge-tabs">
+                <button class="knowledge-tab active" onclick="switchKnowledgeTab('instructions')">
+                    📋 Instructions
+                </button>
+                <button class="knowledge-tab" onclick="switchKnowledgeTab('learnings')">
+                    💡 Learnings
+                </button>
+                <button class="knowledge-tab" onclick="switchKnowledgeTab('cautions')">
+                    ⚠️ Cautions
+                </button>
+                <button class="knowledge-tab" onclick="switchKnowledgeTab('context')">
+                    🔧 Context
+                </button>
+            </div>
+            
+            <div class="knowledge-content active" id="instructions-content">
+                <!-- Instructions will be loaded here -->
+            </div>
+            
+            <div class="knowledge-content" id="learnings-content">
+                <!-- Learnings will be loaded here -->
+            </div>
+            
+            <div class="knowledge-content" id="cautions-content">
+                <!-- Cautions will be loaded here -->
+            </div>
+            
+            <div class="knowledge-content" id="context-content">
+                <!-- Context will be loaded here -->
+            </div>
+            
+            <div class="knowledge-form" id="knowledgeForm">
+                <h4>Add New Knowledge</h4>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="knowledgeType">
+                        <option value="instructions">Instructions</option>
+                        <option value="learnings">Learnings</option>
+                        <option value="cautions">Cautions</option>
+                        <option value="context">Context</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="knowledgeTitle" placeholder="e.g., Always verify email addresses">
+                </div>
+                <div class="form-group">
+                    <label>Content</label>
+                    <textarea id="knowledgeContent" placeholder="Detailed description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Applies to (optional)</label>
+                    <input type="text" id="knowledgeApplies" placeholder="e.g., EmailDrafting, Dynamics365CRUD">
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="knowledgePriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="form-btn cancel" onclick="toggleKnowledgeForm()">Cancel</button>
+                    <button class="form-btn save" onclick="saveKnowledge()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="assembly-line" id="assemblyLine" style="display: none;">
+            <div class="assembly-controls">
+                <button class="control-btn" id="playBtn">
+                    <span>▶️</span> Play
+                </button>
+                <button class="control-btn" id="pauseBtn">
+                    <span>⏸️</span> Pause
+                </button>
+                <button class="control-btn" id="stepBtn">
+                    <span>⏭️</span> Step Forward
+                </button>
+                <button class="control-btn" id="resetBtn">
+                    <span>🔄</span> Reset
+                </button>
+                <button class="control-btn emergency" id="stopBtn">
+                    <span>🛑</span> STOP - Issue Found
+                </button>
+                <button class="control-btn" id="compareBtn">
+                    <span>🔍</span> Compare Mode
+                </button>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+
+            <div class="step-counter" id="stepCounter">
+                Step 0 of 0
+            </div>
+
+            <div class="assembly-stage" id="assemblyStage">
+                <div class="companion-container">
+                    <div class="companion">
+                        <span class="companion-icon">🤖</span>
+                    </div>
+                </div>
+
+                <div class="work-area" id="workArea">
+                    <div class="empty-state">
+                        <i>📂</i>
+                        <p>Select a conversation to begin inspection</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample conversation data from the provided transcripts
+        const conversations = [
+            {
+                id: 'conv1',
+                name: 'Latest SP Request',
+                timestamp: '2025-06-12T14:12:40.346Z',
+                app: 'Dynamics 365',
+                steps: [
+                    {
+                        type: 'user',
+                        content: 'Get my latest sp',
+                        timestamp: '2025-06-12T14:12:40.346Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'Dynamics365CRUD',
+                        operation: 'Fetching opportunities',
+                        timestamp: '2025-06-12T14:12:41.346Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: `Here's your latest SP (opportunity) with a true future estimated close date:
+
+🏆 Latest Opportunity
+Name: New Snowmobile Launch - Phase 1
+Estimated Close Date: June 12, 2025
+Estimated Value: $142,061
+Status: In Progress`,
+                        systemResult: {
+                            "@odata.context": "https://org4e42157d.crm.dynamics.com/api/data/v9.2/$metadata#opportunities",
+                            "value": [{
+                                "statuscode": 1,
+                                "name": "New Snowmobile Launch - Phase 1",
+                                "estimatedvalue": 142061.0,
+                                "estimatedclosedate": "2025-06-12"
+                            }]
+                        },
+                        timestamp: '2025-06-12T14:12:42.346Z'
+                    },
+                    {
+                        type: 'user',
+                        content: 'Send to email',
+                        timestamp: '2025-06-12T14:12:45.346Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'EmailDrafting',
+                        operation: 'Sending email',
+                        timestamp: '2025-06-12T14:12:46.346Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: '✅ The latest opportunity details have been sent to your default email: Kody.wildfeuer@microsoft.com.',
+                        systemResult: {
+                            "status": "success",
+                            "message": "Email draft sent to Power Automate successfully"
+                        },
+                        timestamp: '2025-06-12T14:12:47.346Z'
+                    }
+                ]
+            },
+            {
+                id: 'conv2',
+                name: 'Multiple SPs with PowerPoint',
+                timestamp: '2025-06-12T14:29:09.778Z',
+                app: 'Dynamics 365',
+                steps: [
+                    {
+                        type: 'user',
+                        content: 'Get my latest sps',
+                        timestamp: '2025-06-12T14:29:09.778Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'Dynamics365CRUD',
+                        operation: 'Fetching multiple opportunities',
+                        timestamp: '2025-06-12T14:29:10.778Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: `Here are your latest SPs (opportunities) with future estimated close dates:
+
+🏆 Latest Opportunities
+• Fleet ATV Purchase - $68,976 - 2025-06-16
+• Fleet ATV Purchase - Phase 3 - $13,984 - 2025-06-17
+• Bulk Parts Order - Phase 1 - $83,925 - 2025-06-19
+• Lawn Fertilization Program - Phase 2 - $4,165 - 2025-06-19
+• Live Session Recording - $21,214 - 2025-06-21`,
+                        timestamp: '2025-06-12T14:29:12.778Z'
+                    },
+                    {
+                        type: 'user',
+                        content: 'create a powerpoint for my team with each of these sps as a slide with actionable next steps and priority.',
+                        timestamp: '2025-06-12T14:29:15.778Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'PowerPoint',
+                        operation: 'Creating presentation',
+                        timestamp: '2025-06-12T14:29:16.778Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: 'Your PowerPoint presentation, "Latest Strategic Opportunities Overview," has been created for your team!',
+                        systemResult: {
+                            'status': 'success',
+                            'filename': 'Latest Strategic Opportunities Overview_20250612_102814.pptx',
+                            'download_url': 'https://azfbusinessbot.file.core.windows.net/...'
+                        },
+                        timestamp: '2025-06-12T14:29:18.778Z'
+                    }
+                ]
+            },
+            {
+                id: 'conv3',
+                name: 'Business Questions Request with Kaizen',
+                timestamp: '2025-03-30T14:53:53.989Z',
+                app: 'MAC (Migration Assessment Copilot)',
+                steps: [
+                    {
+                        type: 'user',
+                        content: 'get_business_questions',
+                        timestamp: '2025-03-30T14:53:53.989Z'
+                    },
+                    {
+                        type: 'processing',
+                        agent: 'SeerIntegration',
+                        operation: 'Retrieving business questions',
+                        timestamp: '2025-03-30T14:53:54.989Z'
+                    },
+                    {
+                        type: 'assistant',
+                        content: `Here are some business questions retrieved from SEER that can be used for the MINTEL CRM migration project:
+
+### Organisation
+1. Company Address (Text)
+2. Company Registration Number (Text)
+3. Location of the implementation project (Text)
+4. Lead contact name for the engagement (Text)
+5. Lead contact telephone number for the engagement (Text)
+
+### Objectives
+11. Provide a reference or name for the project (Text)
+12. Do you have a business case? (Yes/No)
+13. Is this project part of a wider program? (Yes/No)`,
+                        systemResult: [
+                            {
+                                "section": "Organisation",
+                                "questionnumber": "100200",
+                                "questiontext": "Company Address",
+                                "datatype": "Text"
+                            }
+                        ],
+                        timestamp: '2025-03-30T14:53:56.989Z',
+                        kaizen: [
+                            {
+                                type: 'kaizen',
+                                content: '🔧 KAIZEN INTERVENTION - User identified issue with question formatting',
+                                timestamp: '2025-03-30T14:53:58.989Z'
+                            },
+                            {
+                                type: 'user',
+                                content: 'Wait, these questions seem too generic. I need questions specifically for Salesforce to Dynamics migration.',
+                                timestamp: '2025-03-30T14:53:59.989Z'
+                            },
+                            {
+                                type: 'assistant',
+                                content: 'I understand. You need migration-specific questions rather than general CRM implementation questions. Let me clarify - are you looking for questions about:\n1. Current Salesforce configuration and customizations?\n2. Data migration requirements?\n3. Integration points that need to be maintained?\n4. User adoption and training needs?',
+                                timestamp: '2025-03-30T14:54:02.989Z'
+                            },
+                            {
+                                type: 'user',
+                                content: 'Yes, exactly! I need questions about current Salesforce setup, especially custom objects and workflows that we need to migrate.',
+                                timestamp: '2025-03-30T14:54:05.989Z'
+                            },
+                            {
+                                type: 'assistant',
+                                content: 'Perfect! Let me adjust the query to focus on Salesforce-specific migration assessment questions. I\'ll retrieve questions about custom objects, workflows, integrations, and migration complexity.',
+                                timestamp: '2025-03-30T14:54:08.989Z'
+                            },
+                            {
+                                type: 'processing',
+                                agent: 'SeerIntegration',
+                                operation: 'Retrieving Salesforce migration questions',
+                                timestamp: '2025-03-30T14:54:09.989Z'
+                            },
+                            {
+                                type: 'assistant',
+                                content: 'Here are the Salesforce-specific migration questions:\n\n### Salesforce Configuration\n40. What Salesforce clouds do you own? (Sales, Service, Marketing)\n41. What third-party applications are integrated?\n42. How many custom objects are in use?\n43. What custom workflows need to be migrated?\n\nIs this more aligned with what you need?',
+                                timestamp: '2025-03-30T14:54:12.989Z'
+                            },
+                            {
+                                type: 'user',
+                                content: 'Yes, much better! Please continue with this approach.',
+                                timestamp: '2025-03-30T14:54:15.989Z'
+                            },
+                            {
+                                type: 'kaizen',
+                                content: '✅ KAIZEN RESOLUTION - Issue resolved, continuing with improved approach',
+                                timestamp: '2025-03-30T14:54:16.989Z'
+                            }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        let currentConversation = null;
+        let currentStep = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let compareMode = false;
+        let kaizenMode = false;
+        let kaizenMessages = [];
+
+        // Knowledge base storage
+        let knowledgeBase = {
+            instructions: [
+                {
+                    id: 'inst1',
+                    title: 'Email Verification Protocol',
+                    content: 'Always verify email addresses before sending. Check for @microsoft.com domain for internal emails.',
+                    appliesTo: ['EmailDrafting'],
+                    priority: 'high',
+                    active: true,
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: 'inst2',
+                    title: 'Opportunity Filtering',
+                    content: 'Only show opportunities with future close dates unless specifically requested otherwise.',
+                    appliesTo: ['Dynamics365CRUD'],
+                    priority: 'medium',
+                    active: true,
+                    createdAt: new Date().toISOString()
+                }
+            ],
+            learnings: [
+                {
+                    id: 'learn1',
+                    title: 'PowerPoint Naming Convention',
+                    content: 'Users prefer descriptive filenames with dates in YYYYMMDD format for easy sorting.',
+                    appliesTo: ['PowerPoint'],
+                    priority: 'low',
+                    active: true,
+                    createdAt: new Date().toISOString()
+                }
+            ],
+            cautions: [
+                {
+                    id: 'caution1',
+                    title: 'Large Data Sets',
+                    content: 'When retrieving more than 50 records, implement pagination to avoid timeout issues.',
+                    appliesTo: ['Dynamics365CRUD', 'SeerIntegration'],
+                    priority: 'critical',
+                    active: true,
+                    createdAt: new Date().toISOString()
+                }
+            ],
+            context: [
+                {
+                    id: 'ctx1',
+                    title: 'User Preferences',
+                    content: 'This user prefers concise summaries with key metrics highlighted. Use bullet points for lists.',
+                    appliesTo: [],
+                    priority: 'medium',
+                    active: true,
+                    createdAt: new Date().toISOString()
+                }
+            ]
+        };
+
+        // Initialize the application
+        function init() {
+            loadKnowledgeBase();
+            loadConversations();
+            setupEventListeners();
+        }
+
+        // Load knowledge base
+        function loadKnowledgeBase() {
+            Object.keys(knowledgeBase).forEach(type => {
+                renderKnowledgeItems(type);
+            });
+        }
+
+        // Render knowledge items
+        function renderKnowledgeItems(type) {
+            const container = document.getElementById(`${type}-content`);
+            const items = knowledgeBase[type].filter(item => item.active);
+            
+            if (items.length === 0) {
+                container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No ' + type + ' added yet</p>';
+                return;
+            }
+            
+            container.innerHTML = items.map(item => `
+                <div class="knowledge-item ${item.active ? 'active' : ''}" data-id="${item.id}">
+                    <div class="knowledge-item-header">
+                        <div class="knowledge-item-title">
+                            <span>${getPriorityIcon(item.priority)}</span>
+                            ${item.title}
+                        </div>
+                        <div class="knowledge-item-actions">
+                            <button class="knowledge-btn" onclick="toggleKnowledgeItem('${type}', '${item.id}')">
+                                ${item.active ? 'Active' : 'Inactive'}
+                            </button>
+                            <button class="knowledge-btn delete" onclick="deleteKnowledgeItem('${type}', '${item.id}')">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                    <div class="knowledge-item-content">${item.content}</div>
+                    <div class="knowledge-item-meta">
+                        ${item.appliesTo.length > 0 ? `<span>📎 ${item.appliesTo.join(', ')}</span>` : ''}
+                        <span>📅 ${new Date(item.createdAt).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Get priority icon
+        function getPriorityIcon(priority) {
+            const icons = {
+                low: '🟢',
+                medium: '🟡',
+                high: '🟠',
+                critical: '🔴'
+            };
+            return icons[priority] || '⚪';
+        }
+
+        // Switch knowledge tab
+        window.switchKnowledgeTab = function(tab) {
+            document.querySelectorAll('.knowledge-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.knowledge-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tab}-content`).classList.add('active');
+        }
+
+        // Toggle knowledge form
+        window.toggleKnowledgeForm = function() {
+            const form = document.getElementById('knowledgeForm');
+            form.classList.toggle('active');
+            
+            if (form.classList.contains('active')) {
+                document.getElementById('knowledgeTitle').focus();
+            } else {
+                // Clear form
+                document.getElementById('knowledgeTitle').value = '';
+                document.getElementById('knowledgeContent').value = '';
+                document.getElementById('knowledgeApplies').value = '';
+                document.getElementById('knowledgePriority').value = 'medium';
+            }
+        }
+
+        // Save knowledge
+        window.saveKnowledge = function() {
+            const type = document.getElementById('knowledgeType').value;
+            const title = document.getElementById('knowledgeTitle').value.trim();
+            const content = document.getElementById('knowledgeContent').value.trim();
+            const appliesTo = document.getElementById('knowledgeApplies').value
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s);
+            const priority = document.getElementById('knowledgePriority').value;
+            
+            if (!title || !content) {
+                alert('Please fill in title and content');
+                return;
+            }
+            
+            const newItem = {
+                id: type + Date.now(),
+                title,
+                content,
+                appliesTo,
+                priority,
+                active: true,
+                createdAt: new Date().toISOString()
+            };
+            
+            knowledgeBase[type].push(newItem);
+            renderKnowledgeItems(type);
+            toggleKnowledgeForm();
+        }
+
+        // Toggle knowledge item
+        window.toggleKnowledgeItem = function(type, id) {
+            const item = knowledgeBase[type].find(i => i.id === id);
+            if (item) {
+                item.active = !item.active;
+                renderKnowledgeItems(type);
+            }
+        }
+
+        // Delete knowledge item
+        window.deleteKnowledgeItem = function(type, id) {
+            if (confirm('Are you sure you want to delete this knowledge item?')) {
+                knowledgeBase[type] = knowledgeBase[type].filter(i => i.id !== id);
+                renderKnowledgeItems(type);
+            }
+        }
+
+        // Get active knowledge for current context
+        function getActiveKnowledge(agent = null) {
+            const activeKnowledge = [];
+            
+            Object.entries(knowledgeBase).forEach(([type, items]) => {
+                items.forEach(item => {
+                    if (item.active) {
+                        // Include if no specific agent or if applies to this agent
+                        if (!agent || item.appliesTo.length === 0 || item.appliesTo.includes(agent)) {
+                            activeKnowledge.push({
+                                type,
+                                ...item
+                            });
+                        }
+                    }
+                });
+            });
+            
+            // Sort by priority
+            const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+            return activeKnowledge.sort((a, b) => 
+                priorityOrder[a.priority] - priorityOrder[b.priority]
+            );
+        }
+
+        // Load conversations into the selector
+        function loadConversations() {
+            const listEl = document.getElementById('conversationList');
+            listEl.innerHTML = '';
+
+            conversations.forEach(conv => {
+                const card = document.createElement('div');
+                card.className = 'conversation-card';
+                card.onclick = () => selectConversation(conv);
+                
+                card.innerHTML = `
+                    <h4>${conv.name}</h4>
+                    <p>${conv.app} • ${new Date(conv.timestamp).toLocaleDateString()}</p>
+                    <p style="margin-top: 5px; color: #666;">${conv.steps.length} steps</p>
+                `;
+                
+                listEl.appendChild(card);
+            });
+        }
+
+        // Select a conversation
+        function selectConversation(conv) {
+            currentConversation = conv;
+            currentStep = 0;
+            isPlaying = false;
+            compareMode = false;
+            
+            // Update UI
+            document.querySelectorAll('.conversation-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            document.getElementById('assemblyLine').style.display = 'block';
+            updateStepCounter();
+            displayStep();
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            document.getElementById('playBtn').onclick = play;
+            document.getElementById('pauseBtn').onclick = pause;
+            document.getElementById('stepBtn').onclick = stepForward;
+            document.getElementById('resetBtn').onclick = reset;
+            document.getElementById('stopBtn').onclick = openKaizenIntervention;
+            document.getElementById('compareBtn').onclick = toggleCompareMode;
+        }
+
+        // Open Kaizen intervention
+        function openKaizenIntervention() {
+            if (!currentConversation || kaizenMode) return;
+            
+            pause();
+            kaizenMode = true;
+            kaizenMessages = [];
+            
+            const currentStepData = currentConversation.steps[currentStep];
+            
+            // Create overlay and intervention dialog
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            overlay.onclick = () => closeKaizenIntervention();
+            
+            const kaizen = document.createElement('div');
+            kaizen.className = 'kaizen-intervention';
+            kaizen.innerHTML = `
+                <div class="kaizen-header">
+                    <h3><span>🔧</span> Kaizen Intervention - Process Improvement</h3>
+                    <button class="kaizen-close" onclick="closeKaizenIntervention()">✕</button>
+                </div>
+                
+                <div class="kaizen-context">
+                    <h4>Current Step Context:</h4>
+                    <p><strong>Step ${currentStep + 1}:</strong> ${currentStepData.type === 'user' ? 'User Command' : 
+                        currentStepData.type === 'processing' ? `Processing with ${currentStepData.agent}` : 
+                        'Assistant Response'}</p>
+                    ${currentStepData.content ? `<p style="margin-top: 10px; color: #ccc;">"${currentStepData.content.substring(0, 100)}..."</p>` : ''}
+                </div>
+                
+                <div class="kaizen-chat" id="kaizenChat">
+                    <div class="kaizen-message kaizen-note">
+                        <div class="sender">System</div>
+                        <div>Kaizen intervention initiated. Describe the issue you've identified.</div>
+                    </div>
+                </div>
+                
+                <div class="kaizen-input-area">
+                    <input type="text" class="kaizen-input" id="kaizenInput" 
+                           placeholder="Describe the issue or improvement needed..." 
+                           onkeypress="if(event.key === 'Enter') sendKaizenMessage()">
+                    <button class="kaizen-send" onclick="sendKaizenMessage()">Send</button>
+                </div>
+                
+                <div class="kaizen-actions">
+                    <button class="kaizen-action-btn" onclick="retryStep()">
+                        🔄 Retry This Step
+                    </button>
+                    <button class="kaizen-action-btn" onclick="modifyAndContinue()">
+                        ✏️ Modify & Continue
+                    </button>
+                    <button class="kaizen-action-btn primary" onclick="resolveAndContinue()">
+                        ✅ Issue Resolved - Continue
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(kaizen);
+            
+            // Focus input
+            setTimeout(() => {
+                document.getElementById('kaizenInput').focus();
+            }, 100);
+        }
+
+        // Close Kaizen intervention
+        window.closeKaizenIntervention = function() {
+            kaizenMode = false;
+            const overlay = document.querySelector('.overlay');
+            const kaizen = document.querySelector('.kaizen-intervention');
+            if (overlay) overlay.remove();
+            if (kaizen) kaizen.remove();
+        }
+
+        // Send Kaizen message
+        window.sendKaizenMessage = function() {
+            const input = document.getElementById('kaizenInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            // Add user message
+            addKaizenMessage('user', message);
+            input.value = '';
+            
+            // Simulate AI response
+            setTimeout(() => {
+                const responses = [
+                    "I understand the issue. Let me help you resolve this. What specific aspect would you like me to adjust?",
+                    "I see what you mean. Would you like me to modify the query parameters or change the approach entirely?",
+                    "Thank you for identifying this. I can adjust the process. Should I focus on the data format or the filtering criteria?",
+                    "I appreciate your feedback. Let me know how you'd prefer this step to work differently."
+                ];
+                const response = responses[Math.floor(Math.random() * responses.length)];
+                addKaizenMessage('assistant', response);
+            }, 1000);
+        }
+
+        // Add message to Kaizen chat
+        function addKaizenMessage(sender, content) {
+            const chat = document.getElementById('kaizenChat');
+            const message = document.createElement('div');
+            message.className = `kaizen-message ${sender}`;
+            message.innerHTML = `
+                <div class="sender">${sender === 'user' ? '👤 You' : '🤖 AI Companion'}</div>
+                <div>${content}</div>
+            `;
+            chat.appendChild(message);
+            chat.scrollTop = chat.scrollHeight;
+            
+            // Store message for transcript
+            kaizenMessages.push({
+                type: sender,
+                content: content,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Retry current step
+        window.retryStep = function() {
+            addKaizenMessage('assistant', 'Retrying the current step with the improvements discussed...');
+            setTimeout(() => {
+                closeKaizenIntervention();
+                // Re-display current step with modifications
+                displayStep();
+            }, 1500);
+        }
+
+        // Modify and continue
+        window.modifyAndContinue = function() {
+            addKaizenMessage('assistant', 'Applying modifications and continuing with the improved process...');
+            
+            // Add kaizen intervention to transcript
+            if (currentConversation && currentConversation.steps[currentStep]) {
+                currentConversation.steps[currentStep].kaizen = [
+                    {
+                        type: 'kaizen',
+                        content: '🔧 KAIZEN INTERVENTION - Process improvement applied',
+                        timestamp: new Date().toISOString()
+                    },
+                    ...kaizenMessages
+                ];
+            }
+            
+            setTimeout(() => {
+                closeKaizenIntervention();
+                stepForward();
+            }, 1500);
+        }
+
+        // Resolve and continue
+        window.resolveAndContinue = function() {
+            addKaizenMessage('assistant', 'Great! Issue resolved. Continuing with the normal flow...');
+            
+            // Add resolution note to transcript
+            if (currentConversation && currentConversation.steps[currentStep]) {
+                currentConversation.steps[currentStep].kaizen = [
+                    {
+                        type: 'kaizen',
+                        content: '✅ KAIZEN RESOLUTION - Issue identified and resolved',
+                        timestamp: new Date().toISOString()
+                    },
+                    ...kaizenMessages
+                ];
+            }
+            
+            setTimeout(() => {
+                closeKaizenIntervention();
+                play();
+            }, 1500);
+        }
+
+        // Play through steps
+        function play() {
+            if (!currentConversation || isPlaying) return;
+            
+            isPlaying = true;
+            document.getElementById('playBtn').classList.add('active');
+            
+            playInterval = setInterval(() => {
+                if (currentStep < currentConversation.steps.length - 1) {
+                    stepForward();
+                } else {
+                    pause();
+                }
+            }, 3000); // 3 seconds per step
+        }
+
+        // Pause playback
+        function pause() {
+            isPlaying = false;
+            document.getElementById('playBtn').classList.remove('active');
+            
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        }
+
+        // Step forward
+        function stepForward() {
+            if (!currentConversation || currentStep >= currentConversation.steps.length - 1) return;
+            
+            currentStep++;
+            updateStepCounter();
+            displayStep();
+        }
+
+        // Reset to beginning
+        function reset() {
+            pause();
+            currentStep = 0;
+            updateStepCounter();
+            displayStep();
+        }
+
+        // Toggle compare mode
+        function toggleCompareMode() {
+            compareMode = !compareMode;
+            document.getElementById('compareBtn').classList.toggle('active', compareMode);
+            displayStep();
+        }
+
+        // Update step counter
+        function updateStepCounter() {
+            if (!currentConversation) return;
+            
+            document.getElementById('stepCounter').textContent = 
+                `Step ${currentStep + 1} of ${currentConversation.steps.length}`;
+            
+            const progress = ((currentStep + 1) / currentConversation.steps.length) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+        }
+
+        // Display current step
+        function displayStep() {
+            if (!currentConversation || !currentConversation.steps[currentStep]) return;
+            
+            const step = currentConversation.steps[currentStep];
+            const workArea = document.getElementById('workArea');
+            
+            let html = '';
+            
+            // Show active context if this is a processing step
+            if (step.type === 'processing' && step.agent) {
+                const activeKnowledge = getActiveKnowledge(step.agent);
+                if (activeKnowledge.length > 0) {
+                    html += `
+                        <div class="context-preview">
+                            <h4><span>📚</span> Active Knowledge for ${step.agent}</h4>
+                            ${activeKnowledge.map(k => `
+                                <div class="context-preview-item">
+                                    <strong>${getPriorityIcon(k.priority)} ${k.title}</strong>: ${k.content}
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            }
+            
+            // Show context indicator if knowledge is being applied
+            const hasActiveKnowledge = step.type === 'processing' && 
+                getActiveKnowledge(step.agent).length > 0;
+            
+            if (hasActiveKnowledge) {
+                html += '<div class="context-indicator">📚 Context Applied</div>';
+            }
+            
+            // Check if this step has kaizen intervention
+            if (step.kaizen && step.kaizen.length > 0) {
+                html += `
+                    <div class="kaizen-message kaizen-note" style="margin-bottom: 20px;">
+                        <div>🔧 This step includes a Kaizen intervention</div>
+                    </div>
+                `;
+            }
+            
+            if (step.type === 'user') {
+                html += `
+                    <div class="user-command">
+                        <h4><span>👤</span> User Command</h4>
+                        <p>${step.content}</p>
+                    </div>
+                `;
+            } else if (step.type === 'processing') {
+                html += `
+                    <div class="network-activity">
+                        <div class="network-icon"></div>
+                        <span class="network-text">LIVE CONNECTION</span>
+                    </div>
+                    
+                    <div class="processing-visualization">
+                        <div class="processing-step active">
+                            <i>📡</i>
+                            <p>Receiving</p>
+                        </div>
+                        <span class="arrow">→</span>
+                        <div class="processing-step active">
+                            <i>⚙️</i>
+                            <p>${step.agent}</p>
+                        </div>
+                        <span class="arrow">→</span>
+                        <div class="processing-step">
+                            <i>📊</i>
+                            <p>Processing</p>
+                        </div>
+                    </div>
+                    
+                    <div class="processing-animation">
+                        <div class="gears">
+                            <div class="gear"></div>
+                            <div class="gear"></div>
+                            <div class="gear"></div>
+                        </div>
+                        <div class="data-flow"></div>
+                    </div>
+                    
+                    <div class="function-status">
+                        <div class="status-message">🔄 ${step.operation}</div>
+                        <div class="status-details">Communicating with ${step.agent} service...</div>
+                        <div class="typing-indicator">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-indicators">
+                        <div class="progress-dot active"></div>
+                        <div class="progress-dot active"></div>
+                        <div class="progress-dot"></div>
+                        <div class="progress-dot"></div>
+                    </div>
+                    
+                    <div class="agent-output">
+                        <h4><span class="loading"></span> Function Execution</h4>
+                        <div class="output-content">
+                            <span class="live-indicator">LIVE</span> Executing ${step.agent}...
+                            ${hasActiveKnowledge ? '\n\n📚 Applying knowledge base context...' : ''}
+                            \n\n⏱️ Typical response time: 2-5 seconds
+                            \n📊 Retrieving data from backend services...
+                        </div>
+                    </div>
+                `;
+                
+                // Simulate response coming in after delay
+                setTimeout(() => {
+                    if (currentStep === findStepIndex(step) && currentConversation) {
+                        showResponsePreview(step);
+                    }
+                }, 2000);
+            } else if (step.type === 'assistant') {
+                if (compareMode && step.systemResult) {
+                    html += `
+                        <div class="comparison-mode">
+                            <div class="comparison-panel transcript">
+                                <h5><span>📄</span> Transcript Output</h5>
+                                <div class="output-content">
+                                    ${step.content}
+                                    ${step.systemResult ? `\n\nSystem Result:\n${JSON.stringify(step.systemResult, null, 2)}` : ''}
+                                </div>
+                                <div class="timestamp">Recorded: ${new Date(step.timestamp).toLocaleString()}</div>
+                            </div>
+                            <div class="comparison-panel live">
+                                <h5><span class="live-indicator">LIVE</span> Current Execution</h5>
+                                <div class="output-content">
+                                    <span style="color: #00d4ff;">Executing live request...</span>
+                                    \n${step.content}
+                                </div>
+                                <div class="timestamp">Now: ${new Date().toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="response-preview">
+                            <div class="response-header">
+                                <h5><span>✅</span> Response Received</h5>
+                                <span class="response-timer">Response time: ${Math.random() * 3 + 1 | 0}s</span>
+                            </div>
+                            <div class="agent-output">
+                                <h4><span>🤖</span> Assistant Response</h4>
+                                <div class="output-content">
+                                    ${step.content}
+                                    ${step.systemResult ? `\n\nSystem Result:\n${JSON.stringify(step.systemResult, null, 2)}` : ''}
+                                </div>
+                                <div class="timestamp">${new Date(step.timestamp).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Display kaizen messages if they exist
+            if (step.kaizen && step.kaizen.length > 0) {
+                html += '<div style="margin-top: 20px; padding: 20px; background: #1a1a1a; border: 1px solid #ff6600; border-radius: 8px;">';
+                html += '<h4 style="color: #ff6600; margin-bottom: 15px;">🔧 Kaizen Intervention History</h4>';
+                
+                step.kaizen.forEach(msg => {
+                    if (msg.type === 'kaizen') {
+                        html += `<div class="kaizen-message kaizen-note" style="margin-bottom: 10px;">${msg.content}</div>`;
+                    } else {
+                        html += `
+                            <div class="kaizen-message ${msg.type}" style="margin-bottom: 10px;">
+                                <div class="sender">${msg.type === 'user' ? '👤 User' : '🤖 AI Companion'}</div>
+                                <div>${msg.content}</div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                html += '</div>';
+            }
+            
+            workArea.innerHTML = html;
+            
+            // Animate companion position
+            animateCompanion(step.type);
+        }
+
+        // Show response preview animation
+        function showResponsePreview(step) {
+            const workArea = document.getElementById('workArea');
+            const existingAnimation = workArea.querySelector('.processing-animation');
+            
+            if (existingAnimation) {
+                // Add response preview
+                const responseHtml = `
+                    <div class="response-preview">
+                        <div class="response-header">
+                            <h5><span>📨</span> Receiving Response...</h5>
+                            <span class="response-timer">3.2s elapsed</span>
+                        </div>
+                        <div class="response-data">
+                            <div style="color: #00ff88;">✓ Connection established</div>
+                            <div style="color: #00ff88;">✓ Authentication verified</div>
+                            <div style="color: #00ff88;">✓ Data retrieved successfully</div>
+                            <div style="margin-top: 10px; color: #00d4ff;">Processing response data...</div>
+                        </div>
+                    </div>
+                `;
+                
+                workArea.insertAdjacentHTML('beforeend', responseHtml);
+                
+                // Update progress dots
+                const dots = workArea.querySelectorAll('.progress-dot');
+                dots.forEach((dot, i) => {
+                    setTimeout(() => {
+                        dot.classList.add('complete');
+                    }, i * 200);
+                });
+            }
+        }
+
+        // Find step index
+        function findStepIndex(targetStep) {
+            if (!currentConversation) return -1;
+            return currentConversation.steps.findIndex(step => 
+                step.timestamp === targetStep.timestamp && 
+                step.type === targetStep.type
+            );
+        }
+
+        // Animate companion based on step type
+        function animateCompanion(stepType) {
+            const companion = document.querySelector('.companion-container');
+            
+            switch(stepType) {
+                case 'user':
+                    companion.style.left = '50px';
+                    break;
+                case 'processing':
+                    companion.style.left = '45%';
+                    companion.style.transform = 'translateX(-50%) translateY(-50%)';
+                    break;
+                case 'assistant':
+                    companion.style.left = 'calc(100% - 150px)';
+                    companion.style.transform = 'translateY(-50%)';
+                    break;
+            }
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

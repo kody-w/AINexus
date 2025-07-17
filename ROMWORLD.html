@@ -1,0 +1,1047 @@
+<!-- ROM Loader -->
+<div class="rom-loader" id="rom-loader">
+    <button class="close-loader" id="close-loader">&times;</button>
+    <h2>🎮 Load Gameboy ROM</h2>
+    <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
+        Choose a ROM file to start playing. Supports .gb and .gbc files.
+    </p>
+    <input type="file" id="rom-input" class="rom-input" accept=".gb,.gbc">
+    <button class="rom-button" onclick="document.getElementById('rom-input').click()">
+        📁 Choose ROM File
+    </button>
+    <div class="rom-list" id="recent-roms">
+        <h4 style="color: #8BBE3F; margin: 20px 0 10px 0;">Recent ROMs:</h4>
+        <p style="color: rgba(255, 255, 255, 0.5); text-align: center;">No recent ROMs</p>
+    </div>
+</div>
+
+<!-- Game State Display -->
+<div class="game-state" id="game-state">
+    <h3>Game Status</h3>
+    <div class="game-info">
+        <div class="game-info-item">
+            <span class="game-info-label">ROM:</span>
+            <span class="game-info-value" id="rom-name">None</span>
+        </div>
+        <div class="game-info-item">
+            <span class="game-info-label">FPS:</span>
+            <span class="game-info-value" id="fps-counter">0</span>
+        </div>
+        <div class="game-info-item">
+            <span class="game-info-label">Frame:</span>
+            <span class="game-info-value" id="frame-counter">0</span>
+        </div>
+    </div>
+</div>
+
+<!-- AI Game Commentary -->
+<div class="ai-game-commentary" id="ai-commentary">
+    <h3>🤖 AI Companion</h3>
+    <div class="ai-commentary-text" id="ai-commentary-text">
+        Ready to help you on your gaming journey!
+    </div>
+</div>
+
+<!-- Save State Panel -->
+<div class="save-state-panel" id="save-state-panel">
+    <button class="close-loader" onclick="document.getElementById('save-state-panel').classList.remove('active')">&times;</button>
+    <h2 style="color: #8BBE3F; margin-bottom: 20px;">💾 Save States</h2>
+    <div id="save-slots">
+        <!-- Save slots will be populated here -->
+    </div>
+</div>
+
+<!-- Gameboy Controls (Mobile) -->
+<div class="gameboy-controls" id="gameboy-controls">
+    <div class="control-grid">
+        <button class="control-btn dpad-up" data-key="ArrowUp">↑</button>
+        <button class="control-btn dpad-left" data-key="ArrowLeft">←</button>
+        <button class="control-btn dpad-right" data-key="ArrowRight">→</button>
+        <button class="control-btn dpad-down" data-key="ArrowDown">↓</button>
+    </div>
+    <div class="action-buttons">
+        <button class="control-btn action" data-key="z">B</button>
+        <button class="control-btn action" data-key="x">A</button>
+    </div>
+    <div class="system-buttons">
+        <button class="control-btn system" data-key="Shift">Select</button>
+        <button class="control-btn system" data-key="Enter">Start</button>
+    </div>
+</div>
+
+<div class="world-ui">
+    <h1 class="world-title" id="world-title">GAMEBOY WORLD</h1>
+    <p class="world-description" id="world-description">A retro gaming sanctuary where classic games come alive in 3D space.</p>
+</div>
+
+<div class="mobile-controls" id="mobile-controls">
+    <div class="controls-container">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+</div>
+
+<div class="look-area" id="look-area"></div>
+
+<div class="loading" id="loading">Initializing gaming world...</div>
+
+<!-- AI Companion Button -->
+<div class="ai-companion-button" id="ai-companion-button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+    </svg>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    // Gameboy World Class
+    class GameboyWorld {
+        constructor() {
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.clock = new THREE.Clock();
+            
+            // Movement
+            this.moveSpeed = 0.1;
+            this.lookSpeed = 0.002;
+            this.keys = { w: false, a: false, s: false, d: false };
+            this.rotation = { x: 0, y: 0 };
+            
+            // Mobile detection
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
+            // Touch controls
+            this.joystickActive = false;
+            this.joystickVector = new THREE.Vector2();
+            this.lookTouch = null;
+            this.joystickTouch = null;
+            
+            // Gameboy
+            this.gameboyScreen = document.getElementById('gameboy-screen');
+            this.gameboyMesh = null;
+            this.screenTexture = null;
+            this.emulator = null;
+            this.isGameRunning = false;
+            this.currentROM = null;
+            
+            // Game state
+            this.frameCount = 0;
+            this.lastFPSUpdate = 0;
+            this.fps = 0;
+            
+            // AI Companion
+            this.aiCompanion = null;
+            this.gameContext = {
+                romName: null,
+                frameData: null,
+                playerActions: [],
+                gameState: {}
+            };
+            
+            // Save states
+            this.saveStates = new Map();
+            
+            // Portals for returning to hub
+            this.portals = [];
+        }
+
+        async init() {
+            console.log('Initializing Gameboy World...');
+            
+            this.setupScene();
+            this.setupLighting();
+            this.createEnvironment();
+            this.createGameboyModel();
+            this.createPortals();
+            this.setupEventListeners();
+            this.setupGameboyEmulator();
+            this.loadRecentROMs();
+            
+            // Initialize AI companion if available
+            if (window.parent && window.parent.worldNavigator && window.parent.worldNavigator.aiManager) {
+                this.aiCompanion = window.parent.worldNavigator.aiManager;
+                this.setupAIIntegration();
+            }
+            
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 1000);
+            
+            if (this.isMobile) {
+                document.getElementById('mobile-controls').classList.add('show');
+            }
+            
+            this.animate();
+        }
+
+        setupScene() {
+            this.scene = new THREE.Scene();
+            this.scene.fog = new THREE.Fog(0x0a0a0a, 10, 100);
+            
+            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera.position.set(0, 3, 10);
+            
+            this.renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true,
+                powerPreference: "high-performance"
+            });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            const container = document.getElementById('three-container');
+            if (container) {
+                container.appendChild(this.renderer.domElement);
+            } else {
+                console.error('three-container element not found!');
+            }
+        }
+
+        setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            this.scene.add(ambientLight);
+            
+            // Gameboy screen light
+            const screenLight = new THREE.PointLight(0x8BBE3F, 2, 20);
+            screenLight.position.set(0, 5, 0);
+            this.scene.add(screenLight);
+            
+            // Directional light
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            this.scene.add(dirLight);
+        }
+
+        createEnvironment() {
+            // Retro arcade floor
+            const floorGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            this.scene.add(floor);
+            
+            // Grid pattern
+            const gridHelper = new THREE.GridHelper(100, 50, 0x8BBE3F, 0x306230);
+            gridHelper.position.y = 0.1;
+            this.scene.add(gridHelper);
+            
+            // Arcade-style pillars
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const radius = 20;
+                
+                const pillarGeometry = new THREE.CylinderGeometry(1, 1, 20, 8);
+                const pillarMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x306230,
+                    emissive: 0x8BBE3F,
+                    emissiveIntensity: 0.1
+                });
+                
+                const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                pillar.position.set(
+                    Math.cos(angle) * radius,
+                    10,
+                    Math.sin(angle) * radius
+                );
+                pillar.castShadow = true;
+                this.scene.add(pillar);
+            }
+            
+            // Floating pixels/particles
+            const particleCount = 500;
+            const particleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 50;
+                positions[i + 1] = Math.random() * 30;
+                positions[i + 2] = (Math.random() - 0.5) * 50;
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x8BBE3F,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            this.scene.add(particles);
+            this.particles = particles;
+        }
+
+        createGameboyModel() {
+            const gameboyGroup = new THREE.Group();
+            
+            // Gameboy body
+            const bodyGeometry = new THREE.BoxGeometry(6, 10, 1);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: 0xc0c0c0,
+                roughness: 0.7,
+                metalness: 0.3
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.castShadow = true;
+            gameboyGroup.add(body);
+            
+            // Add click handler to body
+            body.userData = { clickable: true, action: 'openRomLoader' };
+            
+            // Screen frame
+            const screenFrameGeometry = new THREE.BoxGeometry(4.5, 4, 0.2);
+            const screenFrameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x303030,
+                roughness: 0.8
+            });
+            const screenFrame = new THREE.Mesh(screenFrameGeometry, screenFrameMaterial);
+            screenFrame.position.set(0, 2, 0.6);
+            gameboyGroup.add(screenFrame);
+            
+            // Screen (will display game)
+            const screenGeometry = new THREE.PlaneGeometry(4, 3.6);
+            this.screenTexture = new THREE.CanvasTexture(this.gameboyScreen);
+            this.screenTexture.minFilter = THREE.NearestFilter;
+            this.screenTexture.magFilter = THREE.NearestFilter;
+            
+            const screenMaterial = new THREE.MeshBasicMaterial({
+                map: this.screenTexture,
+                emissive: 0x8BBE3F,
+                emissiveIntensity: 0.2
+            });
+            
+            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+            screen.position.set(0, 2, 0.7);
+            gameboyGroup.add(screen);
+            this.screenMesh = screen;
+            
+            // D-Pad
+            const dpadGroup = new THREE.Group();
+            const dpadSize = 0.8;
+            const dpadThickness = 0.1;
+            
+            // D-Pad cross
+            const dpadHorizontal = new THREE.BoxGeometry(dpadSize * 2, dpadSize * 0.7, dpadThickness);
+            const dpadVertical = new THREE.BoxGeometry(dpadSize * 0.7, dpadSize * 2, dpadThickness);
+            const dpadMaterial = new THREE.MeshStandardMaterial({
+                color: 0x404040,
+                roughness: 0.9
+            });
+            
+            const dpadH = new THREE.Mesh(dpadHorizontal, dpadMaterial);
+            const dpadV = new THREE.Mesh(dpadVertical, dpadMaterial);
+            dpadGroup.add(dpadH, dpadV);
+            dpadGroup.position.set(-1.5, -1.5, 0.6);
+            gameboyGroup.add(dpadGroup);
+            
+            // A and B buttons
+            const buttonGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 16);
+            const buttonMaterial = new THREE.MeshStandardMaterial({
+                color: 0x404040,
+                roughness: 0.9
+            });
+            
+            const buttonA = new THREE.Mesh(buttonGeometry, buttonMaterial);
+            buttonA.rotation.x = Math.PI / 2;
+            buttonA.position.set(1.5, -1, 0.6);
+            gameboyGroup.add(buttonA);
+            
+            const buttonB = new THREE.Mesh(buttonGeometry, buttonMaterial);
+            buttonB.rotation.x = Math.PI / 2;
+            buttonB.position.set(0.5, -2, 0.6);
+            gameboyGroup.add(buttonB);
+            
+            // Start and Select buttons
+            const systemButtonGeometry = new THREE.BoxGeometry(0.8, 0.3, 0.1);
+            const startButton = new THREE.Mesh(systemButtonGeometry, buttonMaterial);
+            startButton.position.set(0.5, -3.5, 0.6);
+            gameboyGroup.add(startButton);
+            
+            const selectButton = new THREE.Mesh(systemButtonGeometry, buttonMaterial);
+            selectButton.position.set(-0.5, -3.5, 0.6);
+            gameboyGroup.add(selectButton);
+            
+            // Position and scale the gameboy
+            gameboyGroup.position.set(0, 5, 0);
+            gameboyGroup.scale.set(1.5, 1.5, 1.5);
+            this.scene.add(gameboyGroup);
+            this.gameboyMesh = gameboyGroup;
+            
+            // Add floating animation
+            this.gameboyGroup = gameboyGroup;
+        }
+
+        createPortals() {
+            // Create a portal back to the hub
+            const portalGroup = new THREE.Group();
+            
+            const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8338ec,
+                emissive: 0x8338ec,
+                emissiveIntensity: 0.5,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            
+            const portalGeometry = new THREE.CircleGeometry(2.7, 32);
+            const portalMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color1: { value: new THREE.Color(0x00ffff) },
+                    color2: { value: new THREE.Color(0xff00ff) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float time;
+                    uniform vec3 color1;
+                    uniform vec3 color2;
+                    varying vec2 vUv;
+                    
+                    void main() {
+                        vec2 center = vUv - 0.5;
+                        float dist = length(center);
+                        float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                        vec3 color = mix(color1, color2, wave);
+                        float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            
+            const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+            portal.position.z = 0.1;
+            
+            portalGroup.add(frame);
+            portalGroup.add(portal);
+            
+            portalGroup.position.set(0, 3, -20);
+            portalGroup.rotation.y = 0;
+            
+            portal.userData = {
+                material: portalMaterial,
+                url: 'index.html', // Go back to hub
+                name: 'Nexus Hub',
+                description: 'Return to the central hub',
+                clickable: true,
+                action: 'portal'
+            };
+            
+            this.portals.push(portal);
+            this.scene.add(portalGroup);
+        }
+
+        setupGameboyEmulator() {
+            // Placeholder for actual Gameboy emulator integration
+            // In a real implementation, you would integrate a library like GameBoy-Online or similar
+            
+            // For now, we'll create a mock emulator
+            this.emulator = {
+                loadROM: (romData) => {
+                    console.log('Loading ROM...');
+                    this.isGameRunning = true;
+                    document.getElementById('rom-loader').style.display = 'none';
+                    document.getElementById('game-state').classList.add('active');
+                    
+                    if (this.isMobile) {
+                        document.getElementById('gameboy-controls').classList.add('active');
+                    }
+                    
+                    // Mock game screen
+                    this.mockGameScreen();
+                },
+                
+                pause: () => {
+                    this.isGameRunning = false;
+                },
+                
+                resume: () => {
+                    this.isGameRunning = true;
+                },
+                
+                saveState: (slot) => {
+                    const state = {
+                        rom: this.currentROM,
+                        timestamp: Date.now(),
+                        frameCount: this.frameCount
+                    };
+                    this.saveStates.set(slot, state);
+                    localStorage.setItem(`gameboy_save_${slot}`, JSON.stringify(state));
+                },
+                
+                loadState: (slot) => {
+                    const state = this.saveStates.get(slot);
+                    if (state) {
+                        console.log('Loading save state', slot);
+                    }
+                }
+            };
+        }
+
+        mockGameScreen() {
+            // Create a mock game display
+            const canvas = this.gameboyScreen;
+            canvas.width = 160;
+            canvas.height = 144;
+            canvas.style.display = 'block';
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Animate a simple mock game screen
+            const animateScreen = () => {
+                if (!this.isGameRunning) return;
+                
+                // Clear screen with gameboy green
+                ctx.fillStyle = '#9BBD0F';
+                ctx.fillRect(0, 0, 160, 144);
+                
+                // Draw some mock game elements
+                ctx.fillStyle = '#556B2F';
+                
+                // Mock sprite
+                const time = Date.now() * 0.001;
+                const x = Math.sin(time) * 50 + 80;
+                const y = Math.cos(time * 0.7) * 30 + 72;
+                
+                ctx.fillRect(x - 8, y - 8, 16, 16);
+                
+                // Mock text
+                ctx.font = '8px monospace';
+                ctx.fillText('GAMEBOY', 50, 20);
+                ctx.fillText(`FRAME: ${this.frameCount}`, 10, 134);
+                
+                // Update texture
+                if (this.screenTexture) {
+                    this.screenTexture.needsUpdate = true;
+                }
+                
+                this.frameCount++;
+                
+                // Update game context for AI
+                this.updateGameContext();
+                
+                requestAnimationFrame(animateScreen);
+            };
+            
+            animateScreen();
+        }
+
+        updateGameContext() {
+            // Update context that AI companion can read
+            this.gameContext.frameData = this.gameboyScreen.toDataURL();
+            this.gameContext.gameState = {
+                frameCount: this.frameCount,
+                fps: this.fps,
+                isRunning: this.isGameRunning
+            };
+            
+            // Send context to AI companion if active
+            if (this.aiCompanion && document.getElementById('ai-companion-button').classList.contains('active')) {
+                this.sendGameContextToAI();
+            }
+        }
+
+        setupAIIntegration() {
+            const aiButton = document.getElementById('ai-companion-button');
+            const aiCommentary = document.getElementById('ai-commentary');
+            
+            aiButton.addEventListener('click', () => {
+                aiButton.classList.toggle('active');
+                aiCommentary.classList.toggle('active');
+                
+                if (aiButton.classList.contains('active')) {
+                    this.startAICommentary();
+                }
+            });
+        }
+
+        startAICommentary() {
+            // Send initial game state to AI
+            if (this.aiCompanion && this.aiCompanion.isActive) {
+                const message = `I'm now watching you play ${this.currentROM || 'a Gameboy game'}. I can see the game screen and help you with tips!`;
+                this.updateAICommentary(message);
+            }
+        }
+
+        sendGameContextToAI() {
+            // Throttle updates to AI
+            if (this.frameCount % 60 === 0) { // Every second at 60fps
+                if (this.aiCompanion && this.aiCompanion.sendMessage) {
+                    // AI can now "see" the game state
+                    const gameInfo = `Game Update: Frame ${this.frameCount}, FPS: ${this.fps}`;
+                    // In a real implementation, you could send screen data or game state
+                }
+            }
+        }
+
+        updateAICommentary(text) {
+            const commentaryText = document.getElementById('ai-commentary-text');
+            commentaryText.textContent = text;
+            
+            // Animate text update
+            commentaryText.style.opacity = '0';
+            setTimeout(() => {
+                commentaryText.style.opacity = '1';
+            }, 100);
+        }
+
+        loadRecentROMs() {
+            const recentROMs = JSON.parse(localStorage.getItem('gameboy_recent_roms') || '[]');
+            const romList = document.getElementById('recent-roms');
+            
+            if (recentROMs.length > 0) {
+                romList.innerHTML = '<h4 style="color: #8BBE3F; margin: 20px 0 10px 0;">Recent ROMs:</h4>';
+                
+                recentROMs.forEach(rom => {
+                    const romItem = document.createElement('div');
+                    romItem.className = 'rom-item';
+                    romItem.innerHTML = `
+                        <div>
+                            <div class="rom-item-name">${rom.name}</div>
+                            <div class="rom-item-size">${(rom.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                    `;
+                    romItem.onclick = () => this.loadROMFromHistory(rom);
+                    romList.appendChild(romItem);
+                });
+            }
+        }
+
+        loadROMFromHistory(romData) {
+            // In a real implementation, you would load the ROM from stored data
+            console.log('Loading ROM from history:', romData.name);
+            this.currentROM = romData.name;
+            document.getElementById('rom-name').textContent = romData.name;
+            this.emulator.loadROM(romData);
+        }
+
+        setupEventListeners() {
+            // Window resize
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            
+            // ROM input
+            document.getElementById('rom-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.loadROM(file);
+                }
+            });
+            
+            // Close loader
+            document.getElementById('close-loader').addEventListener('click', () => {
+                document.getElementById('rom-loader').style.display = 'none';
+            });
+            
+            // Mobile controls
+            if (this.isMobile) {
+                this.setupMobileControls();
+                this.setupGameboyTouchControls();
+            } else {
+                this.setupDesktopControls();
+            }
+            
+            // Keyboard controls for Gameboy
+            this.setupGameboyKeyboard();
+            
+            // Raycaster for clicking
+            this.raycaster = new THREE.Raycaster();
+            this.mouse = new THREE.Vector2();
+            
+            window.addEventListener('click', (e) => {
+                this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                
+                // Check gameboy click
+                const gameboyIntersects = this.raycaster.intersectObjects(this.gameboyGroup.children, true);
+                if (gameboyIntersects.length > 0) {
+                    document.getElementById('rom-loader').style.display = 'block';
+                    return;
+                }
+                
+                // Check portal clicks
+                const portalIntersects = this.raycaster.intersectObjects(this.portals);
+                if (portalIntersects.length > 0) {
+                    const portal = portalIntersects[0].object;
+                    if (portal.userData.url) {
+                        window.location.href = portal.userData.url;
+                    }
+                }
+            });
+        }
+
+        async loadROM(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const romData = new Uint8Array(e.target.result);
+                
+                // Store in recent ROMs
+                const recentROMs = JSON.parse(localStorage.getItem('gameboy_recent_roms') || '[]');
+                const romInfo = {
+                    name: file.name,
+                    size: file.size,
+                    lastPlayed: Date.now()
+                };
+                
+                // Add to recent (max 5)
+                recentROMs.unshift(romInfo);
+                if (recentROMs.length > 5) recentROMs.pop();
+                localStorage.setItem('gameboy_recent_roms', JSON.stringify(recentROMs));
+                
+                // Load ROM
+                this.currentROM = file.name;
+                document.getElementById('rom-name').textContent = file.name;
+                this.emulator.loadROM(romData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        setupGameboyKeyboard() {
+            const keyMap = {
+                'ArrowUp': 'up',
+                'ArrowDown': 'down',
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right',
+                'z': 'b',
+                'x': 'a',
+                'Enter': 'start',
+                'Shift': 'select'
+            };
+            
+            window.addEventListener('keydown', (e) => {
+                if (keyMap[e.key] && this.isGameRunning) {
+                    e.preventDefault();
+                    this.handleGameboyInput(keyMap[e.key], true);
+                }
+                
+                // Save state shortcuts
+                if (e.key >= '1' && e.key <= '5') {
+                    if (e.shiftKey) {
+                        this.emulator.saveState(parseInt(e.key));
+                        this.showNotification(`Saved to slot ${e.key}`);
+                    } else {
+                        this.emulator.loadState(parseInt(e.key));
+                        this.showNotification(`Loaded slot ${e.key}`);
+                    }
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (keyMap[e.key] && this.isGameRunning) {
+                    e.preventDefault();
+                    this.handleGameboyInput(keyMap[e.key], false);
+                }
+            });
+        }
+
+        setupGameboyTouchControls() {
+            const controls = document.querySelectorAll('.control-btn');
+            
+            controls.forEach(btn => {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const key = btn.dataset.key;
+                    this.handleGameboyInput(key, true);
+                    btn.classList.add('pressed');
+                });
+                
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const key = btn.dataset.key;
+                    this.handleGameboyInput(key, false);
+                    btn.classList.remove('pressed');
+                });
+            });
+        }
+
+        handleGameboyInput(input, pressed) {
+            // Track player actions for AI context
+            if (pressed) {
+                this.gameContext.playerActions.push({
+                    action: input,
+                    timestamp: Date.now(),
+                    frame: this.frameCount
+                });
+                
+                // Keep only last 10 actions
+                if (this.gameContext.playerActions.length > 10) {
+                    this.gameContext.playerActions.shift();
+                }
+            }
+            
+            // In a real implementation, send input to emulator
+            console.log(`Gameboy input: ${input} ${pressed ? 'pressed' : 'released'}`);
+        }
+
+        setupDesktopControls() {
+            // Mouse look
+            let isPointerLocked = false;
+            
+            this.renderer.domElement.addEventListener('click', () => {
+                if (!isPointerLocked && !document.getElementById('rom-loader').style.display !== 'none') {
+                    this.renderer.domElement.requestPointerLock();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isPointerLocked) {
+                    this.rotation.y -= e.movementX * this.lookSpeed;
+                    this.rotation.x -= e.movementY * this.lookSpeed;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                }
+            });
+            
+            // WASD movement
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = true;
+                }
+                
+                // Open ROM loader with R
+                if (e.key.toLowerCase() === 'r') {
+                    document.getElementById('rom-loader').style.display = 'block';
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = false;
+                }
+            });
+        }
+
+        setupMobileControls() {
+            const lookArea = document.getElementById('look-area');
+            const joystick = document.getElementById('movement-joystick');
+            const handle = document.getElementById('movement-handle');
+            
+            // Touch look
+            lookArea.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                this.lookTouch = {
+                    id: touch.identifier,
+                    startX: touch.clientX,
+                    startY: touch.clientY,
+                    currentX: touch.clientX,
+                    currentY: touch.clientY
+                };
+            });
+            
+            lookArea.addEventListener('touchmove', (e) => {
+                if (!this.lookTouch) return;
+                
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.lookTouch.id) {
+                        const deltaX = touch.clientX - this.lookTouch.currentX;
+                        const deltaY = touch.clientY - this.lookTouch.currentY;
+                        
+                        this.rotation.y -= deltaX * this.lookSpeed * 2;
+                        this.rotation.x -= deltaY * this.lookSpeed * 2;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                        
+                        this.lookTouch.currentX = touch.clientX;
+                        this.lookTouch.currentY = touch.clientY;
+                        break;
+                    }
+                }
+            });
+            
+            lookArea.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                        this.lookTouch = null;
+                        break;
+                    }
+                }
+            });
+            
+            // Joystick movement
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                this.joystickTouch = { id: touch.identifier };
+                this.joystickActive = true;
+                this.updateJoystick(touch, joystick, handle);
+            });
+            
+            joystick.addEventListener('touchmove', (e) => {
+                if (!this.joystickActive) return;
+                
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.joystickTouch.id) {
+                        this.updateJoystick(touch, joystick, handle);
+                        break;
+                    }
+                }
+            });
+            
+            joystick.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                        this.joystickActive = false;
+                        this.joystickVector.set(0, 0);
+                        handle.style.transform = 'translate(-50%, -50%)';
+                        break;
+                    }
+                }
+            });
+        }
+
+        updateJoystick(touch, joystick, handle) {
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let deltaX = touch.clientX - centerX;
+            let deltaY = touch.clientY - centerY;
+            
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = rect.width / 2 - 25;
+            
+            if (distance > maxDistance) {
+                deltaX = (deltaX / distance) * maxDistance;
+                deltaY = (deltaY / distance) * maxDistance;
+            }
+            
+            handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+            
+            this.joystickVector.x = deltaX / maxDistance;
+            this.joystickVector.y = -deltaY / maxDistance;
+        }
+
+        updateMovement() {
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            
+            this.camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+            
+            if (this.isMobile) {
+                if (this.joystickActive) {
+                    const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                    const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                    this.camera.position.add(moveForward);
+                    this.camera.position.add(moveRight);
+                }
+            } else {
+                if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+            }
+            
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = this.rotation.y;
+            this.camera.rotation.x = this.rotation.x;
+        }
+
+        showNotification(message) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(139, 190, 63, 0.9);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 20px;
+                z-index: 2000;
+                animation: slideDown 0.3s ease;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideUp 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+            
+            const time = this.clock.getElapsedTime();
+            
+            this.updateMovement();
+            
+            // Update FPS counter
+            this.frameCount++;
+            if (time - this.lastFPSUpdate > 1) {
+                this.fps = Math.round(this.frameCount / (time - this.lastFPSUpdate));
+                document.getElementById('fps-counter').textContent = this.fps;
+                document.getElementById('frame-counter').textContent = this.frameCount;
+                this.lastFPSUpdate = time;
+            }
+            
+            // Animate Gameboy floating
+            if (this.gameboyGroup) {
+                this.gameboyGroup.position.y = 5 + Math.sin(time * 2) * 0.3;
+                this.gameboyGroup.rotation.y = Math.sin(time * 0.5) * 0.1;
+            }
+            
+            // Animate particles
+            if (this.particles) {
+                this.particles.rotation.y = time * 0.1;
+                const positions = this.particles.geometry.attributes.position.array;
+                for (let i = 1; i < positions.length; i += 3) {
+                    positions[i] = (positions[i] + 0.01) % 30;
+                }
+                this.particles.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Animate portals
+            this.portals.forEach(portal => {
+                if (portal.userData.material) {
+                    portal.userData.material.uniforms.time.value = time;
+                }
+            });
+            
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    // Initialize world when DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, initializing Gameboy World...');
+        const world = new GameboyWorld();
+        world.init();
+        
+        // Make world accessible for debugging
+        window.gameboyWorld = world;
+    });
+</script>

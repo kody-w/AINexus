@@ -1,0 +1,3326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Nexus Hub - AI Portal Explorer</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Gamepad Indicator */
+        #gamepad-indicator {
+            position: fixed;
+            top: 140px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: #06ffa5;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #gamepad-indicator.active {
+            opacity: 1;
+        }
+
+        /* AI Companion Modal */
+        .ai-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2002;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .ai-modal.show {
+            display: flex;
+        }
+
+        .ai-modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 50px rgba(138, 56, 236, 0.3);
+        }
+
+        .ai-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .ai-modal-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .ai-modal h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .ai-api-key-input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .ai-api-key-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .ai-activate-btn {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+
+        .ai-activate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(131, 56, 236, 0.4);
+        }
+
+        /* Voice Settings */
+        .voice-settings {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .voice-settings h4 {
+            color: #06ffa5;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .form-group select option {
+            background: #1a1a2e;
+            color: white;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .toggle-switch.active {
+            background: #06ffa5;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(24px);
+        }
+
+        .settings-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        /* Voice Input Settings */
+        .voice-input-settings {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .voice-input-settings h4 {
+            color: #ff006e;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        /* AI Chat Interface */
+        .ai-chat-interface {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px) + 100px);
+            right: calc(env(safe-area-inset-right, 20px));
+            width: 350px;
+            height: 450px;
+            background: rgba(20, 20, 40, 0.85);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            z-index: 1003;
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .ai-chat-interface.active {
+            display: flex;
+        }
+
+        .ai-chat-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-title {
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .ai-chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .ai-message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            font-size: 15px;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        .ai-message.user {
+            background: rgba(131, 56, 236, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .ai-message.ai {
+            background: rgba(6, 255, 165, 0.2);
+            margin-right: auto;
+        }
+
+        .ai-message.task-replay {
+            border: 1px solid rgba(255, 106, 0, 0.5);
+            opacity: 0.8;
+            font-style: italic;
+        }
+
+        .ai-typing {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            background: rgba(6, 255, 165, 0.2);
+            margin-right: auto;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: typingPulse 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typingPulse {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .ai-chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .ai-chat-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .ai-chat-send {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .ai-chat-send:hover {
+            transform: scale(1.05);
+        }
+
+        /* Voice Input Button */
+        .voice-input-btn {
+            background: linear-gradient(45deg, #ff006e, #ff4458);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .voice-input-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .voice-input-btn.recording {
+            background: linear-gradient(45deg, #ff0000, #ff4444);
+            animation: recordPulse 1.5s infinite;
+        }
+
+        @keyframes recordPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+            }
+        }
+
+        /* Voice Indicator */
+        .voice-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(138, 56, 236, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 1004;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .voice-indicator.active {
+            display: flex;
+        }
+
+        .voice-indicator i {
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Listening Indicator */
+        .listening-indicator {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 0, 110, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 1004;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .listening-indicator.active {
+            display: flex;
+        }
+
+        .listening-indicator svg {
+            width: 20px;
+            height: 20px;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* AI Companion Button */
+        .ai-companion-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px));
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(131, 56, 236, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(131, 56, 236, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+        }
+
+        .ai-companion-button:hover {
+            background: rgba(131, 56, 236, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.5);
+        }
+
+        .ai-companion-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            border-color: rgba(6, 255, 165, 0.5);
+        }
+
+        /* Tasks Button */
+        .tasks-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 80px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 106, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 106, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
+        }
+
+        .tasks-button:hover {
+            background: rgba(255, 106, 0, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 106, 0, 0.5);
+        }
+
+        .tasks-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* Task Panel */
+        .task-panel {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 100px));
+            left: calc(env(safe-area-inset-left, 20px));
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 106, 0, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 1002;
+            max-width: 350px;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 0 30px rgba(255, 106, 0, 0.3);
+            display: none;
+        }
+
+        .task-panel.active {
+            display: block;
+        }
+
+        .task-panel h3 {
+            margin: 0 0 15px 0;
+            font-size: 20px;
+            background: linear-gradient(45deg, #ff6a00, #ff8c00, #ffa500);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-conversation-btn {
+            background: linear-gradient(45deg, #742774, #4a90e2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 0;
+            width: 100%;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .upload-conversation-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(116, 39, 116, 0.4);
+        }
+
+        .conversation-upload-input {
+            display: none;
+        }
+
+        .task-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .task-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 106, 0, 0.5);
+            transform: translateX(5px);
+        }
+
+        .task-item strong {
+            color: #ffa500;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .task-item small {
+            color: rgba(255, 255, 255, 0.6);
+            display: block;
+            margin-top: 5px;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #06ffa5;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #ff006e;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from { 
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to { 
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            animation: slideIn 0.3s ease;
+            z-index: 1005;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+
+            .ai-chat-interface {
+                width: calc(100% - 40px);
+                right: 20px;
+                left: 20px;
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <!-- Gamepad Indicator -->
+    <div id="gamepad-indicator">
+        🎮 Gamepad Mode
+        <span style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-left: 10px;">
+            LS: Move | RS: Look | A: Enter Portal
+        </span>
+    </div>
+
+    <!-- AI Companion Modal -->
+    <div class="ai-modal" id="ai-modal">
+        <div class="ai-modal-content">
+            <button class="ai-modal-close" id="ai-close">&times;</button>
+            <h3>AI Companion Settings</h3>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
+                Activate your AI companion to explore and interact with the portal worlds.
+            </p>
+            <input type="password" class="ai-api-key-input" id="ai-api-key" placeholder="Enter your API key to activate AI companion">
+            <button class="ai-activate-btn" id="ai-activate-btn">Activate AI Companion</button>
+            
+            <!-- Voice Settings Section -->
+            <div class="voice-settings">
+                <h4>Voice Output Settings</h4>
+                
+                <div class="settings-item">
+                    <label for="voice-enabled-toggle">Enable Voice Response</label>
+                    <div class="toggle-switch" id="voice-enabled-toggle"></div>
+                </div>
+                
+                <div class="settings-item">
+                    <label for="auto-speak-toggle">Auto-speak Responses</label>
+                    <div class="toggle-switch" id="auto-speak-toggle"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="azure-tts-key">Azure TTS API Key (Optional)</label>
+                    <input type="password" id="azure-tts-key" placeholder="Enter Azure TTS key for premium voices">
+                </div>
+                
+                <div class="form-group">
+                    <label for="tts-voice-select">TTS Voice</label>
+                    <select id="tts-voice-select">
+                        <option value="en-US-JennyNeural">Jenny (Female)</option>
+                        <option value="en-US-GuyNeural">Guy (Male)</option>
+                        <option value="en-US-AriaNeural">Aria (Female)</option>
+                        <option value="en-US-DavisNeural">Davis (Male)</option>
+                        <option value="en-US-AmberNeural">Amber (Female)</option>
+                        <option value="en-US-JasonNeural">Jason (Male)</option>
+                        <option value="en-GB-SoniaNeural">Sonia (British Female)</option>
+                        <option value="en-GB-RyanNeural">Ryan (British Male)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Voice Input Settings Section -->
+            <div class="voice-input-settings">
+                <h4>Voice Input Settings</h4>
+                
+                <div class="settings-item">
+                    <label for="voice-input-enabled-toggle">Enable Voice Input</label>
+                    <div class="toggle-switch active" id="voice-input-enabled-toggle"></div>
+                </div>
+                
+                <div class="settings-item">
+                    <label for="continuous-conversation-toggle">Continuous Conversation Mode</label>
+                    <div class="toggle-switch" id="continuous-conversation-toggle"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="voice-activation-key">Push-to-Talk Key (Desktop)</label>
+                    <select id="voice-activation-key">
+                        <option value="Space">Space</option>
+                        <option value="v">V</option>
+                        <option value="t">T</option>
+                        <option value="Control">Ctrl</option>
+                        <option value="Alt">Alt</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Indicator -->
+    <div class="voice-indicator" id="voice-indicator">
+        <i class="fas fa-volume-up"></i>
+        <span>Speaking...</span>
+    </div>
+
+    <!-- Listening Indicator -->
+    <div class="listening-indicator" id="listening-indicator">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span>Listening...</span>
+    </div>
+
+    <!-- AI Chat Interface -->
+    <div class="ai-chat-interface" id="ai-chat-interface">
+        <div class="ai-chat-header">
+            <div class="ai-chat-title">AI Companion Chat</div>
+            <button class="ai-modal-close" onclick="document.getElementById('ai-chat-interface').classList.remove('active')">&times;</button>
+        </div>
+        <div class="ai-chat-messages" id="ai-chat-messages"></div>
+        <div class="ai-chat-input-container">
+            <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.worldNavigator.aiManager.sendMessage()">
+            <button class="voice-input-btn" id="voice-input-btn" title="Hold to speak">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+            <button class="ai-chat-send" onclick="window.worldNavigator.aiManager.sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- Task Panel -->
+    <div class="task-panel" id="task-panel">
+        <h3>📚 Saved Conversations</h3>
+        <button class="upload-conversation-btn" onclick="document.getElementById('conversation-upload-input').click()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Upload Conversation JSON
+        </button>
+        <input type="file" id="conversation-upload-input" class="conversation-upload-input" accept=".json" onchange="window.worldNavigator.taskManager.uploadConversation(event)">
+        <div id="task-list">
+            <!-- Tasks populated here -->
+        </div>
+    </div>
+
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">NEXUS HUB</h1>
+        <p class="world-description" id="world-description">The central hub connecting all worlds. Step through the portals to explore different dimensions with your AI companion.</p>
+    </div>
+
+    <!-- AI Companion Button -->
+    <div class="ai-companion-button" id="ai-companion-button">
+        <svg class="view-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+        </svg>
+    </div>
+
+    <!-- Tasks Button -->
+    <div class="tasks-button" id="tasks-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+        </svg>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter world</p>
+    </div>
+
+    <div class="loading" id="loading">Initializing nexus...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+    <script>
+        // Configuration
+        const WORLD_ATTRIBUTES = {
+            name: "Nexus Hub",
+            description: "The central hub connecting all worlds. Step through the portals to explore different dimensions with your AI companion.",
+            ambientColor: 0x0a0a0a,
+            fogColor: 0x000033,
+            groundColor: 0x1a1a2e,
+            skyColor: 0x16213e,
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0x00ffff,
+            portalColor2: 0xff00ff,
+            particleCount: 500,
+            cameraHeight: 2,
+            fogNear: 10,
+            fogFar: 100
+        };
+
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        // Voice Input Manager
+        class VoiceInputManager {
+            constructor(aiManager) {
+                this.aiManager = aiManager;
+                this.recognition = null;
+                this.isListening = false;
+                this.isEnabled = true;
+                this.continuousMode = false;
+                this.pushToTalkKey = 'Space';
+                this.isKeyPressed = false;
+                
+                // Initialize speech recognition
+                this.initializeSpeechRecognition();
+                
+                // UI elements
+                this.voiceInputBtn = document.getElementById('voice-input-btn');
+                this.listeningIndicator = document.getElementById('listening-indicator');
+                
+                this.setupEventListeners();
+            }
+
+            initializeSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (!SpeechRecognition) {
+                    console.error('Speech recognition not supported');
+                    this.showNotification('Speech recognition not supported in this browser');
+                    return;
+                }
+
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = false;
+                this.recognition.interimResults = true;
+                this.recognition.lang = 'en-US';
+
+                this.recognition.onstart = () => {
+                    console.log('Speech recognition started');
+                    this.isListening = true;
+                    this.voiceInputBtn.classList.add('recording');
+                    this.listeningIndicator.classList.add('active');
+                };
+
+                this.recognition.onend = () => {
+                    console.log('Speech recognition ended');
+                    this.isListening = false;
+                    this.voiceInputBtn.classList.remove('recording');
+                    this.listeningIndicator.classList.remove('active');
+                    
+                    // In continuous mode, restart if still enabled
+                    if (this.continuousMode && this.isEnabled && this.aiManager.isActive) {
+                        setTimeout(() => {
+                            if (!this.aiManager.voiceManager.isSpeaking) {
+                                this.startListening();
+                            }
+                        }, 500);
+                    }
+                };
+
+                this.recognition.onresult = (event) => {
+                    let finalTranscript = '';
+                    let interimTranscript = '';
+
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    // Update input field with interim results
+                    if (interimTranscript) {
+                        document.getElementById('ai-chat-input').value = interimTranscript;
+                    }
+
+                    // Send final transcript as message
+                    if (finalTranscript) {
+                        console.log('Final transcript:', finalTranscript);
+                        document.getElementById('ai-chat-input').value = finalTranscript;
+                        this.aiManager.sendMessage();
+                        
+                        // Stop listening if not in continuous mode
+                        if (!this.continuousMode) {
+                            this.stopListening();
+                        }
+                    }
+                };
+
+                this.recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    this.isListening = false;
+                    this.voiceInputBtn.classList.remove('recording');
+                    this.listeningIndicator.classList.remove('active');
+                    
+                    if (event.error === 'no-speech') {
+                        // Silent timeout, just stop
+                        return;
+                    }
+                    
+                    this.showNotification(`Speech recognition error: ${event.error}`);
+                };
+            }
+
+            setupEventListeners() {
+                // Voice input button (click or touch)
+                if (this.voiceInputBtn) {
+                    if (isMobile) {
+                        // Mobile: touch and hold
+                        this.voiceInputBtn.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            if (this.isEnabled && this.aiManager.isActive) {
+                                this.startListening();
+                            }
+                        });
+
+                        this.voiceInputBtn.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            if (!this.continuousMode) {
+                                this.stopListening();
+                            }
+                        });
+                    } else {
+                        // Desktop: mouse hold
+                        this.voiceInputBtn.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            if (this.isEnabled && this.aiManager.isActive) {
+                                this.startListening();
+                            }
+                        });
+
+                        this.voiceInputBtn.addEventListener('mouseup', (e) => {
+                            e.preventDefault();
+                            if (!this.continuousMode) {
+                                this.stopListening();
+                            }
+                        });
+
+                        this.voiceInputBtn.addEventListener('mouseleave', (e) => {
+                            if (this.isListening && !this.continuousMode) {
+                                this.stopListening();
+                            }
+                        });
+                    }
+                }
+
+                // Desktop push-to-talk key
+                if (!isMobile) {
+                    window.addEventListener('keydown', (e) => {
+                        if (e.key === this.pushToTalkKey && !this.isKeyPressed && this.isEnabled && this.aiManager.isActive && !e.repeat) {
+                            this.isKeyPressed = true;
+                            this.startListening();
+                        }
+                    });
+
+                    window.addEventListener('keyup', (e) => {
+                        if (e.key === this.pushToTalkKey && this.isKeyPressed) {
+                            this.isKeyPressed = false;
+                            if (!this.continuousMode) {
+                                this.stopListening();
+                            }
+                        }
+                    });
+                }
+            }
+
+            startListening() {
+                if (!this.recognition || this.isListening || this.aiManager.voiceManager.isSpeaking) {
+                    return;
+                }
+
+                try {
+                    this.recognition.start();
+                } catch (error) {
+                    console.error('Error starting speech recognition:', error);
+                }
+            }
+
+            stopListening() {
+                if (!this.recognition || !this.isListening) {
+                    return;
+                }
+
+                try {
+                    this.recognition.stop();
+                } catch (error) {
+                    console.error('Error stopping speech recognition:', error);
+                }
+            }
+
+            setEnabled(enabled) {
+                this.isEnabled = enabled;
+                if (!enabled) {
+                    this.stopListening();
+                }
+            }
+
+            setContinuousMode(enabled) {
+                this.continuousMode = enabled;
+                if (enabled && this.isEnabled && this.aiManager.isActive && !this.isListening) {
+                    this.startListening();
+                } else if (!enabled && this.isListening) {
+                    this.stopListening();
+                }
+            }
+
+            setPushToTalkKey(key) {
+                this.pushToTalkKey = key;
+            }
+
+            showNotification(message) {
+                if (this.aiManager && this.aiManager.showNotification) {
+                    this.aiManager.showNotification(message);
+                }
+            }
+        }
+
+        // Voice Manager with Azure TTS
+        class VoiceManager {
+            constructor() {
+                this.synthesis = window.speechSynthesis;
+                this.enabled = true;
+                this.autoSpeak = false;
+                this.isSpeaking = false;
+                this.azureKey = '';
+                this.azureRegion = 'eastus2';
+                this.voiceName = 'en-US-JennyNeural';
+                this.isSdkLoaded = false;
+                this.speechSynthesizer = null;
+                this.maxCharacters = 5000;
+                
+                this.loadSpeechSdk();
+            }
+
+            loadSpeechSdk() {
+                if (window.SpeechSDK) {
+                    this.isSdkLoaded = true;
+                    return;
+                }
+
+                const script = document.createElement("script");
+                script.src = "https://aka.ms/csspeech/jsbrowserpackageraw";
+                script.async = true;
+                script.onload = () => {
+                    console.log("Microsoft Speech SDK loaded");
+                    this.isSdkLoaded = true;
+                };
+                script.onerror = () => {
+                    console.error("Failed to load Microsoft Speech SDK");
+                };
+
+                document.body.appendChild(script);
+            }
+
+            setEnabled(enabled) {
+                this.enabled = enabled;
+            }
+
+            setAutoSpeak(autoSpeak) {
+                this.autoSpeak = autoSpeak;
+            }
+
+            setAzureKey(key) {
+                this.azureKey = key;
+            }
+
+            setVoiceName(voiceName) {
+                this.voiceName = voiceName;
+            }
+
+            async speak(text) {
+                if (!this.enabled || !text || this.isSpeaking) return;
+
+                // Cancel any ongoing speech
+                this.stopSpeaking();
+                
+                // Clean text for speech
+                const cleanText = this.cleanTextForSpeech(text);
+                
+                // Check if Azure TTS is configured and SDK is loaded
+                if (this.azureKey && this.isSdkLoaded && window.SpeechSDK) {
+                    await this.speakWithAzure(cleanText);
+                } else {
+                    await this.speakWithBrowser(cleanText);
+                }
+            }
+
+            async speakWithAzure(text) {
+                try {
+                    const truncatedText = text.length > this.maxCharacters
+                        ? text.substring(0, this.maxCharacters) + "... (text truncated for speech)"
+                        : text;
+
+                    const speechConfig = window.SpeechSDK.SpeechConfig.fromSubscription(
+                        this.azureKey,
+                        this.azureRegion
+                    );
+                    speechConfig.speechSynthesisVoiceName = this.voiceName;
+
+                    const audioConfig = window.SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                    this.speechSynthesizer = new window.SpeechSDK.SpeechSynthesizer(
+                        speechConfig,
+                        audioConfig
+                    );
+
+                    this.isSpeaking = true;
+                    document.getElementById('voice-indicator').classList.add('active');
+
+                    await new Promise((resolve, reject) => {
+                        this.speechSynthesizer.speakTextAsync(
+                            truncatedText,
+                            (result) => {
+                                if (
+                                    result.reason ===
+                                    window.SpeechSDK.ResultReason.SynthesizingAudioCompleted
+                                ) {
+                                    console.log("Azure TTS synthesis completed");
+                                    this.isSpeaking = false;
+                                    document.getElementById('voice-indicator').classList.remove('active');
+                                    
+                                    if (this.speechSynthesizer) {
+                                        this.speechSynthesizer.close();
+                                        this.speechSynthesizer = null;
+                                    }
+                                    resolve();
+                                } else {
+                                    console.error(
+                                        `Speech synthesis canceled, reason: ${result.reason}`
+                                    );
+                                    
+                                    if (this.speechSynthesizer) {
+                                        this.speechSynthesizer.close();
+                                        this.speechSynthesizer = null;
+                                    }
+
+                                    this.isSpeaking = false;
+                                    document.getElementById('voice-indicator').classList.remove('active');
+                                    reject(new Error(`Speech synthesis failed.`));
+                                }
+                            },
+                            (error) => {
+                                console.error("Azure TTS error:", error);
+
+                                if (this.speechSynthesizer) {
+                                    this.speechSynthesizer.close();
+                                    this.speechSynthesizer = null;
+                                }
+
+                                this.isSpeaking = false;
+                                document.getElementById('voice-indicator').classList.remove('active');
+                                reject(error);
+                            }
+                        );
+                    });
+                } catch (error) {
+                    console.error("Azure TTS error:", error);
+                    this.isSpeaking = false;
+                    document.getElementById('voice-indicator').classList.remove('active');
+                    // Fallback to browser TTS
+                    await this.speakWithBrowser(text);
+                }
+            }
+
+            async speakWithBrowser(text) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.rate = 1.0;
+                        utterance.pitch = 1.0;
+                        utterance.volume = 1.0;
+                        
+                        // Select a natural voice if available
+                        const voices = this.synthesis.getVoices();
+                        const preferredVoice = voices.find(voice => 
+                            voice.name.includes('Microsoft') || 
+                            voice.name.includes('Google') ||
+                            voice.name.includes('Natural')
+                        ) || voices[0];
+                        
+                        if (preferredVoice) {
+                            utterance.voice = preferredVoice;
+                        }
+                        
+                        utterance.onstart = () => {
+                            this.isSpeaking = true;
+                            document.getElementById('voice-indicator').classList.add('active');
+                        };
+                        
+                        utterance.onend = () => {
+                            this.isSpeaking = false;
+                            document.getElementById('voice-indicator').classList.remove('active');
+                            resolve();
+                        };
+                        
+                        utterance.onerror = (error) => {
+                            this.isSpeaking = false;
+                            document.getElementById('voice-indicator').classList.remove('active');
+                            reject(error);
+                        };
+                        
+                        this.synthesis.speak(utterance);
+                    } catch (error) {
+                        this.isSpeaking = false;
+                        document.getElementById('voice-indicator').classList.remove('active');
+                        reject(error);
+                    }
+                });
+            }
+
+            stopSpeaking() {
+                if (this.speechSynthesizer) {
+                    try {
+                        this.speechSynthesizer.close();
+                    } catch (e) {
+                        console.warn("Error closing speech synthesizer:", e);
+                    }
+                    this.speechSynthesizer = null;
+                }
+
+                if (window.speechSynthesis) {
+                    try {
+                        window.speechSynthesis.cancel();
+                    } catch (e) {
+                        console.warn("Error canceling speech synthesis:", e);
+                    }
+                }
+
+                this.isSpeaking = false;
+                document.getElementById('voice-indicator').classList.remove('active');
+            }
+
+            cleanTextForSpeech(text) {
+                let cleanText = text.replace(/<[^>]*>/g, " ");
+
+                cleanText = cleanText
+                    .replace(/\*\*([^*]+)\*\*/g, "$1")
+                    .replace(/\*([^*]+)\*/g, "$1")
+                    .replace(/`([^`]+)`/g, "$1")
+                    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+                    .replace(/#{1,6}\s+([^\n]+)/g, "$1")
+                    .replace(/```[\s\S]*?```/g, "")
+                    .replace(/\n/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                return cleanText;
+            }
+        }
+
+        // Task Manager for conversation replay
+        class TaskManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.conversations = new Map();
+                this.currentReplay = null;
+                this.isReplaying = false;
+
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                // Tasks button
+                document.getElementById('tasks-button').addEventListener('click', () => {
+                    this.toggleTaskPanel();
+                });
+            }
+
+            toggleTaskPanel() {
+                const panel = document.getElementById('task-panel');
+                panel.classList.toggle('active');
+                if (panel.classList.contains('active')) {
+                    this.updateTaskList();
+                }
+            }
+
+            updateTaskList() {
+                const taskList = document.getElementById('task-list');
+                taskList.innerHTML = '';
+
+                if (this.conversations.size === 0) {
+                    taskList.innerHTML = '<p style="color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 20px;">No conversations loaded yet. Upload a Teacher-Learner conversation JSON to replay it in 3D space!</p>';
+                    return;
+                }
+
+                this.conversations.forEach((conversation, conversationId) => {
+                    const taskEl = document.createElement('div');
+                    taskEl.className = 'task-item';
+                    
+                    // Extract conversation info
+                    const messageCount = conversation.conversation ? conversation.conversation.length : 0;
+                    const timestamp = conversation.timestamp ? new Date(conversation.timestamp).toLocaleString() : 'Unknown';
+                    const appName = conversation.appName || 'Unnamed Conversation';
+                    
+                    taskEl.innerHTML = `
+                        <strong>${appName}</strong>
+                        <small>Saved: ${timestamp}</small>
+                        <div style="font-size: 0.85em; color: rgba(255, 255, 255, 0.7); margin-top: 8px;">
+                            ${messageCount} messages • 
+                            ${conversation.guid ? 'User ID: ' + conversation.guid.slice(0, 8) + '...' : 'No user ID'}
+                        </div>
+                    `;
+                    taskEl.onclick = () => this.startConversationReplay(conversationId);
+                    taskList.appendChild(taskEl);
+                });
+            }
+
+            async uploadConversation(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    const conversationData = JSON.parse(text);
+
+                    // Validate conversation format
+                    if (!conversationData.conversation || !Array.isArray(conversationData.conversation)) {
+                        throw new Error('Invalid conversation format');
+                    }
+
+                    // Generate unique ID for this conversation
+                    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    // Store conversation
+                    this.conversations.set(conversationId, conversationData);
+
+                    // Update UI
+                    this.updateTaskList();
+                    this.world.showNotification('Conversation uploaded successfully!');
+
+                } catch (error) {
+                    console.error('Error uploading conversation:', error);
+                    this.world.showNotification('Failed to upload conversation. Check file format.');
+                }
+
+                // Reset file input
+                event.target.value = '';
+            }
+
+            async startConversationReplay(conversationId) {
+                const conversation = this.conversations.get(conversationId);
+                if (!conversation) return;
+
+                // Show notification
+                this.world.showNotification(`Starting conversation replay...`);
+
+                // Open chat interface
+                document.getElementById('ai-chat-interface').classList.add('active');
+
+                // Clear current chat
+                const chatMessages = document.getElementById('ai-chat-messages');
+                chatMessages.innerHTML = '';
+
+                // Set replaying flag
+                this.isReplaying = true;
+                this.currentReplay = {
+                    conversation: conversation,
+                    currentIndex: 0
+                };
+
+                // Replay the conversation
+                for (const message of conversation.conversation) {
+                    await this.processMessage(message);
+                    await this.delay(2000); // Wait 2 seconds between messages
+                }
+
+                this.isReplaying = false;
+                this.world.showNotification('Conversation replay completed!');
+            }
+
+            async processMessage(message) {
+                // Add message to chat
+                if (message.role === 'user') {
+                    this.addReplayMessage(message.content, 'user');
+                    
+                    // Simulate user movement
+                    this.simulateUserAction(message.content);
+                    
+                } else if (message.role === 'assistant') {
+                    // Show typing indicator
+                    this.world.aiManager.showTypingIndicator();
+                    
+                    // Wait a bit for realism
+                    await this.delay(1500);
+                    
+                    this.world.aiManager.hideTypingIndicator();
+                    this.addReplayMessage(message.content, 'ai');
+                    
+                    // Animate 3D text if AI manager is active
+                    if (this.world.aiManager && this.world.aiManager.isActive) {
+                        this.world.aiManager.animateTextResponse(message.content);
+                    }
+                    
+                    // Simulate AI companion actions
+                    this.simulateAIAction(message.content);
+                    
+                } else if (message.role === 'system') {
+                    // Show system messages differently
+                    this.addReplayMessage(message.content, 'system');
+                }
+            }
+
+            simulateUserAction(messageContent) {
+                // Simulate user movement based on message content
+                const lowerContent = messageContent.toLowerCase();
+                
+                if (lowerContent.includes('portal') || lowerContent.includes('enter') || lowerContent.includes('go to')) {
+                    // Move camera towards a random portal
+                    const portalIndex = Math.floor(Math.random() * this.world.portals.length);
+                    const portal = this.world.portals[portalIndex];
+                    if (portal) {
+                        const targetPos = portal.parent.position.clone();
+                        targetPos.y = this.world.camera.position.y;
+                        
+                        // Animate camera movement
+                        const startPos = this.world.camera.position.clone();
+                        const animateMove = (progress) => {
+                            if (progress <= 1) {
+                                this.world.camera.position.lerpVectors(startPos, targetPos, progress);
+                                requestAnimationFrame(() => animateMove(progress + 0.02));
+                            }
+                        };
+                        animateMove(0);
+                    }
+                }
+            }
+
+            simulateAIAction(messageContent) {
+                // Simulate AI companion movement based on response
+                if (!this.world.aiManager || !this.world.aiManager.isActive) return;
+                
+                const companion = this.world.aiManager.companion;
+                if (!companion) return;
+
+                const lowerContent = messageContent.toLowerCase();
+                
+                if (lowerContent.includes('follow') || lowerContent.includes('come') || lowerContent.includes('join')) {
+                    // Move companion closer to camera
+                    const targetPos = this.world.camera.position.clone();
+                    targetPos.x += 3;
+                    targetPos.z += 3;
+                    companion.object.position.lerp(targetPos, 0.1);
+                }
+            }
+
+            addReplayMessage(text, sender) {
+                const chatMessages = document.getElementById('ai-chat-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `ai-message ${sender} task-replay`;
+                messageDiv.textContent = text;
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                // Animate companion if AI message
+                if (sender === 'ai' && this.world.aiManager && this.world.aiManager.isActive) {
+                    this.world.aiManager.animateCompanionSpeaking();
+                }
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Simple AI Manager Class
+        class AIManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.apiKey = null;
+                this.endpoint = 'https://azfbusinessbot.azurewebsites.net/api/businessinsightbot_function';
+                this.conversationHistory = [];
+                this.isActive = false;
+                this.userGuid = this.generateUserGuid();
+
+                // Voice manager
+                this.voiceManager = new VoiceManager();
+                
+                // Voice input manager
+                this.voiceInputManager = null;
+
+                // Settings
+                this.settings = this.loadSettings();
+
+                // UI elements
+                this.chatInterface = document.getElementById('ai-chat-interface');
+                this.chatMessages = document.getElementById('ai-chat-messages');
+                this.chatInput = document.getElementById('ai-chat-input');
+                this.companionButton = document.getElementById('ai-companion-button');
+                this.aiModal = document.getElementById('ai-modal');
+
+                // 3D companion
+                this.companion = null;
+                this.textMeshes = [];
+                this.font = null;
+                this.textGroup = null;
+                this.textContainer = null; // New container for scrolling text
+
+                // Store the last voice response
+                this.lastVoiceResponse = null;
+
+                // Active text animation
+                this.activeTextAnimation = null;
+
+                this.setupEventListeners();
+                this.checkCachedApiKey();
+                this.applySettings();
+                
+                // Initialize voice input manager
+                this.voiceInputManager = new VoiceInputManager(this);
+            }
+
+            generateUserGuid() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            loadSettings() {
+                const settings = localStorage.getItem('nexusAISettings');
+                return settings ? JSON.parse(settings) : {
+                    voiceEnabled: true,
+                    autoSpeak: false,
+                    azureTTSKey: '',
+                    ttsVoiceName: 'en-US-JennyNeural',
+                    voiceInputEnabled: true,
+                    continuousConversation: false,
+                    pushToTalkKey: 'Space'
+                };
+            }
+
+            saveSettings() {
+                localStorage.setItem('nexusAISettings', JSON.stringify(this.settings));
+            }
+
+            applySettings() {
+                // Apply voice output settings
+                this.voiceManager.setEnabled(this.settings.voiceEnabled);
+                this.voiceManager.setAutoSpeak(this.settings.autoSpeak);
+                this.voiceManager.setAzureKey(this.settings.azureTTSKey);
+                this.voiceManager.setVoiceName(this.settings.ttsVoiceName);
+
+                // Apply voice input settings
+                if (this.voiceInputManager) {
+                    this.voiceInputManager.setEnabled(this.settings.voiceInputEnabled);
+                    this.voiceInputManager.setContinuousMode(this.settings.continuousConversation);
+                    this.voiceInputManager.setPushToTalkKey(this.settings.pushToTalkKey);
+                }
+
+                // Update UI toggles
+                const voiceEnabledToggle = document.getElementById('voice-enabled-toggle');
+                if (voiceEnabledToggle) {
+                    voiceEnabledToggle.classList.toggle('active', this.settings.voiceEnabled);
+                }
+
+                const autoSpeakToggle = document.getElementById('auto-speak-toggle');
+                if (autoSpeakToggle) {
+                    autoSpeakToggle.classList.toggle('active', this.settings.autoSpeak);
+                }
+
+                const voiceInputEnabledToggle = document.getElementById('voice-input-enabled-toggle');
+                if (voiceInputEnabledToggle) {
+                    voiceInputEnabledToggle.classList.toggle('active', this.settings.voiceInputEnabled);
+                }
+
+                const continuousConversationToggle = document.getElementById('continuous-conversation-toggle');
+                if (continuousConversationToggle) {
+                    continuousConversationToggle.classList.toggle('active', this.settings.continuousConversation);
+                }
+
+                // Update Azure TTS settings
+                const azureTTSKeyInput = document.getElementById('azure-tts-key');
+                if (azureTTSKeyInput && this.settings.azureTTSKey) {
+                    azureTTSKeyInput.value = this.settings.azureTTSKey;
+                }
+
+                const ttsVoiceSelect = document.getElementById('tts-voice-select');
+                if (ttsVoiceSelect) {
+                    ttsVoiceSelect.value = this.settings.ttsVoiceName;
+                }
+
+                const voiceActivationKeySelect = document.getElementById('voice-activation-key');
+                if (voiceActivationKeySelect) {
+                    voiceActivationKeySelect.value = this.settings.pushToTalkKey;
+                }
+            }
+
+            async checkCachedApiKey() {
+                const cachedApiKey = localStorage.getItem('nexus_ai_api_key');
+                if (cachedApiKey) {
+                    this.apiKey = cachedApiKey;
+                    try {
+                        const response = await this.sendToAPI('System check - testing cached API key.');
+                        if (response.assistant_response) {
+                            this.isActive = true;
+                            this.companionButton.classList.add('active');
+                            this.createAICompanion();
+                            this.showNotification('AI Companion activated!');
+                            
+                            // Start continuous conversation if enabled
+                            if (this.settings.continuousConversation && this.voiceInputManager) {
+                                this.voiceInputManager.startListening();
+                            }
+                        }
+                    } catch (error) {
+                        localStorage.removeItem('nexus_ai_api_key');
+                        this.apiKey = null;
+                    }
+                }
+            }
+
+            setupEventListeners() {
+                this.companionButton.addEventListener('click', () => {
+                    if (this.isActive) {
+                        this.chatInterface.classList.toggle('active');
+                    } else {
+                        this.aiModal.classList.add('show');
+                    }
+                });
+
+                document.getElementById('ai-close').addEventListener('click', () => {
+                    this.aiModal.classList.remove('show');
+                });
+
+                document.getElementById('ai-activate-btn').addEventListener('click', () => {
+                    this.activateAI();
+                });
+
+                // Voice output settings toggles
+                document.getElementById('voice-enabled-toggle').addEventListener('click', (e) => {
+                    const isActive = e.target.classList.toggle('active');
+                    this.settings.voiceEnabled = isActive;
+                    this.saveSettings();
+                    this.voiceManager.setEnabled(isActive);
+                });
+
+                document.getElementById('auto-speak-toggle').addEventListener('click', (e) => {
+                    const isActive = e.target.classList.toggle('active');
+                    this.settings.autoSpeak = isActive;
+                    this.saveSettings();
+                    this.voiceManager.setAutoSpeak(isActive);
+                });
+
+                // Voice input settings toggles
+                document.getElementById('voice-input-enabled-toggle').addEventListener('click', (e) => {
+                    const isActive = e.target.classList.toggle('active');
+                    this.settings.voiceInputEnabled = isActive;
+                    this.saveSettings();
+                    if (this.voiceInputManager) {
+                        this.voiceInputManager.setEnabled(isActive);
+                    }
+                });
+
+                document.getElementById('continuous-conversation-toggle').addEventListener('click', (e) => {
+                    const isActive = e.target.classList.toggle('active');
+                    this.settings.continuousConversation = isActive;
+                    this.saveSettings();
+                    if (this.voiceInputManager) {
+                        this.voiceInputManager.setContinuousMode(isActive);
+                    }
+                });
+
+                // Azure TTS settings
+                document.getElementById('azure-tts-key').addEventListener('change', (e) => {
+                    this.settings.azureTTSKey = e.target.value.trim();
+                    this.saveSettings();
+                    this.voiceManager.setAzureKey(this.settings.azureTTSKey);
+                });
+
+                document.getElementById('tts-voice-select').addEventListener('change', (e) => {
+                    this.settings.ttsVoiceName = e.target.value;
+                    this.saveSettings();
+                    this.voiceManager.setVoiceName(this.settings.ttsVoiceName);
+                });
+
+                document.getElementById('voice-activation-key').addEventListener('change', (e) => {
+                    this.settings.pushToTalkKey = e.target.value;
+                    this.saveSettings();
+                    if (this.voiceInputManager) {
+                        this.voiceInputManager.setPushToTalkKey(this.settings.pushToTalkKey);
+                    }
+                });
+            }
+
+            async activateAI() {
+                const apiKeyInput = document.getElementById('ai-api-key');
+                const apiKey = apiKeyInput.value.trim();
+
+                if (!apiKey) {
+                    this.showNotification('Please enter an API key');
+                    return;
+                }
+
+                this.apiKey = apiKey;
+
+                try {
+                    const response = await this.sendToAPI('Hello! I have joined the Nexus world.');
+
+                    if (response.assistant_response) {
+                        this.isActive = true;
+                        this.companionButton.classList.add('active');
+                        this.aiModal.classList.remove('show');
+                        this.showNotification('AI Companion activated!');
+                        localStorage.setItem('nexus_ai_api_key', apiKey);
+
+                        this.createAICompanion();
+                        this.addMessage(response.assistant_response, 'ai');
+                        
+                        // Store the voice response and use it for 3D text
+                        if (response.voice_response) {
+                            this.lastVoiceResponse = response.voice_response;
+                            // Use voice response for 3D text
+                            this.animateTextResponse(response.voice_response);
+                            
+                            // Speak voice response if auto-speak is enabled
+                            if (this.settings.autoSpeak) {
+                                await this.voiceManager.speak(response.voice_response);
+                            }
+                        } else {
+                            // Fallback to assistant response
+                            this.animateTextResponse(response.assistant_response);
+                        }
+                        
+                        // Start continuous conversation if enabled
+                        if (this.settings.continuousConversation && this.voiceInputManager) {
+                            setTimeout(() => {
+                                this.voiceInputManager.startListening();
+                            }, 2000);
+                        }
+                        
+                        apiKeyInput.value = '';
+                    }
+                } catch (error) {
+                    console.error('Failed to activate AI:', error);
+                    this.showNotification('Failed to activate AI. Please check your API key.');
+                }
+            }
+
+            createAICompanion() {
+                const companionGroup = new THREE.Group();
+
+                // Glowing orb
+                const geometry = new THREE.SphereGeometry(0.8, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x8338ec,
+                    emissive: 0x8338ec,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.8
+                });
+
+                const orb = new THREE.Mesh(geometry, material);
+                orb.position.y = 2;
+                companionGroup.add(orb);
+
+                // Glow effect
+                const glowLight = new THREE.PointLight(0x8338ec, 2, 10);
+                glowLight.position.y = 2;
+                companionGroup.add(glowLight);
+
+                // Particles around orb
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 50;
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI;
+                    const radius = 1.5 + Math.random() * 0.5;
+
+                    positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta) + 2;
+                    positions[i + 2] = radius * Math.cos(phi);
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x06ffa5,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6
+                });
+
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                companionGroup.add(particles);
+
+                // Text display group with container for scrolling
+                this.textContainer = new THREE.Group();
+                this.textGroup = new THREE.Group();
+                this.textContainer.add(this.textGroup);
+                this.textContainer.position.y = 4;
+                companionGroup.add(this.textContainer);
+
+                companionGroup.position.set(5, 0, 5);
+                this.world.scene.add(companionGroup);
+
+                this.companion = {
+                    object: companionGroup,
+                    orb: orb,
+                    particles: particles,
+                    light: glowLight
+                };
+
+                // Load font for 3D text
+                this.loadFont();
+
+                // Animate companion
+                this.animateCompanion();
+            }
+
+            loadFont() {
+                const loader = new THREE.FontLoader();
+                loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+                    this.font = font;
+                });
+            }
+
+            animateCompanion() {
+                const animate = () => {
+                    if (!this.isActive || !this.companion) return;
+
+                    const time = Date.now() * 0.001;
+
+                    // Float animation
+                    this.companion.orb.position.y = 2 + Math.sin(time * 2) * 0.2;
+
+                    // Rotate particles
+                    this.companion.particles.rotation.y = time * 0.5;
+
+                    // Pulse glow
+                    this.companion.light.intensity = 2 + Math.sin(time * 3) * 0.5;
+
+                    // Follow player
+                    const targetPos = new THREE.Vector3();
+                    targetPos.copy(this.world.camera.position);
+                    targetPos.x += 5;
+                    targetPos.z += 5;
+
+                    this.companion.object.position.lerp(targetPos, 0.05);
+
+                    // Make text container face camera
+                    if (this.textContainer) {
+                        this.textContainer.lookAt(this.world.camera.position);
+                    }
+
+                    requestAnimationFrame(animate);
+                };
+
+                animate();
+            }
+
+            async sendToAPI(message) {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'x-functions-key': this.apiKey
+                };
+
+                const body = {
+                    user_input: message,
+                    conversation_history: this.conversationHistory,
+                    user_guid: this.userGuid
+                };
+
+                const response = await fetch(this.endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                return await response.json();
+            }
+
+            async sendMessage() {
+                const message = this.chatInput.value.trim();
+                if (!message || !this.isActive) return;
+
+                // Check if currently replaying
+                if (this.world.taskManager && this.world.taskManager.isReplaying) {
+                    this.showNotification('Cannot send messages during conversation replay');
+                    return;
+                }
+
+                this.addMessage(message, 'user');
+                this.chatInput.value = '';
+
+                this.showTypingIndicator();
+
+                this.conversationHistory.push({
+                    role: 'user',
+                    content: message
+                });
+
+                try {
+                    const response = await this.sendToAPI(message);
+
+                    this.hideTypingIndicator();
+
+                    if (response.assistant_response) {
+                        this.addMessage(response.assistant_response, 'ai');
+
+                        this.conversationHistory.push({
+                            role: 'assistant',
+                            content: response.assistant_response
+                        });
+
+                        // Use voice response for 3D text if available
+                        if (response.voice_response) {
+                            this.lastVoiceResponse = response.voice_response;
+                            // Display voice response in 3D
+                            this.animateTextResponse(response.voice_response);
+                            
+                            // Speak voice response if auto-speak is enabled
+                            if (this.settings.autoSpeak) {
+                                await this.voiceManager.speak(response.voice_response);
+                                
+                                // After speaking, restart listening if in continuous mode
+                                if (this.settings.continuousConversation && this.voiceInputManager) {
+                                    setTimeout(() => {
+                                        this.voiceInputManager.startListening();
+                                    }, 500);
+                                }
+                            }
+                        } else {
+                            // Fallback to assistant response
+                            this.animateTextResponse(response.assistant_response);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                    this.hideTypingIndicator();
+                    this.addMessage('Sorry, I encountered an error. Please try again.', 'ai');
+                }
+            }
+
+            animateTextResponse(text) {
+                // Stop any existing animation
+                if (this.activeTextAnimation) {
+                    cancelAnimationFrame(this.activeTextAnimation);
+                    this.activeTextAnimation = null;
+                }
+
+                // Clear previous text
+                this.textMeshes.forEach(mesh => {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) mesh.material.dispose();
+                    this.textGroup.remove(mesh);
+                });
+                this.textMeshes = [];
+
+                if (!this.font || !this.textGroup) return;
+
+                // Split text into lines (max characters per line)
+                const maxCharsPerLine = 40;
+                const words = text.split(' ');
+                const lines = [];
+                let currentLine = '';
+
+                words.forEach(word => {
+                    if ((currentLine + word).length > maxCharsPerLine) {
+                        if (currentLine) {
+                            lines.push(currentLine.trim());
+                            currentLine = '';
+                        }
+                    }
+                    currentLine += word + ' ';
+                });
+                if (currentLine) {
+                    lines.push(currentLine.trim());
+                }
+
+                // Create text meshes for each line
+                const lineHeight = 0.5;
+                const textMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffeb3b,
+                    emissive: 0xffeb3b,
+                    emissiveIntensity: 0.3,
+                    metalness: 0.5,
+                    roughness: 0.3,
+                    transparent: true,
+                    opacity: 1
+                });
+
+                lines.forEach((line, index) => {
+                    const textGeometry = new THREE.TextGeometry(line, {
+                        font: this.font,
+                        size: 0.25,
+                        height: 0.05,
+                        curveSegments: 12,
+                        bevelEnabled: true,
+                        bevelThickness: 0.01,
+                        bevelSize: 0.01,
+                        bevelSegments: 8
+                    });
+
+                    textGeometry.center();
+
+                    const textMesh = new THREE.Mesh(textGeometry, textMaterial.clone());
+                    textMesh.position.y = -index * lineHeight;
+                    
+                    this.textGroup.add(textMesh);
+                    this.textMeshes.push(textMesh);
+                });
+
+                // Calculate total height of text block
+                const totalHeight = lines.length * lineHeight;
+
+                // Start scrolling animation
+                this.animateScrollingText(totalHeight);
+            }
+
+            animateScrollingText(totalHeight) {
+                const scrollSpeed = 0.01; // Adjust speed as needed
+                const startY = -2; // Start position below view
+                const endY = totalHeight + 2; // End position above view
+                let currentY = startY;
+
+                const animate = () => {
+                    if (!this.textGroup || this.textMeshes.length === 0) return;
+
+                    // Update text position
+                    currentY += scrollSpeed;
+                    this.textGroup.position.y = currentY;
+
+                    // Check if text has scrolled completely
+                    if (currentY > endY) {
+                        // Fade out and remove
+                        this.fadeOutText();
+                        return;
+                    }
+
+                    // Fade in/out based on position
+                    this.textMeshes.forEach((mesh, index) => {
+                        const meshWorldY = currentY - index * 0.5;
+                        
+                        // Fade in at bottom
+                        if (meshWorldY < -1) {
+                            mesh.material.opacity = Math.max(0, 1 + meshWorldY);
+                        }
+                        // Fade out at top
+                        else if (meshWorldY > 1) {
+                            mesh.material.opacity = Math.max(0, 2 - meshWorldY);
+                        }
+                        // Full opacity in middle
+                        else {
+                            mesh.material.opacity = 1;
+                        }
+                    });
+
+                    this.activeTextAnimation = requestAnimationFrame(animate);
+                };
+
+                // Start the animation
+                animate();
+            }
+
+            fadeOutText() {
+                let opacity = 1;
+                const fadeSpeed = 0.02;
+
+                const fade = () => {
+                    opacity -= fadeSpeed;
+                    
+                    if (opacity <= 0) {
+                        // Clear text
+                        this.textMeshes.forEach(mesh => {
+                            if (mesh.geometry) mesh.geometry.dispose();
+                            if (mesh.material) mesh.material.dispose();
+                            this.textGroup.remove(mesh);
+                        });
+                        this.textMeshes = [];
+                        this.textGroup.position.y = 0;
+                        return;
+                    }
+
+                    // Update opacity for all text meshes
+                    this.textMeshes.forEach(mesh => {
+                        mesh.material.opacity = opacity;
+                    });
+
+                    requestAnimationFrame(fade);
+                };
+
+                fade();
+            }
+
+            animateCompanionSpeaking() {
+                if (!this.companion) return;
+
+                // Quick pulse animation
+                const originalScale = this.companion.orb.scale.x;
+                let progress = 0;
+                const animate = () => {
+                    progress += 0.1;
+                    if (progress > 1) return;
+
+                    const scale = originalScale + Math.sin(progress * Math.PI) * 0.3;
+                    this.companion.orb.scale.setScalar(scale);
+
+                    // Increase glow while speaking
+                    this.companion.light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 1;
+                    this.companion.orb.material.emissiveIntensity = 0.5 + Math.sin(progress * Math.PI) * 0.3;
+
+                    requestAnimationFrame(animate);
+                };
+                animate();
+            }
+
+            showTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'ai-message ai-typing';
+                typingDiv.id = 'ai-typing-indicator';
+                typingDiv.innerHTML = `
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                `;
+                this.chatMessages.appendChild(typingDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            hideTypingIndicator() {
+                const typingIndicator = document.getElementById('ai-typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+
+            addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `ai-message ${sender}`;
+                messageDiv.textContent = text;
+
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = message;
+
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+        }
+
+        // Add Font and TextGeometry support to THREE
+        THREE.FontLoader = class FontLoader extends THREE.Loader {
+            constructor(manager) {
+                super(manager);
+            }
+
+            load(url, onLoad, onProgress, onError) {
+                const scope = this;
+                const loader = new THREE.FileLoader(this.manager);
+                loader.setPath(this.path);
+                loader.setRequestHeader(this.requestHeader);
+                loader.setWithCredentials(this.withCredentials);
+                loader.load(url, function(text) {
+                    try {
+                        const json = JSON.parse(text);
+                        const font = scope.parse(json);
+                        if (onLoad) onLoad(font);
+                    } catch (e) {
+                        if (onError) onError(e);
+                    }
+                }, onProgress, onError);
+            }
+
+            parse(json) {
+                return new THREE.Font(json);
+            }
+        };
+
+        // Add Font class
+        THREE.Font = class Font {
+            constructor(data) {
+                this.type = 'Font';
+                this.data = data;
+            }
+
+            generateShapes(text, size = 100) {
+                const shapes = [];
+                const paths = createPaths(text, size, this.data);
+
+                for (let p = 0, pl = paths.length; p < pl; p++) {
+                    Array.prototype.push.apply(shapes, paths[p].toShapes());
+                }
+
+                return shapes;
+            }
+        };
+
+        // Add TextGeometry
+        THREE.TextGeometry = class TextGeometry extends THREE.ExtrudeGeometry {
+            constructor(text, parameters = {}) {
+                const font = parameters.font;
+
+                if (!font || !font.data) {
+                    console.error('THREE.TextGeometry: font parameter is not an instance of THREE.Font.');
+                    super();
+                    return;
+                }
+
+                const shapes = font.generateShapes(text, parameters.size);
+
+                parameters.depth = parameters.height !== undefined ? parameters.height : 50;
+
+                if (parameters.bevelThickness === undefined) parameters.bevelThickness = 10;
+                if (parameters.bevelSize === undefined) parameters.bevelSize = 8;
+                if (parameters.bevelEnabled === undefined) parameters.bevelEnabled = false;
+
+                super(shapes, parameters);
+
+                this.type = 'TextGeometry';
+            }
+        };
+
+        // Helper function for font paths
+        function createPaths(text, size, data) {
+            const chars = Array.from(text);
+            const scale = size / data.resolution;
+            const line_height = (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * scale;
+
+            const paths = [];
+
+            let offsetX = 0, offsetY = 0;
+
+            for (let i = 0; i < chars.length; i++) {
+                const char = chars[i];
+
+                if (char === '\n') {
+                    offsetX = 0;
+                    offsetY -= line_height;
+                } else {
+                    const ret = createPath(char, scale, offsetX, offsetY, data);
+                    if (ret) {
+                        offsetX += ret.offsetX;
+                        paths.push(ret.path);
+                    }
+                }
+            }
+
+            return paths;
+        }
+
+        function createPath(char, scale, offsetX, offsetY, data) {
+            const glyph = data.glyphs[char] || data.glyphs['?'];
+
+            if (!glyph) {
+                console.error('THREE.Font: character "' + char + '" does not exists in font family ' + data.familyName + '.');
+                return;
+            }
+
+            const path = new THREE.ShapePath();
+
+            let x, y, cpx, cpy, cpx1, cpy1, cpx2, cpy2;
+
+            if (glyph.o) {
+                const outline = glyph._cachedOutline || (glyph._cachedOutline = glyph.o.split(' '));
+
+                for (let i = 0, l = outline.length; i < l;) {
+                    const action = outline[i++];
+
+                    switch (action) {
+                        case 'm': // moveTo
+                            x = outline[i++] * scale + offsetX;
+                            y = outline[i++] * scale + offsetY;
+                            path.moveTo(x, y);
+                            break;
+
+                        case 'l': // lineTo
+                            x = outline[i++] * scale + offsetX;
+                            y = outline[i++] * scale + offsetY;
+                            path.lineTo(x, y);
+                            break;
+
+                        case 'q': // quadraticCurveTo
+                            cpx = outline[i++] * scale + offsetX;
+                            cpy = outline[i++] * scale + offsetY;
+                            cpx1 = outline[i++] * scale + offsetX;
+                            cpy1 = outline[i++] * scale + offsetY;
+                            path.quadraticCurveTo(cpx1, cpy1, cpx, cpy);
+                            break;
+
+                        case 'b': // bezierCurveTo
+                            cpx = outline[i++] * scale + offsetX;
+                            cpy = outline[i++] * scale + offsetY;
+                            cpx1 = outline[i++] * scale + offsetX;
+                            cpy1 = outline[i++] * scale + offsetY;
+                            cpx2 = outline[i++] * scale + offsetX;
+                            cpy2 = outline[i++] * scale + offsetY;
+                            path.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, cpx, cpy);
+                            break;
+                    }
+                }
+            }
+
+            return { offsetX: glyph.ha * scale, path: path };
+        }
+
+        // Simplified World Navigator
+        class WorldNavigator {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+
+                this.moveSpeed = WORLD_ATTRIBUTES.moveSpeed;
+                this.lookSpeed = WORLD_ATTRIBUTES.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+
+                this.isMobile = isMobile;
+                this.isIOS = isIOS;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+
+                // Gamepad support
+                this.gamepad = null;
+                this.gamepadDeadzone = 0.15;
+                this.gamepadButtonStates = {};
+
+                this.aiManager = null;
+                this.taskManager = null;
+
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+
+            init() {
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+
+                this.setupScene();
+                this.setupLighting();
+                this.createEnvironment();
+                this.createPortals();
+                this.setupEventListeners();
+
+                // Initialize AI manager
+                this.aiManager = new AIManager(this);
+
+                // Initialize Task Manager
+                this.taskManager = new TaskManager(this);
+
+                // Setup gamepad controls
+                this.setupGamepadControls();
+
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter world';
+                    }
+                }
+
+                // Make WorldNavigator globally accessible
+                window.worldNavigator = this;
+
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(WORLD_ATTRIBUTES.fogColor, WORLD_ATTRIBUTES.fogNear, WORLD_ATTRIBUTES.fogFar);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, WORLD_ATTRIBUTES.cameraHeight, 10);
+
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(WORLD_ATTRIBUTES.ambientColor, 0.5);
+                this.scene.add(ambientLight);
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(10, 20, 10);
+                dirLight.castShadow = true;
+                this.scene.add(dirLight);
+            }
+
+            createEnvironment() {
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: WORLD_ATTRIBUTES.groundColor,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+
+                // Grid helper
+                const gridHelper = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
+                gridHelper.position.y = 0.1;
+                this.scene.add(gridHelper);
+
+                // Sky sphere
+                const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+                const skyMaterial = new THREE.MeshBasicMaterial({
+                    color: WORLD_ATTRIBUTES.skyColor,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+
+                // Particles
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = WORLD_ATTRIBUTES.particleCount;
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 100;
+                    positions[i + 1] = Math.random() * 50;
+                    positions[i + 2] = (Math.random() - 0.5) * 100;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(particles);
+            }
+
+            createPortals() {
+                // Create demo portals
+                const demoWorlds = [
+                    { name: "Crystal Caves", description: "A world of glowing crystals", emoji: "💎" },
+                    { name: "Sky Islands", description: "Floating islands in the clouds", emoji: "☁️" },
+                    { name: "Neon City", description: "A cyberpunk metropolis", emoji: "🌃" },
+                    { name: "Ocean Depths", description: "An underwater realm", emoji: "🌊" }
+                ];
+
+                const radius = 12;
+                const numPortals = demoWorlds.length;
+
+                for (let i = 0; i < numPortals; i++) {
+                    const angle = (i / numPortals) * Math.PI * 2;
+                    const world = demoWorlds[i];
+
+                    const portalGroup = new THREE.Group();
+
+                    // Portal frame
+                    const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8338ec,
+                        emissive: 0x8338ec,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+
+                    // Portal surface
+                    const portalGeometry = new THREE.CircleGeometry(2.7, 32);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(WORLD_ATTRIBUTES.portalColor1) },
+                            color2: { value: new THREE.Color(WORLD_ATTRIBUTES.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, wave);
+                                float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+
+                    portalGroup.position.set(
+                        Math.cos(angle) * radius,
+                        3,
+                        Math.sin(angle) * radius
+                    );
+                    portalGroup.rotation.y = -angle + Math.PI;
+
+                    // Portal light
+                    const light = new THREE.PointLight(0x8338ec, 1, 10);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        name: world.name,
+                        description: world.description
+                    };
+
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                // Mouse controls
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            this.showNotification(`Entering ${portal.userData.name}...`);
+                            // Portal travel logic would go here
+                        }
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        e.preventDefault();
+                        this.showNotification(`Entering ${portal.userData.name}...`);
+                        return;
+                    }
+
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            setupGamepadControls() {
+                // Check for gamepad support
+                if (!('getGamepads' in navigator)) {
+                    console.log('Gamepad API not supported');
+                    return;
+                }
+
+                // Listen for gamepad connection
+                window.addEventListener('gamepadconnected', (e) => {
+                    console.log('Gamepad connected:', e.gamepad.id);
+                    this.gamepad = e.gamepad.index;
+                    this.showNotification('🎮 Gamepad connected! Use left stick to move, right stick to look');
+                    
+                    // Show gamepad indicator
+                    document.getElementById('gamepad-indicator').classList.add('active');
+                });
+
+                window.addEventListener('gamepaddisconnected', (e) => {
+                    console.log('Gamepad disconnected');
+                    if (this.gamepad === e.gamepad.index) {
+                        this.gamepad = null;
+                        document.getElementById('gamepad-indicator').classList.remove('active');
+                    }
+                });
+            }
+
+            updateGamepadInput() {
+                if (this.gamepad === null) return;
+
+                const gamepads = navigator.getGamepads();
+                const gp = gamepads[this.gamepad];
+                
+                if (!gp || !gp.connected) return;
+
+                // Left stick for movement (axes 0 and 1)
+                const leftX = this.applyDeadzone(gp.axes[0]);
+                const leftY = this.applyDeadzone(gp.axes[1]);
+
+                // Right stick for camera look (axes 2 and 3)
+                const rightX = this.applyDeadzone(gp.axes[2]);
+                const rightY = this.applyDeadzone(gp.axes[3]);
+
+                // Movement
+                if (Math.abs(leftX) > 0 || Math.abs(leftY) > 0) {
+                    const forward = new THREE.Vector3();
+                    const right = new THREE.Vector3();
+
+                    this.camera.getWorldDirection(forward);
+                    forward.y = 0;
+                    forward.normalize();
+
+                    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                    // Move based on left stick
+                    const moveForward = forward.multiplyScalar(-leftY * this.moveSpeed);
+                    const moveRight = right.multiplyScalar(leftX * this.moveSpeed);
+                    
+                    this.camera.position.add(moveForward);
+                    this.camera.position.add(moveRight);
+                }
+
+                // Camera look with right stick
+                if (Math.abs(rightX) > 0 || Math.abs(rightY) > 0) {
+                    this.rotation.y -= rightX * this.lookSpeed * 2;
+                    this.rotation.x -= rightY * this.lookSpeed * 2;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                }
+
+                // A button (button 0) for interact/enter portal
+                if (gp.buttons[0].pressed) {
+                    this.handleGamepadInteraction();
+                }
+
+                // X button (button 2) for AI companion
+                if (gp.buttons[2].pressed && !this.gamepadButtonStates.x) {
+                    document.getElementById('ai-companion-button').click();
+                }
+
+                // Y button (button 3) for tasks
+                if (gp.buttons[3].pressed && !this.gamepadButtonStates.y) {
+                    document.getElementById('tasks-button').click();
+                }
+
+                // Update button states to detect single presses
+                this.updateGamepadButtonStates(gp);
+            }
+
+            applyDeadzone(value) {
+                if (Math.abs(value) < this.gamepadDeadzone) {
+                    return 0;
+                }
+                return value;
+            }
+
+            updateGamepadButtonStates(gp) {
+                if (!this.gamepadButtonStates) {
+                    this.gamepadButtonStates = {};
+                }
+                
+                this.gamepadButtonStates.a = gp.buttons[0].pressed;
+                this.gamepadButtonStates.b = gp.buttons[1].pressed;
+                this.gamepadButtonStates.x = gp.buttons[2].pressed;
+                this.gamepadButtonStates.y = gp.buttons[3].pressed;
+            }
+
+            handleGamepadInteraction() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+                    this.showNotification(`Entering ${portal.userData.name}...`);
+                }
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+
+                        this.tooltip.classList.add('visible');
+
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = message;
+
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+
+                // Update gamepad input
+                this.updateGamepadInput();
+
+                this.updateMovement();
+                this.updateHover();
+
+                // Animate portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+                        const intensity = 0.8 + Math.sin(time * 2 + index) * 0.2;
+                        portal.userData.light.intensity = intensity;
+                    }
+                    portal.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
+                });
+
+                // Animate particles
+                const particles = this.scene.getObjectByProperty('type', 'Points');
+                if (particles) {
+                    particles.rotation.y = time * 0.05;
+                    particles.position.y = Math.sin(time * 0.2) * 2;
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const navigator = new WorldNavigator();
+            navigator.init();
+        });
+
+        // Force load voices for speech synthesis
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            // Some browsers need a second call
+            window.speechSynthesis.onvoiceschanged = () => {
+                speechSynthesis.getVoices();
+            };
+        }
+
+        // iOS specific handling
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+    </script>
+</body>
+</html>
