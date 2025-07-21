@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Workshop - Your Collaborative Space</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Workshop Canvas */
+        #workshop-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(131, 56, 236, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(6, 255, 165, 0.1) 0%, transparent 50%),
+                #0a0a0a;
+        }
+
+        /* Grid overlay for spatial reference */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        /* Workshop Header */
+        .workshop-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+
+        .workshop-title {
+            font-size: 2em;
+            font-weight: 100;
+            letter-spacing: 0.1em;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff, #06ffa5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
+        }
+
+        .workshop-status {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9em;
+        }
+
+        /* Work Items (Draggable) */
+        .work-item {
+            position: absolute;
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            cursor: move;
+            transition: all 0.3s ease;
+            min-width: 200px;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .work-item:hover {
+            border-color: rgba(131, 56, 236, 0.5);
+            box-shadow: 0 6px 30px rgba(131, 56, 236, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .work-item.dragging {
+            opacity: 0.8;
+            cursor: grabbing;
+            z-index: 1000;
+        }
+
+        .work-item.ai-processing {
+            border-color: rgba(6, 255, 165, 0.8);
+            animation: aiPulse 2s infinite;
+        }
+
+        @keyframes aiPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(6, 255, 165, 0.3); }
+            50% { box-shadow: 0 8px 40px rgba(6, 255, 165, 0.6); }
+        }
+
+        .work-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .work-item-type {
+            font-size: 0.8em;
+            color: #06ffa5;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .work-item-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .work-item-content {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .work-item-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.6);
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+
+        /* AI Companion */
+        .ai-companion {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(131, 56, 236, 0.8), rgba(131, 56, 236, 0.3));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.5);
+            z-index: 500;
+        }
+
+        .ai-companion.active {
+            background: radial-gradient(circle, rgba(6, 255, 165, 0.8), rgba(6, 255, 165, 0.3));
+            box-shadow: 0 0 40px rgba(6, 255, 165, 0.6);
+        }
+
+        .ai-companion::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent, rgba(131, 56, 236, 0.2));
+            animation: pulse 2s infinite;
+        }
+
+        .ai-companion:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 40px rgba(131, 56, 236, 0.7);
+        }
+
+        .ai-companion-icon {
+            width: 40px;
+            height: 40px;
+            fill: white;
+            z-index: 1;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.5; }
+        }
+
+        /* Workshop Zones */
+        .workshop-zone {
+            position: absolute;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .workshop-zone.active {
+            border-color: rgba(6, 255, 165, 0.3);
+            background: rgba(6, 255, 165, 0.05);
+        }
+
+        .zone-label {
+            position: absolute;
+            top: -30px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 20px;
+            width: 300px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            z-index: 101;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h3 {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #06ffa5;
+        }
+
+        .control-button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: rgba(131, 56, 236, 0.2);
+            border: 1px solid rgba(131, 56, 236, 0.5);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .control-button:hover {
+            background: rgba(131, 56, 236, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .control-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .control-button.active {
+            background: rgba(6, 255, 165, 0.3);
+            border-color: rgba(6, 255, 165, 0.5);
+        }
+
+        /* File Drop Zone */
+        .file-drop-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-drop-zone:hover,
+        .file-drop-zone.drag-over {
+            border-color: rgba(6, 255, 165, 0.5);
+            background: rgba(6, 255, 165, 0.1);
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 30px;
+            padding: 5px;
+            display: flex;
+            gap: 5px;
+            z-index: 102;
+        }
+
+        .view-option {
+            padding: 10px 20px;
+            border-radius: 25px;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .view-option.active {
+            background: rgba(131, 56, 236, 0.5);
+            color: white;
+        }
+
+        /* AI Activity Indicator */
+        .ai-activity {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(6, 255, 165, 0.5);
+            border-radius: 15px;
+            padding: 15px;
+            max-width: 300px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1001;
+        }
+
+        .ai-activity.visible {
+            opacity: 1;
+        }
+
+        .ai-activity-header {
+            color: #06ffa5;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .ai-activity-content {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+        }
+
+        /* Connection Lines */
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(131, 56, 236, 0.5) 20%, 
+                rgba(131, 56, 236, 0.5) 80%, 
+                transparent
+            );
+            transform-origin: 0 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .connection-line.active {
+            opacity: 1;
+            animation: flow 2s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { background-position: -100px 0; }
+            100% { background-position: 100px 0; }
+        }
+
+        /* Mini Map */
+        .mini-map {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 200px;
+            height: 150px;
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 10px;
+            z-index: 100;
+        }
+
+        .mini-map-viewport {
+            position: absolute;
+            border: 2px solid rgba(6, 255, 165, 0.5);
+            background: rgba(6, 255, 165, 0.1);
+            pointer-events: none;
+        }
+
+        /* Chat Interface */
+        .chat-interface {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            width: 350px;
+            height: 400px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(131, 56, 236, 0.5);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            z-index: 103;
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.3);
+        }
+
+        .chat-interface.active {
+            display: flex;
+        }
+
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .chat-message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            background: rgba(131, 56, 236, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .chat-message.assistant {
+            background: rgba(6, 255, 165, 0.2);
+            margin-right: auto;
+        }
+
+        .chat-message.system {
+            background: rgba(255, 106, 0, 0.2);
+            margin: 10px auto;
+            text-align: center;
+            font-style: italic;
+            max-width: 90%;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 5px;
+            padding: 10px 15px;
+            background: rgba(6, 255, 165, 0.2);
+            border-radius: 15px;
+            max-width: 80px;
+            margin: 10px 0;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: typingPulse 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typingPulse {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: rgba(131, 56, 236, 0.3);
+            border: 1px solid rgba(131, 56, 236, 0.5);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .chat-send-btn:hover {
+            background: rgba(131, 56, 236, 0.5);
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            animation: slideIn 0.3s ease;
+            z-index: 1005;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Voice Indicator */
+        .voice-indicator {
+            position: fixed;
+            top: 20px;
+            right: 340px;
+            background: rgba(138, 56, 236, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 104;
+        }
+
+        .voice-indicator.active {
+            display: flex;
+        }
+
+        .voice-indicator svg {
+            width: 20px;
+            height: 20px;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* API Key Setup */
+        .api-key-setup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .api-key-setup.hidden {
+            display: none;
+        }
+
+        .api-key-modal {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 12px;
+            margin: 20px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        /* Import/Export Section */
+        .import-export-section {
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+
+        .file-info {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 5px;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="workshop-canvas">
+        <div class="grid-overlay"></div>
+        
+        <!-- Workshop Header -->
+        <div class="workshop-header">
+            <h1 class="workshop-title">AI WORKSHOP</h1>
+            <div class="workshop-status">Private Workspace • 0 items in scope</div>
+        </div>
+
+        <!-- Workshop Zones -->
+        <div class="workshop-zone" id="active-zone" style="top: 150px; left: 50px; width: 400px; height: 300px;">
+            <div class="zone-label">Active Work Area</div>
+        </div>
+
+        <div class="workshop-zone" id="reference-zone" style="top: 150px; right: 400px; width: 300px; height: 300px;">
+            <div class="zone-label">Reference Materials</div>
+        </div>
+
+        <div class="workshop-zone" id="output-zone" style="bottom: 50px; left: 50px; width: 400px; height: 200px;">
+            <div class="zone-label">AI Output</div>
+        </div>
+
+        <!-- AI Companion -->
+        <div class="ai-companion" id="ai-companion" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            <svg class="ai-companion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+            </svg>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="control-section">
+                <h3>Workshop Controls</h3>
+                <div class="file-drop-zone" id="file-drop-zone">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 10px;">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <div>Drop files here or click to browse</div>
+                    <div style="font-size: 0.8em; color: rgba(255, 255, 255, 0.5); margin-top: 5px;">
+                        Files brought into the workshop are accessible to AI
+                    </div>
+                </div>
+                <input type="file" id="file-input" style="display: none;" multiple>
+            </div>
+
+            <div class="control-section">
+                <h3>Active Items</h3>
+                <div id="item-list" style="color: rgba(255, 255, 255, 0.5); text-align: center; padding: 20px;">
+                    No items in workshop yet
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>AI Actions</h3>
+                <button class="control-button" id="activate-ai-btn" onclick="toggleAI()">Activate AI Companion</button>
+                <button class="control-button" onclick="analyzeWorkspace()">Analyze Workspace</button>
+                <button class="control-button" onclick="clearWorkspace()">Clear Workspace</button>
+            </div>
+
+            <div class="control-section import-export-section">
+                <h3>Import/Export Workspace</h3>
+                <button class="control-button" onclick="exportWorkspace()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export Workspace Data
+                </button>
+                <button class="control-button" onclick="document.getElementById('import-file-input').click()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Import Workspace Data
+                </button>
+                <input type="file" id="import-file-input" style="display: none;" accept=".json" onchange="importWorkspace(event)">
+                <div id="import-info" class="file-info" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+            <button class="view-option active" onclick="setView('2d')">2D View</button>
+            <button class="view-option" onclick="setView('3d')">3D View</button>
+        </div>
+
+        <!-- Mini Map -->
+        <div class="mini-map">
+            <div class="mini-map-viewport" style="top: 40%; left: 40%; width: 20%; height: 20%;"></div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="chat-interface" id="chat-interface">
+            <div class="chat-header">
+                <div style="font-weight: bold; color: #06ffa5;">AI Assistant</div>
+                <button onclick="toggleChat()" style="background: none; border: none; color: white; cursor: pointer; font-size: 20px;">&times;</button>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chat-input" placeholder="Ask about items in the workshop..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <button class="chat-send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- AI Activity Indicator -->
+        <div class="ai-activity" id="ai-activity">
+            <div class="ai-activity-header">AI Working...</div>
+            <div class="ai-activity-content">Analyzing document structure</div>
+        </div>
+
+        <!-- Voice Indicator -->
+        <div class="voice-indicator" id="voice-indicator">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            </svg>
+            <span>Speaking...</span>
+        </div>
+    </div>
+
+    <!-- API Key Setup Modal -->
+    <div class="api-key-setup" id="api-key-setup">
+        <div class="api-key-modal">
+            <h2 style="color: #06ffa5; margin-bottom: 10px;">AI Workshop Setup</h2>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
+                Enter your API key to activate the AI companion
+            </p>
+            <input type="password" class="api-key-input" id="api-key-input" placeholder="Enter your API key">
+            <button class="control-button" onclick="setupAPIKey()">Activate Workshop</button>
+            <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.8em; margin-top: 15px;">
+                For testing, you can use "test" as the key
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let workItems = new Map();
+        let aiActive = false;
+        let selectedItem = null;
+        let draggedItem = null;
+        let offset = { x: 0, y: 0 };
+        let connections = new Map();
+        let conversationHistory = [];
+        let userGuid = null;
+        let apiKey = null;
+        let apiEndpoint = 'http://localhost:7071/api/businessinsightbot_function';
+        let speechSynthesis = window.speechSynthesis;
+        let voiceEnabled = true;
+        let fileContents = new Map(); // Store actual file contents
+        let workspaceMetadata = {
+            createdAt: new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            version: '1.0'
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check for stored API key
+            apiKey = localStorage.getItem('workshop_api_key');
+            if (apiKey) {
+                document.getElementById('api-key-setup').classList.add('hidden');
+                initializeWorkshop();
+            }
+        });
+
+        function setupAPIKey() {
+            const input = document.getElementById('api-key-input');
+            const key = input.value.trim();
+            if (key) {
+                apiKey = key;
+                localStorage.setItem('workshop_api_key', key);
+                document.getElementById('api-key-setup').classList.add('hidden');
+                initializeWorkshop();
+            }
+        }
+        function initializeWorkshop() {
+            // Generate or retrieve user GUID
+            userGuid = localStorage.getItem('workshop_user_guid');
+            if (!userGuid) {
+                userGuid = generateGUID();
+                localStorage.setItem('workshop_user_guid', userGuid);
+            }
+
+            setupDragAndDrop();
+            setupFileHandling();
+            setupAICompanion();
+            updateWorkspaceStatus();
+            
+            // Initialize AI with user GUID
+            sendInitialMessage();
+        }
+
+        function generateGUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        async function sendInitialMessage() {
+            try {
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: userGuid,
+                        conversation_history: [],
+                        user_guid: userGuid
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('AI initialized with user context');
+                }
+            } catch (error) {
+                console.error('Error initializing AI:', error);
+            }
+        }
+
+        // AI Integration
+        async function sendToAI(message, context = {}) {
+            if (!aiActive) return;
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            // Add context about workspace items
+            let workspaceContext = '';
+            if (workItems.size > 0) {
+                workspaceContext = '\n\nCurrent workspace contains:\n';
+                workItems.forEach((item, id) => {
+                    workspaceContext += `- ${item.data.title} (${item.data.type})\n`;
+                    if (item.data.preview) {
+                        workspaceContext += `  Preview: ${item.data.preview.substring(0, 100)}...\n`;
+                    }
+                });
+            }
+
+            const fullMessage = message + workspaceContext;
+
+            try {
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-functions-key': apiKey
+                    },
+                    body: JSON.stringify({
+                        user_input: fullMessage,
+                        conversation_history: conversationHistory,
+                        user_guid: userGuid
+                    })
+                });
+
+                hideTypingIndicator();
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update conversation history
+                    conversationHistory.push({ role: 'user', content: message });
+                    conversationHistory.push({ role: 'assistant', content: data.assistant_response });
+
+                    // Display response
+                    addChatMessage(data.assistant_response, 'assistant');
+
+                    // Handle voice response if available
+                    if (data.voice_response && voiceEnabled) {
+                        speak(data.voice_response);
+                    }
+
+                    // Show agent logs if any
+                    if (data.agent_logs) {
+                        console.log('Agent logs:', data.agent_logs);
+                    }
+
+                    return data;
+                } else {
+                    throw new Error('API request failed');
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error communicating with AI:', error);
+                addChatMessage('Sorry, I encountered an error. Please try again.', 'system');
+            }
+        }
+
+        function speak(text) {
+            if (!voiceEnabled || !speechSynthesis) return;
+
+            // Cancel any ongoing speech
+            speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            // Show voice indicator
+            document.getElementById('voice-indicator').classList.add('active');
+
+            utterance.onend = () => {
+                document.getElementById('voice-indicator').classList.remove('active');
+            };
+
+            speechSynthesis.speak(utterance);
+        }
+
+        function showTypingIndicator() {
+            const messages = document.getElementById('chat-messages');
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.id = 'typing-indicator';
+            indicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+            messages.appendChild(indicator);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function addChatMessage(text, sender) {
+            const messages = document.getElementById('chat-messages');
+            const message = document.createElement('div');
+            message.className = `chat-message ${sender}`;
+            
+            // Parse markdown-style formatting
+            let formattedText = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+            
+            message.innerHTML = formattedText;
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (message && aiActive) {
+                addChatMessage(message, 'user');
+                sendToAI(message);
+                input.value = '';
+            }
+        }
+
+        function toggleAI() {
+            aiActive = !aiActive;
+            const btn = document.getElementById('activate-ai-btn');
+            const companion = document.getElementById('ai-companion');
+            
+            if (aiActive) {
+                btn.textContent = 'Deactivate AI Companion';
+                btn.classList.add('active');
+                companion.classList.add('active');
+                document.getElementById('chat-interface').classList.add('active');
+                showNotification('AI Companion activated!');
+                animateAICompanion();
+                
+                // Send welcome message
+                sendToAI('Hello! I\'m now active in the workshop. What would you like to work on?');
+            } else {
+                btn.textContent = 'Activate AI Companion';
+                btn.classList.remove('active');
+                companion.classList.remove('active');
+                showNotification('AI Companion deactivated');
+            }
+        }
+
+        function analyzeWorkspace() {
+            if (!aiActive) {
+                showNotification('Please activate AI companion first');
+                return;
+            }
+
+            if (workItems.size === 0) {
+                showNotification('No items in workspace to analyze');
+                return;
+            }
+
+            sendToAI('Please analyze all items currently in the workspace and provide insights about their relationships and potential uses.');
+        }
+
+        // Drag and Drop for files
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('file-drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const canvas = document.getElementById('workshop-canvas');
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+
+            // Canvas-wide drop
+            canvas.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const x = e.clientX;
+                    const y = e.clientY;
+                    handleFiles(files, { x, y });
+                }
+            });
+
+            // Drop zone specific
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                handleFiles(e.dataTransfer.files);
+            });
+        }
+
+        // File handling with preview and content storage
+        async function handleFiles(files, position = null) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const id = `item-${Date.now()}-${i}`;
+                
+                // Read and store file content
+                let preview = '';
+                let fullContent = '';
+                
+                try {
+                    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.csv')) {
+                        fullContent = await readFileAsText(file);
+                        preview = fullContent.substring(0, 500);
+                    } else if (file.type.startsWith('image/')) {
+                        fullContent = await readFileAsDataURL(file);
+                        preview = 'Image file';
+                    } else {
+                        fullContent = await readFileAsArrayBuffer(file);
+                        preview = 'Binary file';
+                    }
+                    
+                    // Store file content
+                    fileContents.set(id, {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        content: fullContent,
+                        lastModified: file.lastModified
+                    });
+                } catch (error) {
+                    console.error('Error reading file:', error);
+                }
+
+                const item = createWorkItem({
+                    id,
+                    type: getFileType(file),
+                    title: file.name,
+                    content: `Size: ${formatFileSize(file.size)}`,
+                    file: file,
+                    preview: preview,
+                    position: position ? 
+                        { x: position.x + (i * 20), y: position.y + (i * 20) } : 
+                        { x: 200 + (i * 220), y: 200 + (i * 20) }
+                });
+
+                workItems.set(id, item);
+                
+                // Animate zone if in active area
+                checkZoneActivation(item);
+            }
+
+            updateWorkspaceStatus();
+            updateItemList();
+            workspaceMetadata.lastModified = new Date().toISOString();
+
+            if (aiActive) {
+                showAIActivity('Processing new files...', 2000);
+                setTimeout(() => {
+                    sendToAI(`New files have been added to the workspace: ${Array.from(files).map(f => f.name).join(', ')}. How would you like me to help with these?`);
+                }, 500);
+            }
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function readFilePreview(file, maxChars = 500) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    resolve(content.substring(0, maxChars));
+                };
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        // Create work item element
+        function createWorkItem(data) {
+            const item = document.createElement('div');
+            item.className = 'work-item';
+            item.id = data.id;
+            item.style.left = data.position.x + 'px';
+            item.style.top = data.position.y + 'px';
+
+            item.innerHTML = `
+                <div class="work-item-header">
+                    <span class="work-item-type">${data.type}</span>
+                    <span style="cursor: pointer;" onclick="removeItem('${data.id}')">&times;</span>
+                </div>
+                <div class="work-item-title">${data.title}</div>
+                <div class="work-item-content">${data.content}</div>
+                ${data.preview ? `<div class="work-item-preview">${data.preview}</div>` : ''}
+            `;
+
+            // Make draggable
+            item.addEventListener('mousedown', startDrag);
+            
+            // Double-click to analyze with AI
+            item.addEventListener('dblclick', () => {
+                if (aiActive) {
+                    item.classList.add('ai-processing');
+                    sendToAI(`Please analyze the file "${data.title}" in detail.`);
+                    setTimeout(() => {
+                        item.classList.remove('ai-processing');
+                    }, 3000);
+                }
+            });
+            
+            document.getElementById('workshop-canvas').appendChild(item);
+
+            return {
+                element: item,
+                data: data
+            };
+        }
+
+        // Dragging functionality
+        function startDrag(e) {
+            if (e.target.closest('.work-item-header span')) return;
+            
+            draggedItem = e.currentTarget;
+            draggedItem.classList.add('dragging');
+            
+            const rect = draggedItem.getBoundingClientRect();
+            offset.x = e.clientX - rect.left;
+            offset.y = e.clientY - rect.top;
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!draggedItem) return;
+            
+            draggedItem.style.left = (e.clientX - offset.x) + 'px';
+            draggedItem.style.top = (e.clientY - offset.y) + 'px';
+
+            // Check zone activation
+            const item = workItems.get(draggedItem.id);
+            if (item) {
+                checkZoneActivation(item);
+            }
+
+            // Update connections if AI is active
+            if (aiActive) {
+                updateConnections();
+            }
+        }
+
+        function stopDrag() {
+            if (draggedItem) {
+                draggedItem.classList.remove('dragging');
+                
+                // Update item position in data
+                const item = workItems.get(draggedItem.id);
+                if (item) {
+                    item.data.position = {
+                        x: parseInt(draggedItem.style.left),
+                        y: parseInt(draggedItem.style.top)
+                    };
+                    workspaceMetadata.lastModified = new Date().toISOString();
+                }
+                
+                // Check which zone the item was dropped in
+                if (item && aiActive) {
+                    const zones = document.querySelectorAll('.workshop-zone.active');
+                    if (zones.length > 0) {
+                        const zoneLabel = zones[0].querySelector('.zone-label').textContent;
+                        sendToAI(`I've moved "${item.data.title}" to the ${zoneLabel}. What should we do with it there?`);
+                    }
+                }
+                
+                draggedItem = null;
+            }
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // Zone management
+        function checkZoneActivation(item) {
+            const zones = document.querySelectorAll('.workshop-zone');
+            const itemRect = item.element.getBoundingClientRect();
+
+            zones.forEach(zone => {
+                const zoneRect = zone.getBoundingClientRect();
+                
+                if (isOverlapping(itemRect, zoneRect)) {
+                    zone.classList.add('active');
+                } else {
+                    zone.classList.remove('active');
+                }
+            });
+        }
+
+        function isOverlapping(rect1, rect2) {
+            return !(rect1.right < rect2.left || 
+                     rect2.right < rect1.left || 
+                     rect1.bottom < rect2.top || 
+                     rect2.bottom < rect1.top);
+        }
+
+        // AI Companion
+        function setupAICompanion() {
+            const companion = document.getElementById('ai-companion');
+            
+            companion.addEventListener('click', () => {
+                if (aiActive) {
+                    toggleChat();
+                } else {
+                    showNotification('Please activate AI companion first');
+                }
+            });
+        }
+
+        function animateAICompanion() {
+            const companion = document.getElementById('ai-companion');
+            let angle = 0;
+            
+            function move() {
+                if (!aiActive) return;
+                
+                angle += 0.01;
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const radius = 200;
+                
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius * 0.5;
+                
+                companion.style.left = x + 'px';
+                companion.style.top = y + 'px';
+                
+                requestAnimationFrame(move);
+            }
+            
+            move();
+        }
+
+        // Utility functions
+        function getFileType(file) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            const typeMap = {
+                'pdf': 'document',
+                'doc': 'document',
+                'docx': 'document',
+                'txt': 'text',
+                'jpg': 'image',
+                'jpeg': 'image',
+                'png': 'image',
+                'csv': 'data',
+                'xlsx': 'data',
+                'json': 'data',
+                'js': 'code',
+                'py': 'code',
+                'html': 'code',
+                'css': 'code'
+            };
+            return typeMap[extension] || 'file';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function updateWorkspaceStatus() {
+            const status = document.querySelector('.workshop-status');
+            const itemCount = workItems.size;
+            status.textContent = `Private Workspace • ${itemCount} item${itemCount !== 1 ? 's' : ''} in scope`;
+        }
+
+        function updateItemList() {
+            const itemList = document.getElementById('item-list');
+            
+            if (workItems.size === 0) {
+                itemList.innerHTML = '<div style="color: rgba(255, 255, 255, 0.5); text-align: center; padding: 20px;">No items in workshop yet</div>';
+                return;
+            }
+
+            itemList.innerHTML = Array.from(workItems.values()).map(item => `
+                <div style="padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;"
+                     onclick="focusOnItem('${item.data.id}')"
+                     onmouseover="highlightItem('${item.data.id}', true)"
+                     onmouseout="highlightItem('${item.data.id}', false)">
+                    <div style="font-weight: 600; color: #06ffa5; font-size: 0.8em;">${item.data.type.toUpperCase()}</div>
+                    <div>${item.data.title}</div>
+                </div>
+            `).join('');
+        }
+
+        function focusOnItem(id) {
+            const item = workItems.get(id);
+            if (item) {
+                const element = item.element;
+                element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                element.style.animation = 'pulse 0.5s ease';
+                setTimeout(() => {
+                    element.style.animation = '';
+                }, 500);
+            }
+        }
+
+        function highlightItem(id, highlight) {
+            const item = workItems.get(id);
+            if (item) {
+                if (highlight) {
+                    item.element.style.boxShadow = '0 0 30px rgba(6, 255, 165, 0.6)';
+                } else {
+                    item.element.style.boxShadow = '';
+                }
+            }
+        }
+
+        function removeItem(id) {
+            const item = workItems.get(id);
+            if (item) {
+                item.element.remove();
+                workItems.delete(id);
+                fileContents.delete(id);
+                updateWorkspaceStatus();
+                updateItemList();
+                workspaceMetadata.lastModified = new Date().toISOString();
+                
+                if (aiActive) {
+                    sendToAI(`The file "${item.data.title}" has been removed from the workspace.`);
+                }
+            }
+        }
+
+        function showAIActivity(message, duration = 3000) {
+            const activity = document.getElementById('ai-activity');
+            const content = activity.querySelector('.ai-activity-content');
+            
+            content.textContent = message;
+            activity.classList.add('visible');
+            
+            // Position near AI companion
+            const companion = document.getElementById('ai-companion');
+            const rect = companion.getBoundingClientRect();
+            activity.style.left = (rect.left + 100) + 'px';
+            activity.style.top = rect.top + 'px';
+            
+            setTimeout(() => {
+                activity.classList.remove('visible');
+            }, duration);
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Control functions
+        function clearWorkspace() {
+            if (workItems.size === 0) {
+                showNotification('Workspace is already empty');
+                return;
+            }
+            
+            if (confirm('Clear all items from the workspace?')) {
+                workItems.forEach(item => item.element.remove());
+                workItems.clear();
+                fileContents.clear();
+                conversationHistory = [];
+                updateWorkspaceStatus();
+                updateItemList();
+                workspaceMetadata.lastModified = new Date().toISOString();
+                showNotification('Workspace cleared');
+                
+                if (aiActive) {
+                    sendToAI('The workspace has been cleared.');
+                }
+            }
+        }
+
+        // Export workspace data
+        function exportWorkspace() {
+            if (workItems.size === 0 && conversationHistory.length === 0) {
+                showNotification('No data to export');
+                return;
+            }
+
+            // Prepare export data
+            const exportData = {
+                metadata: workspaceMetadata,
+                userGuid: userGuid,
+                exportDate: new Date().toISOString(),
+                workItems: [],
+                fileContents: [],
+                conversationHistory: conversationHistory,
+                connections: Array.from(connections.entries()),
+                aiState: {
+                    active: aiActive,
+                    voiceEnabled: voiceEnabled
+                }
+            };
+
+            // Export work items with positions
+            workItems.forEach((item, id) => {
+                exportData.workItems.push({
+                    id: id,
+                    data: {
+                        ...item.data,
+                        position: {
+                            x: parseInt(item.element.style.left),
+                            y: parseInt(item.element.style.top)
+                        }
+                    }
+                });
+            });
+
+            // Export file contents
+            fileContents.forEach((content, id) => {
+                exportData.fileContents.push({
+                    id: id,
+                    ...content
+                });
+            });
+
+            // Create and download file
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `workspace-export-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('Workspace exported successfully');
+        }
+
+        // Import workspace data
+        async function importWorkspace(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await readFileAsText(file);
+                const importData = JSON.parse(text);
+
+                // Validate import data
+                if (!importData.metadata || !importData.workItems) {
+                    throw new Error('Invalid workspace file format');
+                }
+
+                // Clear current workspace
+                if (workItems.size > 0) {
+                    if (!confirm('This will replace your current workspace. Continue?')) {
+                        return;
+                    }
+                    
+                    // Clear existing items
+                    workItems.forEach(item => item.element.remove());
+                    workItems.clear();
+                    fileContents.clear();
+                }
+
+                // Import metadata
+                workspaceMetadata = {
+                    ...importData.metadata,
+                    lastImported: new Date().toISOString(),
+                    lastModified: new Date().toISOString()
+                };
+
+                // Import conversation history
+                if (importData.conversationHistory) {
+                    conversationHistory = importData.conversationHistory;
+                    
+                    // Recreate chat messages
+                    const chatMessages = document.getElementById('chat-messages');
+                    chatMessages.innerHTML = '';
+                    conversationHistory.forEach(msg => {
+                        if (msg.role === 'user' || msg.role === 'assistant') {
+                            addChatMessage(msg.content, msg.role);
+                        }
+                    });
+                }
+
+                // Import file contents
+                if (importData.fileContents) {
+                    importData.fileContents.forEach(file => {
+                        fileContents.set(file.id, {
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            content: file.content,
+                            lastModified: file.lastModified
+                        });
+                    });
+                }
+
+                // Import work items
+                importData.workItems.forEach(itemData => {
+                    const item = createWorkItem(itemData.data);
+                    workItems.set(itemData.id, item);
+                });
+
+                // Import connections
+                if (importData.connections) {
+                    connections = new Map(importData.connections);
+                }
+
+                // Restore AI state
+                if (importData.aiState) {
+                    voiceEnabled = importData.aiState.voiceEnabled;
+                    if (importData.aiState.active && !aiActive) {
+                        toggleAI();
+                    }
+                }
+
+                updateWorkspaceStatus();
+                updateItemList();
+
+                // Show import info
+                const importInfo = document.getElementById('import-info');
+                importInfo.style.display = 'block';
+                importInfo.textContent = `Imported: ${importData.workItems.length} items, ${conversationHistory.length} messages`;
+                
+                showNotification('Workspace imported successfully');
+
+                if (aiActive) {
+                    sendToAI(`I've imported a workspace with ${importData.workItems.length} items. The workspace was originally created on ${new Date(importData.metadata.createdAt).toLocaleDateString()}.`);
+                }
+
+            } catch (error) {
+                console.error('Error importing workspace:', error);
+                showNotification('Error importing workspace: ' + error.message);
+            }
+
+            // Reset file input
+            event.target.value = '';
+        }
+
+        function toggleChat() {
+            document.getElementById('chat-interface').classList.toggle('active');
+        }
+
+        function setView(view) {
+            document.querySelectorAll('.view-option').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            if (view === '3d') {
+                showNotification('Switching to 3D view...');
+                // Here you would transition to the 3D portal world
+                // For now, just show a message
+                setTimeout(() => {
+                    if (confirm('Launch 3D immersive view? (This would open the portal world)')) {
+                        showNotification('3D view would load here with all workspace items preserved');
+                    }
+                }, 500);
+            }
+        }
+
+        function setupFileHandling() {
+            // Additional file handling setup if needed
+        }
+
+        function updateConnections() {
+            // Update visual connections between items
+            // This would draw lines between related items when AI identifies relationships
+        }
+    </script>
+</body>
+</html>

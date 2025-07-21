@@ -4495,40 +4495,6 @@
                 `;
             }
 
-            parseResponseWithVoice(content) {
-                // Parse the response to extract formatted and voice parts
-                if (!content) {
-                    return { formatted: "", voice: "" };
-                }
-                
-                // Split by the delimiter
-                const parts = content.split("|||VOICE|||");
-                
-                if (parts.length >= 2) {
-                    // We have both parts
-                    return {
-                        formatted: parts[0].trim(),
-                        voice: parts[1].trim()
-                    };
-                } else {
-                    // No voice delimiter found, use the content as-is
-                    return {
-                        formatted: content.trim(),
-                        voice: this.extractSimpleVoiceResponse(content)
-                    };
-                }
-            }
-
-            extractSimpleVoiceResponse(content) {
-                // Extract a simple summary for voice when no voice response is provided
-                const cleanText = content.replace(/\*\*|`|#|>|---|[\U00010000-\U0010ffff]|[\u2600-\u26FF]|[\u2700-\u27BF]/g, '');
-                const sentences = cleanText.split('.');
-                if (sentences.length > 0) {
-                    return sentences[0].trim() + ".";
-                }
-                return "I've completed your request.";
-            }
-
             animateCompanionSpeaking() {
                 const companion = this.companions.get('ai-assistant');
                 if (!companion) return;
