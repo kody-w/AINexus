@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>The Last 10 Minutes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 1.8em;
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 10px;
+        }
+
+        .world-description {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.3);
+            font-style: italic;
+            max-width: 400px;
+        }
+
+        .statistics-panel {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            z-index: 1001;
+            font-size: 0.9em;
+            text-align: right;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 200;
+            color: rgba(255, 200, 150, 0.8);
+            margin-bottom: 10px;
+        }
+
+        .stat-subtext {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.75em;
+            font-style: italic;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.5);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+        }
+
+        /* Final Moment Overlay */
+        .final-moment-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 2000;
+            display: none;
+            opacity: 0;
+            transition: opacity 2s ease;
+            pointer-events: none;
+        }
+
+        .final-moment-overlay.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .moment-scene {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .moment-visual {
+            font-size: 8em;
+            margin-bottom: 40px;
+            opacity: 0.3;
+            filter: blur(2px);
+        }
+
+        .moment-context {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 20px;
+        }
+
+        .moment-text {
+            font-size: 1.4em;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.8;
+            font-style: italic;
+        }
+
+        .moment-detail {
+            margin-top: 40px;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 0.85em;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .moment-unsent {
+            margin-top: 60px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.02);
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+            max-width: 400px;
+        }
+
+        .unsent-label {
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 10px;
+        }
+
+        .unsent-message {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1em;
+            font-style: italic;
+        }
+
+        .moment-exit {
+            position: absolute;
+            bottom: 40px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8em;
+            cursor: pointer;
+            padding: 15px 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .moment-exit:hover {
+            color: rgba(255, 255, 255, 0.6);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .soul-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 200, 150, 0.2);
+            border-radius: 10px;
+            padding: 15px 20px;
+            max-width: 250px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .soul-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-age {
+            font-size: 1.3em;
+            color: rgba(255, 200, 150, 0.8);
+            margin-bottom: 5px;
+        }
+
+        .tooltip-time {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .tooltip-hint {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 200, 150, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 200, 150, 0.4);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.3);
+            font-weight: 200;
+            letter-spacing: 0.15em;
+            z-index: 2000;
+        }
+
+        .multiplayer-panel {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1001;
+            font-size: 0.8em;
+        }
+
+        .ghost-count {
+            color: rgba(255, 200, 150, 0.6);
+        }
+
+        .ghost-label {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.75em;
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 1.3em;
+            }
+
+            .statistics-panel {
+                padding: 15px;
+            }
+
+            .stat-value {
+                font-size: 1.5em;
+            }
+        }
+
+        @supports (-webkit-touch-callout: none) {
+            body, #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title">The Last 10 Minutes</h1>
+        <p class="world-description">Of everyone who departed today</p>
+    </div>
+
+    <div class="statistics-panel" id="statistics-panel">
+        <div class="stat-label">Souls present</div>
+        <div class="stat-value" id="soul-count">0</div>
+        <div class="stat-subtext">~2 people pass every second</div>
+    </div>
+
+    <div class="multiplayer-panel" id="multiplayer-panel" style="display: none;">
+        <div class="ghost-count" id="ghost-count">0</div>
+        <div class="ghost-label">other witnesses</div>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">WASD to move, Mouse to look. Walk into an orb to witness a final moment.</div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="soul-tooltip" id="soul-tooltip">
+        <div class="tooltip-age"></div>
+        <div class="tooltip-time"></div>
+        <div class="tooltip-hint">Walk closer to witness</div>
+    </div>
+
+    <div class="final-moment-overlay" id="final-moment-overlay">
+        <div class="moment-scene">
+            <div class="moment-visual" id="moment-visual"></div>
+            <div class="moment-context" id="moment-context"></div>
+            <div class="moment-text" id="moment-text"></div>
+            <div class="moment-detail" id="moment-detail"></div>
+            <div class="moment-unsent" id="moment-unsent">
+                <div class="unsent-label">The text they never sent</div>
+                <div class="unsent-message" id="unsent-message"></div>
+            </div>
+        </div>
+        <div class="moment-exit" id="moment-exit">Return to the memorial</div>
+    </div>
+
+    <div class="loading" id="loading">Gathering souls...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script>
+        // Death statistics data (approximate global averages)
+        const DEATH_DATA = {
+            deathsPerSecond: 1.8, // ~155,000 deaths per day globally
+            causeDistribution: [
+                { cause: 'heart disease', weight: 0.16 },
+                { cause: 'stroke', weight: 0.11 },
+                { cause: 'respiratory illness', weight: 0.06 },
+                { cause: 'age', weight: 0.25 },
+                { cause: 'accident', weight: 0.05 },
+                { cause: 'cancer', weight: 0.17 },
+                { cause: 'infection', weight: 0.08 },
+                { cause: 'other illness', weight: 0.12 }
+            ],
+            ageDistribution: [
+                { range: [0, 5], weight: 0.04 },
+                { range: [5, 15], weight: 0.01 },
+                { range: [15, 30], weight: 0.03 },
+                { range: [30, 50], weight: 0.08 },
+                { range: [50, 70], weight: 0.25 },
+                { range: [70, 85], weight: 0.35 },
+                { range: [85, 100], weight: 0.24 }
+            ]
+        };
+
+        // Final moment generators
+        const FINAL_MOMENTS = {
+            ceilings: [
+                'A water-stained hospital ceiling, fluorescent lights humming softly',
+                'The familiar cracks in their bedroom ceiling they\'d memorized over decades',
+                'A car roof, sunlight filtering through dusty glass',
+                'The open sky, clouds drifting like thoughts letting go',
+                'Acoustic tiles in an emergency room, counting the holes',
+                'A painted ceiling they\'d always meant to repaint',
+                'The underside of a bridge, rain pattering above',
+                'Their child\'s glow-in-the-dark stars, still stuck up there after forty years',
+                'A tent ceiling, wind making it breathe',
+                'Nothing - their eyes were already closed',
+                'The wooden beams of a cabin they\'d built with their father',
+                'A chandelier they\'d inherited from their grandmother',
+                'The same ceiling they\'d stared at on their wedding night'
+            ],
+
+            lastSounds: [
+                'A heart monitor\'s steady rhythm',
+                'Their favorite song, playing distantly from another room',
+                'Birdsong through an open window',
+                'The television, volume too low to understand',
+                'Someone saying their name',
+                'Traffic sounds, muffled by walls',
+                'Rain against glass',
+                'Complete silence',
+                'A grandchild laughing somewhere in the house',
+                'The tick of a clock they\'d had for thirty years',
+                'Wind chimes they\'d always found annoying',
+                'A phone ringing, unanswered',
+                'The ocean, always the ocean',
+                'Someone reading aloud, words becoming a gentle blur'
+            ],
+
+            lastThoughts: [
+                'I should have called them back',
+                'The garden will need watering',
+                'I wonder if they know',
+                'It\'s quieter than I expected',
+                'I hope they remember the good parts',
+                'The light is actually quite beautiful',
+                'I never did learn to play piano',
+                'I\'m not ready, but I suppose no one ever is',
+                'I hope the dog will be okay',
+                'Tell them I tried',
+                'It doesn\'t hurt anymore',
+                'I wish I\'d said yes more often',
+                'Was it enough? I hope it was enough.',
+                'The kids are going to need the password to the...',
+                'I can\'t remember her face and that\'s okay now',
+                'One more sunset would have been nice'
+            ],
+
+            unsentTexts: [
+                'I forgive you. I should have said it years ago.',
+                'The spare key is under the blue pot. I love you.',
+                'I\'m proud of you. I always was.',
+                'Remember that summer at the lake? I think about it every day.',
+                'I\'m sorry. I was scared and I let it make me small.',
+                'You were right. About all of it.',
+                'The recipe is in the yellow notebook, third drawer.',
+                'Take care of each other. That\'s all that matters.',
+                'I never told you, but you saved my life once.',
+                'Don\'t cry too long. I had a good run.',
+                'The money is in the...',
+                'I was going to tell you at dinner tonight.',
+                'Meet me at our spot. One last time.',
+                'Delete my browser history lol. But seriously, I love you.',
+                'Call your mother more. Trust me on this one.'
+            ],
+
+            settings: [
+                { visual: '🛏️', context: 'In their bed at home', detail: 'The sheets still smelled like the lavender detergent they\'d used for forty years' },
+                { visual: '🏥', context: 'Hospital, room 4B', detail: 'The TV was playing a cooking show no one was watching' },
+                { visual: '🪑', context: 'In their favorite chair', detail: 'A half-finished crossword puzzle on the armrest' },
+                { visual: '🚗', context: 'By the roadside', detail: 'The radio was playing that song from their first dance' },
+                { visual: '🌳', context: 'Under an old oak tree', detail: 'They\'d carved their initials in it sixty years ago' },
+                { visual: '🛋️', context: 'On the living room couch', detail: 'The family photos watched from the mantle' },
+                { visual: '🌅', context: 'Watching the sunrise', detail: 'It was the first one they\'d gotten up early enough to see in years' },
+                { visual: '📚', context: 'In the library', detail: 'Surrounded by books they\'d never finish now' },
+                { visual: '🍳', context: 'At the kitchen table', detail: 'Coffee growing cold in their favorite mug' },
+                { visual: '🌊', context: 'By the ocean', detail: 'The waves kept their rhythm, indifferent and eternal' },
+                { visual: '✈️', context: 'Somewhere over the Atlantic', detail: 'They\'d always wanted to see Paris' },
+                { visual: '🏔️', context: 'On the mountain trail', detail: 'The view was exactly what they\'d hoped for' }
+            ]
+        };
+
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+
+        class LastTenMinutesWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.souls = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+
+                this.moveSpeed = 0.12;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+
+                this.isMobile = isMobile;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+
+                this.hoveredSoul = null;
+                this.tooltip = document.getElementById('soul-tooltip');
+                this.isPointerLocked = false;
+
+                this.inMoment = false;
+                this.currentSoul = null;
+
+                // Multiplayer
+                this.peer = null;
+                this.connections = new Map();
+                this.otherGhosts = new Map();
+                this.roomId = null;
+
+                // Soul spawning
+                this.lastSpawnTime = 0;
+                this.spawnInterval = 1000 / DEATH_DATA.deathsPerSecond;
+                this.maxSouls = 200;
+
+                this.startTime = Date.now();
+            }
+
+            async init() {
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1500);
+
+                this.setupScene();
+                this.setupLighting();
+                this.createEnvironment();
+                this.setupEventListeners();
+                this.initializeMultiplayer();
+
+                // Spawn initial souls
+                for (let i = 0; i < 50; i++) {
+                    this.spawnSoul(true);
+                }
+
+                this.updateSoulCount();
+
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look, joystick to move. Touch an orb to witness.';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x000000, 0.015);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 1.6, 0);
+
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0x111111, 1);
+                this.scene.add(ambientLight);
+
+                // Soft moonlight from above
+                const moonLight = new THREE.DirectionalLight(0x8888aa, 0.3);
+                moonLight.position.set(0, 50, 0);
+                this.scene.add(moonLight);
+            }
+
+            createEnvironment() {
+                // Ground - dark, reflective like still water
+                const groundGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x050508,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = 0;
+                this.scene.add(ground);
+
+                // Subtle fog particles
+                const particleCount = 500;
+                const particleGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 100;
+                    positions[i + 1] = Math.random() * 10;
+                    positions[i + 2] = (Math.random() - 0.5) * 100;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x333344,
+                    size: 0.5,
+                    transparent: true,
+                    opacity: 0.3,
+                    blending: THREE.AdditiveBlending
+                });
+
+                this.fogParticles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(this.fogParticles);
+
+                // Distant memorial structures - abstract obelisks
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const distance = 40 + Math.random() * 20;
+
+                    const height = 10 + Math.random() * 15;
+                    const obeliskGeometry = new THREE.BoxGeometry(1, height, 1);
+                    const obeliskMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x111115,
+                        roughness: 0.5,
+                        metalness: 0.3
+                    });
+
+                    const obelisk = new THREE.Mesh(obeliskGeometry, obeliskMaterial);
+                    obelisk.position.set(
+                        Math.cos(angle) * distance,
+                        height / 2,
+                        Math.sin(angle) * distance
+                    );
+                    obelisk.rotation.y = Math.random() * 0.2;
+                    this.scene.add(obelisk);
+                }
+            }
+
+            generateSoulData() {
+                // Generate age based on distribution
+                const ageRoll = Math.random();
+                let cumulative = 0;
+                let age = 75;
+
+                for (const bucket of DEATH_DATA.ageDistribution) {
+                    cumulative += bucket.weight;
+                    if (ageRoll < cumulative) {
+                        age = bucket.range[0] + Math.random() * (bucket.range[1] - bucket.range[0]);
+                        break;
+                    }
+                }
+
+                // Generate time of death (within last 10 minutes)
+                const minutesAgo = Math.random() * 10;
+                const timeOfDeath = new Date(Date.now() - minutesAgo * 60000);
+
+                // Generate final moment
+                const setting = FINAL_MOMENTS.settings[Math.floor(Math.random() * FINAL_MOMENTS.settings.length)];
+
+                return {
+                    age: Math.floor(age),
+                    timeOfDeath,
+                    minutesAgo: minutesAgo.toFixed(1),
+                    ceiling: FINAL_MOMENTS.ceilings[Math.floor(Math.random() * FINAL_MOMENTS.ceilings.length)],
+                    lastSound: FINAL_MOMENTS.lastSounds[Math.floor(Math.random() * FINAL_MOMENTS.lastSounds.length)],
+                    lastThought: FINAL_MOMENTS.lastThoughts[Math.floor(Math.random() * FINAL_MOMENTS.lastThoughts.length)],
+                    unsentText: FINAL_MOMENTS.unsentTexts[Math.floor(Math.random() * FINAL_MOMENTS.unsentTexts.length)],
+                    setting
+                };
+            }
+
+            spawnSoul(initialSpawn = false) {
+                if (this.souls.length >= this.maxSouls) {
+                    // Remove oldest soul
+                    const oldest = this.souls.shift();
+                    if (oldest && oldest.mesh) {
+                        this.scene.remove(oldest.mesh);
+                        this.scene.remove(oldest.light);
+                    }
+                }
+
+                const soulData = this.generateSoulData();
+
+                // Soul orb
+                const geometry = new THREE.SphereGeometry(0.3, 32, 32);
+
+                // Color based on age - younger = brighter, older = warmer
+                const ageNormalized = soulData.age / 100;
+                const hue = 0.08 - ageNormalized * 0.05; // Orange to deep amber
+                const saturation = 0.3 + (1 - ageNormalized) * 0.3;
+                const lightness = 0.4 + (1 - ageNormalized) * 0.3;
+
+                const color = new THREE.Color().setHSL(hue, saturation, lightness);
+
+                const material = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.6
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+
+                // Position - floating at varying heights
+                let x, z;
+                if (initialSpawn) {
+                    x = (Math.random() - 0.5) * 60;
+                    z = (Math.random() - 0.5) * 60;
+                } else {
+                    // Spawn at edges and drift in
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 40;
+                    x = Math.cos(angle) * distance;
+                    z = Math.sin(angle) * distance;
+                }
+
+                const y = 1 + Math.random() * 4;
+                mesh.position.set(x, y, z);
+
+                // Glow effect
+                const glowGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.15
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                mesh.add(glow);
+
+                // Point light
+                const light = new THREE.PointLight(color, 0.5, 5);
+                light.position.copy(mesh.position);
+                this.scene.add(light);
+
+                // Store soul data
+                mesh.userData = {
+                    ...soulData,
+                    color,
+                    driftSpeed: 0.001 + Math.random() * 0.002,
+                    driftAngle: Math.random() * Math.PI * 2,
+                    bobOffset: Math.random() * Math.PI * 2,
+                    light
+                };
+
+                this.scene.add(mesh);
+                this.souls.push({ mesh, light, data: soulData });
+
+                return mesh;
+            }
+
+            updateSoulCount() {
+                document.getElementById('soul-count').textContent = this.souls.length;
+            }
+
+            initializeMultiplayer() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.roomId = urlParams.get('room') || 'last-minutes-memorial';
+
+                try {
+                    this.peer = new Peer();
+
+                    this.peer.on('open', (id) => {
+                        console.log('Connected to peer network:', id);
+                        this.connectToRoom();
+                    });
+
+                    this.peer.on('connection', (conn) => {
+                        this.handleConnection(conn);
+                    });
+
+                    this.peer.on('error', (err) => {
+                        console.log('Peer error:', err.type);
+                    });
+                } catch (e) {
+                    console.log('Multiplayer unavailable');
+                }
+            }
+
+            connectToRoom() {
+                // Try to connect to known room hosts
+                const hostId = `${this.roomId}-host`;
+                const conn = this.peer.connect(hostId);
+
+                conn.on('open', () => {
+                    this.handleConnection(conn);
+                });
+
+                conn.on('error', () => {
+                    // Become host if can't connect
+                    console.log('Becoming room host');
+                });
+            }
+
+            handleConnection(conn) {
+                this.connections.set(conn.peer, conn);
+
+                conn.on('data', (data) => {
+                    if (data.type === 'position') {
+                        this.updateGhostPosition(conn.peer, data);
+                    }
+                });
+
+                conn.on('close', () => {
+                    this.connections.delete(conn.peer);
+                    this.removeGhost(conn.peer);
+                });
+
+                this.updateGhostCount();
+            }
+
+            updateGhostPosition(peerId, data) {
+                let ghost = this.otherGhosts.get(peerId);
+
+                if (!ghost) {
+                    // Create ghost representation
+                    const geometry = new THREE.SphereGeometry(0.3, 16, 16);
+                    const material = new THREE.MeshBasicMaterial({
+                        color: 0x445566,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    ghost = new THREE.Mesh(geometry, material);
+                    this.scene.add(ghost);
+                    this.otherGhosts.set(peerId, ghost);
+                    this.updateGhostCount();
+                }
+
+                ghost.position.set(data.x, data.y, data.z);
+            }
+
+            removeGhost(peerId) {
+                const ghost = this.otherGhosts.get(peerId);
+                if (ghost) {
+                    this.scene.remove(ghost);
+                    this.otherGhosts.delete(peerId);
+                    this.updateGhostCount();
+                }
+            }
+
+            updateGhostCount() {
+                const count = this.otherGhosts.size;
+                if (count > 0) {
+                    document.getElementById('multiplayer-panel').style.display = 'block';
+                    document.getElementById('ghost-count').textContent = count;
+                } else {
+                    document.getElementById('multiplayer-panel').style.display = 'none';
+                }
+            }
+
+            broadcastPosition() {
+                const data = {
+                    type: 'position',
+                    x: this.camera.position.x,
+                    y: this.camera.position.y,
+                    z: this.camera.position.z
+                };
+
+                this.connections.forEach((conn) => {
+                    if (conn.open) {
+                        conn.send(data);
+                    }
+                });
+            }
+
+            enterFinalMoment(soul) {
+                this.inMoment = true;
+                this.currentSoul = soul;
+
+                const data = soul.userData;
+                const overlay = document.getElementById('final-moment-overlay');
+
+                document.getElementById('moment-visual').textContent = data.setting.visual;
+                document.getElementById('moment-context').textContent = data.setting.context;
+                document.getElementById('moment-text').innerHTML = `
+                    "${data.lastThought}"
+                    <br><br>
+                    <span style="opacity: 0.5; font-size: 0.85em;">
+                        The last thing they heard: ${data.lastSound.toLowerCase()}
+                    </span>
+                `;
+                document.getElementById('moment-detail').textContent = data.setting.detail;
+                document.getElementById('unsent-message').textContent = `"${data.unsentText}"`;
+
+                overlay.classList.add('active');
+
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+            }
+
+            exitFinalMoment() {
+                this.inMoment = false;
+                this.currentSoul = null;
+
+                const overlay = document.getElementById('final-moment-overlay');
+                overlay.classList.remove('active');
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                document.getElementById('moment-exit').addEventListener('click', () => {
+                    this.exitFinalMoment();
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.inMoment) {
+                        this.exitFinalMoment();
+                    }
+                });
+
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (this.inMoment) return;
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (this.inMoment) return;
+
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked && !this.inMoment) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+
+                lookArea.addEventListener('touchstart', (e) => {
+                    if (this.inMoment) return;
+
+                    const touch = e.touches[0];
+
+                    // Check for soul tap
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const soulMeshes = this.souls.map(s => s.mesh);
+                    const intersects = this.raycaster.intersectObjects(soulMeshes);
+
+                    if (intersects.length > 0) {
+                        this.enterFinalMoment(intersects[0].object);
+                        return;
+                    }
+
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch || this.inMoment) return;
+
+                    for (let touch of e.touches) {
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+
+                joystick.addEventListener('touchstart', (e) => {
+                    if (this.inMoment) return;
+                    e.preventDefault();
+
+                    const touch = e.touches[0];
+                    this.joystickTouch = { id: touch.identifier };
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch || this.inMoment) return;
+                    e.preventDefault();
+
+                    for (let touch of e.touches) {
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                joystick.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            break;
+                        }
+                    }
+                }, { passive: false });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            updateMovement() {
+                if (this.inMoment) return;
+
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.clone().multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.clone().multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.clone().multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.clone().multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.clone().multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.clone().multiplyScalar(this.moveSpeed));
+                }
+
+                this.camera.position.y = 1.6; // Fixed eye height
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            checkSoulProximity() {
+                if (this.inMoment) return;
+
+                const playerPos = this.camera.position;
+
+                for (const soul of this.souls) {
+                    const distance = playerPos.distanceTo(soul.mesh.position);
+
+                    if (distance < 1.5) {
+                        this.enterFinalMoment(soul.mesh);
+                        return;
+                    }
+                }
+
+                // Update tooltip for nearby souls (desktop hover)
+                if (!this.isMobile) {
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                    const soulMeshes = this.souls.map(s => s.mesh);
+                    const intersects = this.raycaster.intersectObjects(soulMeshes);
+
+                    if (intersects.length > 0 && intersects[0].distance < 15) {
+                        const soul = intersects[0].object;
+
+                        if (soul !== this.hoveredSoul) {
+                            this.hoveredSoul = soul;
+
+                            this.tooltip.querySelector('.tooltip-age').textContent = `Age ${soul.userData.age}`;
+                            this.tooltip.querySelector('.tooltip-time').textContent = `${soul.userData.minutesAgo} minutes ago`;
+                            this.tooltip.classList.add('visible');
+
+                            const vector = new THREE.Vector3();
+                            soul.getWorldPosition(vector);
+                            vector.project(this.camera);
+
+                            const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                            const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                            this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 270)}px`;
+                            this.tooltip.style.top = `${Math.min(y - 30, window.innerHeight - 150)}px`;
+                        }
+                    } else {
+                        if (this.hoveredSoul) {
+                            this.hoveredSoul = null;
+                            this.tooltip.classList.remove('visible');
+                        }
+                    }
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+                const now = Date.now();
+
+                if (!this.inMoment) {
+                    this.updateMovement();
+                    this.checkSoulProximity();
+
+                    // Spawn new souls
+                    if (now - this.lastSpawnTime > this.spawnInterval) {
+                        this.spawnSoul();
+                        this.updateSoulCount();
+                        this.lastSpawnTime = now;
+                    }
+
+                    // Update souls
+                    this.souls.forEach((soul, index) => {
+                        const mesh = soul.mesh;
+
+                        // Gentle drifting
+                        mesh.position.x += Math.cos(mesh.userData.driftAngle) * mesh.userData.driftSpeed;
+                        mesh.position.z += Math.sin(mesh.userData.driftAngle) * mesh.userData.driftSpeed;
+
+                        // Slowly drift toward center
+                        mesh.position.x *= 0.9999;
+                        mesh.position.z *= 0.9999;
+
+                        // Gentle bobbing
+                        mesh.position.y = (1 + Math.random() * 4) + Math.sin(time * 0.5 + mesh.userData.bobOffset) * 0.3;
+
+                        // Pulsing opacity
+                        const pulse = 0.4 + Math.sin(time * 2 + index * 0.3) * 0.2;
+                        mesh.material.opacity = pulse;
+
+                        // Update light position
+                        soul.light.position.copy(mesh.position);
+                        soul.light.intensity = pulse * 0.5;
+                    });
+
+                    // Animate fog particles
+                    if (this.fogParticles) {
+                        const positions = this.fogParticles.geometry.attributes.position.array;
+                        for (let i = 0; i < positions.length; i += 3) {
+                            positions[i + 1] += Math.sin(time * 0.3 + i) * 0.002;
+                        }
+                        this.fogParticles.geometry.attributes.position.needsUpdate = true;
+                    }
+
+                    // Broadcast position for multiplayer
+                    if (this.peer && this.connections.size > 0 && Math.floor(time * 10) % 2 === 0) {
+                        this.broadcastPosition();
+                    }
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new LastTenMinutesWorld();
+            world.init();
+        });
+
+        // Prevent pull-to-refresh
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>

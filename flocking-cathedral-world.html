@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Flocking Cathedral - Architecture Built by Emergence</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Georgia', serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+            max-width: 350px;
+        }
+
+        .world-title {
+            font-size: 2.2em;
+            font-weight: 300;
+            letter-spacing: 0.15em;
+            color: #fff;
+            margin-bottom: 8px;
+            text-shadow: 0 0 30px rgba(255, 200, 100, 0.3);
+        }
+
+        .world-subtitle {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.4);
+            font-style: italic;
+            letter-spacing: 0.05em;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 18px;
+            z-index: 1001;
+            min-width: 200px;
+        }
+
+        .panel-title {
+            font-size: 0.7em;
+            color: rgba(255, 200, 100, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 12px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .stat-value {
+            color: #ffc864;
+        }
+
+        /* Mode Toggle */
+        .mode-toggle {
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mode-btn {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 200, 100, 0.1);
+            border: 1px solid rgba(255, 200, 100, 0.3);
+            border-radius: 8px;
+            color: #ffc864;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Georgia', serif;
+            font-size: 0.8em;
+            letter-spacing: 0.05em;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 200, 100, 0.2);
+        }
+
+        .mode-btn.repel {
+            background: rgba(100, 150, 255, 0.1);
+            border-color: rgba(100, 150, 255, 0.3);
+            color: #6496ff;
+        }
+
+        .mode-indicator {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Controls hint */
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 200, 100, 0.1);
+            border: 2px solid rgba(255, 200, 100, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 200, 100, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .mobile-mode-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 200, 100, 0.2);
+            border: 2px solid rgba(255, 200, 100, 0.4);
+            color: #ffc864;
+            font-size: 0.7em;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .mobile-mode-btn.repel {
+            background: rgba(100, 150, 255, 0.2);
+            border-color: rgba(100, 150, 255, 0.4);
+            color: #6496ff;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 150px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        /* Crystallize notification */
+        .crystallize-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 200, 100, 0.1);
+            border: 1px solid rgba(255, 200, 100, 0.3);
+            padding: 20px 40px;
+            border-radius: 10px;
+            color: #ffc864;
+            font-size: 1.1em;
+            z-index: 1002;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        .crystallize-notification.visible {
+            opacity: 1;
+        }
+
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2000;
+        }
+
+        .loading-text {
+            font-size: 1.2em;
+            color: rgba(255, 200, 100, 0.8);
+            letter-spacing: 0.1em;
+            font-weight: 300;
+        }
+
+        .loading-sub {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .stats-panel {
+                top: auto;
+                bottom: 160px;
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+            }
+
+            .world-title {
+                font-size: 1.6em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title">FLOCKING CATHEDRAL</h1>
+        <p class="world-subtitle">Architecture built by emergence</p>
+    </div>
+
+    <div class="stats-panel" id="stats-panel">
+        <div class="panel-title">Flock Status</div>
+        <div class="stat-row">
+            <span class="stat-label">Active Boids</span>
+            <span class="stat-value" id="stat-boids">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Structures</span>
+            <span class="stat-value" id="stat-structures">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Density Zones</span>
+            <span class="stat-value" id="stat-density">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Cathedral Age</span>
+            <span class="stat-value" id="stat-age">0:00</span>
+        </div>
+        <div class="mode-toggle">
+            <button class="mode-btn" id="mode-btn" onclick="toggleMode()">
+                MODE: ATTRACT
+            </button>
+            <div class="mode-indicator">Click or press SPACE to toggle</div>
+        </div>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">
+        WASD to move | Mouse to look | SPACE to toggle attract/repel | The flock remembers
+    </div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+        <button class="mobile-mode-btn" id="mobile-mode-btn" onclick="toggleMode()">
+            ATTRACT
+        </button>
+    </div>
+
+    <div class="crystallize-notification" id="crystallize-notification">
+        Structure Crystallized
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="loading-text">Awakening the Flock</div>
+        <div class="loading-sub">They have been waiting</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ============================================
+        // BOID FLOCKING SYSTEM
+        // ============================================
+        class Boid {
+            constructor(position) {
+                this.position = position.clone();
+                this.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2
+                );
+                this.acceleration = new THREE.Vector3();
+
+                this.maxSpeed = 0.8;
+                this.maxForce = 0.03;
+
+                // Visual
+                this.mesh = null;
+                this.trail = [];
+                this.trailLength = 5;
+            }
+
+            // Apply force to acceleration
+            applyForce(force) {
+                this.acceleration.add(force);
+            }
+
+            // Separation: steer away from nearby boids
+            separate(boids, desiredSeparation = 3) {
+                const steer = new THREE.Vector3();
+                let count = 0;
+
+                for (const other of boids) {
+                    const d = this.position.distanceTo(other.position);
+                    if (d > 0 && d < desiredSeparation) {
+                        const diff = this.position.clone().sub(other.position);
+                        diff.normalize();
+                        diff.divideScalar(d);
+                        steer.add(diff);
+                        count++;
+                    }
+                }
+
+                if (count > 0) {
+                    steer.divideScalar(count);
+                    steer.normalize();
+                    steer.multiplyScalar(this.maxSpeed);
+                    steer.sub(this.velocity);
+                    steer.clampLength(0, this.maxForce);
+                }
+
+                return steer;
+            }
+
+            // Alignment: steer towards average heading of neighbors
+            align(boids, neighborDist = 8) {
+                const sum = new THREE.Vector3();
+                let count = 0;
+
+                for (const other of boids) {
+                    const d = this.position.distanceTo(other.position);
+                    if (d > 0 && d < neighborDist) {
+                        sum.add(other.velocity);
+                        count++;
+                    }
+                }
+
+                if (count > 0) {
+                    sum.divideScalar(count);
+                    sum.normalize();
+                    sum.multiplyScalar(this.maxSpeed);
+                    const steer = sum.sub(this.velocity);
+                    steer.clampLength(0, this.maxForce);
+                    return steer;
+                }
+
+                return new THREE.Vector3();
+            }
+
+            // Cohesion: steer towards center of neighbors
+            cohesion(boids, neighborDist = 10) {
+                const sum = new THREE.Vector3();
+                let count = 0;
+
+                for (const other of boids) {
+                    const d = this.position.distanceTo(other.position);
+                    if (d > 0 && d < neighborDist) {
+                        sum.add(other.position);
+                        count++;
+                    }
+                }
+
+                if (count > 0) {
+                    sum.divideScalar(count);
+                    return this.seek(sum);
+                }
+
+                return new THREE.Vector3();
+            }
+
+            // Seek a target
+            seek(target) {
+                const desired = target.clone().sub(this.position);
+                desired.normalize();
+                desired.multiplyScalar(this.maxSpeed);
+                const steer = desired.sub(this.velocity);
+                steer.clampLength(0, this.maxForce);
+                return steer;
+            }
+
+            // Flee from a target
+            flee(target) {
+                const desired = this.position.clone().sub(target);
+                const d = desired.length();
+                if (d < 25) {
+                    desired.normalize();
+                    desired.multiplyScalar(this.maxSpeed * (1 + (25 - d) / 25));
+                    const steer = desired.sub(this.velocity);
+                    steer.clampLength(0, this.maxForce * 3);
+                    return steer;
+                }
+                return new THREE.Vector3();
+            }
+
+            // Apply all flocking behaviors
+            flock(boids) {
+                const sep = this.separate(boids);
+                const ali = this.align(boids);
+                const coh = this.cohesion(boids);
+
+                // Weight the forces
+                sep.multiplyScalar(1.8);
+                ali.multiplyScalar(1.0);
+                coh.multiplyScalar(1.0);
+
+                this.applyForce(sep);
+                this.applyForce(ali);
+                this.applyForce(coh);
+            }
+
+            // React to player
+            reactToPlayer(playerPos, isAttractor) {
+                if (isAttractor) {
+                    const seek = this.seek(playerPos);
+                    seek.multiplyScalar(0.8);
+                    this.applyForce(seek);
+                } else {
+                    const flee = this.flee(playerPos);
+                    flee.multiplyScalar(1.2);
+                    this.applyForce(flee);
+                }
+            }
+
+            // Boundary avoidance
+            boundaries(bounds = 80) {
+                const steer = new THREE.Vector3();
+                const margin = 10;
+
+                if (this.position.x < -bounds + margin) steer.x = this.maxSpeed;
+                if (this.position.x > bounds - margin) steer.x = -this.maxSpeed;
+                if (this.position.y < 2) steer.y = this.maxSpeed;
+                if (this.position.y > bounds - margin) steer.y = -this.maxSpeed;
+                if (this.position.z < -bounds + margin) steer.z = this.maxSpeed;
+                if (this.position.z > bounds - margin) steer.z = -this.maxSpeed;
+
+                this.applyForce(steer);
+            }
+
+            update() {
+                // Update velocity
+                this.velocity.add(this.acceleration);
+                this.velocity.clampLength(0, this.maxSpeed);
+
+                // Update position
+                this.position.add(this.velocity);
+
+                // Reset acceleration
+                this.acceleration.set(0, 0, 0);
+
+                // Update mesh
+                if (this.mesh) {
+                    this.mesh.position.copy(this.position);
+
+                    // Point in direction of velocity
+                    if (this.velocity.length() > 0.01) {
+                        const lookAt = this.position.clone().add(this.velocity);
+                        this.mesh.lookAt(lookAt);
+                    }
+                }
+
+                // Update trail
+                this.trail.push(this.position.clone());
+                if (this.trail.length > this.trailLength) {
+                    this.trail.shift();
+                }
+            }
+        }
+
+        // ============================================
+        // STRUCTURE SYSTEM
+        // ============================================
+        class Structure {
+            constructor(position, size, color) {
+                this.position = position.clone();
+                this.size = size;
+                this.age = 0;
+                this.mesh = null;
+                this.growing = true;
+                this.targetSize = size;
+                this.currentSize = 0.1;
+
+                this.createMesh(color);
+            }
+
+            createMesh(color) {
+                // Create crystalline structure
+                const geometry = new THREE.OctahedronGeometry(1, 0);
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.2,
+                    metalness: 0.3,
+                    roughness: 0.4,
+                    transparent: true,
+                    opacity: 0.8
+                });
+
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(this.position);
+                this.mesh.scale.setScalar(this.currentSize);
+
+                // Random rotation
+                this.mesh.rotation.set(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI
+                );
+            }
+
+            update(deltaTime) {
+                this.age += deltaTime;
+
+                // Grow toward target size
+                if (this.growing && this.currentSize < this.targetSize) {
+                    this.currentSize += (this.targetSize - this.currentSize) * 0.02;
+                    this.mesh.scale.setScalar(this.currentSize);
+                }
+
+                // Gentle rotation
+                this.mesh.rotation.y += 0.002;
+
+                // Pulse emissive
+                const pulse = 0.15 + Math.sin(this.age * 2) * 0.1;
+                this.mesh.material.emissiveIntensity = pulse;
+            }
+        }
+
+        // ============================================
+        // MAIN WORLD
+        // ============================================
+        class FlockingCathedral {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.clock = new THREE.Clock();
+
+                // Boids
+                this.boids = [];
+                this.boidCount = 800;
+                this.boidMeshes = null;
+
+                // Structures
+                this.structures = [];
+                this.densityGrid = {};
+                this.gridSize = 8;
+                this.crystallizeThreshold = 15;
+
+                // Player
+                this.isAttractor = true;
+                this.moveSpeed = 0.2;
+                this.lookSpeed = 0.002;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+                this.velocity = new THREE.Vector3();
+
+                // State
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                this.isPointerLocked = false;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+
+                this.startTime = Date.now();
+            }
+
+            async init() {
+                this.setupScene();
+                this.setupLighting();
+                this.createEnvironment();
+                this.createBoids();
+                this.setupEventListeners();
+
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Joystick to move | Drag to look | Button to toggle mode';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1500);
+
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x0a0810, 0.008);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 15, 40);
+
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                // Warm ambient
+                const ambient = new THREE.AmbientLight(0x1a1510, 0.4);
+                this.scene.add(ambient);
+
+                // Golden directional light
+                const sunLight = new THREE.DirectionalLight(0xffd090, 0.6);
+                sunLight.position.set(50, 100, 50);
+                sunLight.castShadow = true;
+                this.scene.add(sunLight);
+
+                // Cool fill light
+                const fillLight = new THREE.DirectionalLight(0x4060ff, 0.2);
+                fillLight.position.set(-50, 50, -50);
+                this.scene.add(fillLight);
+
+                // Player light
+                this.playerLight = new THREE.PointLight(0xffc864, 0.8, 30);
+                this.scene.add(this.playerLight);
+            }
+
+            createEnvironment() {
+                // Ground plane - subtle grid
+                const groundGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x0a0a0a,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+
+                // Subtle grid
+                const gridHelper = new THREE.GridHelper(200, 50, 0x1a1510, 0x0a0808);
+                gridHelper.position.y = 0.01;
+                this.scene.add(gridHelper);
+
+                // Boundary pillars
+                const pillarGeometry = new THREE.CylinderGeometry(0.5, 0.5, 100, 8);
+                const pillarMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1510,
+                    emissive: 0x1a1510,
+                    emissiveIntensity: 0.2
+                });
+
+                const bounds = 80;
+                const pillarPositions = [
+                    [-bounds, 0, -bounds], [bounds, 0, -bounds],
+                    [-bounds, 0, bounds], [bounds, 0, bounds]
+                ];
+
+                pillarPositions.forEach(pos => {
+                    const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                    pillar.position.set(pos[0], 50, pos[2]);
+                    this.scene.add(pillar);
+                });
+
+                // Starfield
+                const starsGeometry = new THREE.BufferGeometry();
+                const starPositions = [];
+                for (let i = 0; i < 2000; i++) {
+                    starPositions.push(
+                        (Math.random() - 0.5) * 400,
+                        Math.random() * 150 + 50,
+                        (Math.random() - 0.5) * 400
+                    );
+                }
+                starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+                const starsMaterial = new THREE.PointsMaterial({
+                    color: 0xffd090,
+                    size: 0.5,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const stars = new THREE.Points(starsGeometry, starsMaterial);
+                this.scene.add(stars);
+            }
+
+            createBoids() {
+                // Create instanced mesh for performance
+                const boidGeometry = new THREE.ConeGeometry(0.15, 0.6, 4);
+                boidGeometry.rotateX(Math.PI / 2);
+
+                const boidMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffc864,
+                    emissive: 0xffa030,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.5,
+                    roughness: 0.3
+                });
+
+                this.boidMeshes = new THREE.InstancedMesh(boidGeometry, boidMaterial, this.boidCount);
+                this.boidMeshes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                this.scene.add(this.boidMeshes);
+
+                // Create boid instances
+                for (let i = 0; i < this.boidCount; i++) {
+                    const position = new THREE.Vector3(
+                        (Math.random() - 0.5) * 100,
+                        Math.random() * 40 + 5,
+                        (Math.random() - 0.5) * 100
+                    );
+                    const boid = new Boid(position);
+                    this.boids.push(boid);
+                }
+            }
+
+            updateBoids() {
+                const playerPos = this.camera.position.clone();
+                playerPos.y = Math.max(playerPos.y, 2);
+
+                const dummy = new THREE.Object3D();
+
+                // Update density grid
+                this.densityGrid = {};
+
+                for (let i = 0; i < this.boids.length; i++) {
+                    const boid = this.boids[i];
+
+                    // Apply flocking behaviors
+                    boid.flock(this.boids);
+
+                    // React to player
+                    boid.reactToPlayer(playerPos, this.isAttractor);
+
+                    // Boundary avoidance
+                    boid.boundaries();
+
+                    // Avoid structures
+                    for (const structure of this.structures) {
+                        const d = boid.position.distanceTo(structure.position);
+                        if (d < structure.size * 2) {
+                            const flee = boid.flee(structure.position);
+                            flee.multiplyScalar(0.5);
+                            boid.applyForce(flee);
+                        }
+                    }
+
+                    // Update
+                    boid.update();
+
+                    // Update instanced mesh
+                    dummy.position.copy(boid.position);
+                    if (boid.velocity.length() > 0.01) {
+                        dummy.lookAt(boid.position.clone().add(boid.velocity));
+                    }
+                    dummy.updateMatrix();
+                    this.boidMeshes.setMatrixAt(i, dummy.matrix);
+
+                    // Update density grid
+                    const gridX = Math.floor(boid.position.x / this.gridSize);
+                    const gridY = Math.floor(boid.position.y / this.gridSize);
+                    const gridZ = Math.floor(boid.position.z / this.gridSize);
+                    const key = `${gridX},${gridY},${gridZ}`;
+
+                    if (!this.densityGrid[key]) {
+                        this.densityGrid[key] = {
+                            count: 0,
+                            position: new THREE.Vector3(
+                                gridX * this.gridSize + this.gridSize / 2,
+                                gridY * this.gridSize + this.gridSize / 2,
+                                gridZ * this.gridSize + this.gridSize / 2
+                            )
+                        };
+                    }
+                    this.densityGrid[key].count++;
+                }
+
+                this.boidMeshes.instanceMatrix.needsUpdate = true;
+
+                // Check for crystallization
+                this.checkCrystallization();
+            }
+
+            checkCrystallization() {
+                for (const key in this.densityGrid) {
+                    const cell = this.densityGrid[key];
+
+                    if (cell.count >= this.crystallizeThreshold) {
+                        // Check if structure already exists nearby
+                        let tooClose = false;
+                        for (const structure of this.structures) {
+                            if (structure.position.distanceTo(cell.position) < this.gridSize * 1.5) {
+                                tooClose = true;
+                                // Grow existing structure
+                                structure.targetSize = Math.min(structure.targetSize + 0.1, 8);
+                                break;
+                            }
+                        }
+
+                        if (!tooClose && cell.position.y > 2) {
+                            this.createStructure(cell.position, cell.count);
+                        }
+                    }
+                }
+            }
+
+            createStructure(position, density) {
+                const size = Math.min(1 + density / 20, 5);
+
+                // Color based on height
+                const hue = 0.08 + (position.y / 80) * 0.1;
+                const color = new THREE.Color().setHSL(hue, 0.7, 0.5);
+
+                const structure = new Structure(position, size, color);
+                this.structures.push(structure);
+                this.scene.add(structure.mesh);
+
+                // Show notification
+                const notification = document.getElementById('crystallize-notification');
+                notification.classList.add('visible');
+                setTimeout(() => notification.classList.remove('visible'), 1500);
+            }
+
+            updateStructures(deltaTime) {
+                for (const structure of this.structures) {
+                    structure.update(deltaTime);
+                }
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                // Mode toggle
+                window.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        toggleMode();
+                    }
+                });
+
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) this.keys[key] = true;
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) this.keys[key] = false;
+                });
+
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+                    for (let touch of e.touches) {
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.joystickActive = true;
+                    this.joystickTouch = { id: e.touches[0].identifier };
+                    this.updateJoystick(e.touches[0], joystick, handle);
+                }, { passive: false });
+
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive) return;
+                    e.preventDefault();
+                    for (let touch of e.touches) {
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                joystick.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+                            break;
+                        }
+                    }
+                }, { passive: false });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 20;
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        this.velocity.add(forward.clone().multiplyScalar(this.joystickVector.y * 0.015));
+                        this.velocity.add(right.clone().multiplyScalar(this.joystickVector.x * 0.015));
+                    }
+                } else {
+                    if (this.keys.w) this.velocity.add(forward.clone().multiplyScalar(0.015));
+                    if (this.keys.s) this.velocity.add(forward.clone().multiplyScalar(-0.015));
+                    if (this.keys.a) this.velocity.add(right.clone().multiplyScalar(-0.015));
+                    if (this.keys.d) this.velocity.add(right.clone().multiplyScalar(0.015));
+                }
+
+                this.velocity.multiplyScalar(0.92);
+                this.velocity.clampLength(0, this.moveSpeed);
+
+                this.camera.position.add(this.velocity);
+
+                // Boundaries
+                const bounds = 75;
+                this.camera.position.x = Math.max(-bounds, Math.min(bounds, this.camera.position.x));
+                this.camera.position.z = Math.max(-bounds, Math.min(bounds, this.camera.position.z));
+                this.camera.position.y = Math.max(2, Math.min(60, this.camera.position.y));
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+
+                // Update player light
+                this.playerLight.position.copy(this.camera.position);
+                this.playerLight.color.setHex(this.isAttractor ? 0xffc864 : 0x6496ff);
+            }
+
+            updateUI() {
+                document.getElementById('stat-boids').textContent = this.boids.length;
+                document.getElementById('stat-structures').textContent = this.structures.length;
+                document.getElementById('stat-density').textContent = Object.keys(this.densityGrid).length;
+
+                // Age
+                const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('stat-age').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const deltaTime = this.clock.getDelta();
+
+                this.updateMovement();
+                this.updateBoids();
+                this.updateStructures(deltaTime);
+
+                // Update UI every 30 frames
+                if (Math.floor(this.clock.getElapsedTime() * 60) % 30 === 0) {
+                    this.updateUI();
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Global
+        let world;
+
+        function toggleMode() {
+            world.isAttractor = !world.isAttractor;
+
+            const btn = document.getElementById('mode-btn');
+            const mobileBtn = document.getElementById('mobile-mode-btn');
+
+            if (world.isAttractor) {
+                btn.textContent = 'MODE: ATTRACT';
+                btn.classList.remove('repel');
+                mobileBtn.textContent = 'ATTRACT';
+                mobileBtn.classList.remove('repel');
+            } else {
+                btn.textContent = 'MODE: REPEL';
+                btn.classList.add('repel');
+                mobileBtn.textContent = 'REPEL';
+                mobileBtn.classList.add('repel');
+            }
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            world = new FlockingCathedral();
+            world.init();
+        });
+    </script>
+</body>
+</html>
