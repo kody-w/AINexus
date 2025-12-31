@@ -1,0 +1,2626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Nexus Hub v2 - Federated World Explorer</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* Loading Screen */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.3em;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s ease-in-out infinite;
+            margin-bottom: 30px;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-status {
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        /* World UI */
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        .world-description {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .federation-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 5px 15px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #00ffff;
+        }
+
+        .federation-badge.visitor {
+            background: rgba(255, 106, 0, 0.1);
+            border-color: rgba(255, 106, 0, 0.3);
+            color: #ff6a00;
+        }
+
+        /* World Origin Indicator */
+        #world-origin {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.3s ease;
+        }
+
+        #world-origin.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        #world-origin .origin-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        #world-origin .origin-name {
+            color: #06ffa5;
+            font-weight: bold;
+        }
+
+        /* Controls Hint */
+        .controls-hint {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        /* Portal Tooltip */
+        .portal-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 25px;
+            border-radius: 15px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            max-width: 300px;
+        }
+
+        .portal-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .portal-tooltip.external {
+            border-color: rgba(255, 106, 0, 0.5);
+        }
+
+        .tooltip-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #06ffa5;
+            margin-bottom: 5px;
+        }
+
+        .tooltip-description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .tooltip-nexus {
+            font-size: 11px;
+            color: #ff6a00;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 8px;
+            margin-top: 5px;
+        }
+
+        .tooltip-instruction {
+            font-size: 12px;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: env(safe-area-inset-bottom, 20px);
+            z-index: 1000;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border-radius: 25px;
+            border: 1px solid rgba(0, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            transition: transform 0.3s ease;
+            color: #06ffa5;
+            font-weight: bold;
+        }
+
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Multiplayer Status */
+        .multiplayer-status {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-indicator.connected {
+            background: #06ffa5;
+            box-shadow: 0 0 10px #06ffa5;
+        }
+
+        .player-count {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+
+        /* Portal Manager Button */
+        .portal-manager {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 100px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .portal-manager:hover {
+            background: rgba(0, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        .portal-manager svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* AI Companion Button */
+        .ai-companion-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 30px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(131, 56, 236, 0.5);
+        }
+
+        .ai-companion-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(131, 56, 236, 0.7);
+        }
+
+        .ai-companion-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* Federation Button */
+        .federation-button {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 30px) + 170px);
+            right: calc(env(safe-area-inset-right, 30px));
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 106, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 106, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1002;
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
+        }
+
+        .federation-button:hover {
+            background: rgba(255, 106, 0, 0.5);
+            transform: scale(1.1);
+        }
+
+        .federation-button svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        /* Modal Base Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3002;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: rgba(20, 20, 40, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            color: #ff006e;
+            transform: rotate(90deg);
+        }
+
+        .modal h3 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+
+        /* Portal List */
+        .portal-list {
+            margin: 20px 0;
+        }
+
+        .portal-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .portal-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(0, 255, 255, 0.5);
+        }
+
+        .portal-item.external {
+            border-color: rgba(255, 106, 0, 0.3);
+        }
+
+        .portal-item.external:hover {
+            border-color: rgba(255, 106, 0, 0.6);
+        }
+
+        .portal-item-info {
+            flex: 1;
+        }
+
+        .portal-item-name {
+            font-weight: bold;
+            color: #06ffa5;
+            margin-bottom: 3px;
+        }
+
+        .portal-item-location {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .portal-item-nexus {
+            font-size: 0.75em;
+            color: #ff6a00;
+            margin-top: 2px;
+        }
+
+        .portal-action-btn {
+            background: linear-gradient(45deg, #06ffa5, #00ff88);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .portal-action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 15px rgba(6, 255, 165, 0.4);
+        }
+
+        /* AI Chat Interface */
+        .ai-chat-interface {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px) + 100px);
+            right: calc(env(safe-area-inset-right, 20px));
+            width: 350px;
+            height: 450px;
+            background: rgba(20, 20, 40, 0.85);
+            border: 2px solid rgba(138, 56, 236, 0.5);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            z-index: 1003;
+            box-shadow: 0 0 30px rgba(138, 56, 236, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .ai-chat-interface.active {
+            display: flex;
+        }
+
+        .ai-chat-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-title {
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .ai-chat-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .ai-chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .ai-message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .ai-message.user {
+            background: rgba(131, 56, 236, 0.3);
+            margin-left: auto;
+        }
+
+        .ai-message.ai {
+            background: rgba(6, 255, 165, 0.2);
+        }
+
+        .ai-chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 10px;
+        }
+
+        .ai-chat-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .ai-chat-send {
+            background: linear-gradient(45deg, #8338ec, #3a86ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* Federation Modal */
+        .federation-modal h3 {
+            background: linear-gradient(45deg, #ff6a00, #ff8c00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nexus-list {
+            margin: 20px 0;
+        }
+
+        .nexus-item {
+            background: rgba(255, 106, 0, 0.1);
+            border: 1px solid rgba(255, 106, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nexus-item:hover {
+            background: rgba(255, 106, 0, 0.2);
+            border-color: rgba(255, 106, 0, 0.6);
+        }
+
+        .nexus-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .nexus-item-name {
+            font-weight: bold;
+            color: #ff6a00;
+        }
+
+        .nexus-item-status {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(6, 255, 165, 0.2);
+            color: #06ffa5;
+        }
+
+        .nexus-item-status.offline {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6b6b;
+        }
+
+        .nexus-item-description {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .nexus-item-worlds {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 5px;
+        }
+
+        .add-nexus-form {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .add-nexus-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 106, 0, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .add-nexus-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .add-nexus-btn {
+            width: 100%;
+            background: linear-gradient(45deg, #ff6a00, #ff8c00);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .add-nexus-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 106, 0, 0.4);
+        }
+
+        /* QR Code */
+        .qr-container {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px) + 100px);
+            left: calc(env(safe-area-inset-left, 20px));
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+        }
+
+        .qr-container h4 {
+            color: #06ffa5;
+            font-size: 12px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #qr-code {
+            width: 100px;
+            height: 100px;
+            background: white;
+            border-radius: 5px;
+        }
+
+        /* Return Portal Indicator */
+        .return-portal-indicator {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 20px) + 250px);
+            right: calc(env(safe-area-inset-right, 30px));
+            background: rgba(255, 106, 0, 0.2);
+            border: 1px solid rgba(255, 106, 0, 0.5);
+            border-radius: 15px;
+            padding: 10px 15px;
+            z-index: 1001;
+            display: none;
+        }
+
+        .return-portal-indicator.show {
+            display: block;
+        }
+
+        .return-portal-indicator span {
+            color: #ff6a00;
+            font-size: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 1.8em;
+            }
+
+            .ai-chat-interface {
+                width: calc(100% - 40px);
+                right: 20px;
+                bottom: calc(env(safe-area-inset-bottom, 20px) + 150px);
+                height: 350px;
+            }
+
+            .qr-container {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <h1 class="loading-title">NEXUS v2</h1>
+        <div class="loading-spinner"></div>
+        <p class="loading-status" id="loading-status">Loading configuration...</p>
+    </div>
+
+    <!-- Three.js Container -->
+    <div id="three-container"></div>
+
+    <!-- World UI -->
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">Nexus Hub v2</h1>
+        <p class="world-description" id="world-description">Federated world explorer - interconnect with infinite nexuses</p>
+        <div class="federation-badge" id="federation-badge">
+            <span>🌐</span>
+            <span id="federation-status">Federation Active</span>
+        </div>
+    </div>
+
+    <!-- World Origin -->
+    <div id="world-origin">
+        <span class="origin-label">Arrived from </span>
+        <span class="origin-name" id="origin-world-name"></span>
+    </div>
+
+    <!-- Multiplayer Status -->
+    <div class="multiplayer-status">
+        <div class="status-indicator" id="status-indicator"></div>
+        <span id="status-text">Initializing...</span>
+        <span class="player-count" id="player-count"></span>
+    </div>
+
+    <!-- Controls Hint -->
+    <div class="controls-hint" id="controls-hint">
+        Click to look around, Use WASD to move, Click on portals to travel
+    </div>
+
+    <!-- Portal Tooltip -->
+    <div class="portal-tooltip" id="portal-tooltip">
+        <div class="tooltip-title"></div>
+        <div class="tooltip-description"></div>
+        <div class="tooltip-nexus"></div>
+        <div class="tooltip-instruction">Click to enter world</div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portal Manager Button -->
+    <div class="portal-manager" id="portal-manager-btn" title="Portal Manager">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="2" x2="12" y2="6"/>
+            <line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="6" y2="12"/>
+            <line x1="18" y1="12" x2="22" y2="12"/>
+        </svg>
+    </div>
+
+    <!-- Federation Button -->
+    <div class="federation-button" id="federation-btn" title="Federation Browser">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+    </div>
+
+    <!-- AI Companion Button -->
+    <button class="ai-companion-button" id="ai-companion-btn" title="AI Companion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
+            <path d="M12 2a10 10 0 1 1-10 10h10V2z" opacity="0.5"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </button>
+
+    <!-- AI Chat Interface -->
+    <div class="ai-chat-interface" id="ai-chat-interface">
+        <div class="ai-chat-header">
+            <span class="ai-chat-title">🤖 AI Companion</span>
+            <button class="ai-chat-close" id="ai-chat-close">×</button>
+        </div>
+        <div class="ai-chat-messages" id="ai-chat-messages">
+            <div class="ai-message ai">Welcome to the Nexus v2! I'm your AI companion. Ask me anything about the worlds or how to navigate the federated nexus network.</div>
+        </div>
+        <div class="ai-chat-input-container">
+            <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Ask your AI companion...">
+            <button class="ai-chat-send" id="ai-chat-send">Send</button>
+        </div>
+    </div>
+
+    <!-- Portal Manager Modal -->
+    <div class="modal" id="portal-manager-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="portal-close">×</button>
+            <h3>🌀 Portal Network</h3>
+            <div class="portal-list" id="portal-list"></div>
+        </div>
+    </div>
+
+    <!-- Federation Modal -->
+    <div class="modal federation-modal" id="federation-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="federation-close">×</button>
+            <h3>🌐 Federated Nexuses</h3>
+            <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 15px;">
+                Connect to other nexuses to expand your portal network
+            </p>
+            <div class="nexus-list" id="nexus-list"></div>
+            <div class="add-nexus-form">
+                <input type="text" class="add-nexus-input" id="add-nexus-input" placeholder="Enter nexus URL (e.g., username.github.io/repo)">
+                <button class="add-nexus-btn" id="add-nexus-btn">Add Nexus</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Return Portal Indicator -->
+    <div class="return-portal-indicator" id="return-portal-indicator">
+        <span>↩️ Return portal available</span>
+    </div>
+
+    <!-- QR Code -->
+    <div class="qr-container" id="qr-container">
+        <h4>Join Session</h4>
+        <div id="qr-code"></div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // =============================================
+        // NEXUS V2 - FEDERATED WORLD EXPLORER
+        // =============================================
+
+        // Configuration loaded from nexus.json
+        let NEXUS_CONFIG = null;
+        let CURRENT_WORLD = null;
+
+        // Fork identity (detected or from config)
+        const FORK_IDENTITY = detectForkIdentity();
+
+        function detectForkIdentity() {
+            const hostname = window.location.hostname;
+            const pathname = window.location.pathname;
+
+            if (hostname.endsWith('.github.io')) {
+                const owner = hostname.replace('.github.io', '');
+                const pathParts = pathname.split('/').filter(p => p);
+                const repo = pathParts[0] || 'AINexus';
+                return { owner, repo };
+            }
+
+            // Local development fallback
+            return { owner: 'kody-w', repo: 'AINexus' };
+        }
+
+        // Parse federation context from URL
+        function parseFederationContext() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                sourceWorld: params.get('from'),
+                sourceWorldName: params.get('fromName'),
+                sourceNexus: params.get('fromNexus'),
+                returnAddress: params.get('nexusReturn'),
+                hostId: params.get('host'),
+                userId: params.get('userId'),
+                userName: params.get('userName'),
+                isExternalVisitor: params.get('fromNexus') !== null &&
+                                   params.get('fromNexus') !== `${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}`,
+                canReturn: params.get('nexusReturn') !== null
+            };
+        }
+
+        const federationContext = parseFederationContext();
+
+        // Parse inherited visual attributes
+        function parseInheritedAttributes() {
+            const params = new URLSearchParams(window.location.search);
+            const inherited = {};
+
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+
+            return inherited;
+        }
+
+        const inheritedAttributes = parseInheritedAttributes();
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // =============================================
+        // FEDERATED IDENTITY MANAGER
+        // =============================================
+        class FederatedIdentityManager {
+            constructor() {
+                this.IDENTITY_KEY = 'nexus_v2_identity';
+                this.identity = this.getOrCreateIdentity();
+            }
+
+            getOrCreateIdentity() {
+                let identity = localStorage.getItem(this.IDENTITY_KEY);
+
+                if (identity) {
+                    identity = JSON.parse(identity);
+                    identity.lastSeen = Date.now();
+                    localStorage.setItem(this.IDENTITY_KEY, JSON.stringify(identity));
+                    return identity;
+                }
+
+                identity = {
+                    id: this.generatePersistentId(),
+                    username: this.generateDefaultUsername(),
+                    avatarColor: this.generateAvatarColor(),
+                    createdAt: Date.now(),
+                    lastSeen: Date.now(),
+                    originFork: FORK_IDENTITY
+                };
+
+                localStorage.setItem(this.IDENTITY_KEY, JSON.stringify(identity));
+                return identity;
+            }
+
+            generatePersistentId() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            generateDefaultUsername() {
+                const adjectives = ['Swift', 'Neon', 'Cyber', 'Quantum', 'Digital', 'Stellar', 'Void', 'Crystal'];
+                const nouns = ['Explorer', 'Wanderer', 'Voyager', 'Pilot', 'Navigator', 'Traveler', 'Seeker'];
+                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const noun = nouns[Math.floor(Math.random() * nouns.length)];
+                return `${adj}${noun}${Math.floor(Math.random() * 1000)}`;
+            }
+
+            generateAvatarColor() {
+                const hue = Math.floor(Math.random() * 360);
+                return `hsl(${hue}, 70%, 60%)`;
+            }
+
+            generateSessionToken() {
+                const sessionData = {
+                    playerId: this.identity.id,
+                    timestamp: Date.now(),
+                    nonce: Math.random().toString(36).substr(2, 16)
+                };
+                return btoa(JSON.stringify(sessionData));
+            }
+
+            updateUsername(newUsername) {
+                this.identity.username = newUsername;
+                localStorage.setItem(this.IDENTITY_KEY, JSON.stringify(this.identity));
+            }
+        }
+
+        // =============================================
+        // NEXUS FEDERATION CLASS
+        // =============================================
+        class NexusFederation {
+            constructor() {
+                this.currentNexusId = `${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}`;
+                this.manifestCache = new Map();
+                this.CACHE_TTL = 3600000; // 1 hour
+                this.CACHE_KEY = 'nexus_federation_cache';
+                this.linkedNexuses = [];
+
+                this.loadCacheFromStorage();
+            }
+
+            async fetchNexusManifest(nexusId, forceRefresh = false) {
+                const cached = this.manifestCache.get(nexusId);
+                const now = Date.now();
+
+                if (cached && !forceRefresh && (now - cached.fetchedAt) < this.CACHE_TTL) {
+                    return { manifest: cached.manifest, fromCache: true };
+                }
+
+                const [username, repo] = nexusId.split('/');
+                const manifestUrl = `https://${username}.github.io/${repo}/v2/nexus.json`;
+
+                try {
+                    const response = await fetch(manifestUrl);
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch manifest: ${response.status}`);
+                    }
+
+                    const manifest = await response.json();
+
+                    if (!this.validateManifest(manifest)) {
+                        throw new Error('Invalid manifest format');
+                    }
+
+                    this.manifestCache.set(nexusId, {
+                        manifest,
+                        fetchedAt: now
+                    });
+                    this.saveCacheToStorage();
+
+                    return { manifest, fromCache: false };
+
+                } catch (error) {
+                    console.error(`Error fetching manifest for ${nexusId}:`, error);
+
+                    if (cached) {
+                        return { manifest: cached.manifest, fromCache: true, stale: true };
+                    }
+
+                    throw error;
+                }
+            }
+
+            validateManifest(manifest) {
+                return manifest &&
+                       manifest.version &&
+                       manifest.identity &&
+                       manifest.identity.name;
+            }
+
+            resolveNexusAddress(address) {
+                if (address.startsWith('nexus://')) {
+                    const match = address.match(/^nexus:\/\/([^\/]+)\/([^\/]+)\/(.+)$/);
+                    if (match) {
+                        const [, username, repo, worldId] = match;
+                        const filename = worldId.endsWith('.html') ? worldId : `${worldId}.html`;
+                        return {
+                            type: 'external',
+                            nexusId: `${username}/${repo}`,
+                            worldId: worldId.replace('.html', ''),
+                            pagesUrl: `https://${username}.github.io/${repo}/${filename}`
+                        };
+                    }
+                }
+
+                // Relative URL
+                return {
+                    type: 'local',
+                    nexusId: this.currentNexusId,
+                    worldId: address.replace('.html', ''),
+                    pagesUrl: address
+                };
+            }
+
+            async getRemoteWorlds(nexusId) {
+                try {
+                    const { manifest } = await this.fetchNexusManifest(nexusId);
+                    const [username, repo] = nexusId.split('/');
+
+                    const worlds = [];
+
+                    if (manifest.worlds?.local) {
+                        manifest.worlds.local.forEach(world => {
+                            worlds.push({
+                                ...world,
+                                nexusId,
+                                pagesUrl: `https://${username}.github.io/${repo}/v2/${world.file}`,
+                                isExternal: true
+                            });
+                        });
+                    }
+
+                    return worlds;
+                } catch (error) {
+                    console.error(`Failed to get worlds from ${nexusId}:`, error);
+                    return [];
+                }
+            }
+
+            createFederatedRoomId(localRoomId) {
+                return `${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}:${localRoomId}`;
+            }
+
+            parseFederatedRoomId(federatedId) {
+                const match = federatedId.match(/^([^\/]+)\/([^:]+):(.+)$/);
+                if (match) {
+                    return {
+                        owner: match[1],
+                        repo: match[2],
+                        roomId: match[3],
+                        isExternal: match[1] !== FORK_IDENTITY.owner || match[2] !== FORK_IDENTITY.repo
+                    };
+                }
+                // Legacy format
+                return {
+                    owner: FORK_IDENTITY.owner,
+                    repo: FORK_IDENTITY.repo,
+                    roomId: federatedId,
+                    isExternal: false
+                };
+            }
+
+            saveCacheToStorage() {
+                try {
+                    const cacheData = {};
+                    this.manifestCache.forEach((value, key) => {
+                        cacheData[key] = value;
+                    });
+                    localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheData));
+                } catch (e) {
+                    console.warn('Failed to persist federation cache:', e);
+                }
+            }
+
+            loadCacheFromStorage() {
+                try {
+                    const stored = localStorage.getItem(this.CACHE_KEY);
+                    if (stored) {
+                        const cacheData = JSON.parse(stored);
+                        Object.entries(cacheData).forEach(([key, value]) => {
+                            this.manifestCache.set(key, value);
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to load federation cache:', e);
+                }
+            }
+        }
+
+        // =============================================
+        // AI MANAGER CLASS
+        // =============================================
+        class AIManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.apiEndpoint = NEXUS_CONFIG?.features?.aiCompanion?.endpoint ||
+                                   'https://azfbusinessbot.azurewebsites.net/api/aidialog';
+                this.userId = window.identityManager?.identity?.id || 'anonymous';
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('ai-companion-btn').addEventListener('click', () => {
+                    this.toggleChat();
+                });
+
+                document.getElementById('ai-chat-close').addEventListener('click', () => {
+                    this.hideChat();
+                });
+
+                document.getElementById('ai-chat-send').addEventListener('click', () => {
+                    this.sendMessage();
+                });
+
+                document.getElementById('ai-chat-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+            }
+
+            toggleChat() {
+                const chatInterface = document.getElementById('ai-chat-interface');
+                chatInterface.classList.toggle('active');
+            }
+
+            hideChat() {
+                document.getElementById('ai-chat-interface').classList.remove('active');
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('ai-chat-input');
+                const message = input.value.trim();
+                if (!message) return;
+
+                this.addMessage(message, 'user');
+                input.value = '';
+
+                try {
+                    const response = await fetch(this.apiEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_query: message,
+                            user_guid: this.userId
+                        })
+                    });
+
+                    const data = await response.json();
+                    this.addMessage(data.assistant_response || 'I apologize, I encountered an error.', 'ai');
+                } catch (error) {
+                    console.error('AI Error:', error);
+                    this.addMessage('Sorry, I\'m having trouble connecting. Please try again.', 'ai');
+                }
+            }
+
+            addMessage(text, type) {
+                const messagesContainer = document.getElementById('ai-chat-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `ai-message ${type}`;
+                messageDiv.textContent = text;
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+
+        // =============================================
+        // MULTIPLAYER MANAGER CLASS
+        // =============================================
+        class MultiplayerManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.peer = null;
+                this.connections = new Map();
+                this.players = new Map();
+                this.isHost = false;
+                this.roomId = null;
+                this.federatedRoomId = null;
+                this.updateInterval = 50;
+                this.lastUpdate = 0;
+
+                this.initializePeer();
+            }
+
+            initializePeer() {
+                const hostParam = federationContext.hostId;
+
+                try {
+                    if (hostParam) {
+                        // Parse federated room ID
+                        const parsed = window.federation.parseFederatedRoomId(hostParam);
+                        this.federatedRoomId = hostParam;
+                        this.roomId = parsed.roomId;
+                        this.peer = new Peer();
+
+                        this.peer.on('open', (id) => {
+                            console.log('Joining federated room:', this.federatedRoomId);
+                            setTimeout(() => this.connectToHost(this.roomId), 1000);
+                            this.updateStatus('Connecting...', false);
+                        });
+                    } else {
+                        // Creating new room
+                        this.isHost = true;
+                        this.peer = new Peer();
+
+                        this.peer.on('open', (id) => {
+                            this.roomId = id;
+                            this.federatedRoomId = window.federation.createFederatedRoomId(id);
+                            console.log('Created federated room:', this.federatedRoomId);
+                            this.updateShareUrl();
+                            this.updateStatus('Hosting', true);
+                        });
+                    }
+
+                    this.peer.on('connection', (conn) => {
+                        console.log('Incoming connection from:', conn.peer);
+                        this.handleNewConnection(conn);
+                    });
+
+                    this.peer.on('error', (err) => {
+                        console.error('Peer error:', err);
+                        this.updateStatus('Error', false);
+                    });
+
+                    this.peer.on('disconnected', () => {
+                        this.updateStatus('Disconnected', false);
+                        setTimeout(() => {
+                            if (!this.peer.destroyed) {
+                                this.peer.reconnect();
+                            }
+                        }, 3000);
+                    });
+
+                } catch (error) {
+                    console.error('Failed to initialize peer:', error);
+                }
+            }
+
+            connectToHost(hostId) {
+                try {
+                    const identity = window.identityManager.identity;
+
+                    const conn = this.peer.connect(hostId, {
+                        reliable: true,
+                        serialization: 'json',
+                        metadata: {
+                            playerId: identity.id,
+                            username: identity.username,
+                            avatarColor: identity.avatarColor,
+                            originFork: identity.originFork,
+                            currentFork: FORK_IDENTITY,
+                            protocolVersion: 2
+                        }
+                    });
+
+                    const connectionTimeout = setTimeout(() => {
+                        if (!conn.open) {
+                            this.world.showNotification('Connection timeout. Host may be offline.');
+                            conn.close();
+                        }
+                    }, 10000);
+
+                    conn.on('open', () => {
+                        clearTimeout(connectionTimeout);
+                        this.updateStatus('Connected', true);
+                    });
+
+                    this.handleNewConnection(conn);
+                } catch (error) {
+                    console.error('Failed to connect to host:', error);
+                }
+            }
+
+            handleNewConnection(conn) {
+                const peerId = conn.peer;
+
+                conn.on('open', () => {
+                    this.connections.set(peerId, conn);
+                    this.createPlayerAvatar(peerId, conn.metadata);
+
+                    const username = conn.metadata?.username || 'Anonymous';
+                    const isExternal = conn.metadata?.originFork &&
+                        (conn.metadata.originFork.owner !== FORK_IDENTITY.owner ||
+                         conn.metadata.originFork.repo !== FORK_IDENTITY.repo);
+
+                    if (isExternal) {
+                        this.world.showNotification(`${username} joined from ${conn.metadata.originFork.owner}'s nexus`);
+                    } else {
+                        this.world.showNotification(`${username} joined`);
+                    }
+
+                    this.updatePlayerCount();
+
+                    if (this.isHost) {
+                        this.sendWorldState(conn);
+                    }
+                });
+
+                conn.on('data', (data) => {
+                    this.handlePeerData(peerId, data);
+                });
+
+                conn.on('close', () => {
+                    this.removePlayer(peerId);
+                    this.connections.delete(peerId);
+                    this.updatePlayerCount();
+                });
+            }
+
+            handlePeerData(peerId, data) {
+                switch (data.type) {
+                    case 'playerUpdate':
+                        this.updatePlayerPosition(peerId, data.position, data.rotation);
+                        break;
+                    case 'worldSync':
+                        if (!this.isHost) {
+                            // Sync world state from host
+                        }
+                        break;
+                }
+            }
+
+            createPlayerAvatar(peerId, metadata) {
+                const avatarGroup = new THREE.Group();
+
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.4, 1.5, 8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: metadata?.avatarColor || '#00ffff',
+                    emissive: metadata?.avatarColor || '#00ffff',
+                    emissiveIntensity: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 0.75;
+                avatarGroup.add(body);
+
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+                const head = new THREE.Mesh(headGeometry, bodyMaterial);
+                head.position.y = 1.8;
+                avatarGroup.add(head);
+
+                // Name tag
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.roundRect(0, 0, 256, 64, 10);
+                ctx.fill();
+                ctx.font = 'bold 24px Arial';
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.fillText(metadata?.username || 'Anonymous', 128, 40);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(2, 0.5, 1);
+                sprite.position.y = 2.5;
+                avatarGroup.add(sprite);
+
+                // Glow
+                const light = new THREE.PointLight(metadata?.avatarColor || '#00ffff', 0.5, 5);
+                light.position.y = 1;
+                avatarGroup.add(light);
+
+                avatarGroup.position.set(
+                    Math.random() * 10 - 5,
+                    0,
+                    Math.random() * 10 - 5
+                );
+
+                this.world.scene.add(avatarGroup);
+                this.players.set(peerId, { avatar: avatarGroup, metadata, lastUpdate: Date.now() });
+            }
+
+            updatePlayerPosition(peerId, position, rotation) {
+                const player = this.players.get(peerId);
+                if (player && player.avatar) {
+                    player.avatar.position.lerp(
+                        new THREE.Vector3(position.x, position.y, position.z),
+                        0.3
+                    );
+                    player.avatar.rotation.y = rotation;
+                    player.lastUpdate = Date.now();
+                }
+            }
+
+            removePlayer(peerId) {
+                const player = this.players.get(peerId);
+                if (player && player.avatar) {
+                    this.world.scene.remove(player.avatar);
+                    this.players.delete(peerId);
+                    this.world.showNotification(`${player.metadata?.username || 'Player'} left`);
+                }
+            }
+
+            sendWorldState(conn) {
+                conn.send({
+                    type: 'worldSync',
+                    worldState: {
+                        worlds: this.world.worlds.map(w => ({
+                            name: w.name,
+                            url: w.pages_url || w.url
+                        }))
+                    }
+                });
+            }
+
+            broadcastPlayerUpdate() {
+                const now = Date.now();
+                if (now - this.lastUpdate < this.updateInterval) return;
+
+                const updateData = {
+                    type: 'playerUpdate',
+                    position: {
+                        x: this.world.camera.position.x,
+                        y: this.world.camera.position.y,
+                        z: this.world.camera.position.z
+                    },
+                    rotation: this.world.rotation.y
+                };
+
+                this.connections.forEach((conn) => {
+                    if (conn.open) {
+                        conn.send(updateData);
+                    }
+                });
+
+                this.lastUpdate = now;
+            }
+
+            updateStatus(text, connected) {
+                document.getElementById('status-text').textContent = text;
+                const indicator = document.getElementById('status-indicator');
+                if (connected) {
+                    indicator.classList.add('connected');
+                } else {
+                    indicator.classList.remove('connected');
+                }
+            }
+
+            updatePlayerCount() {
+                const count = this.players.size;
+                document.getElementById('player-count').textContent = count > 0 ? `(${count} online)` : '';
+            }
+
+            updateShareUrl() {
+                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+                const baseUrl = `https://${FORK_IDENTITY.owner}.github.io/${FORK_IDENTITY.repo}/v2/${currentFile}`;
+                const shareUrl = `${baseUrl}?host=${this.federatedRoomId}`;
+
+                // Generate QR Code
+                const qrContainer = document.getElementById('qr-code');
+                if (qrContainer && typeof QRCode !== 'undefined') {
+                    qrContainer.innerHTML = '';
+                    QRCode.toCanvas(qrContainer, shareUrl, {
+                        width: 100,
+                        margin: 1,
+                        color: { dark: '#000000', light: '#ffffff' }
+                    });
+                }
+            }
+        }
+
+        // =============================================
+        // PORTAL MANAGER CLASS
+        // =============================================
+        class PortalManager {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.customPortals = new Map();
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('portal-manager-btn').addEventListener('click', () => {
+                    this.showModal();
+                });
+
+                document.getElementById('portal-close').addEventListener('click', () => {
+                    this.hideModal();
+                });
+
+                document.getElementById('portal-manager-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'portal-manager-modal') {
+                        this.hideModal();
+                    }
+                });
+            }
+
+            showModal() {
+                document.getElementById('portal-manager-modal').classList.add('show');
+                this.updatePortalList();
+            }
+
+            hideModal() {
+                document.getElementById('portal-manager-modal').classList.remove('show');
+            }
+
+            updatePortalList() {
+                const portalList = document.getElementById('portal-list');
+                portalList.innerHTML = '';
+
+                // Local worlds section
+                const localWorlds = this.world.worlds.filter(w => !w.isExternal);
+                if (localWorlds.length > 0) {
+                    portalList.innerHTML += '<h4 style="color: #06ffa5; margin: 15px 0 10px;">Local Worlds</h4>';
+                    localWorlds.forEach((world, index) => {
+                        portalList.appendChild(this.createPortalItem(world, index));
+                    });
+                }
+
+                // External worlds section
+                const externalWorlds = this.world.worlds.filter(w => w.isExternal);
+                if (externalWorlds.length > 0) {
+                    portalList.innerHTML += '<h4 style="color: #ff6a00; margin: 20px 0 10px;">External Worlds</h4>';
+                    externalWorlds.forEach((world, index) => {
+                        const item = this.createPortalItem(world, index);
+                        item.classList.add('external');
+                        portalList.appendChild(item);
+                    });
+                }
+
+                // Custom portals
+                if (this.customPortals.size > 0) {
+                    portalList.innerHTML += '<h4 style="color: #00ffff; margin: 20px 0 10px;">Custom Portals</h4>';
+                    this.customPortals.forEach((portal) => {
+                        portalList.appendChild(this.createPortalItem(portal, -1, true));
+                    });
+                }
+            }
+
+            createPortalItem(world, index, isCustom = false) {
+                const portalItem = document.createElement('div');
+                portalItem.className = 'portal-item';
+
+                const url = world.pages_url || world.url || world.file;
+                const nexusInfo = world.nexusId ? `From: ${world.nexusId}` : (world.source || '');
+
+                portalItem.innerHTML = `
+                    <div class="portal-item-info">
+                        <div class="portal-item-name">${world.icon || '🌀'} ${world.name}</div>
+                        <div class="portal-item-location">${world.description || 'Portal ' + (index + 1)}</div>
+                        ${nexusInfo ? `<div class="portal-item-nexus">${nexusInfo}</div>` : ''}
+                    </div>
+                    <button class="portal-action-btn">Enter</button>
+                `;
+
+                portalItem.querySelector('.portal-action-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.fastTravel(url, world.name, world.nexusId);
+                });
+
+                portalItem.addEventListener('click', () => {
+                    this.fastTravel(url, world.name, world.nexusId);
+                });
+
+                return portalItem;
+            }
+
+            fastTravel(url, portalName, nexusId = null) {
+                this.hideModal();
+                this.world.showNotification(`Traveling to ${portalName}...`);
+                this.world.enterWorld(url, nexusId);
+            }
+        }
+
+        // =============================================
+        // FEDERATION BROWSER CLASS
+        // =============================================
+        class FederationBrowser {
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('federation-btn').addEventListener('click', () => {
+                    this.showModal();
+                });
+
+                document.getElementById('federation-close').addEventListener('click', () => {
+                    this.hideModal();
+                });
+
+                document.getElementById('federation-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'federation-modal') {
+                        this.hideModal();
+                    }
+                });
+
+                document.getElementById('add-nexus-btn').addEventListener('click', () => {
+                    this.addNexus();
+                });
+
+                document.getElementById('add-nexus-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.addNexus();
+                    }
+                });
+            }
+
+            showModal() {
+                document.getElementById('federation-modal').classList.add('show');
+                this.updateNexusList();
+            }
+
+            hideModal() {
+                document.getElementById('federation-modal').classList.remove('show');
+            }
+
+            async updateNexusList() {
+                const nexusList = document.getElementById('nexus-list');
+                nexusList.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center;">Loading linked nexuses...</p>';
+
+                const linkedNexuses = NEXUS_CONFIG?.federation?.linkedNexuses || [];
+
+                if (linkedNexuses.length === 0) {
+                    nexusList.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center;">No linked nexuses yet. Add one below!</p>';
+                    return;
+                }
+
+                nexusList.innerHTML = '';
+
+                for (const nexus of linkedNexuses) {
+                    const nexusItem = document.createElement('div');
+                    nexusItem.className = 'nexus-item';
+
+                    let status = 'checking';
+                    let worldCount = '?';
+
+                    try {
+                        const { manifest } = await window.federation.fetchNexusManifest(nexus.id);
+                        status = 'online';
+                        worldCount = manifest.worlds?.local?.length || 0;
+                    } catch (e) {
+                        status = 'offline';
+                    }
+
+                    nexusItem.innerHTML = `
+                        <div class="nexus-item-header">
+                            <span class="nexus-item-name">${nexus.icon || '🌐'} ${nexus.name}</span>
+                            <span class="nexus-item-status ${status === 'offline' ? 'offline' : ''}">${status}</span>
+                        </div>
+                        <div class="nexus-item-description">${nexus.url}</div>
+                        <div class="nexus-item-worlds">${worldCount} worlds available</div>
+                    `;
+
+                    nexusItem.addEventListener('click', () => {
+                        this.exploreNexus(nexus);
+                    });
+
+                    nexusList.appendChild(nexusItem);
+                }
+            }
+
+            async exploreNexus(nexus) {
+                try {
+                    const worlds = await window.federation.getRemoteWorlds(nexus.id);
+
+                    if (worlds.length > 0) {
+                        // Add worlds to the portal network
+                        worlds.forEach(world => {
+                            if (!this.world.worlds.find(w => w.id === world.id)) {
+                                this.world.worlds.push(world);
+                            }
+                        });
+
+                        this.world.recreatePortals();
+                        this.hideModal();
+                        this.world.showNotification(`Added ${worlds.length} worlds from ${nexus.name}`);
+                    } else {
+                        this.world.showNotification('No worlds found in this nexus');
+                    }
+                } catch (error) {
+                    this.world.showNotification('Failed to connect to nexus');
+                }
+            }
+
+            async addNexus() {
+                const input = document.getElementById('add-nexus-input');
+                let nexusUrl = input.value.trim();
+
+                if (!nexusUrl) return;
+
+                // Parse URL to get owner/repo
+                let nexusId = nexusUrl;
+                if (nexusUrl.includes('github.io')) {
+                    const match = nexusUrl.match(/([^\/]+)\.github\.io\/([^\/]+)/);
+                    if (match) {
+                        nexusId = `${match[1]}/${match[2]}`;
+                    }
+                }
+
+                try {
+                    const { manifest } = await window.federation.fetchNexusManifest(nexusId);
+
+                    // Add to linked nexuses (in memory - would need backend to persist)
+                    if (!NEXUS_CONFIG.federation.linkedNexuses) {
+                        NEXUS_CONFIG.federation.linkedNexuses = [];
+                    }
+
+                    NEXUS_CONFIG.federation.linkedNexuses.push({
+                        id: nexusId,
+                        name: manifest.identity.name,
+                        url: `https://${nexusId.replace('/', '.github.io/')}/v2/`,
+                        icon: manifest.identity.icon || '🌐'
+                    });
+
+                    input.value = '';
+                    this.updateNexusList();
+                    this.world.showNotification(`Connected to ${manifest.identity.name}!`);
+                } catch (error) {
+                    this.world.showNotification('Failed to connect to nexus. Check the URL.');
+                }
+            }
+        }
+
+        // =============================================
+        // WORLD NAVIGATOR CLASS
+        // =============================================
+        class WorldNavigator {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+
+                this.isMobile = isMobile;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+                this.touches = new Map();
+
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.isPointerLocked = false;
+
+                // Managers
+                this.multiplayer = null;
+                this.aiManager = null;
+                this.portalManager = null;
+                this.federationBrowser = null;
+            }
+
+            async init() {
+                // Show origin if arrived from another world
+                if (federationContext.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = federationContext.sourceWorldName;
+                    originDiv.classList.add('visible');
+
+                    // Show external visitor badge
+                    if (federationContext.isExternalVisitor) {
+                        const badge = document.getElementById('federation-badge');
+                        badge.classList.add('visitor');
+                        document.getElementById('federation-status').textContent =
+                            `Visitor from ${federationContext.sourceNexus}`;
+                    }
+
+                    // Show return portal indicator
+                    if (federationContext.canReturn) {
+                        document.getElementById('return-portal-indicator').classList.add('show');
+                    }
+                }
+
+                // Update UI
+                document.getElementById('loading-status').textContent = 'Setting up scene...';
+                document.getElementById('world-title').textContent = CURRENT_WORLD.name;
+                document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+
+                this.setupScene();
+                this.setupLighting();
+
+                document.getElementById('loading-status').textContent = 'Loading worlds...';
+                await this.loadWorlds();
+
+                document.getElementById('loading-status').textContent = 'Creating environment...';
+                this.createEnvironment();
+                this.createPortals();
+                this.setupEventListeners();
+
+                // Initialize managers
+                this.multiplayer = new MultiplayerManager(this);
+                this.aiManager = new AIManager(this);
+                this.portalManager = new PortalManager(this);
+                this.federationBrowser = new FederationBrowser(this);
+
+                // Mobile setup
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent =
+                        'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+                }
+
+                // Hide loading
+                setTimeout(() => {
+                    document.getElementById('loading').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 500);
+                }, 500);
+
+                // Make globally accessible
+                window.worldNavigator = this;
+
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.5);
+                this.scene.add(ambientLight);
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(10, 20, 10);
+                this.scene.add(dirLight);
+            }
+
+            async loadWorlds() {
+                // Load from nexus.json config
+                this.worlds = [];
+
+                // Add local worlds from config
+                if (NEXUS_CONFIG?.worlds?.local) {
+                    NEXUS_CONFIG.worlds.local.forEach(world => {
+                        this.worlds.push({
+                            ...world,
+                            pages_url: world.file,
+                            isExternal: false
+                        });
+                    });
+                }
+
+                // Add external worlds from config
+                if (NEXUS_CONFIG?.worlds?.external) {
+                    NEXUS_CONFIG.worlds.external.forEach(world => {
+                        this.worlds.push({
+                            ...world,
+                            pages_url: world.url,
+                            isExternal: true,
+                            nexusId: world.source
+                        });
+                    });
+                }
+
+                // Add return portal if visitor from external nexus
+                if (federationContext.canReturn && federationContext.returnAddress) {
+                    const resolved = window.federation.resolveNexusAddress(federationContext.returnAddress);
+                    this.worlds.unshift({
+                        id: 'return-portal',
+                        name: `Return to ${federationContext.sourceWorldName || 'Origin'}`,
+                        description: `Return to ${federationContext.sourceNexus}`,
+                        icon: '↩️',
+                        pages_url: resolved.pagesUrl,
+                        isExternal: true,
+                        nexusId: federationContext.sourceNexus,
+                        isReturn: true
+                    });
+                }
+
+                console.log(`Loaded ${this.worlds.length} worlds`);
+            }
+
+            createEnvironment() {
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+
+                const vertices = groundGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i + 2] = Math.sin(vertices[i] * 0.1) * Math.cos(vertices[i + 1] * 0.1) * 0.5;
+                }
+                groundGeometry.computeVertexNormals();
+
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                this.scene.add(ground);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(200, 100, 0x444444, 0x222222);
+                gridHelper.position.y = 0.1;
+                this.scene.add(gridHelper);
+
+                // Sky
+                const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+                const skyMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        topColor: { value: new THREE.Color(CURRENT_WORLD.skyColor) },
+                        bottomColor: { value: new THREE.Color(CURRENT_WORLD.fogColor) },
+                        offset: { value: 33 },
+                        exponent: { value: 0.6 }
+                    },
+                    vertexShader: `
+                        varying vec3 vWorldPosition;
+                        void main() {
+                            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                            vWorldPosition = worldPosition.xyz;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 topColor;
+                        uniform vec3 bottomColor;
+                        uniform float offset;
+                        uniform float exponent;
+                        varying vec3 vWorldPosition;
+                        void main() {
+                            float h = normalize(vWorldPosition + offset).y;
+                            gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                        }
+                    `,
+                    side: THREE.BackSide
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+
+                // Particles
+                const particleCount = CURRENT_WORLD.particleCount;
+                const particleGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 200;
+                    positions[i + 1] = Math.random() * 50;
+                    positions[i + 2] = (Math.random() - 0.5) * 200;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: CURRENT_WORLD.portalColor1,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+
+                this.particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(this.particles);
+            }
+
+            createPortals() {
+                // Clear existing portals
+                this.portals.forEach(portal => this.scene.remove(portal));
+                this.portals = [];
+
+                const numPortals = Math.min(this.worlds.length, 16);
+                const radius = 15;
+
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i];
+                    const angle = (i / numPortals) * Math.PI * 2;
+
+                    // Portal frame (torus)
+                    const torusGeometry = new THREE.TorusGeometry(1.5, 0.1, 16, 100);
+                    const torusMaterial = new THREE.MeshStandardMaterial({
+                        color: world.isReturn ? 0xff6a00 : (world.isExternal ? 0xff6a00 : CURRENT_WORLD.portalColor1),
+                        emissive: world.isReturn ? 0xff6a00 : (world.isExternal ? 0xff6a00 : CURRENT_WORLD.portalColor1),
+                        emissiveIntensity: 0.5
+                    });
+                    const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+
+                    // Portal surface
+                    const circleGeometry = new THREE.CircleGeometry(1.4, 32);
+                    const circleMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(world.isExternal ? 0xff6a00 : CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(world.isExternal ? 0xff8c00 : CURRENT_WORLD.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, wave);
+                                float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.8);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+                    circle.position.z = 0.01;
+
+                    // Portal group
+                    const portal = new THREE.Group();
+                    portal.add(torus);
+                    portal.add(circle);
+
+                    // Position
+                    portal.position.set(
+                        Math.cos(angle) * radius,
+                        3,
+                        Math.sin(angle) * radius
+                    );
+                    portal.lookAt(0, 3, 0);
+
+                    // Glow
+                    const light = new THREE.PointLight(
+                        world.isExternal ? 0xff6a00 : CURRENT_WORLD.portalColor1,
+                        0.5,
+                        10
+                    );
+                    portal.add(light);
+
+                    // User data
+                    portal.userData = {
+                        world: world,
+                        url: world.pages_url || world.url,
+                        name: world.name,
+                        description: world.description || `Enter ${world.name}`,
+                        nexusId: world.nexusId,
+                        isExternal: world.isExternal,
+                        isReturn: world.isReturn,
+                        circleMaterial: circleMaterial
+                    };
+
+                    this.scene.add(portal);
+                    this.portals.push(portal);
+                }
+            }
+
+            recreatePortals() {
+                this.createPortals();
+            }
+
+            setupEventListeners() {
+                // Resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                // Keyboard
+                document.addEventListener('keydown', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) this.keys[key] = true;
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key in this.keys) this.keys[key] = false;
+                });
+
+                // Mouse
+                if (!this.isMobile) {
+                    this.renderer.domElement.addEventListener('click', () => {
+                        if (!this.isPointerLocked) {
+                            this.renderer.domElement.requestPointerLock();
+                        } else {
+                            this.checkPortalClick();
+                        }
+                    });
+
+                    document.addEventListener('pointerlockchange', () => {
+                        this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                    });
+
+                    document.addEventListener('mousemove', (e) => {
+                        if (this.isPointerLocked) {
+                            this.rotation.y -= e.movementX * this.lookSpeed;
+                            this.rotation.x -= e.movementY * this.lookSpeed;
+                            this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+                        }
+                    });
+                } else {
+                    // Mobile touch controls
+                    this.setupMobileControls();
+                }
+            }
+
+            setupMobileControls() {
+                const joystickContainer = document.getElementById('movement-joystick');
+                const joystickHandle = document.getElementById('movement-handle');
+                const container = document.getElementById('three-container');
+
+                // Joystick
+                joystickContainer.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.joystickTouch = e.touches[0].identifier;
+                    this.joystickActive = true;
+                }, { passive: false });
+
+                joystickContainer.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    for (let touch of e.touches) {
+                        if (touch.identifier === this.joystickTouch) {
+                            const rect = joystickContainer.getBoundingClientRect();
+                            const centerX = rect.left + rect.width / 2;
+                            const centerY = rect.top + rect.height / 2;
+
+                            let dx = touch.clientX - centerX;
+                            let dy = touch.clientY - centerY;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            const maxDistance = rect.width / 2 - 25;
+
+                            if (distance > maxDistance) {
+                                dx = (dx / distance) * maxDistance;
+                                dy = (dy / distance) * maxDistance;
+                            }
+
+                            joystickHandle.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                            this.joystickVector.set(dx / maxDistance, dy / maxDistance);
+                        }
+                    }
+                }, { passive: false });
+
+                joystickContainer.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (touch.identifier === this.joystickTouch) {
+                            this.joystickTouch = null;
+                            this.joystickActive = false;
+                            joystickHandle.style.transform = 'translate(-50%, -50%)';
+                            this.joystickVector.set(0, 0);
+                        }
+                    }
+                });
+
+                // Look controls
+                container.addEventListener('touchstart', (e) => {
+                    for (let touch of e.touches) {
+                        if (touch.identifier !== this.joystickTouch) {
+                            this.lookTouch = {
+                                id: touch.identifier,
+                                startX: touch.clientX,
+                                startY: touch.clientY,
+                                lastX: touch.clientX,
+                                lastY: touch.clientY
+                            };
+                            break;
+                        }
+                    }
+                });
+
+                container.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    for (let touch of e.touches) {
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            const dx = touch.clientX - this.lookTouch.lastX;
+                            const dy = touch.clientY - this.lookTouch.lastY;
+
+                            this.rotation.y -= dx * 0.005;
+                            this.rotation.x -= dy * 0.005;
+                            this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+
+                            this.lookTouch.lastX = touch.clientX;
+                            this.lookTouch.lastY = touch.clientY;
+                        }
+                    }
+                }, { passive: false });
+
+                container.addEventListener('touchend', (e) => {
+                    for (let touch of e.changedTouches) {
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            // Check for tap on portal
+                            const dx = Math.abs(touch.clientX - this.lookTouch.startX);
+                            const dy = Math.abs(touch.clientY - this.lookTouch.startY);
+                            if (dx < 10 && dy < 10) {
+                                this.checkPortalClick();
+                            }
+                            this.lookTouch = null;
+                        }
+                    }
+                });
+            }
+
+            checkPortalClick() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals, true);
+
+                if (intersects.length > 0) {
+                    let portal = intersects[0].object;
+                    while (portal.parent && !portal.userData.url) {
+                        portal = portal.parent;
+                    }
+
+                    if (portal.userData.url) {
+                        this.showNotification(`Entering ${portal.userData.name}...`);
+                        this.enterWorld(portal.userData.url, portal.userData.nexusId);
+                    }
+                }
+            }
+
+            enterWorld(url, nexusId = null) {
+                // Build inheritance params
+                const params = new URLSearchParams();
+
+                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+                params.set('from', currentFile);
+                params.set('fromName', CURRENT_WORLD.name);
+                params.set('fromNexus', `${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}`);
+                params.set('nexusReturn', `nexus://${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}/v2/${currentFile.replace('.html', '')}`);
+
+                // Visual attributes
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('lookSpeed', this.lookSpeed.toString());
+
+                // Preserve multiplayer session
+                if (this.multiplayer?.federatedRoomId) {
+                    params.set('host', this.multiplayer.federatedRoomId);
+                }
+
+                // Identity
+                const identity = window.identityManager?.identity;
+                if (identity) {
+                    params.set('userId', identity.id);
+                    params.set('userName', identity.username);
+                }
+
+                // Navigate
+                const separator = url.includes('?') ? '&' : '?';
+                window.location.href = `${url}${separator}${params.toString()}`;
+            }
+
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals, true);
+
+                if (intersects.length > 0) {
+                    let portal = intersects[0].object;
+                    while (portal.parent && !portal.userData.url) {
+                        portal = portal.parent;
+                    }
+
+                    if (portal.userData.url && this.hoveredPortal !== portal) {
+                        this.hoveredPortal = portal;
+
+                        const titleEl = this.tooltip.querySelector('.tooltip-title');
+                        const descEl = this.tooltip.querySelector('.tooltip-description');
+                        const nexusEl = this.tooltip.querySelector('.tooltip-nexus');
+
+                        titleEl.textContent = `${portal.userData.world?.icon || '🌀'} ${portal.userData.name}`;
+                        descEl.textContent = portal.userData.description;
+
+                        if (portal.userData.isExternal && portal.userData.nexusId) {
+                            nexusEl.textContent = `From: ${portal.userData.nexusId}`;
+                            nexusEl.style.display = 'block';
+                            this.tooltip.classList.add('external');
+                        } else {
+                            nexusEl.style.display = 'none';
+                            this.tooltip.classList.remove('external');
+                        }
+
+                        this.tooltip.classList.add('visible');
+
+                        // Position tooltip
+                        const screenPos = this.getScreenPosition(portal.position);
+                        this.tooltip.style.left = `${screenPos.x}px`;
+                        this.tooltip.style.top = `${screenPos.y - 100}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+
+            getScreenPosition(position) {
+                const vector = position.clone();
+                vector.project(this.camera);
+
+                return {
+                    x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+                    y: (-vector.y * 0.5 + 0.5) * window.innerHeight
+                };
+            }
+
+            showNotification(message) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.classList.add('show');
+
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const delta = this.clock.getDelta();
+                const time = this.clock.getElapsedTime();
+
+                // Update camera rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+
+                // Movement
+                const moveDirection = new THREE.Vector3();
+
+                if (this.isMobile && this.joystickActive) {
+                    moveDirection.x = this.joystickVector.x;
+                    moveDirection.z = this.joystickVector.y;
+                } else {
+                    if (this.keys.w) moveDirection.z -= 1;
+                    if (this.keys.s) moveDirection.z += 1;
+                    if (this.keys.a) moveDirection.x -= 1;
+                    if (this.keys.d) moveDirection.x += 1;
+                }
+
+                if (moveDirection.length() > 0) {
+                    moveDirection.normalize();
+                    moveDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.rotation.y);
+                    this.camera.position.add(moveDirection.multiplyScalar(this.moveSpeed));
+                }
+
+                // Update portal animations
+                this.portals.forEach(portal => {
+                    if (portal.userData.circleMaterial) {
+                        portal.userData.circleMaterial.uniforms.time.value = time;
+                    }
+                });
+
+                // Update particles
+                if (this.particles) {
+                    this.particles.rotation.y = time * 0.02;
+                }
+
+                // Update hover
+                this.updateHover();
+
+                // Broadcast multiplayer position
+                if (this.multiplayer) {
+                    this.multiplayer.broadcastPlayerUpdate();
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // =============================================
+        // INITIALIZATION
+        // =============================================
+        async function loadNexusConfig() {
+            try {
+                document.getElementById('loading-status').textContent = 'Loading nexus configuration...';
+                const response = await fetch('./nexus.json');
+                NEXUS_CONFIG = await response.json();
+                console.log('Loaded nexus config:', NEXUS_CONFIG.identity.name);
+            } catch (error) {
+                console.error('Failed to load nexus.json, using defaults:', error);
+                NEXUS_CONFIG = {
+                    version: '2.0.0',
+                    identity: {
+                        name: 'Nexus Hub v2',
+                        description: 'Federated world explorer'
+                    },
+                    theme: {
+                        worldDefaults: {
+                            ambientColor: '0a0a0a',
+                            fogColor: '000033',
+                            groundColor: '1a1a2e',
+                            skyColor: '16213e',
+                            portalColor1: '00ffff',
+                            portalColor2: 'ff00ff',
+                            particleCount: 1000,
+                            fogNear: 10,
+                            fogFar: 100,
+                            cameraHeight: 2,
+                            moveSpeed: 0.15,
+                            lookSpeed: 0.002
+                        }
+                    },
+                    worlds: { local: [], external: [] },
+                    federation: { linkedNexuses: [] }
+                };
+            }
+
+            // Build CURRENT_WORLD from config + inherited attributes
+            const defaults = NEXUS_CONFIG.theme?.worldDefaults || {};
+            CURRENT_WORLD = {
+                name: NEXUS_CONFIG.identity?.name || 'Nexus Hub v2',
+                description: NEXUS_CONFIG.identity?.description || 'Federated world explorer',
+                ambientColor: parseInt(defaults.ambientColor || '0a0a0a', 16),
+                fogColor: parseInt(defaults.fogColor || '000033', 16),
+                groundColor: parseInt(defaults.groundColor || '1a1a2e', 16),
+                skyColor: parseInt(defaults.skyColor || '16213e', 16),
+                portalColor1: parseInt(defaults.portalColor1 || '00ffff', 16),
+                portalColor2: parseInt(defaults.portalColor2 || 'ff00ff', 16),
+                particleCount: defaults.particleCount || 1000,
+                fogNear: defaults.fogNear || 10,
+                fogFar: defaults.fogFar || 100,
+                cameraHeight: defaults.cameraHeight || 2,
+                moveSpeed: defaults.moveSpeed || 0.15,
+                lookSpeed: defaults.lookSpeed || 0.002,
+                ...inheritedAttributes
+            };
+        }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadNexusConfig();
+
+            // Initialize global managers
+            window.identityManager = new FederatedIdentityManager();
+            window.federation = new NexusFederation();
+
+            // Start the world
+            const navigator = new WorldNavigator();
+            await navigator.init();
+        });
+    </script>
+</body>
+</html>

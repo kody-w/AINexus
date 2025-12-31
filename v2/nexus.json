@@ -1,0 +1,175 @@
+{
+  "$schema": "./schemas/nexus.schema.json",
+  "version": "2.0.0",
+  "schemaVersion": 1,
+
+  "identity": {
+    "id": "ainexus-prime",
+    "name": "AINexus Prime",
+    "shortName": "AINexus",
+    "description": "The original nexus - a collection of interconnected 3D worlds with AI companions and multiplayer exploration",
+    "icon": "🌐",
+    "owner": {
+      "name": "kody-w",
+      "url": "https://github.com/kody-w",
+      "avatar": "https://github.com/kody-w.png"
+    },
+    "homepage": "https://kody-w.github.io/AINexus/v2/",
+    "repository": "https://github.com/kody-w/AINexus",
+    "license": "MIT",
+    "forkedFrom": null
+  },
+
+  "github": {
+    "owner": "kody-w",
+    "repo": "AINexus",
+    "branch": "main"
+  },
+
+  "theme": {
+    "preset": "default",
+    "colors": {
+      "primary": "#00ffff",
+      "secondary": "#ff00ff",
+      "accent": "#06ffa5",
+      "background": "#0a0a1a",
+      "text": "#ffffff"
+    },
+    "worldDefaults": {
+      "ambientColor": "0a0a0a",
+      "fogColor": "000033",
+      "groundColor": "1a1a2e",
+      "skyColor": "16213e",
+      "portalColor1": "00ffff",
+      "portalColor2": "ff00ff",
+      "particleCount": 1000,
+      "fogNear": 10,
+      "fogFar": 100,
+      "cameraHeight": 2,
+      "moveSpeed": 0.15,
+      "lookSpeed": 0.002
+    },
+    "hub": {
+      "titleGradient": ["#00ffff", "#ff00ff", "#06ffa5"],
+      "portalGlowIntensity": 1.5,
+      "hudOpacity": 0.85
+    }
+  },
+
+  "worlds": {
+    "local": [
+      {
+        "id": "example-world",
+        "file": "worlds/example-world.html",
+        "name": "Example World",
+        "description": "A documented example showing v2 world patterns",
+        "icon": "✨",
+        "tags": ["example", "template", "documentation"],
+        "featured": true
+      }
+    ],
+    "external": [
+      {
+        "id": "v1-crystal-caves",
+        "url": "../crystal-caves-world.html",
+        "name": "Crystal Caves",
+        "description": "A mystical underground realm filled with glowing crystals and ancient secrets",
+        "icon": "💎",
+        "tags": ["v1", "caves", "mystical"],
+        "source": "kody-w/AINexus",
+        "verified": true
+      },
+      {
+        "id": "v1-galaxy-zoo",
+        "url": "../galaxy-zoo-world.html",
+        "name": "Galaxy Zoo",
+        "description": "Explore cosmic creatures in a stellar menagerie",
+        "icon": "🌌",
+        "tags": ["v1", "space", "creatures"],
+        "source": "kody-w/AINexus",
+        "verified": true
+      },
+      {
+        "id": "v1-floating-gardens",
+        "url": "../floating-gardens-world.html",
+        "name": "Floating Gardens",
+        "description": "Sky islands drift through endless blue with lush vegetation",
+        "icon": "🌿",
+        "tags": ["v1", "nature", "sky"],
+        "source": "kody-w/AINexus",
+        "verified": true
+      },
+      {
+        "id": "v1-neon-arcade",
+        "url": "../neon-arcade-world.html",
+        "name": "Neon Arcade",
+        "description": "A retro-futuristic arcade with pulsing lights and classic games",
+        "icon": "🕹️",
+        "tags": ["v1", "arcade", "neon"],
+        "source": "kody-w/AINexus",
+        "verified": true
+      },
+      {
+        "id": "v1-ancient-library",
+        "url": "../ancient-library-world.html",
+        "name": "Ancient Library",
+        "description": "Towering shelves of forgotten knowledge in an eternal repository",
+        "icon": "📚",
+        "tags": ["v1", "library", "ancient"],
+        "source": "kody-w/AINexus",
+        "verified": true
+      }
+    ]
+  },
+
+  "federation": {
+    "enabled": true,
+    "linkedNexuses": [],
+    "discovery": {
+      "allowPublicListing": true,
+      "showInDirectory": true,
+      "acceptIncomingLinks": true
+    },
+    "addressFormat": "nexus://{owner}/{repo}/{world}"
+  },
+
+  "features": {
+    "aiCompanion": {
+      "enabled": true,
+      "endpoint": "https://azfbusinessbot.azurewebsites.net/api/aidialog",
+      "requireApiKey": false
+    },
+    "multiplayer": {
+      "enabled": true,
+      "permanentRoom": "kody-w/AINexus:nexus-v2-permanent",
+      "maxPlayers": 50
+    },
+    "sceneRecording": {
+      "enabled": true,
+      "maxDuration": 300
+    },
+    "portalCreation": {
+      "enabled": true,
+      "allowExternalNexus": true
+    },
+    "offlineMode": {
+      "enabled": true,
+      "cacheWorlds": true
+    }
+  },
+
+  "api": {
+    "peerJs": {
+      "host": "0.peerjs.com",
+      "port": 443,
+      "secure": true
+    }
+  },
+
+  "metadata": {
+    "created": "2025-01-01T00:00:00Z",
+    "lastModified": "2025-01-01T00:00:00Z",
+    "generator": "AINexus v2",
+    "coreVersion": "2.0.0"
+  }
+}

@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- ============================================
+         AINEXUS V2 WORLD TEMPLATE
+
+         This template provides the standard structure
+         for creating new v2 worlds. Follow the marked
+         sections to customize your world.
+
+         REQUIRED sections are marked with [REQUIRED]
+         OPTIONAL sections are marked with [OPTIONAL]
+         DO NOT MODIFY sections marked [FRAMEWORK]
+    ============================================= -->
+    <title>Your World Name - AINexus v2</title>
+
+    <style>
+        /* ==========================================
+           [FRAMEWORK] Base Styles - Do Not Modify
+        ========================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* Loading Screen */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ==========================================
+           [REQUIRED] World UI Styles
+           Customize colors and gradients here
+        ========================================== */
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            /* [CUSTOMIZE] Title gradient colors */
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #06ffa5);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        /* World Origin */
+        #world-origin {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.3s ease;
+        }
+
+        #world-origin.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Controls Hint */
+        .controls-hint {
+            position: fixed;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        /* Portal Tooltip */
+        .portal-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 25px;
+            border-radius: 15px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .portal-tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #06ffa5;
+        }
+
+        .tooltip-description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: env(safe-area-inset-bottom, 20px);
+            z-index: 1000;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            margin: 20px;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border-radius: 25px;
+            border: 1px solid rgba(0, 255, 255, 0.5);
+            z-index: 2000;
+            transition: transform 0.3s ease;
+            color: #06ffa5;
+        }
+
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Back Button */
+        .back-button {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1002;
+            transition: all 0.3s ease;
+            margin-top: 80px;
+        }
+
+        .back-button:hover {
+            background: rgba(0, 255, 255, 0.3);
+            border-color: #00ffff;
+        }
+
+        .back-button svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Three.js Container -->
+    <div id="three-container"></div>
+
+    <!-- ==========================================
+         [REQUIRED] World UI Elements
+         Customize the title and description
+    ========================================== -->
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">YOUR WORLD NAME</h1>
+        <p class="world-description" id="world-description">Your world description goes here</p>
+    </div>
+
+    <!-- World Origin -->
+    <div id="world-origin">
+        <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Arrived from </span>
+        <span id="origin-world-name" style="color: #06ffa5; font-weight: bold;"></span>
+    </div>
+
+    <!-- Back Button -->
+    <div class="back-button" id="back-button" title="Return to Hub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+    </div>
+
+    <!-- Controls Hint -->
+    <div class="controls-hint" id="controls-hint">
+        Click to look around, Use WASD to move, Click on portals to travel
+    </div>
+
+    <!-- Portal Tooltip -->
+    <div class="portal-tooltip" id="portal-tooltip">
+        <div class="tooltip-title"></div>
+        <div class="tooltip-description"></div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+    // =============================================
+    // [REQUIRED] WORLD CONFIGURATION
+    // This is the primary customization point
+    // =============================================
+
+    const WORLD_CONFIG = {
+        // [REQUIRED] Basic Identity
+        id: 'your-world-id',           // Unique identifier (kebab-case)
+        name: 'Your World Name',       // Display name
+        icon: '🌍',                    // Emoji icon
+        description: 'Your world description here - what makes this world unique?',
+
+        // [REQUIRED] Visual Theme - Hex colors without 0x prefix
+        ambientColor: 0x0a0a0a,        // Scene ambient light color
+        fogColor: 0x000033,            // Fog color
+        groundColor: 0x1a1a2e,         // Ground material color
+        skyColor: 0x16213e,            // Sky gradient top color
+        portalColor1: 0x00ffff,        // Portal primary color
+        portalColor2: 0xff00ff,        // Portal secondary color
+
+        // [OPTIONAL] Advanced Settings
+        particleCount: 1000,           // Ambient particles (reduce for mobile)
+        cameraHeight: 2,               // Player eye height
+        fogNear: 10,                   // Fog start distance
+        fogFar: 100,                   // Fog end distance
+        moveSpeed: 0.15,               // Movement speed
+        lookSpeed: 0.002               // Mouse sensitivity
+    };
+
+    // =============================================
+    // [FRAMEWORK] Parse Inherited Attributes
+    // =============================================
+    function parseInheritedAttributes() {
+        const params = new URLSearchParams(window.location.search);
+        const inherited = {};
+
+        inherited.sourceWorld = params.get('from') || null;
+        inherited.sourceWorldName = params.get('fromName') || null;
+        inherited.sourceNexus = params.get('fromNexus') || null;
+        inherited.returnAddress = params.get('nexusReturn') || null;
+
+        if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+        if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+        if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+        if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+        if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+
+        return inherited;
+    }
+
+    const inheritedAttributes = parseInheritedAttributes();
+    const CURRENT_WORLD = { ...WORLD_CONFIG, ...inheritedAttributes };
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // Detect fork identity
+    function detectForkIdentity() {
+        const hostname = window.location.hostname;
+        if (hostname.endsWith('.github.io')) {
+            const owner = hostname.replace('.github.io', '');
+            const pathParts = window.location.pathname.split('/').filter(p => p);
+            const repo = pathParts[0] || 'AINexus';
+            return { owner, repo };
+        }
+        return { owner: 'local', repo: 'AINexus' };
+    }
+    const FORK_IDENTITY = detectForkIdentity();
+
+    // =============================================
+    // [FRAMEWORK] World Class
+    // =============================================
+    class World {
+        constructor() {
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.portals = [];
+            this.raycaster = new THREE.Raycaster();
+            this.clock = new THREE.Clock();
+
+            this.moveSpeed = CURRENT_WORLD.moveSpeed;
+            this.lookSpeed = CURRENT_WORLD.lookSpeed;
+            this.keys = { w: false, a: false, s: false, d: false };
+            this.rotation = { x: 0, y: 0 };
+
+            this.isMobile = isMobile;
+            this.joystickActive = false;
+            this.joystickVector = new THREE.Vector2();
+            this.lookTouch = null;
+            this.joystickTouch = null;
+
+            this.hoveredPortal = null;
+            this.tooltip = document.getElementById('portal-tooltip');
+            this.isPointerLocked = false;
+        }
+
+        async init() {
+            // Show origin if arrived from another world
+            if (inheritedAttributes.sourceWorldName) {
+                const originDiv = document.getElementById('world-origin');
+                document.getElementById('origin-world-name').textContent = inheritedAttributes.sourceWorldName;
+                originDiv.classList.add('visible');
+            }
+
+            // Update UI
+            document.getElementById('world-title').textContent = CURRENT_WORLD.name;
+            document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+
+            this.setupScene();
+            this.setupLighting();
+            this.createEnvironment();    // [CUSTOMIZE THIS]
+            this.createPortals();
+            this.setupEventListeners();
+            this.setupBackButton();
+
+            if (this.isMobile) {
+                document.getElementById('controls-hint').textContent =
+                    'Touch & drag to look, Use joystick to move';
+                document.getElementById('mobile-controls').classList.add('show');
+            }
+
+            // Hide loading
+            setTimeout(() => {
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+            }, 500);
+
+            window.worldInstance = this;
+            this.animate();
+        }
+
+        setupScene() {
+            this.scene = new THREE.Scene();
+            this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+
+            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('three-container').appendChild(this.renderer.domElement);
+        }
+
+        setupLighting() {
+            const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.5);
+            this.scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            this.scene.add(dirLight);
+        }
+
+        // =========================================
+        // [REQUIRED] CUSTOMIZE THIS METHOD
+        // Create your world's unique environment
+        // =========================================
+        createEnvironment() {
+            // === GROUND ===
+            const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: CURRENT_WORLD.groundColor,
+                roughness: 0.8
+            });
+
+            // Add terrain variation
+            const vertices = groundGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                vertices[i + 2] = Math.sin(vertices[i] * 0.1) * Math.cos(vertices[i + 1] * 0.1) * 0.5;
+            }
+            groundGeometry.computeVertexNormals();
+
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            this.scene.add(ground);
+
+            // === GRID ===
+            const gridHelper = new THREE.GridHelper(200, 100, 0x444444, 0x222222);
+            gridHelper.position.y = 0.1;
+            this.scene.add(gridHelper);
+
+            // === SKY ===
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+            const skyMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(CURRENT_WORLD.skyColor) },
+                    bottomColor: { value: new THREE.Color(CURRENT_WORLD.fogColor) },
+                    offset: { value: 33 },
+                    exponent: { value: 0.6 }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition + offset).y;
+                        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                    }
+                `,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            this.scene.add(sky);
+
+            // === PARTICLES ===
+            const particleCount = CURRENT_WORLD.particleCount;
+            const particleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 200;
+                positions[i + 1] = Math.random() * 50;
+                positions[i + 2] = (Math.random() - 0.5) * 200;
+            }
+
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const particleMaterial = new THREE.PointsMaterial({
+                color: CURRENT_WORLD.portalColor1,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            this.particles = new THREE.Points(particleGeometry, particleMaterial);
+            this.scene.add(this.particles);
+
+            // =========================================
+            // ADD YOUR CUSTOM CONTENT BELOW
+            // Examples:
+            // - Custom geometry (buildings, trees, etc.)
+            // - Special effects (lights, animated objects)
+            // - Interactive elements
+            // =========================================
+
+            // Example: Add some glowing spheres
+            /*
+            for (let i = 0; i < 10; i++) {
+                const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+                const sphereMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.portalColor1,
+                    emissive: CURRENT_WORLD.portalColor1,
+                    emissiveIntensity: 0.5
+                });
+                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                sphere.position.set(
+                    (Math.random() - 0.5) * 50,
+                    Math.random() * 5 + 1,
+                    (Math.random() - 0.5) * 50
+                );
+                this.scene.add(sphere);
+            }
+            */
+        }
+
+        createPortals() {
+            // Create a portal back to the hub
+            const hubPortal = this.createPortal(
+                '../index.html',
+                'Nexus Hub',
+                'Return to the central hub',
+                '🌐',
+                new THREE.Vector3(0, 3, -15)
+            );
+            this.portals.push(hubPortal);
+
+            // Add more portals to other worlds here
+            // Example:
+            /*
+            const anotherPortal = this.createPortal(
+                'another-world.html',
+                'Another World',
+                'Explore something new',
+                '✨',
+                new THREE.Vector3(10, 3, -10)
+            );
+            this.portals.push(anotherPortal);
+            */
+        }
+
+        createPortal(url, name, description, icon, position) {
+            // Portal frame
+            const torusGeometry = new THREE.TorusGeometry(1.5, 0.1, 16, 100);
+            const torusMaterial = new THREE.MeshStandardMaterial({
+                color: CURRENT_WORLD.portalColor1,
+                emissive: CURRENT_WORLD.portalColor1,
+                emissiveIntensity: 0.5
+            });
+            const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+
+            // Portal surface
+            const circleGeometry = new THREE.CircleGeometry(1.4, 32);
+            const circleMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                    color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float time;
+                    uniform vec3 color1;
+                    uniform vec3 color2;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 center = vUv - 0.5;
+                        float dist = length(center);
+                        float wave = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
+                        vec3 color = mix(color1, color2, wave);
+                        float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                        gl_FragColor = vec4(color, alpha * 0.8);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+            circle.position.z = 0.01;
+
+            // Group
+            const portal = new THREE.Group();
+            portal.add(torus);
+            portal.add(circle);
+            portal.position.copy(position);
+            portal.lookAt(0, position.y, 0);
+
+            // Glow
+            const light = new THREE.PointLight(CURRENT_WORLD.portalColor1, 0.5, 10);
+            portal.add(light);
+
+            // User data
+            portal.userData = {
+                url: url,
+                name: name,
+                description: description,
+                icon: icon,
+                circleMaterial: circleMaterial
+            };
+
+            this.scene.add(portal);
+            return portal;
+        }
+
+        setupBackButton() {
+            document.getElementById('back-button').addEventListener('click', () => {
+                this.enterWorld('../index.html');
+            });
+        }
+
+        setupEventListeners() {
+            // Resize
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Keyboard
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+                if (key in this.keys) this.keys[key] = true;
+            });
+
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (key in this.keys) this.keys[key] = false;
+            });
+
+            // Mouse (Desktop)
+            if (!this.isMobile) {
+                this.renderer.domElement.addEventListener('click', () => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.checkPortalClick();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+                    }
+                });
+            } else {
+                // Mobile touch controls
+                this.setupMobileControls();
+            }
+        }
+
+        setupMobileControls() {
+            const joystickContainer = document.getElementById('movement-joystick');
+            const joystickHandle = document.getElementById('movement-handle');
+            const container = document.getElementById('three-container');
+
+            // Joystick
+            joystickContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.joystickTouch = e.touches[0].identifier;
+                this.joystickActive = true;
+            }, { passive: false });
+
+            joystickContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.joystickTouch) {
+                        const rect = joystickContainer.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
+
+                        let dx = touch.clientX - centerX;
+                        let dy = touch.clientY - centerY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const maxDistance = rect.width / 2 - 25;
+
+                        if (distance > maxDistance) {
+                            dx = (dx / distance) * maxDistance;
+                            dy = (dy / distance) * maxDistance;
+                        }
+
+                        joystickHandle.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                        this.joystickVector.set(dx / maxDistance, dy / maxDistance);
+                    }
+                }
+            }, { passive: false });
+
+            joystickContainer.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (touch.identifier === this.joystickTouch) {
+                        this.joystickTouch = null;
+                        this.joystickActive = false;
+                        joystickHandle.style.transform = 'translate(-50%, -50%)';
+                        this.joystickVector.set(0, 0);
+                    }
+                }
+            });
+
+            // Look controls
+            container.addEventListener('touchstart', (e) => {
+                for (let touch of e.touches) {
+                    if (touch.identifier !== this.joystickTouch) {
+                        this.lookTouch = {
+                            id: touch.identifier,
+                            startX: touch.clientX,
+                            startY: touch.clientY,
+                            lastX: touch.clientX,
+                            lastY: touch.clientY
+                        };
+                        break;
+                    }
+                }
+            });
+
+            container.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let touch of e.touches) {
+                    if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                        const dx = touch.clientX - this.lookTouch.lastX;
+                        const dy = touch.clientY - this.lookTouch.lastY;
+
+                        this.rotation.y -= dx * 0.005;
+                        this.rotation.x -= dy * 0.005;
+                        this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+
+                        this.lookTouch.lastX = touch.clientX;
+                        this.lookTouch.lastY = touch.clientY;
+                    }
+                }
+            }, { passive: false });
+
+            container.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                        const dx = Math.abs(touch.clientX - this.lookTouch.startX);
+                        const dy = Math.abs(touch.clientY - this.lookTouch.startY);
+                        if (dx < 10 && dy < 10) {
+                            this.checkPortalClick();
+                        }
+                        this.lookTouch = null;
+                    }
+                }
+            });
+        }
+
+        checkPortalClick() {
+            this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const intersects = this.raycaster.intersectObjects(this.portals, true);
+
+            if (intersects.length > 0) {
+                let portal = intersects[0].object;
+                while (portal.parent && !portal.userData.url) {
+                    portal = portal.parent;
+                }
+
+                if (portal.userData.url) {
+                    this.showNotification(`Entering ${portal.userData.name}...`);
+                    this.enterWorld(portal.userData.url);
+                }
+            }
+        }
+
+        enterWorld(url) {
+            // Build inheritance params
+            const params = new URLSearchParams();
+
+            const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+            params.set('from', currentFile);
+            params.set('fromName', CURRENT_WORLD.name);
+            params.set('fromNexus', `${FORK_IDENTITY.owner}/${FORK_IDENTITY.repo}`);
+
+            // Visual attributes
+            params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+            params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+            params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+            params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+
+            // Navigate
+            const separator = url.includes('?') ? '&' : '?';
+            window.location.href = `${url}${separator}${params.toString()}`;
+        }
+
+        updateHover() {
+            this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const intersects = this.raycaster.intersectObjects(this.portals, true);
+
+            if (intersects.length > 0) {
+                let portal = intersects[0].object;
+                while (portal.parent && !portal.userData.url) {
+                    portal = portal.parent;
+                }
+
+                if (portal.userData.url && this.hoveredPortal !== portal) {
+                    this.hoveredPortal = portal;
+
+                    const titleEl = this.tooltip.querySelector('.tooltip-title');
+                    const descEl = this.tooltip.querySelector('.tooltip-description');
+
+                    titleEl.textContent = `${portal.userData.icon || '🌀'} ${portal.userData.name}`;
+                    descEl.textContent = portal.userData.description;
+
+                    this.tooltip.classList.add('visible');
+
+                    const screenPos = this.getScreenPosition(portal.position);
+                    this.tooltip.style.left = `${screenPos.x}px`;
+                    this.tooltip.style.top = `${screenPos.y - 100}px`;
+                }
+            } else {
+                if (this.hoveredPortal) {
+                    this.hoveredPortal = null;
+                    this.tooltip.classList.remove('visible');
+                }
+            }
+        }
+
+        getScreenPosition(position) {
+            const vector = position.clone();
+            vector.project(this.camera);
+            return {
+                x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+                y: (-vector.y * 0.5 + 0.5) * window.innerHeight
+            };
+        }
+
+        showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => notification.classList.remove('show'), 3000);
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+
+            const time = this.clock.getElapsedTime();
+
+            // Update camera rotation
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = this.rotation.y;
+            this.camera.rotation.x = this.rotation.x;
+
+            // Movement
+            const moveDirection = new THREE.Vector3();
+
+            if (this.isMobile && this.joystickActive) {
+                moveDirection.x = this.joystickVector.x;
+                moveDirection.z = this.joystickVector.y;
+            } else {
+                if (this.keys.w) moveDirection.z -= 1;
+                if (this.keys.s) moveDirection.z += 1;
+                if (this.keys.a) moveDirection.x -= 1;
+                if (this.keys.d) moveDirection.x += 1;
+            }
+
+            if (moveDirection.length() > 0) {
+                moveDirection.normalize();
+                moveDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.rotation.y);
+                this.camera.position.add(moveDirection.multiplyScalar(this.moveSpeed));
+            }
+
+            // Update portal animations
+            this.portals.forEach(portal => {
+                if (portal.userData.circleMaterial) {
+                    portal.userData.circleMaterial.uniforms.time.value = time;
+                }
+            });
+
+            // Update particles
+            if (this.particles) {
+                this.particles.rotation.y = time * 0.02;
+            }
+
+            // Update hover
+            this.updateHover();
+
+            // =========================================
+            // ADD YOUR CUSTOM ANIMATIONS BELOW
+            // Example: Rotate objects, update effects
+            // =========================================
+
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    // =============================================
+    // [FRAMEWORK] Initialize World
+    // =============================================
+    document.addEventListener('DOMContentLoaded', () => {
+        const world = new World();
+        world.init();
+    });
+    </script>
+</body>
+</html>
