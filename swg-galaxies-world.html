@@ -405,6 +405,82 @@
             justify-content: center;
         }
 
+        /* Daily Challenges */
+        #daily-challenges-button {
+            position: fixed;
+            top: 10px;
+            right: 310px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #daily-challenges-button.has-incomplete { animation: challengePulse 2s infinite; }
+        @keyframes challengePulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255,215,0,0.3); }
+            50% { box-shadow: 0 0 15px rgba(255,215,0,0.8); }
+        }
+        #daily-challenges-panel {
+            position: fixed;
+            top: 50px;
+            right: 10px;
+            width: 280px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            display: none;
+            z-index: 200;
+        }
+        #daily-challenges-panel.active { display: block; }
+        .daily-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #4a6fa5;
+            padding-bottom: 8px;
+        }
+        .daily-header h3 { color: #ffd700; margin: 0; font-size: 14px; }
+        .daily-timer { color: #888; font-size: 11px; }
+        .challenge-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(0,0,0,0.4);
+            border-left: 3px solid #4a6fa5;
+            border-radius: 3px;
+        }
+        .challenge-item.completed {
+            border-left-color: #4aff4a;
+            background: rgba(74,255,74,0.1);
+        }
+        .challenge-name { color: #fff; font-size: 12px; font-weight: bold; margin-bottom: 5px; }
+        .challenge-desc { color: #aaa; font-size: 11px; margin-bottom: 8px; }
+        .challenge-progress {
+            height: 8px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        .challenge-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4a6fa5, #6a9fd5);
+            transition: width 0.3s ease;
+        }
+        .challenge-item.completed .challenge-progress-bar { background: linear-gradient(90deg, #4aff4a, #8aff8a); }
+        .challenge-reward { color: #ffd700; font-size: 10px; }
+        .challenge-status {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #888;
+        }
+
         /* Inventory Button */
         #inventory-button {
             position: fixed;
@@ -1023,6 +1099,18 @@
     <!-- Help Button -->
     <div id="help-button" class="swg-panel" onclick="toggleHelpOverlay()">?</div>
 
+    <!-- Daily Challenges Button -->
+    <div id="daily-challenges-button" class="swg-panel" onclick="toggleDailyChallenges()">📋</div>
+
+    <!-- Daily Challenges Panel -->
+    <div id="daily-challenges-panel" class="swg-panel">
+        <div class="daily-header">
+            <h3>Daily Challenges</h3>
+            <span class="daily-timer" id="daily-timer">Resets in: --:--</span>
+        </div>
+        <div id="challenges-list"></div>
+    </div>
+
     <!-- Help Overlay -->
     <div id="help-overlay">
         <div class="help-content swg-panel">
@@ -1289,7 +1377,12 @@
                 deaths: 0,
                 totalPlayTime: 0
             },
-            achievements: {}
+            achievements: {},
+            dailyChallenges: {
+                lastRefresh: null,
+                challenges: [],
+                completedToday: 0
+            }
         };
 
         const SKILL_XP_REQUIRED = 1000;
@@ -1321,7 +1414,8 @@
                     skills: GameState.skills,
                     skillXP: GameState.skillXP,
                     statistics: GameState.statistics,
-                    achievements: GameState.achievements
+                    achievements: GameState.achievements,
+                    dailyChallenges: GameState.dailyChallenges
                 };
                 localStorage.setItem('swg_tatooine_save', JSON.stringify(saveData));
                 if (!silent) addChatMessage('Game saved.', 'system');
@@ -1349,6 +1443,7 @@
                 GameState.skillXP = saveData.skillXP || GameState.skillXP;
                 GameState.statistics = saveData.statistics || GameState.statistics;
                 GameState.achievements = saveData.achievements || {};
+                GameState.dailyChallenges = saveData.dailyChallenges || { lastRefresh: null, challenges: [], completedToday: 0 };
 
                 return saveData;
             } catch (e) {
@@ -1727,13 +1822,13 @@
 
         // ==================== CREATURES ====================
         const CREATURE_TYPES = {
-            womprat: { name: 'Womp Rat', health: 150, damage: 15, xp: 50, level: 1, loot: ['hide', 'bone', 'meat'], credits: [5, 15], icon: '🐀' },
-            dewback: { name: 'Dewback', health: 400, damage: 35, xp: 150, level: 5, loot: ['hide', 'bone', 'meat'], credits: [20, 50], icon: '🦎' },
-            bantha: { name: 'Bantha', health: 800, damage: 50, xp: 300, level: 10, loot: ['hide', 'bone', 'meat', 'hide'], credits: [50, 100], icon: '🦬' },
-            tusken: { name: 'Tusken Raider', health: 350, damage: 45, xp: 200, level: 8, loot: ['iron', 'credits'], credits: [30, 80], icon: '👤' },
-            krayt: { name: 'Krayt Dragon', health: 5000, damage: 200, xp: 2000, level: 50, loot: ['bone', 'bone', 'bone', 'kraytPearl'], credits: [500, 1000], icon: '🐉', boss: true },
-            jawa: { name: 'Jawa Scavenger', health: 100, damage: 10, xp: 30, level: 1, loot: ['copper', 'iron'], credits: [10, 30], icon: '🧙', neutral: true },
-            rontoHerd: { name: 'Ronto', health: 600, damage: 40, xp: 180, level: 7, loot: ['hide', 'meat', 'bone'], credits: [40, 80], icon: '🦒' }
+            womprat: { name: 'Womp Rat', health: 150, damage: 15, xp: 50, level: 1, loot: ['hide', 'bone', 'meat'], credits: [5, 15], icon: '🐀', behavior: 'pack', aggroRadius: 0 },
+            dewback: { name: 'Dewback', health: 400, damage: 35, xp: 150, level: 5, loot: ['hide', 'bone', 'meat'], credits: [20, 50], icon: '🦎', behavior: 'charge', aggroRadius: 15 },
+            bantha: { name: 'Bantha', health: 800, damage: 50, xp: 300, level: 10, loot: ['hide', 'bone', 'meat', 'hide'], credits: [50, 100], icon: '🦬', behavior: 'defensive', aggroRadius: 10 },
+            tusken: { name: 'Tusken Raider', health: 350, damage: 45, xp: 200, level: 8, loot: ['iron', 'credits'], credits: [30, 80], icon: '👤', behavior: 'ranged', aggroRadius: 25 },
+            krayt: { name: 'Krayt Dragon', health: 5000, damage: 200, xp: 2000, level: 50, loot: ['bone', 'bone', 'bone', 'kraytPearl'], credits: [500, 1000], icon: '🐉', boss: true, behavior: 'boss', aggroRadius: 40 },
+            jawa: { name: 'Jawa Scavenger', health: 100, damage: 10, xp: 30, level: 1, loot: ['copper', 'iron'], credits: [10, 30], icon: '🧙', neutral: true, behavior: 'flee', aggroRadius: 0 },
+            rontoHerd: { name: 'Ronto', health: 600, damage: 40, xp: 180, level: 7, loot: ['hide', 'meat', 'bone'], credits: [40, 80], icon: '🦒', behavior: 'defensive', aggroRadius: 12 }
         };
 
         // ==================== RECIPES ====================
@@ -1920,6 +2015,271 @@
             document.getElementById('achievements-window').classList.remove('active');
         }
 
+        // ==================== DAILY CHALLENGE SYSTEM ====================
+        const DAILY_CHALLENGE_TEMPLATES = [
+            // Kill challenges
+            { type: 'kills', name: 'Hunter', desc: 'Kill {count} creatures', countRange: [5, 15], rewards: { credits: 100, xp: 200 }, icon: '🎯' },
+            { type: 'killType', creature: 'womprat', name: 'Rat Exterminator', desc: 'Kill {count} Womp Rats', countRange: [3, 8], rewards: { credits: 75, xp: 150 }, icon: '🐀' },
+            { type: 'killType', creature: 'dewback', name: 'Dewback Wrangler', desc: 'Kill {count} Dewbacks', countRange: [2, 5], rewards: { credits: 150, xp: 300 }, icon: '🦎' },
+            { type: 'killType', creature: 'tusken', name: 'Tusken Hunter', desc: 'Kill {count} Tusken Raiders', countRange: [2, 4], rewards: { credits: 200, xp: 400 }, icon: '👤' },
+            { type: 'killType', creature: 'bantha', name: 'Big Game Hunter', desc: 'Kill {count} Banthas', countRange: [1, 3], rewards: { credits: 250, xp: 500 }, icon: '🦬' },
+
+            // Resource challenges
+            { type: 'gather', resource: 'any', name: 'Scavenger', desc: 'Gather {count} resources', countRange: [10, 25], rewards: { credits: 80, xp: 160 }, icon: '📦' },
+            { type: 'gather', resource: 'hide', name: 'Tanner', desc: 'Gather {count} hides', countRange: [5, 12], rewards: { credits: 100, xp: 180 }, icon: '🧶' },
+            { type: 'gather', resource: 'bone', name: 'Bone Collector', desc: 'Gather {count} bones', countRange: [5, 10], rewards: { credits: 90, xp: 170 }, icon: '🦴' },
+
+            // Combat challenges
+            { type: 'criticalHits', name: 'Precision Strike', desc: 'Land {count} critical hits', countRange: [3, 8], rewards: { credits: 120, xp: 250 }, icon: '💥' },
+            { type: 'abilityUses', name: 'Combat Specialist', desc: 'Use abilities {count} times', countRange: [15, 30], rewards: { credits: 100, xp: 200 }, icon: '⚔️' },
+
+            // Mission challenges
+            { type: 'missions', name: 'Mercenary Work', desc: 'Complete {count} missions', countRange: [1, 3], rewards: { credits: 200, xp: 400 }, icon: '📜' },
+
+            // Earning challenges
+            { type: 'earnCredits', name: 'Entrepreneur', desc: 'Earn {count} credits', countRange: [200, 500], rewards: { credits: 50, xp: 300 }, icon: '💰' },
+            { type: 'earnXP', name: 'Learner', desc: 'Earn {count} XP', countRange: [500, 1500], rewards: { credits: 150, xp: 100 }, icon: '📚' },
+
+            // Survival challenges
+            { type: 'surviveMinutes', name: 'Survivor', desc: 'Survive for {count} minutes without dying', countRange: [5, 15], rewards: { credits: 180, xp: 350 }, icon: '🛡️' }
+        ];
+
+        function getDailyResetTime() {
+            const now = new Date();
+            const reset = new Date(now);
+            reset.setHours(0, 0, 0, 0);
+            reset.setDate(reset.getDate() + 1);
+            return reset.getTime();
+        }
+
+        function getTimeUntilReset() {
+            const now = Date.now();
+            const reset = getDailyResetTime();
+            const diff = reset - now;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            return `${hours}h ${minutes}m`;
+        }
+
+        function generateDailyChallenges() {
+            const today = new Date().toDateString();
+
+            // Check if we need to refresh challenges
+            if (GameState.dailyChallenges.lastRefresh !== today) {
+                // Use date as seed for consistent challenges per day
+                const seed = new Date().setHours(0, 0, 0, 0);
+                const rng = (x) => {
+                    x = Math.sin(x) * 10000;
+                    return x - Math.floor(x);
+                };
+
+                // Select 3 random challenges
+                const shuffled = [...DAILY_CHALLENGE_TEMPLATES].sort((a, b) => rng(seed + DAILY_CHALLENGE_TEMPLATES.indexOf(a)) - 0.5);
+                const selected = shuffled.slice(0, 3);
+
+                GameState.dailyChallenges = {
+                    lastRefresh: today,
+                    challenges: selected.map((template, i) => {
+                        const count = template.countRange[0] + Math.floor(rng(seed + i * 100) * (template.countRange[1] - template.countRange[0] + 1));
+                        return {
+                            id: `daily_${i}_${Date.now()}`,
+                            template: DAILY_CHALLENGE_TEMPLATES.indexOf(template),
+                            name: template.name,
+                            desc: template.desc.replace('{count}', count),
+                            icon: template.icon,
+                            type: template.type,
+                            creature: template.creature,
+                            resource: template.resource,
+                            target: count,
+                            progress: 0,
+                            completed: false,
+                            claimed: false,
+                            rewards: {
+                                credits: Math.floor(template.rewards.credits * (count / template.countRange[0])),
+                                xp: Math.floor(template.rewards.xp * (count / template.countRange[0]))
+                            },
+                            startStats: {
+                                kills: GameState.statistics.totalKills,
+                                criticalHits: GameState.statistics.criticalHits,
+                                missions: GameState.statistics.missionsCompleted,
+                                credits: GameState.statistics.totalCreditsEarned,
+                                xp: GameState.statistics.totalXPEarned,
+                                abilityUses: GameState.abilityUsesThisSession || 0,
+                                surviveStart: Date.now(),
+                                creatureKills: { ...GameState.statistics.creaturesKilled },
+                                resourcesGathered: { ...GameState.resources }
+                            }
+                        };
+                    }),
+                    completedToday: 0
+                };
+
+                saveGame(true);
+                addChatMessage('New daily challenges available!', 'system');
+            }
+        }
+
+        function updateDailyChallengeProgress() {
+            if (!GameState.dailyChallenges.challenges) return;
+
+            GameState.dailyChallenges.challenges.forEach(challenge => {
+                if (challenge.completed) return;
+
+                const start = challenge.startStats;
+                let newProgress = 0;
+
+                switch (challenge.type) {
+                    case 'kills':
+                        newProgress = GameState.statistics.totalKills - start.kills;
+                        break;
+                    case 'killType':
+                        const creatureKills = GameState.statistics.creaturesKilled[challenge.creature] || 0;
+                        const startCreatureKills = start.creatureKills[challenge.creature] || 0;
+                        newProgress = creatureKills - startCreatureKills;
+                        break;
+                    case 'gather':
+                        if (challenge.resource === 'any') {
+                            const totalNow = Object.values(GameState.resources).reduce((a, b) => a + b, 0);
+                            const totalStart = Object.values(start.resourcesGathered).reduce((a, b) => a + b, 0);
+                            newProgress = totalNow - totalStart;
+                        } else {
+                            newProgress = (GameState.resources[challenge.resource] || 0) - (start.resourcesGathered[challenge.resource] || 0);
+                        }
+                        break;
+                    case 'criticalHits':
+                        newProgress = GameState.statistics.criticalHits - start.criticalHits;
+                        break;
+                    case 'abilityUses':
+                        newProgress = (GameState.abilityUsesThisSession || 0) - start.abilityUses;
+                        break;
+                    case 'missions':
+                        newProgress = GameState.statistics.missionsCompleted - start.missions;
+                        break;
+                    case 'earnCredits':
+                        newProgress = GameState.statistics.totalCreditsEarned - start.credits;
+                        break;
+                    case 'earnXP':
+                        newProgress = GameState.statistics.totalXPEarned - start.xp;
+                        break;
+                    case 'surviveMinutes':
+                        // Track minutes since challenge start without dying
+                        const minutesSurvived = Math.floor((Date.now() - start.surviveStart) / 60000);
+                        newProgress = minutesSurvived;
+                        break;
+                }
+
+                challenge.progress = Math.max(0, Math.min(challenge.target, newProgress));
+
+                // Check for completion
+                if (challenge.progress >= challenge.target && !challenge.completed) {
+                    challenge.completed = true;
+                    GameState.dailyChallenges.completedToday++;
+                    showDailyChallengeComplete(challenge);
+                }
+            });
+
+            updateDailyChallengesUI();
+        }
+
+        function showDailyChallengeComplete(challenge) {
+            AudioManager.playMissionComplete();
+            addChatMessage(`Daily Challenge Complete: ${challenge.name}! Claim your reward.`, 'xp');
+
+            // Flash the button
+            const button = document.getElementById('daily-challenges-button');
+            button.classList.add('has-incomplete');
+        }
+
+        function claimChallengeReward(challengeId) {
+            const challenge = GameState.dailyChallenges.challenges.find(c => c.id === challengeId);
+            if (!challenge || !challenge.completed || challenge.claimed) return;
+
+            challenge.claimed = true;
+
+            // Grant rewards
+            GameState.player.credits += challenge.rewards.credits;
+            GameState.statistics.totalCreditsEarned += challenge.rewards.credits;
+
+            const totalXP = challenge.rewards.xp;
+            distributeXP(totalXP);
+            GameState.statistics.totalXPEarned += totalXP;
+
+            addChatMessage(`Claimed: +${challenge.rewards.credits} credits, +${challenge.rewards.xp} XP`, 'xp');
+            AudioManager.playSound('pickup');
+
+            updateDailyChallengesUI();
+            updateUI();
+            saveGame(true);
+
+            // Check if all claimed
+            const allClaimed = GameState.dailyChallenges.challenges.every(c => c.claimed);
+            if (allClaimed) {
+                document.getElementById('daily-challenges-button').classList.remove('has-incomplete');
+            }
+        }
+
+        function toggleDailyChallenges() {
+            const panel = document.getElementById('daily-challenges-panel');
+            panel.classList.toggle('active');
+            if (panel.classList.contains('active')) {
+                generateDailyChallenges();
+                updateDailyChallengesUI();
+            }
+        }
+
+        function updateDailyChallengesUI() {
+            const container = document.getElementById('challenges-list');
+            const timer = document.getElementById('daily-timer');
+
+            if (!GameState.dailyChallenges.challenges) {
+                generateDailyChallenges();
+            }
+
+            timer.textContent = `Resets in: ${getTimeUntilReset()}`;
+
+            container.innerHTML = GameState.dailyChallenges.challenges.map(challenge => {
+                const percent = Math.min(100, (challenge.progress / challenge.target) * 100);
+                const statusText = challenge.claimed ? 'Claimed' : (challenge.completed ? 'Click to Claim!' : `${challenge.progress}/${challenge.target}`);
+
+                return `
+                    <div class="challenge-item ${challenge.completed ? 'completed' : ''}"
+                         onclick="${challenge.completed && !challenge.claimed ? `claimChallengeReward('${challenge.id}')` : ''}"
+                         style="${challenge.completed && !challenge.claimed ? 'cursor: pointer;' : ''}">
+                        <div class="challenge-name">${challenge.icon} ${challenge.name}</div>
+                        <div class="challenge-desc">${challenge.desc}</div>
+                        <div class="challenge-progress">
+                            <div class="challenge-progress-bar" style="width: ${percent}%"></div>
+                        </div>
+                        <div class="challenge-status">
+                            <span>${statusText}</span>
+                            <span class="challenge-reward">${challenge.rewards.credits}💰 ${challenge.rewards.xp}⭐</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Update button pulse
+            const hasUnclaimedComplete = GameState.dailyChallenges.challenges.some(c => c.completed && !c.claimed);
+            const button = document.getElementById('daily-challenges-button');
+            if (hasUnclaimedComplete) {
+                button.classList.add('has-incomplete');
+            } else {
+                button.classList.remove('has-incomplete');
+            }
+        }
+
+        function resetSurvivalChallengeOnDeath() {
+            if (!GameState.dailyChallenges.challenges) return;
+
+            GameState.dailyChallenges.challenges.forEach(challenge => {
+                if (challenge.type === 'surviveMinutes' && !challenge.completed) {
+                    challenge.startStats.surviveStart = Date.now();
+                    challenge.progress = 0;
+                    addChatMessage('Survival challenge reset due to death.', 'combat');
+                }
+            });
+        }
+
         // ==================== ABILITY TOOLTIPS ====================
         function showAbilityTooltip(abilityId, slotElement) {
             const ability = ABILITIES[abilityId];
@@ -2077,6 +2437,9 @@
                 }
                 updateHAMBars();
                 updateCreditsDisplay();
+
+                // Initialize daily challenges
+                generateDailyChallenges();
             }, 2500);
 
             animate();
@@ -2840,6 +3203,9 @@
             GameState.cooldowns[abilityId] = Date.now() + ability.cooldown;
             startCooldownAnimation(slot, ability.cooldown);
 
+            // Track ability uses for daily challenges
+            GameState.abilityUsesThisSession = (GameState.abilityUsesThisSession || 0) + 1;
+
             updateHAMBars();
         }
 
@@ -3108,7 +3474,8 @@
             const totalBaseDamage = baseDamage + weaponDamage;
             const critChance = 0.15 + (skillBonuses.critBonus / 100);
             const isCritical = Math.random() < critChance;
-            let damage = Math.floor(totalBaseDamage * (1 + skillBonuses.damageBonus / 100) * (0.8 + Math.random() * 0.4));
+            const sicknessMultiplier = getCloningSicknessMultiplier('damage');
+            let damage = Math.floor(totalBaseDamage * (1 + skillBonuses.damageBonus / 100) * (0.8 + Math.random() * 0.4) * sicknessMultiplier);
             if (isCritical) {
                 damage = Math.floor(damage * 1.5);
                 GameState.statistics.criticalHits++;
@@ -3146,6 +3513,9 @@
             target.userData.combatTarget = camera;
             GameState.inCombat = true;
 
+            // Trigger pack aggro for pack-type creatures
+            triggerPackAggro(target);
+
             if (target.userData.currentHealth <= 0) {
                 killCreature(target);
             } else {
@@ -3169,13 +3539,15 @@
             const creaturePos = creature.position.clone();
             creaturePos.y += 2;
 
-            // Grant XP
+            // Grant XP (reduced by cloning sickness)
             const xpGain = creature.userData.xp;
             const xpBonus = getBuffValue('xpBonus');
-            const totalXP = Math.floor(xpGain * (1 + xpBonus / 100));
+            const sicknessXpMultiplier = getCloningSicknessMultiplier('xp');
+            const totalXP = Math.floor(xpGain * (1 + xpBonus / 100) * sicknessXpMultiplier);
             GameState.statistics.totalXPEarned += totalXP;
             gainSkillXP('marksman', totalXP);
-            addChatMessage(`You gained ${totalXP} combat experience.`, 'xp');
+            const sicknessText = sicknessXpMultiplier < 1 ? ' (reduced by Cloning Sickness)' : '';
+            addChatMessage(`You gained ${totalXP} combat experience.${sicknessText}`, 'xp');
 
             // Floating XP text
             createFloatingText(`+${totalXP} XP`, creaturePos, 'xp-gain');
@@ -4064,6 +4436,10 @@
                 if (creature.userData.currentHealth <= 0) return;
 
                 const data = creature.userData;
+                const distToPlayer = camera.position.distanceTo(creature.position);
+                const creatureType = CREATURE_TYPES[data.creatureType];
+                const behavior = creatureType?.behavior || 'default';
+                const aggroRadius = creatureType?.aggroRadius || 0;
 
                 // Face health bars to camera
                 if (data.healthBarBg) {
@@ -4071,35 +4447,135 @@
                     data.healthBarFill.lookAt(camera.position);
                 }
 
+                // Proximity aggro for aggressive creatures
+                if (!data.inCombat && !data.neutral && aggroRadius > 0 && distToPlayer < aggroRadius) {
+                    data.inCombat = true;
+                    data.combatTarget = camera;
+                    addChatMessage(`${data.name} attacks!`, 'combat');
+
+                    // Pack behavior: alert nearby same-type creatures
+                    if (behavior === 'pack') {
+                        creatures.forEach(other => {
+                            if (other !== creature &&
+                                other.userData.creatureType === data.creatureType &&
+                                other.userData.currentHealth > 0 &&
+                                creature.position.distanceTo(other.position) < 25) {
+                                other.userData.inCombat = true;
+                                other.userData.combatTarget = camera;
+                            }
+                        });
+                    }
+                }
+
+                // Flee behavior (Jawas run when attacked)
+                if (behavior === 'flee' && data.inCombat) {
+                    const awayDirection = new THREE.Vector3()
+                        .subVectors(creature.position, camera.position)
+                        .normalize();
+                    creature.position.add(awayDirection.multiplyScalar(0.1));
+                    if (distToPlayer > 40) {
+                        data.inCombat = false;
+                        data.combatTarget = null;
+                    }
+                    return;
+                }
+
                 if (data.inCombat && data.combatTarget) {
-                    // Chase player
                     const direction = new THREE.Vector3()
                         .subVectors(camera.position, creature.position)
                         .normalize();
 
-                    const distToPlayer = camera.position.distanceTo(creature.position);
+                    // Behavior-specific combat logic
+                    let attackRange = 3;
+                    let moveSpeed = data.level * 0.02 + 0.05;
+                    let damageMultiplier = 1;
 
-                    if (distToPlayer > 3) {
-                        creature.position.add(direction.multiplyScalar(data.level * 0.02 + 0.05));
+                    // Ranged behavior (Tuskens shoot from distance)
+                    if (behavior === 'ranged') {
+                        attackRange = 20;
+                        if (distToPlayer < 8) {
+                            // Back away if too close
+                            creature.position.add(direction.multiplyScalar(-0.03));
+                        }
+                    }
+
+                    // Charge behavior (Dewbacks charge periodically)
+                    if (behavior === 'charge') {
+                        if (!data.lastCharge || Date.now() - data.lastCharge > 8000) {
+                            if (distToPlayer > 10 && distToPlayer < 30) {
+                                data.isCharging = true;
+                                data.chargeStart = Date.now();
+                                data.lastCharge = Date.now();
+                                addChatMessage(`${data.name} charges!`, 'combat');
+                            }
+                        }
+                        if (data.isCharging) {
+                            moveSpeed = 0.25; // Fast charge
+                            damageMultiplier = 2;
+                            if (Date.now() - data.chargeStart > 2000 || distToPlayer < 3) {
+                                data.isCharging = false;
+                            }
+                        }
+                    }
+
+                    // Defensive behavior (Banthas gain defense when low health)
+                    if (behavior === 'defensive') {
+                        const healthPercent = data.currentHealth / data.maxHealth;
+                        if (healthPercent < 0.5) {
+                            data.defensiveStance = true;
+                            damageMultiplier = 0.7; // Deal less damage but...
+                        }
+                    }
+
+                    // Boss behavior (Krayt special attacks)
+                    if (behavior === 'boss') {
+                        const healthPercent = data.currentHealth / data.maxHealth;
+                        // Roar attack every 15 seconds
+                        if (!data.lastRoar || Date.now() - data.lastRoar > 15000) {
+                            if (distToPlayer < 25) {
+                                addChatMessage(`${data.name} lets out a terrifying ROAR!`, 'combat');
+                                triggerScreenShake(1);
+                                data.lastRoar = Date.now();
+                            }
+                        }
+                        // Tail swipe at low health
+                        if (healthPercent < 0.25) {
+                            damageMultiplier = 1.5;
+                        }
+                    }
+
+                    // Movement
+                    if (distToPlayer > attackRange) {
+                        creature.position.add(direction.multiplyScalar(moveSpeed));
                     } else {
                         // Attack player
                         if (!data.lastAttack || Date.now() - data.lastAttack > 2000) {
-                            const baseDamage = Math.floor(data.damage * (0.8 + Math.random() * 0.4));
+                            let baseDamage = Math.floor(data.damage * (0.8 + Math.random() * 0.4) * damageMultiplier);
                             const armorDefense = GameState.equipment.armor ? GameState.equipment.armor.defense : 0;
+
+                            // Defensive stance reduces incoming damage too
+                            if (data.defensiveStance) {
+                                baseDamage = Math.floor(baseDamage * 0.8);
+                            }
+
                             const damage = Math.max(1, baseDamage - armorDefense);
                             GameState.player.health -= damage;
                             const blocked = armorDefense > 0 ? ` (${armorDefense} blocked)` : '';
-                            addChatMessage(`${data.name} hits you for ${damage} damage!${blocked}`, 'combat');
+                            const chargeText = data.isCharging ? ' CHARGE!' : '';
+                            addChatMessage(`${data.name} hits you for ${damage} damage!${blocked}${chargeText}`, 'combat');
                             data.lastAttack = Date.now();
                             updateHAMBars();
 
-                            // Combat feedback - floating damage on player
+                            // Ranged creatures create incoming blaster bolt
+                            if (behavior === 'ranged') {
+                                createBlasterBolt(creature.position.clone(), camera.position.clone(), '#00ff00');
+                            }
+
+                            // Combat feedback
                             const playerDamagePos = camera.position.clone();
                             playerDamagePos.y += 0.5;
                             createFloatingText(`-${damage}`, playerDamagePos, 'damage-taken');
-
-                            // Screen shake, hit flash, and hurt sound
-                            triggerScreenShake(damage / data.damage); // Intensity based on damage ratio
+                            triggerScreenShake(damage / data.damage);
                             triggerHitFlash();
                             AudioManager.playPlayerHurt();
 
@@ -4113,6 +4589,8 @@
                     if (distToPlayer > 60) {
                         data.inCombat = false;
                         data.combatTarget = null;
+                        data.isCharging = false;
+                        data.defensiveStance = false;
                     }
                 } else if (!data.neutral) {
                     // Wander
@@ -4125,12 +4603,12 @@
                         data.lastWander = Date.now();
                     }
 
-                    const direction = new THREE.Vector3()
+                    const wanderDir = new THREE.Vector3()
                         .subVectors(data.wanderTarget, creature.position)
                         .normalize();
 
                     if (creature.position.distanceTo(data.wanderTarget) > 2) {
-                        creature.position.add(direction.multiplyScalar(0.02));
+                        creature.position.add(wanderDir.multiplyScalar(0.02));
                     }
                 }
 
@@ -4146,8 +4624,35 @@
             });
         }
 
+        // Pack aggro helper - called when player attacks a pack creature
+        function triggerPackAggro(attackedCreature) {
+            const behavior = CREATURE_TYPES[attackedCreature.userData.creatureType]?.behavior;
+            if (behavior === 'pack') {
+                creatures.forEach(other => {
+                    if (other !== attackedCreature &&
+                        other.userData.creatureType === attackedCreature.userData.creatureType &&
+                        other.userData.currentHealth > 0 &&
+                        attackedCreature.position.distanceTo(other.position) < 25) {
+                        other.userData.inCombat = true;
+                        other.userData.combatTarget = camera;
+                    }
+                });
+            }
+        }
+
         function playerDeath() {
             addChatMessage('You have been incapacitated!', 'combat');
+            GameState.statistics.deaths++;
+
+            // Death penalty: Lose 10% of credits (max 500)
+            const creditLoss = Math.min(500, Math.floor(GameState.player.credits * 0.1));
+            if (creditLoss > 0) {
+                GameState.player.credits -= creditLoss;
+                addChatMessage(`You lost ${creditLoss} credits!`, 'combat');
+            }
+
+            // Reset survival challenges on death
+            resetSurvivalChallengeOnDeath();
 
             // Respawn at starport
             setTimeout(() => {
@@ -4157,8 +4662,61 @@
                 camera.position.set(-30, 2, 30);
                 clearTarget();
                 updateHAMBars();
+                updateCreditsDisplay();
                 addChatMessage('You have been cloned at the nearest cloning facility.', 'system');
+
+                // Apply Cloning Sickness debuff
+                applyCloningSickness();
             }, 3000);
+        }
+
+        function applyCloningSickness() {
+            // Check if already has cloning sickness
+            const existingSickness = GameState.buffs.find(b => b.id === 'cloningSickness');
+            if (existingSickness) {
+                // Stack duration for repeated deaths
+                existingSickness.endTime = Date.now() + 180000; // Reset to 3 minutes
+                existingSickness.stacks = Math.min(3, (existingSickness.stacks || 1) + 1);
+                addChatMessage(`Cloning Sickness intensified! (${existingSickness.stacks} stacks)`, 'system');
+            } else {
+                // Add new cloning sickness
+                GameState.buffs.push({
+                    id: 'cloningSickness',
+                    name: 'Cloning Sickness',
+                    icon: '🤢',
+                    endTime: Date.now() + 180000, // 3 minutes
+                    stacks: 1,
+                    effects: {
+                        damageReduction: -0.2,  // -20% damage dealt
+                        regenReduction: -0.5,   // -50% regen
+                        xpReduction: -0.25      // -25% XP
+                    }
+                });
+                addChatMessage('You are suffering from Cloning Sickness! (-20% damage, -50% regen, -25% XP for 3 minutes)', 'system');
+            }
+            renderBuffs();
+        }
+
+        function hasCloningSickness() {
+            const sickness = GameState.buffs.find(b => b.id === 'cloningSickness');
+            return sickness ? sickness : null;
+        }
+
+        function getCloningSicknessMultiplier(type) {
+            const sickness = hasCloningSickness();
+            if (!sickness) return 1;
+
+            const stackMultiplier = sickness.stacks || 1;
+            switch (type) {
+                case 'damage':
+                    return 1 + (sickness.effects.damageReduction * stackMultiplier);
+                case 'regen':
+                    return 1 + (sickness.effects.regenReduction * stackMultiplier);
+                case 'xp':
+                    return 1 + (sickness.effects.xpReduction * stackMultiplier);
+                default:
+                    return 1;
+            }
         }
 
         // ==================== REGENERATION ====================
@@ -4176,6 +4734,12 @@
                 actionRegen *= 0.5;
                 mindRegen *= 0.5;
             }
+
+            // Apply cloning sickness regen penalty
+            const regenMultiplier = getCloningSicknessMultiplier('regen');
+            healthRegen *= regenMultiplier;
+            actionRegen *= regenMultiplier;
+            mindRegen *= regenMultiplier;
 
             p.health = Math.min(p.maxHealth, p.health + healthRegen * delta);
             p.action = Math.min(p.maxAction, p.action + actionRegen * delta);
@@ -4228,6 +4792,10 @@
                     if (GameState.activeMission.type === 'delivery') {
                         checkMissionProgress();
                     }
+                }
+                // Update daily challenges every ~10 frames
+                if (Math.random() < 0.1) {
+                    updateDailyChallengeProgress();
                 }
             }
 
