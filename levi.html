@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>The Bridge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #88aaff, #ffffff, #ffaa88);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 10s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.5);
+            max-width: 500px;
+            font-weight: 200;
+            letter-spacing: 0.1em;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(136, 170, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible { display: block; }
+
+        .tooltip-title {
+            font-size: 1.3em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #88aaff;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #ffaa88;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show { display: block; }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(136, 170, 255, 0.4);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(136, 170, 255, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.3);
+            font-weight: 200;
+            letter-spacing: 0.2em;
+            z-index: 2000;
+        }
+
+        @media (max-width: 768px) {
+            .world-title { font-size: 2em; }
+            .world-description { font-size: 1em; }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title">The Bridge</h1>
+        <p class="world-description">A liminal space between worlds. All paths lead somewhere.</p>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">WASD to move | Mouse to look | Click portals to travel</div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-container" id="movement-joystick">
+            <div class="joystick-handle" id="movement-handle"></div>
+        </div>
+    </div>
+
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+
+    <div class="loading" id="loading">Crossing the threshold...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // =============================================
+    // THE BRIDGE - A Liminal Space Between Worlds
+    // =============================================
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // Parse URL params
+    function parseParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            sourceWorld: params.get('from'),
+            sourceWorldName: params.get('fromName'),
+            portalColor1: params.has('portalColor1') ? parseInt(params.get('portalColor1'), 16) : 0x88aaff,
+            portalColor2: params.has('portalColor2') ? parseInt(params.get('portalColor2'), 16) : 0xffaa88
+        };
+    }
+
+    const inherited = parseParams();
+
+    class TheBridge {
+        constructor() {
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.portals = [];
+            this.bridgeSegments = [];
+            this.floatingPlatforms = [];
+            this.particles = null;
+            this.raycaster = new THREE.Raycaster();
+            this.clock = new THREE.Clock();
+
+            this.moveSpeed = 0.12;
+            this.lookSpeed = 0.002;
+            this.keys = { w: false, a: false, s: false, d: false };
+            this.rotation = { x: 0, y: 0 };
+
+            this.isMobile = isMobile;
+            this.joystickActive = false;
+            this.joystickVector = new THREE.Vector2();
+            this.lookTouch = null;
+            this.joystickTouch = null;
+
+            this.hoveredPortal = null;
+            this.tooltip = document.getElementById('portal-tooltip');
+            this.isPointerLocked = false;
+        }
+
+        init() {
+            this.setupScene();
+            this.setupLighting();
+            this.createBridge();
+            this.createFloatingPlatforms();
+            this.createVoidParticles();
+            this.createPortals();
+            this.setupEventListeners();
+
+            if (this.isMobile) {
+                document.getElementById('controls-hint').textContent = 'Touch to look | Joystick to move';
+                document.getElementById('mobile-controls').classList.add('show');
+            }
+
+            setTimeout(() => {
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+            }, 800);
+
+            this.animate();
+        }
+
+        setupScene() {
+            this.scene = new THREE.Scene();
+            // No fog - infinite void feeling
+
+            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            this.camera.position.set(0, 3, 0);
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.setClearColor(0x000005, 1);
+            document.getElementById('three-container').appendChild(this.renderer.domElement);
+        }
+
+        setupLighting() {
+            // Minimal ambient
+            const ambient = new THREE.AmbientLight(0x111122, 0.3);
+            this.scene.add(ambient);
+
+            // Soft directional from above
+            const dir = new THREE.DirectionalLight(0x88aaff, 0.5);
+            dir.position.set(0, 50, 0);
+            this.scene.add(dir);
+
+            // Subtle warm from below
+            const below = new THREE.DirectionalLight(0xffaa88, 0.2);
+            below.position.set(0, -20, 0);
+            this.scene.add(below);
+        }
+
+        createBridge() {
+            // Create an infinite-looking bridge extending in both directions
+            const bridgeMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                roughness: 0.4,
+                metalness: 0.6,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            // Main bridge path
+            for (let i = -20; i <= 20; i++) {
+                const segment = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 0.5, 5),
+                    bridgeMaterial
+                );
+                segment.position.set(0, 0, i * 5);
+                segment.userData.baseY = 0;
+                segment.userData.offset = i * 0.3;
+                this.bridgeSegments.push(segment);
+                this.scene.add(segment);
+
+                // Railings
+                if (Math.abs(i) < 18) {
+                    const railMat = new THREE.MeshStandardMaterial({
+                        color: 0x88aaff,
+                        emissive: 0x88aaff,
+                        emissiveIntensity: 0.2,
+                        metalness: 0.8
+                    });
+
+                    [-1.8, 1.8].forEach(x => {
+                        const post = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.05, 0.05, 2, 8),
+                            railMat
+                        );
+                        post.position.set(x, 1, i * 5);
+                        this.scene.add(post);
+                    });
+                }
+            }
+
+            // Edge glow lines
+            const glowMat = new THREE.LineBasicMaterial({
+                color: 0x88aaff,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            [-2, 2].forEach(x => {
+                const points = [];
+                for (let i = -100; i <= 100; i += 5) {
+                    points.push(new THREE.Vector3(x, 0.3, i));
+                }
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geo, glowMat);
+                this.scene.add(line);
+            });
+        }
+
+        createFloatingPlatforms() {
+            // Distant floating platforms in the void
+            const platformMat = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                emissive: 0x222244,
+                emissiveIntensity: 0.1,
+                transparent: true,
+                opacity: 0.7
+            });
+
+            for (let i = 0; i < 30; i++) {
+                const size = 2 + Math.random() * 8;
+                const platform = new THREE.Mesh(
+                    new THREE.BoxGeometry(size, 0.5, size),
+                    platformMat
+                );
+
+                // Position in the void around the bridge
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 20 + Math.random() * 80;
+                platform.position.set(
+                    Math.cos(angle) * distance,
+                    (Math.random() - 0.5) * 40,
+                    Math.sin(angle) * distance + (Math.random() - 0.5) * 100
+                );
+                platform.rotation.y = Math.random() * Math.PI;
+
+                platform.userData.floatSpeed = 0.5 + Math.random() * 0.5;
+                platform.userData.floatOffset = Math.random() * Math.PI * 2;
+                platform.userData.baseY = platform.position.y;
+
+                this.floatingPlatforms.push(platform);
+                this.scene.add(platform);
+
+                // Some platforms have faint lights
+                if (Math.random() > 0.7) {
+                    const light = new THREE.PointLight(
+                        Math.random() > 0.5 ? 0x88aaff : 0xffaa88,
+                        0.3,
+                        20
+                    );
+                    light.position.copy(platform.position);
+                    light.position.y += 2;
+                    this.scene.add(light);
+                }
+            }
+        }
+
+        createVoidParticles() {
+            // Stars/particles in the void
+            const count = 2000;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                // Spherical distribution
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = 100 + Math.random() * 400;
+
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+
+                // Color variation
+                const colorChoice = Math.random();
+                if (colorChoice < 0.5) {
+                    colors[i * 3] = 0.5 + Math.random() * 0.3;     // R
+                    colors[i * 3 + 1] = 0.6 + Math.random() * 0.3; // G
+                    colors[i * 3 + 2] = 1;                          // B
+                } else if (colorChoice < 0.8) {
+                    colors[i * 3] = 1;
+                    colors[i * 3 + 1] = 0.6 + Math.random() * 0.3;
+                    colors[i * 3 + 2] = 0.5 + Math.random() * 0.3;
+                } else {
+                    colors[i * 3] = 1;
+                    colors[i * 3 + 1] = 1;
+                    colors[i * 3 + 2] = 1;
+                }
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const mat = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            this.particles = new THREE.Points(geo, mat);
+            this.scene.add(this.particles);
+        }
+
+        createPortals() {
+            // Multiple portals along the bridge leading to different worlds
+            const portalData = [
+                // Forward direction
+                {
+                    url: 'index.html',
+                    name: 'AINexus Hub',
+                    description: 'The central nexus of all worlds',
+                    position: new THREE.Vector3(0, 3, -60),
+                    color1: 0x00ffff,
+                    color2: 0xff00ff
+                },
+                {
+                    url: 'v2/index.html',
+                    name: 'AINexus v2',
+                    description: 'The federated nexus hub',
+                    position: new THREE.Vector3(-8, 3, -40),
+                    color1: 0x00ffff,
+                    color2: 0x00ff88
+                },
+                {
+                    url: 'crystal-caves-world.html',
+                    name: 'Crystal Caves',
+                    description: 'A mystical underground realm',
+                    position: new THREE.Vector3(8, 3, -40),
+                    color1: 0x00ffff,
+                    color2: 0xff00ff
+                },
+                // Backward direction
+                {
+                    url: 'neon-arcade-world.html',
+                    name: 'Neon Arcade',
+                    description: 'Retro-futuristic gaming paradise',
+                    position: new THREE.Vector3(-8, 3, 40),
+                    color1: 0xff00ff,
+                    color2: 0x00ffff
+                },
+                {
+                    url: 'ancient-library-world.html',
+                    name: 'Ancient Library',
+                    description: 'Endless halls of forgotten knowledge',
+                    position: new THREE.Vector3(8, 3, 40),
+                    color1: 0xffcc00,
+                    color2: 0xff9900
+                },
+                {
+                    url: 'galaxy-zoo-world.html',
+                    name: 'Galaxy Zoo',
+                    description: 'A stellar menagerie of cosmic creatures',
+                    position: new THREE.Vector3(0, 3, 60),
+                    color1: 0x6600ff,
+                    color2: 0xff00aa
+                }
+            ];
+
+            // Add return portal if we came from somewhere
+            if (inherited.sourceWorld) {
+                portalData.push({
+                    url: inherited.sourceWorld,
+                    name: inherited.sourceWorldName || 'Return',
+                    description: 'Return to where you came from',
+                    position: new THREE.Vector3(0, 3, 15),
+                    color1: inherited.portalColor1,
+                    color2: inherited.portalColor2
+                });
+            }
+
+            portalData.forEach(data => {
+                const portal = this.createPortal(data);
+                this.portals.push(portal);
+            });
+        }
+
+        createPortal(data) {
+            const group = new THREE.Group();
+
+            // Ethereal ring frame
+            const frameGeo = new THREE.TorusGeometry(2.5, 0.15, 16, 32);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: data.color1,
+                emissive: data.color1,
+                emissiveIntensity: 0.5,
+                transparent: true,
+                opacity: 0.8
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            group.add(frame);
+
+            // Second ring for depth
+            const frame2 = new THREE.Mesh(
+                new THREE.TorusGeometry(2.3, 0.08, 16, 32),
+                new THREE.MeshStandardMaterial({
+                    color: data.color2,
+                    emissive: data.color2,
+                    emissiveIntensity: 0.3,
+                    transparent: true,
+                    opacity: 0.6
+                })
+            );
+            frame2.position.z = 0.1;
+            group.add(frame2);
+
+            // Portal surface
+            const portalGeo = new THREE.CircleGeometry(2.1, 64);
+            const portalMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color1: { value: new THREE.Color(data.color1) },
+                    color2: { value: new THREE.Color(data.color2) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float time;
+                    uniform vec3 color1;
+                    uniform vec3 color2;
+                    varying vec2 vUv;
+
+                    void main() {
+                        vec2 center = vUv - 0.5;
+                        float dist = length(center);
+                        float angle = atan(center.y, center.x);
+
+                        // Gentle swirl
+                        float swirl = sin(angle * 3.0 + time * 0.5 - dist * 8.0) * 0.5 + 0.5;
+
+                        // Radial pulse
+                        float pulse = sin(dist * 12.0 - time * 2.0) * 0.3 + 0.7;
+
+                        vec3 color = mix(color1, color2, swirl * pulse);
+
+                        // Soft edge
+                        float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+                        alpha *= 0.85;
+
+                        // Add subtle shimmer
+                        alpha *= 0.9 + sin(time * 4.0 + angle * 5.0) * 0.1;
+
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            const portalMesh = new THREE.Mesh(portalGeo, portalMat);
+            portalMesh.position.z = 0.15;
+            group.add(portalMesh);
+
+            group.position.copy(data.position);
+            group.lookAt(0, data.position.y, 0);
+
+            // Soft point light
+            const light = new THREE.PointLight(data.color1, 0.8, 20);
+            group.add(light);
+
+            portalMesh.userData = {
+                url: data.url,
+                name: data.name,
+                description: data.description,
+                material: portalMat,
+                light: light
+            };
+
+            this.scene.add(group);
+            return portalMesh;
+        }
+
+        setupEventListeners() {
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            if (this.isMobile) {
+                this.setupMobileControls();
+            } else {
+                this.setupDesktopControls();
+            }
+        }
+
+        setupDesktopControls() {
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = true;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = false;
+                }
+            });
+
+            this.renderer.domElement.addEventListener('click', () => {
+                if (!this.isPointerLocked) {
+                    this.renderer.domElement.requestPointerLock();
+                } else {
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    if (intersects.length > 0) {
+                        this.enterWorld(intersects[0].object.userData.url);
+                    }
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (this.isPointerLocked) {
+                    this.rotation.y -= e.movementX * this.lookSpeed;
+                    this.rotation.x -= e.movementY * this.lookSpeed;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                }
+            });
+        }
+
+        setupMobileControls() {
+            const lookArea = document.getElementById('look-area');
+
+            lookArea.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    this.enterWorld(intersects[0].object.userData.url);
+                    return;
+                }
+
+                this.lookTouch = {
+                    id: touch.identifier,
+                    currentX: touch.clientX,
+                    currentY: touch.clientY
+                };
+            }, { passive: true });
+
+            lookArea.addEventListener('touchmove', (e) => {
+                if (!this.lookTouch) return;
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.lookTouch.id) {
+                        const deltaX = touch.clientX - this.lookTouch.currentX;
+                        const deltaY = touch.clientY - this.lookTouch.currentY;
+                        this.rotation.y -= deltaX * this.lookSpeed * 2;
+                        this.rotation.x -= deltaY * this.lookSpeed * 2;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                        this.lookTouch.currentX = touch.clientX;
+                        this.lookTouch.currentY = touch.clientY;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            lookArea.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                        this.lookTouch = null;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            const joystick = document.getElementById('movement-joystick');
+            const handle = document.getElementById('movement-handle');
+
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.joystickTouch = { id: e.touches[0].identifier };
+                this.joystickActive = true;
+                this.updateJoystick(e.touches[0], joystick, handle);
+            }, { passive: false });
+
+            joystick.addEventListener('touchmove', (e) => {
+                if (!this.joystickActive) return;
+                e.preventDefault();
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.joystickTouch.id) {
+                        this.updateJoystick(touch, joystick, handle);
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            joystick.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                        this.joystickActive = false;
+                        this.joystickTouch = null;
+                        this.joystickVector.set(0, 0);
+                        handle.style.transform = 'translate(-50%, -50%)';
+                        break;
+                    }
+                }
+            }, { passive: true });
+        }
+
+        updateJoystick(touch, joystick, handle) {
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let deltaX = touch.clientX - centerX;
+            let deltaY = touch.clientY - centerY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = rect.width / 2 - 25;
+            if (distance > maxDistance) {
+                deltaX = (deltaX / distance) * maxDistance;
+                deltaY = (deltaY / distance) * maxDistance;
+            }
+            handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+            this.joystickVector.x = deltaX / maxDistance;
+            this.joystickVector.y = -deltaY / maxDistance;
+        }
+
+        enterWorld(url) {
+            const params = new URLSearchParams();
+            params.set('from', 'levi.html');
+            params.set('fromName', 'The Bridge');
+            params.set('portalColor1', '88aaff');
+            params.set('portalColor2', 'ffaa88');
+
+            const separator = url.includes('?') ? '&' : '?';
+            window.location.href = url + separator + params.toString();
+        }
+
+        updateHover() {
+            this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const intersects = this.raycaster.intersectObjects(this.portals);
+
+            if (intersects.length > 0) {
+                const portal = intersects[0].object;
+                if (portal !== this.hoveredPortal) {
+                    this.hoveredPortal = portal;
+                    this.tooltip.querySelector('.tooltip-title').textContent = portal.userData.name;
+                    this.tooltip.querySelector('.tooltip-description').textContent = portal.userData.description;
+                    this.tooltip.classList.add('visible');
+
+                    const vector = new THREE.Vector3();
+                    portal.getWorldPosition(vector);
+                    vector.project(this.camera);
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                    this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                    this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                }
+            } else if (this.hoveredPortal) {
+                this.hoveredPortal = null;
+                this.tooltip.classList.remove('visible');
+            }
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+
+            const time = this.clock.getElapsedTime();
+
+            // Camera
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = this.rotation.y;
+            this.camera.rotation.x = this.rotation.x;
+
+            // Movement - constrained to bridge
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            this.camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+            if (this.isMobile && this.joystickActive) {
+                this.camera.position.add(forward.multiplyScalar(this.joystickVector.y * this.moveSpeed));
+                this.camera.position.add(right.multiplyScalar(this.joystickVector.x * this.moveSpeed));
+            } else {
+                if (this.keys.w) this.camera.position.add(forward.clone().multiplyScalar(this.moveSpeed));
+                if (this.keys.s) this.camera.position.add(forward.clone().multiplyScalar(-this.moveSpeed));
+                if (this.keys.a) this.camera.position.add(right.clone().multiplyScalar(-this.moveSpeed));
+                if (this.keys.d) this.camera.position.add(right.clone().multiplyScalar(this.moveSpeed));
+            }
+
+            // Keep on bridge roughly
+            this.camera.position.x = Math.max(-3, Math.min(3, this.camera.position.x));
+            this.camera.position.y = 3;
+
+            // Subtle bridge movement
+            this.bridgeSegments.forEach(segment => {
+                segment.position.y = segment.userData.baseY +
+                    Math.sin(time * 0.5 + segment.userData.offset) * 0.05;
+            });
+
+            // Floating platforms
+            this.floatingPlatforms.forEach(platform => {
+                platform.position.y = platform.userData.baseY +
+                    Math.sin(time * platform.userData.floatSpeed + platform.userData.floatOffset) * 0.5;
+            });
+
+            // Portals
+            this.portals.forEach((portal, i) => {
+                if (portal.userData.material) {
+                    portal.userData.material.uniforms.time.value = time;
+                    portal.userData.light.intensity = 0.6 + Math.sin(time * 1.5 + i * 0.5) * 0.2;
+                }
+            });
+
+            // Slow star rotation
+            if (this.particles) {
+                this.particles.rotation.y += 0.0001;
+            }
+
+            this.updateHover();
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        new TheBridge().init();
+    });
+    </script>
+</body>
+</html>

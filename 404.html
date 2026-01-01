@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Procedural World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 2.5em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, var(--color1, #00ffff), var(--color2, #ff00ff), var(--color3, #00ff00));
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 8s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .procedural-badge {
+            display: inline-block;
+            background: rgba(255, 100, 0, 0.3);
+            border: 1px solid rgba(255, 100, 0, 0.6);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            color: #ff9900;
+            margin-top: 10px;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--color1, #00ffff);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .portal-tooltip.visible { display: block; }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: var(--color1, #00ffff);
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: var(--color2, #ff00ff);
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show { display: block; }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--color1, #00ffff);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: var(--color1, rgba(0, 255, 255, 0.8));
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            margin: 30px auto;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        @media (max-width: 768px) {
+            .world-title { font-size: 1.8em; }
+            .world-description { font-size: 1em; max-width: 300px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">GENERATING...</h1>
+        <p class="world-description" id="world-description">Procedurally generating world...</p>
+        <div class="procedural-badge">Procedurally Generated</div>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Click to enter</p>
+    </div>
+
+    <div class="loading" id="loading">Generating procedural world...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // =============================================
+    // PROCEDURAL WORLD GENERATOR
+    // Generates worlds JIT based on URL/filename
+    // =============================================
+
+    // Theme definitions based on keywords
+    const THEMES = {
+        neon: {
+            colors: [0xff00ff, 0x00ffff, 0xff6600],
+            fog: 0x0a0014,
+            ambient: 0x1a0028,
+            ground: 0x050510,
+            sky: [0x0a0014, 0x1a0033],
+            elements: ['grid', 'glow', 'buildings'],
+            particleColor: 0x00ffff
+        },
+        arcade: {
+            colors: [0xff00ff, 0x00ffff, 0x9900ff],
+            fog: 0x050008,
+            ambient: 0x110022,
+            ground: 0x0a0010,
+            sky: [0x050008, 0x1a0033],
+            elements: ['cabinets', 'grid', 'glow'],
+            particleColor: 0xff00ff
+        },
+        library: {
+            colors: [0xffcc00, 0xff9900, 0x6600cc],
+            fog: 0x110800,
+            ambient: 0x442200,
+            ground: 0x1a0f00,
+            sky: [0x110800, 0x221100],
+            elements: ['shelves', 'books', 'lanterns'],
+            particleColor: 0xffcc00
+        },
+        crystal: {
+            colors: [0x00ffff, 0xff00ff, 0x00ff88],
+            fog: 0x000033,
+            ambient: 0x001122,
+            ground: 0x0a0a1a,
+            sky: [0x000022, 0x000044],
+            elements: ['crystals', 'cave', 'glow'],
+            particleColor: 0x00ffff
+        },
+        forest: {
+            colors: [0x00ff00, 0x88ff00, 0x00aa44],
+            fog: 0x001100,
+            ambient: 0x002200,
+            ground: 0x0a1a0a,
+            sky: [0x001100, 0x002211],
+            elements: ['trees', 'grass', 'fireflies'],
+            particleColor: 0x88ff00
+        },
+        ocean: {
+            colors: [0x0066ff, 0x00aaff, 0x0088aa],
+            fog: 0x001133,
+            ambient: 0x002244,
+            ground: 0x001122,
+            sky: [0x001133, 0x002255],
+            elements: ['waves', 'bubbles', 'coral'],
+            particleColor: 0x00aaff
+        },
+        fire: {
+            colors: [0xff3300, 0xff6600, 0xffaa00],
+            fog: 0x110500,
+            ambient: 0x331100,
+            ground: 0x1a0800,
+            sky: [0x110500, 0x221100],
+            elements: ['flames', 'embers', 'rocks'],
+            particleColor: 0xff6600
+        },
+        space: {
+            colors: [0x6600ff, 0x0044ff, 0xff00aa],
+            fog: 0x000011,
+            ambient: 0x000022,
+            ground: 0x050508,
+            sky: [0x000005, 0x000011],
+            elements: ['stars', 'nebula', 'asteroids'],
+            particleColor: 0x6600ff
+        },
+        ice: {
+            colors: [0x88ddff, 0xaaeeff, 0x4488ff],
+            fog: 0x112233,
+            ambient: 0x224455,
+            ground: 0x1a2a3a,
+            sky: [0x112233, 0x223344],
+            elements: ['icicles', 'snow', 'crystals'],
+            particleColor: 0xaaeeff
+        },
+        desert: {
+            colors: [0xffaa00, 0xff8800, 0xcc6600],
+            fog: 0x332200,
+            ambient: 0x443300,
+            ground: 0x2a1a0a,
+            sky: [0x443322, 0x665544],
+            elements: ['dunes', 'cacti', 'rocks'],
+            particleColor: 0xffaa00
+        },
+        cyber: {
+            colors: [0x00ff88, 0x00ffff, 0xff0088],
+            fog: 0x000a0a,
+            ambient: 0x001a1a,
+            ground: 0x0a1010,
+            sky: [0x000a0a, 0x001a1a],
+            elements: ['grid', 'data', 'hologram'],
+            particleColor: 0x00ff88
+        },
+        void: {
+            colors: [0x440066, 0x220044, 0x660088],
+            fog: 0x050005,
+            ambient: 0x110011,
+            ground: 0x0a000a,
+            sky: [0x050005, 0x0a000a],
+            elements: ['void', 'portals', 'fragments'],
+            particleColor: 0x440066
+        },
+        default: {
+            colors: [0x00ffff, 0xff00ff, 0x00ff00],
+            fog: 0x000033,
+            ambient: 0x0a0a0a,
+            ground: 0x1a1a2e,
+            sky: [0x000022, 0x000044],
+            elements: ['platforms', 'orbs', 'pillars'],
+            particleColor: 0x00ffff
+        }
+    };
+
+    // Parse URL to extract world name and keywords
+    function parseWorldFromURL() {
+        const path = window.location.pathname;
+        const filename = path.split('/').pop().replace('.html', '').replace(/-/g, ' ').replace(/_/g, ' ');
+
+        // Extract keywords
+        const keywords = filename.toLowerCase().split(' ').filter(w => w.length > 2);
+
+        // Determine theme based on keywords
+        let theme = THEMES.default;
+        let themeName = 'default';
+
+        for (const keyword of keywords) {
+            if (THEMES[keyword]) {
+                theme = THEMES[keyword];
+                themeName = keyword;
+                break;
+            }
+        }
+
+        // Check for partial matches
+        if (themeName === 'default') {
+            for (const [name, t] of Object.entries(THEMES)) {
+                if (keywords.some(k => name.includes(k) || k.includes(name))) {
+                    theme = t;
+                    themeName = name;
+                    break;
+                }
+            }
+        }
+
+        // Generate display name
+        const displayName = filename.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ') || 'Unknown Realm';
+
+        return {
+            filename,
+            keywords,
+            theme,
+            themeName,
+            displayName,
+            seed: hashString(filename)
+        };
+    }
+
+    // Simple string hash for seeded randomness
+    function hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash);
+    }
+
+    // Seeded random number generator
+    class SeededRandom {
+        constructor(seed) {
+            this.seed = seed;
+        }
+
+        next() {
+            this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff;
+            return this.seed / 0x7fffffff;
+        }
+
+        range(min, max) {
+            return min + this.next() * (max - min);
+        }
+
+        int(min, max) {
+            return Math.floor(this.range(min, max + 1));
+        }
+
+        pick(array) {
+            return array[this.int(0, array.length - 1)];
+        }
+    }
+
+    const worldInfo = parseWorldFromURL();
+    const rng = new SeededRandom(worldInfo.seed);
+
+    // Set CSS variables for theme
+    document.documentElement.style.setProperty('--color1', '#' + worldInfo.theme.colors[0].toString(16).padStart(6, '0'));
+    document.documentElement.style.setProperty('--color2', '#' + worldInfo.theme.colors[1].toString(16).padStart(6, '0'));
+    document.documentElement.style.setProperty('--color3', '#' + worldInfo.theme.colors[2].toString(16).padStart(6, '0'));
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // Parse URL params for inheritance
+    function parseInheritedAttributes() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            sourceWorld: params.get('from'),
+            sourceWorldName: params.get('fromName'),
+            portalColor1: params.has('portalColor1') ? parseInt(params.get('portalColor1'), 16) : null,
+            portalColor2: params.has('portalColor2') ? parseInt(params.get('portalColor2'), 16) : null
+        };
+    }
+
+    const inheritedAttributes = parseInheritedAttributes();
+
+    class ProceduralWorld {
+        constructor() {
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.portals = [];
+            this.objects = [];
+            this.particles = null;
+            this.raycaster = new THREE.Raycaster();
+            this.clock = new THREE.Clock();
+
+            this.moveSpeed = 0.15;
+            this.lookSpeed = 0.002;
+            this.keys = { w: false, a: false, s: false, d: false };
+            this.rotation = { x: 0, y: 0 };
+
+            this.isMobile = isMobile;
+            this.joystickActive = false;
+            this.joystickVector = new THREE.Vector2();
+            this.lookTouch = null;
+            this.joystickTouch = null;
+
+            this.hoveredPortal = null;
+            this.tooltip = document.getElementById('portal-tooltip');
+            this.isPointerLocked = false;
+
+            this.theme = worldInfo.theme;
+            this.rng = rng;
+        }
+
+        init() {
+            // Set UI
+            document.getElementById('world-title').textContent = worldInfo.displayName;
+            document.getElementById('world-description').textContent =
+                `A procedurally generated ${worldInfo.themeName} realm`;
+
+            this.setupScene();
+            this.setupLighting();
+            this.createEnvironment();
+            this.createProceduralElements();
+            this.createParticles();
+            this.createPortals();
+            this.setupEventListeners();
+
+            if (this.isMobile) {
+                document.getElementById('controls-hint').textContent =
+                    'Touch & drag to look, Use joystick to move';
+                document.getElementById('mobile-controls').classList.add('show');
+            }
+
+            setTimeout(() => {
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+            }, 500);
+
+            this.animate();
+        }
+
+        setupScene() {
+            this.scene = new THREE.Scene();
+            this.scene.fog = new THREE.FogExp2(this.theme.fog, 0.02);
+
+            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera.position.set(0, 2, 10);
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('three-container').appendChild(this.renderer.domElement);
+        }
+
+        setupLighting() {
+            const ambient = new THREE.AmbientLight(this.theme.ambient, 0.4);
+            this.scene.add(ambient);
+
+            // Add colored lights based on theme
+            this.theme.colors.forEach((color, i) => {
+                const light = new THREE.PointLight(color, 1, 50);
+                const angle = (i / this.theme.colors.length) * Math.PI * 2;
+                light.position.set(Math.cos(angle) * 20, 10, Math.sin(angle) * 20);
+                this.scene.add(light);
+            });
+        }
+
+        createEnvironment() {
+            // Ground
+            const groundGeo = new THREE.PlaneGeometry(200, 200, 20, 20);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: this.theme.ground,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+
+            // Add some height variation
+            const vertices = groundGeo.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                vertices[i + 2] = this.rng.range(-0.5, 0.5);
+            }
+            groundGeo.computeVertexNormals();
+
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            this.scene.add(ground);
+
+            // Sky sphere with gradient
+            const skyGeo = new THREE.SphereGeometry(100, 32, 32);
+            const skyMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(this.theme.sky[1]) },
+                    bottomColor: { value: new THREE.Color(this.theme.sky[0]) }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition).y;
+                        gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
+                    }
+                `,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeo, skyMat);
+            this.scene.add(sky);
+
+            // Grid if theme includes it
+            if (this.theme.elements.includes('grid')) {
+                const gridColor = this.theme.colors[0];
+                for (let i = -50; i <= 50; i += 5) {
+                    const mat = new THREE.LineBasicMaterial({
+                        color: gridColor,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+
+                    const geo1 = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(i, 0.1, -50),
+                        new THREE.Vector3(i, 0.1, 50)
+                    ]);
+                    const geo2 = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(-50, 0.1, i),
+                        new THREE.Vector3(50, 0.1, i)
+                    ]);
+
+                    this.scene.add(new THREE.Line(geo1, mat));
+                    this.scene.add(new THREE.Line(geo2, mat));
+                }
+            }
+        }
+
+        createProceduralElements() {
+            const elements = this.theme.elements;
+
+            // Generate 20-40 procedural objects based on theme
+            const count = this.rng.int(20, 40);
+
+            for (let i = 0; i < count; i++) {
+                let mesh;
+                const x = this.rng.range(-40, 40);
+                const z = this.rng.range(-40, 40);
+
+                // Skip if too close to center (portal area)
+                if (Math.abs(x) < 8 && Math.abs(z) < 8) continue;
+
+                const color = this.rng.pick(this.theme.colors);
+
+                if (elements.includes('crystals') || elements.includes('icicles')) {
+                    // Crystal/Icicle
+                    const height = this.rng.range(2, 6);
+                    const geo = new THREE.OctahedronGeometry(0.5, 0);
+                    geo.scale(1, height, 1);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.3,
+                        transparent: true,
+                        opacity: 0.8,
+                        metalness: 0.5,
+                        roughness: 0.2
+                    });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(x, height / 2, z);
+                    mesh.rotation.x = this.rng.range(-0.2, 0.2);
+                    mesh.rotation.z = this.rng.range(-0.2, 0.2);
+
+                } else if (elements.includes('trees')) {
+                    // Simple tree
+                    const group = new THREE.Group();
+                    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 3, 8);
+                    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+                    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                    trunk.position.y = 1.5;
+                    group.add(trunk);
+
+                    const leavesGeo = new THREE.ConeGeometry(2, 4, 8);
+                    const leavesMat = new THREE.MeshStandardMaterial({ color: color });
+                    const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                    leaves.position.y = 4.5;
+                    group.add(leaves);
+
+                    group.position.set(x, 0, z);
+                    mesh = group;
+
+                } else if (elements.includes('buildings') || elements.includes('cabinets')) {
+                    // Building/Cabinet
+                    const width = this.rng.range(2, 5);
+                    const height = this.rng.range(5, 15);
+                    const depth = this.rng.range(2, 5);
+                    const geo = new THREE.BoxGeometry(width, height, depth);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: this.theme.ground,
+                        metalness: 0.5,
+                        roughness: 0.3
+                    });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(x, height / 2, z);
+
+                    // Add glow strips
+                    const stripGeo = new THREE.BoxGeometry(width + 0.1, 0.2, depth + 0.1);
+                    const stripMat = new THREE.MeshBasicMaterial({ color: color });
+                    for (let j = 0; j < height / 3; j++) {
+                        const strip = new THREE.Mesh(stripGeo, stripMat);
+                        strip.position.y = j * 3 - height / 2 + 1;
+                        mesh.add(strip);
+                    }
+
+                } else if (elements.includes('shelves') || elements.includes('books')) {
+                    // Bookshelf
+                    const height = this.rng.range(4, 8);
+                    const geo = new THREE.BoxGeometry(3, height, 0.5);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0x4a3020 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(x, height / 2, z);
+
+                    // Add books
+                    for (let shelf = 0; shelf < height - 1; shelf++) {
+                        for (let book = 0; book < 5; book++) {
+                            const bookGeo = new THREE.BoxGeometry(0.3, 0.8, 0.4);
+                            const bookMat = new THREE.MeshStandardMaterial({
+                                color: this.rng.pick([0x8b0000, 0x006400, 0x00008b, 0x4b0082])
+                            });
+                            const bookMesh = new THREE.Mesh(bookGeo, bookMat);
+                            bookMesh.position.set(-1 + book * 0.5, shelf - height / 2 + 1, 0);
+                            mesh.add(bookMesh);
+                        }
+                    }
+
+                } else if (elements.includes('rocks') || elements.includes('asteroids')) {
+                    // Rock/Asteroid
+                    const geo = new THREE.DodecahedronGeometry(this.rng.range(0.5, 2), 0);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: this.theme.ground,
+                        roughness: 0.9
+                    });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(x, this.rng.range(0.5, elements.includes('asteroids') ? 10 : 2), z);
+                    mesh.rotation.set(this.rng.range(0, Math.PI), this.rng.range(0, Math.PI), 0);
+
+                } else {
+                    // Default: glowing orb/pillar
+                    const isOrb = this.rng.next() > 0.5;
+                    const geo = isOrb ?
+                        new THREE.SphereGeometry(this.rng.range(0.5, 1.5), 16, 16) :
+                        new THREE.CylinderGeometry(0.5, 0.5, this.rng.range(2, 5), 8);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.3,
+                        roughness: 0.4
+                    });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(x, isOrb ? this.rng.range(1, 4) : geo.parameters.height / 2, z);
+                }
+
+                if (mesh) {
+                    mesh.userData.floatOffset = this.rng.range(0, Math.PI * 2);
+                    mesh.userData.rotationSpeed = this.rng.range(0.001, 0.01);
+                    this.objects.push(mesh);
+                    this.scene.add(mesh);
+                }
+            }
+        }
+
+        createParticles() {
+            const count = 500;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = this.rng.range(-50, 50);
+                positions[i * 3 + 1] = this.rng.range(0, 30);
+                positions[i * 3 + 2] = this.rng.range(-50, 50);
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const mat = new THREE.PointsMaterial({
+                color: this.theme.particleColor,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            this.particles = new THREE.Points(geo, mat);
+            this.scene.add(this.particles);
+        }
+
+        createPortals() {
+            const portalData = [
+                {
+                    url: 'index.html',
+                    name: 'AINexus Hub',
+                    description: 'Return to the main hub',
+                    position: new THREE.Vector3(0, 3, -15)
+                },
+                {
+                    url: 'v2/index.html',
+                    name: 'AINexus v2 Hub',
+                    description: 'Visit the federated v2 hub',
+                    position: new THREE.Vector3(-10, 3, -10)
+                },
+                {
+                    url: 'crystal-caves-world.html',
+                    name: 'Crystal Caves',
+                    description: 'Explore the crystal caverns',
+                    position: new THREE.Vector3(10, 3, -10)
+                }
+            ];
+
+            // Add return portal if we came from somewhere
+            if (inheritedAttributes.sourceWorld) {
+                portalData.push({
+                    url: inheritedAttributes.sourceWorld,
+                    name: inheritedAttributes.sourceWorldName || 'Return',
+                    description: 'Return to previous world',
+                    position: new THREE.Vector3(0, 3, 15)
+                });
+            }
+
+            portalData.forEach(data => {
+                const portal = this.createPortal(data.url, data.name, data.description, data.position);
+                this.portals.push(portal);
+            });
+        }
+
+        createPortal(url, name, description, position) {
+            const color1 = inheritedAttributes.portalColor1 || this.theme.colors[0];
+            const color2 = inheritedAttributes.portalColor2 || this.theme.colors[1];
+
+            // Frame
+            const frameGeo = new THREE.TorusGeometry(2, 0.3, 8, 6);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: color1,
+                emissive: color1,
+                emissiveIntensity: 0.3,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+
+            // Portal surface
+            const portalGeo = new THREE.CircleGeometry(1.7, 32);
+            const portalMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color1: { value: new THREE.Color(color1) },
+                    color2: { value: new THREE.Color(color2) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float time;
+                    uniform vec3 color1;
+                    uniform vec3 color2;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 center = vUv - 0.5;
+                        float dist = length(center);
+                        float angle = atan(center.y, center.x);
+                        float spiral = sin(dist * 10.0 - time * 2.0 + angle * 3.0) * 0.5 + 0.5;
+                        vec3 color = mix(color1, color2, spiral);
+                        float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                        gl_FragColor = vec4(color, alpha * 0.9);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            const portalMesh = new THREE.Mesh(portalGeo, portalMat);
+            portalMesh.position.z = 0.1;
+
+            const group = new THREE.Group();
+            group.add(frame);
+            group.add(portalMesh);
+            group.position.copy(position);
+            group.lookAt(0, position.y, 0);
+
+            // Light
+            const light = new THREE.PointLight(color1, 1, 15);
+            group.add(light);
+
+            portalMesh.userData = {
+                url: url,
+                name: name,
+                description: description,
+                material: portalMat,
+                light: light
+            };
+
+            this.scene.add(group);
+            return portalMesh;
+        }
+
+        setupEventListeners() {
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            if (this.isMobile) {
+                this.setupMobileControls();
+            } else {
+                this.setupDesktopControls();
+            }
+        }
+
+        setupDesktopControls() {
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = true;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = false;
+                }
+            });
+
+            this.renderer.domElement.addEventListener('click', () => {
+                if (!this.isPointerLocked) {
+                    this.renderer.domElement.requestPointerLock();
+                } else {
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+                    if (intersects.length > 0) {
+                        this.enterWorld(intersects[0].object.userData.url);
+                    }
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (this.isPointerLocked) {
+                    this.rotation.y -= e.movementX * this.lookSpeed;
+                    this.rotation.x -= e.movementY * this.lookSpeed;
+                    this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                }
+            });
+        }
+
+        setupMobileControls() {
+            const lookArea = document.getElementById('look-area');
+
+            lookArea.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+
+                // Check for portal tap
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    this.enterWorld(intersects[0].object.userData.url);
+                    return;
+                }
+
+                this.lookTouch = {
+                    id: touch.identifier,
+                    currentX: touch.clientX,
+                    currentY: touch.clientY
+                };
+            }, { passive: true });
+
+            lookArea.addEventListener('touchmove', (e) => {
+                if (!this.lookTouch) return;
+
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.lookTouch.id) {
+                        const deltaX = touch.clientX - this.lookTouch.currentX;
+                        const deltaY = touch.clientY - this.lookTouch.currentY;
+
+                        this.rotation.y -= deltaX * this.lookSpeed * 2;
+                        this.rotation.x -= deltaY * this.lookSpeed * 2;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+                        this.lookTouch.currentX = touch.clientX;
+                        this.lookTouch.currentY = touch.clientY;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            lookArea.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                        this.lookTouch = null;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            const joystick = document.getElementById('movement-joystick');
+            const handle = document.getElementById('movement-handle');
+
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                this.joystickTouch = { id: touch.identifier };
+                this.joystickActive = true;
+                this.updateJoystick(touch, joystick, handle);
+            }, { passive: false });
+
+            joystick.addEventListener('touchmove', (e) => {
+                if (!this.joystickActive) return;
+                e.preventDefault();
+                for (let touch of e.touches) {
+                    if (touch.identifier === this.joystickTouch.id) {
+                        this.updateJoystick(touch, joystick, handle);
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            joystick.addEventListener('touchend', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                        this.joystickActive = false;
+                        this.joystickTouch = null;
+                        this.joystickVector.set(0, 0);
+                        handle.style.transform = 'translate(-50%, -50%)';
+                        break;
+                    }
+                }
+            }, { passive: true });
+        }
+
+        updateJoystick(touch, joystick, handle) {
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            let deltaX = touch.clientX - centerX;
+            let deltaY = touch.clientY - centerY;
+
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = rect.width / 2 - 25;
+
+            if (distance > maxDistance) {
+                deltaX = (deltaX / distance) * maxDistance;
+                deltaY = (deltaY / distance) * maxDistance;
+            }
+
+            handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+            this.joystickVector.x = deltaX / maxDistance;
+            this.joystickVector.y = -deltaY / maxDistance;
+        }
+
+        enterWorld(url) {
+            // Build inheritance params
+            const params = new URLSearchParams();
+            params.set('from', window.location.pathname.split('/').pop());
+            params.set('fromName', worldInfo.displayName);
+            params.set('portalColor1', this.theme.colors[0].toString(16).padStart(6, '0'));
+            params.set('portalColor2', this.theme.colors[1].toString(16).padStart(6, '0'));
+
+            // Navigate
+            const separator = url.includes('?') ? '&' : '?';
+            window.location.href = url + separator + params.toString();
+        }
+
+        updateHover() {
+            this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const intersects = this.raycaster.intersectObjects(this.portals);
+
+            if (intersects.length > 0) {
+                const portal = intersects[0].object;
+                if (portal !== this.hoveredPortal) {
+                    this.hoveredPortal = portal;
+
+                    this.tooltip.querySelector('.tooltip-title').textContent = portal.userData.name;
+                    this.tooltip.querySelector('.tooltip-description').textContent = portal.userData.description;
+                    this.tooltip.classList.add('visible');
+
+                    const vector = new THREE.Vector3();
+                    portal.getWorldPosition(vector);
+                    vector.project(this.camera);
+
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                    this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                    this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                }
+            } else if (this.hoveredPortal) {
+                this.hoveredPortal = null;
+                this.tooltip.classList.remove('visible');
+            }
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+
+            const time = this.clock.getElapsedTime();
+
+            // Camera
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = this.rotation.y;
+            this.camera.rotation.x = this.rotation.x;
+
+            // Movement
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            this.camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+            if (this.isMobile && this.joystickActive) {
+                this.camera.position.add(forward.multiplyScalar(this.joystickVector.y * this.moveSpeed));
+                this.camera.position.add(right.multiplyScalar(this.joystickVector.x * this.moveSpeed));
+            } else {
+                if (this.keys.w) this.camera.position.add(forward.clone().multiplyScalar(this.moveSpeed));
+                if (this.keys.s) this.camera.position.add(forward.clone().multiplyScalar(-this.moveSpeed));
+                if (this.keys.a) this.camera.position.add(right.clone().multiplyScalar(-this.moveSpeed));
+                if (this.keys.d) this.camera.position.add(right.clone().multiplyScalar(this.moveSpeed));
+            }
+
+            // Update portals
+            this.portals.forEach((portal, i) => {
+                if (portal.userData.material) {
+                    portal.userData.material.uniforms.time.value = time;
+                    portal.userData.light.intensity = 0.8 + Math.sin(time * 2 + i) * 0.2;
+                }
+            });
+
+            // Animate objects
+            this.objects.forEach(obj => {
+                if (obj.userData.rotationSpeed) {
+                    obj.rotation.y += obj.userData.rotationSpeed;
+                }
+            });
+
+            // Animate particles
+            if (this.particles) {
+                const positions = this.particles.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] -= 0.02;
+                    if (positions[i + 1] < 0) positions[i + 1] = 30;
+                }
+                this.particles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            this.updateHover();
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const world = new ProceduralWorld();
+        world.init();
+    });
+    </script>
+</body>
+</html>
