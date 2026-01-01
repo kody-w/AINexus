@@ -273,6 +273,137 @@
         }
         .inv-slot:hover { border-color: #ffd700; }
         .inv-slot.has-item { background: rgba(74,111,165,0.3); }
+        .inv-slot.equipped { border: 2px solid #ffd700; background: rgba(255,215,0,0.2); }
+
+        /* Equipment Slots */
+        .equipment-slots {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        .equip-slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #4a6fa5;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .equip-slot:hover { border-color: #ffd700; }
+        .equip-slot.has-item { background: rgba(255,215,0,0.15); border-color: #ffd700; }
+        .equip-slot-label { font-size: 9px; color: #aaa; margin-top: 2px; }
+        .equip-slot-icon { font-size: 22px; }
+        .equipment-stats {
+            font-size: 11px;
+            color: #66ff66;
+            margin-top: 5px;
+        }
+
+        /* Muzzle Flash Effect */
+        .muzzle-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, rgba(255,100,50,1) 0%, rgba(255,50,0,0.8) 30%, rgba(255,0,0,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 150;
+            animation: muzzleFlash 80ms ease-out forwards;
+        }
+        @keyframes muzzleFlash {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+
+        /* Impact Sparks */
+        .impact-spark {
+            position: fixed;
+            width: 6px;
+            height: 6px;
+            background: #ffaa00;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 150;
+            box-shadow: 0 0 6px #ff6600, 0 0 10px #ff3300;
+        }
+        @keyframes sparkFly {
+            0% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(30px); }
+        }
+
+        /* Help Overlay */
+        #help-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 500;
+        }
+        #help-overlay.active { display: flex; }
+        .help-content {
+            width: 800px;
+            max-height: 90vh;
+            padding: 25px;
+            overflow-y: auto;
+        }
+        .help-content h2 { color: #ffd700; text-align: center; margin-bottom: 20px; font-size: 24px; }
+        .help-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .help-section h3 { color: #4a6fa5; margin-bottom: 12px; font-size: 14px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .help-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        .help-row .key {
+            background: rgba(74,111,165,0.3);
+            padding: 2px 8px;
+            border-radius: 3px;
+            color: #ffd700;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: center;
+        }
+        .help-row .desc { color: #ccc; }
+        .help-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 11px;
+        }
+        #help-button {
+            position: fixed;
+            top: 10px;
+            right: 270px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
         /* Inventory Button */
         #inventory-button {
@@ -889,6 +1020,48 @@
     <!-- Buff Display -->
     <div id="buff-display"></div>
 
+    <!-- Help Button -->
+    <div id="help-button" class="swg-panel" onclick="toggleHelpOverlay()">?</div>
+
+    <!-- Help Overlay -->
+    <div id="help-overlay">
+        <div class="help-content swg-panel">
+            <button class="close-btn" onclick="closeHelpOverlay()">X</button>
+            <h2>Game Help & Controls</h2>
+            <div class="help-grid">
+                <div class="help-section">
+                    <h3>Movement & Combat</h3>
+                    <div class="help-row"><span class="key">W A S D</span><span class="desc">Move</span></div>
+                    <div class="help-row"><span class="key">Mouse</span><span class="desc">Look around</span></div>
+                    <div class="help-row"><span class="key">Click</span><span class="desc">Lock cursor</span></div>
+                    <div class="help-row"><span class="key">SHIFT</span><span class="desc">Run</span></div>
+                    <div class="help-row"><span class="key">TAB</span><span class="desc">Cycle targets</span></div>
+                    <div class="help-row"><span class="key">E</span><span class="desc">Interact</span></div>
+                    <div class="help-row"><span class="key">1-6</span><span class="desc">Use abilities</span></div>
+                    <div class="help-row"><span class="key">ESC</span><span class="desc">Close windows</span></div>
+                </div>
+                <div class="help-section">
+                    <h3>Windows & Menus</h3>
+                    <div class="help-row"><span class="key">K</span><span class="desc">Skills</span></div>
+                    <div class="help-row"><span class="key">I</span><span class="desc">Inventory</span></div>
+                    <div class="help-row"><span class="key">J</span><span class="desc">Achievements</span></div>
+                    <div class="help-row"><span class="key">H</span><span class="desc">This help</span></div>
+                    <div class="help-row"><span class="key">F5</span><span class="desc">Quick Save</span></div>
+                </div>
+                <div class="help-section">
+                    <h3>Game Systems</h3>
+                    <div class="help-row"><span class="key" style="background:#aa0000;">Health</span><span class="desc">Take damage</span></div>
+                    <div class="help-row"><span class="key" style="background:#00aa00;">Action</span><span class="desc">For abilities</span></div>
+                    <div class="help-row"><span class="key" style="background:#0000aa;">Mind</span><span class="desc">For healing</span></div>
+                    <div class="help-row"><span class="key">Missions</span><span class="desc">Terminal in town</span></div>
+                    <div class="help-row"><span class="key">Buffs</span><span class="desc">Visit Cantina</span></div>
+                    <div class="help-row"><span class="key">Equip</span><span class="desc">Click items (I)</span></div>
+                </div>
+            </div>
+            <div class="help-footer">Press H anytime to toggle this help screen</div>
+        </div>
+    </div>
+
     <!-- Target Frame -->
     <div id="target-frame" class="swg-panel">
         <div id="target-name">Target Name</div>
@@ -992,6 +1165,17 @@
     <div id="inventory-window" class="swg-panel">
         <button class="close-btn" onclick="closeInventoryWindow()">X</button>
         <h2>Inventory</h2>
+        <div class="equipment-slots">
+            <div class="equip-slot" id="weapon-slot" onclick="unequipItem('weapon')" title="Weapon Slot">
+                <span class="equip-slot-icon" id="weapon-slot-icon">-</span>
+                <span class="equip-slot-label">Weapon</span>
+            </div>
+            <div class="equip-slot" id="armor-slot" onclick="unequipItem('armor')" title="Armor Slot">
+                <span class="equip-slot-icon" id="armor-slot-icon">-</span>
+                <span class="equip-slot-label">Armor</span>
+            </div>
+            <div class="equipment-stats" id="equipment-stats"></div>
+        </div>
         <div id="inventory-grid" class="inventory-grid"></div>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
             <h3 style="color: #ffd700; margin-bottom: 10px;">Resources</h3>
@@ -1069,6 +1253,10 @@
             },
             target: null,
             inventory: [],
+            equipment: {
+                weapon: null,
+                armor: null
+            },
             resources: {
                 iron: 0, copper: 0, steel: 0,
                 hide: 0, bone: 0, meat: 0,
@@ -1128,6 +1316,7 @@
                         }
                     },
                     inventory: GameState.inventory,
+                    equipment: GameState.equipment,
                     resources: GameState.resources,
                     skills: GameState.skills,
                     skillXP: GameState.skillXP,
@@ -1154,6 +1343,7 @@
                 // Restore player stats
                 Object.assign(GameState.player, saveData.player);
                 GameState.inventory = saveData.inventory || [];
+                GameState.equipment = saveData.equipment || { weapon: null, armor: null };
                 GameState.resources = saveData.resources || GameState.resources;
                 GameState.skills = saveData.skills || GameState.skills;
                 GameState.skillXP = saveData.skillXP || GameState.skillXP;
@@ -2431,6 +2621,7 @@
                 if (key === 'k') toggleSkillsWindow();
                 if (key === 'i') toggleInventoryWindow();
                 if (key === 'j') toggleAchievementsWindow();
+                if (key === 'h') toggleHelpOverlay();
                 if (key === 'e') interactWithNearby();
                 if (key === 'escape') closeAllWindows();
                 if (key === 'tab') {
@@ -2776,12 +2967,148 @@
             requestAnimationFrame(animateBolt);
         }
 
+        // ==================== MUZZLE FLASH & IMPACT SPARKS ====================
+        function createMuzzleFlash() {
+            const flash = document.createElement('div');
+            flash.className = 'muzzle-flash';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 100);
+        }
+
+        function createImpactSparks(worldPos, sparkCount = 5) {
+            // Project 3D position to screen
+            const pos = worldPos.clone();
+            pos.project(camera);
+            const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+
+            for (let i = 0; i < sparkCount; i++) {
+                const spark = document.createElement('div');
+                spark.className = 'impact-spark';
+                spark.style.left = `${x}px`;
+                spark.style.top = `${y}px`;
+                document.body.appendChild(spark);
+
+                // Random direction for each spark
+                const angle = (Math.PI * 2 * i) / sparkCount + Math.random() * 0.5;
+                const speed = 50 + Math.random() * 80;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed - 30; // Upward bias
+
+                let startTime = null;
+                const duration = 300 + Math.random() * 200;
+
+                const animateSpark = (timestamp) => {
+                    if (!startTime) startTime = timestamp;
+                    const progress = (timestamp - startTime) / duration;
+
+                    if (progress < 1) {
+                        const gravity = 150 * progress * progress;
+                        spark.style.left = `${x + vx * progress}px`;
+                        spark.style.top = `${y + vy * progress + gravity}px`;
+                        spark.style.opacity = 1 - progress;
+                        requestAnimationFrame(animateSpark);
+                    } else {
+                        spark.remove();
+                    }
+                };
+                requestAnimationFrame(animateSpark);
+            }
+        }
+
+        // ==================== HELP OVERLAY ====================
+        function toggleHelpOverlay() {
+            document.getElementById('help-overlay').classList.toggle('active');
+        }
+
+        function closeHelpOverlay() {
+            document.getElementById('help-overlay').classList.remove('active');
+        }
+
+        // ==================== EQUIPMENT SYSTEM ====================
+        function equipItem(inventoryIndex) {
+            const item = GameState.inventory[inventoryIndex];
+            if (!item) return;
+
+            if (item.type === 'weapon') {
+                // Unequip current weapon first
+                if (GameState.equipment.weapon) {
+                    GameState.inventory.push(GameState.equipment.weapon);
+                }
+                GameState.equipment.weapon = item;
+                GameState.inventory.splice(inventoryIndex, 1);
+                addChatMessage(`Equipped ${item.name} (+${item.damage} damage)`, 'system');
+                AudioManager.playUIClick();
+            } else if (item.type === 'armor') {
+                // Unequip current armor first
+                if (GameState.equipment.armor) {
+                    GameState.inventory.push(GameState.equipment.armor);
+                }
+                GameState.equipment.armor = item;
+                GameState.inventory.splice(inventoryIndex, 1);
+                addChatMessage(`Equipped ${item.name} (+${item.defense} defense)`, 'system');
+                AudioManager.playUIClick();
+            }
+            renderInventory();
+        }
+
+        function unequipItem(slot) {
+            if (slot === 'weapon' && GameState.equipment.weapon) {
+                GameState.inventory.push(GameState.equipment.weapon);
+                addChatMessage(`Unequipped ${GameState.equipment.weapon.name}`, 'system');
+                GameState.equipment.weapon = null;
+                AudioManager.playUIClick();
+            } else if (slot === 'armor' && GameState.equipment.armor) {
+                GameState.inventory.push(GameState.equipment.armor);
+                addChatMessage(`Unequipped ${GameState.equipment.armor.name}`, 'system');
+                GameState.equipment.armor = null;
+                AudioManager.playUIClick();
+            }
+            renderInventory();
+        }
+
+        function updateEquipmentSlots() {
+            const weaponSlot = document.getElementById('weapon-slot');
+            const armorSlot = document.getElementById('armor-slot');
+            const weaponIcon = document.getElementById('weapon-slot-icon');
+            const armorIcon = document.getElementById('armor-slot-icon');
+            const statsDisplay = document.getElementById('equipment-stats');
+
+            if (GameState.equipment.weapon) {
+                weaponSlot.classList.add('has-item');
+                weaponIcon.textContent = '🔫';
+                weaponSlot.title = `${GameState.equipment.weapon.name} (Click to unequip)`;
+            } else {
+                weaponSlot.classList.remove('has-item');
+                weaponIcon.textContent = '-';
+                weaponSlot.title = 'Weapon Slot';
+            }
+
+            if (GameState.equipment.armor) {
+                armorSlot.classList.add('has-item');
+                armorIcon.textContent = '🛡️';
+                armorSlot.title = `${GameState.equipment.armor.name} (Click to unequip)`;
+            } else {
+                armorSlot.classList.remove('has-item');
+                armorIcon.textContent = '-';
+                armorSlot.title = 'Armor Slot';
+            }
+
+            // Show total equipment stats
+            const totalDamage = GameState.equipment.weapon ? GameState.equipment.weapon.damage : 0;
+            const totalDefense = GameState.equipment.armor ? GameState.equipment.armor.defense : 0;
+            statsDisplay.innerHTML = totalDamage || totalDefense ?
+                `+${totalDamage} DMG | +${totalDefense} DEF` : '';
+        }
+
         function dealDamage(target, baseDamage) {
-            // Calculate damage with skill bonuses
+            // Calculate damage with skill bonuses and equipped weapon
             const skillBonuses = calculateSkillBonuses();
+            const weaponDamage = GameState.equipment.weapon ? GameState.equipment.weapon.damage : 0;
+            const totalBaseDamage = baseDamage + weaponDamage;
             const critChance = 0.15 + (skillBonuses.critBonus / 100);
             const isCritical = Math.random() < critChance;
-            let damage = Math.floor(baseDamage * (1 + skillBonuses.damageBonus / 100) * (0.8 + Math.random() * 0.4));
+            let damage = Math.floor(totalBaseDamage * (1 + skillBonuses.damageBonus / 100) * (0.8 + Math.random() * 0.4));
             if (isCritical) {
                 damage = Math.floor(damage * 1.5);
                 GameState.statistics.criticalHits++;
@@ -2797,6 +3124,9 @@
                 AudioManager.playBlasterShot();
             }
 
+            // Muzzle flash effect
+            createMuzzleFlash();
+
             // Floating damage number
             const targetPos = target.position.clone();
             targetPos.y += 2; // Above creature
@@ -2806,6 +3136,10 @@
             const playerPos = camera.position.clone();
             playerPos.y -= 0.3; // Slightly below eye level
             createBlasterBolt(playerPos, target.position.clone(), '#ff0000');
+
+            // Impact sparks at target after bolt arrives (150ms travel time)
+            const impactPos = target.position.clone();
+            setTimeout(() => createImpactSparks(impactPos, isCritical ? 8 : 5), 150);
 
             // Aggro the creature
             target.userData.inCombat = true;
@@ -3295,13 +3629,31 @@
                 slot.className = 'inv-slot';
 
                 if (GameState.inventory[i]) {
+                    const item = GameState.inventory[i];
                     slot.classList.add('has-item');
-                    slot.textContent = getItemIcon(GameState.inventory[i].type);
-                    slot.title = GameState.inventory[i].name;
+                    slot.textContent = getItemIcon(item.type);
+
+                    // Add title with equip hint for weapons/armor
+                    if (item.type === 'weapon') {
+                        slot.title = `${item.name} (+${item.damage} DMG) - Click to equip`;
+                        slot.style.cursor = 'pointer';
+                        const index = i;
+                        slot.onclick = () => equipItem(index);
+                    } else if (item.type === 'armor') {
+                        slot.title = `${item.name} (+${item.defense} DEF) - Click to equip`;
+                        slot.style.cursor = 'pointer';
+                        const index = i;
+                        slot.onclick = () => equipItem(index);
+                    } else {
+                        slot.title = item.name;
+                    }
                 }
 
                 grid.appendChild(slot);
             }
+
+            // Update equipment slots display
+            updateEquipmentSlots();
 
             // Resources display
             const resDisplay = document.getElementById('resources-display');
@@ -3444,6 +3796,7 @@
             closeCantinaUI();
             closeMissionWindow();
             closeAchievementsWindow();
+            closeHelpOverlay();
         }
 
         // ==================== MISSION SYSTEM ====================
@@ -3731,9 +4084,12 @@
                     } else {
                         // Attack player
                         if (!data.lastAttack || Date.now() - data.lastAttack > 2000) {
-                            const damage = Math.floor(data.damage * (0.8 + Math.random() * 0.4));
+                            const baseDamage = Math.floor(data.damage * (0.8 + Math.random() * 0.4));
+                            const armorDefense = GameState.equipment.armor ? GameState.equipment.armor.defense : 0;
+                            const damage = Math.max(1, baseDamage - armorDefense);
                             GameState.player.health -= damage;
-                            addChatMessage(`${data.name} hits you for ${damage} damage!`, 'combat');
+                            const blocked = armorDefense > 0 ? ` (${armorDefense} blocked)` : '';
+                            addChatMessage(`${data.name} hits you for ${damage} damage!${blocked}`, 'combat');
                             data.lastAttack = Date.now();
                             updateHAMBars();
 
