@@ -510,6 +510,184 @@
             background: linear-gradient(90deg, #ff00ff, #00ffff);
             transition: width 0.5s;
         }
+
+        /* Floating Damage Numbers */
+        .floating-text {
+            position: fixed;
+            font-family: 'Arial Black', sans-serif;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 10px currentColor;
+            pointer-events: none;
+            z-index: 500;
+            animation: floatUp 1.5s ease-out forwards;
+            white-space: nowrap;
+        }
+        .floating-text.damage-dealt { color: #ffff00; font-size: 24px; }
+        .floating-text.damage-taken { color: #ff4444; font-size: 28px; }
+        .floating-text.healing { color: #44ff44; font-size: 24px; }
+        .floating-text.xp-gain { color: #00ffff; font-size: 20px; }
+        .floating-text.credits { color: #ffd700; font-size: 20px; }
+        .floating-text.critical { font-size: 32px; animation: floatUpCrit 1.5s ease-out forwards; }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            20% { transform: translateY(-20px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-80px) scale(0.8); }
+        }
+        @keyframes floatUpCrit {
+            0% { opacity: 1; transform: translateY(0) scale(1.5); }
+            15% { transform: translateY(-15px) scale(1.8); }
+            100% { opacity: 0; transform: translateY(-100px) scale(1); }
+        }
+
+        /* Screen Shake Effect */
+        .screen-shake {
+            animation: shake 0.3s ease-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-5px, -3px); }
+            20% { transform: translate(5px, 3px); }
+            30% { transform: translate(-4px, 2px); }
+            40% { transform: translate(4px, -2px); }
+            50% { transform: translate(-3px, 3px); }
+            60% { transform: translate(3px, -3px); }
+            70% { transform: translate(-2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            90% { transform: translate(-1px, 1px); }
+        }
+
+        /* Hit Flash Overlay */
+        #hit-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 400;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        #hit-flash.active {
+            animation: hitFlash 0.4s ease-out;
+        }
+        @keyframes hitFlash {
+            0% { opacity: 0.6; }
+            100% { opacity: 0; }
+        }
+
+        /* Blaster Bolt Trail */
+        .blaster-bolt {
+            position: fixed;
+            width: 30px;
+            height: 4px;
+            border-radius: 2px;
+            pointer-events: none;
+            z-index: 450;
+            box-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+        }
+
+        /* Mission Terminal Window */
+        #mission-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 550px;
+            height: 500px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+        }
+        #mission-window.active { display: block; }
+        #mission-window h2 { color: #ffd700; margin-bottom: 15px; text-align: center; }
+        .mission-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .mission-tab {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid #4a6fa5;
+            color: #aaa;
+            cursor: pointer;
+            text-align: center;
+        }
+        .mission-tab.active { border-color: #ffd700; color: #ffd700; background: rgba(74,111,165,0.3); }
+        .mission-list { max-height: 350px; overflow-y: auto; }
+        .mission-item {
+            padding: 15px;
+            border: 1px solid #4a6fa5;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.3);
+        }
+        .mission-item:hover { border-color: #ffd700; }
+        .mission-title { color: #ffd700; font-size: 14px; margin-bottom: 5px; }
+        .mission-desc { color: #aaa; font-size: 12px; margin-bottom: 10px; }
+        .mission-reward { color: #66ff66; font-size: 12px; }
+        .mission-difficulty { font-size: 11px; margin-top: 5px; }
+        .mission-difficulty.easy { color: #66ff66; }
+        .mission-difficulty.medium { color: #ffcc00; }
+        .mission-difficulty.hard { color: #ff6666; }
+        .mission-accept-btn {
+            background: #4a6fa5;
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .mission-accept-btn:hover { background: #5a7fb5; }
+        .mission-progress {
+            height: 8px;
+            background: #222;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .mission-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a6fa5, #ffd700);
+            transition: width 0.3s;
+        }
+
+        /* Active Mission HUD */
+        #active-mission-hud {
+            position: fixed;
+            top: 120px;
+            right: 10px;
+            width: 200px;
+            padding: 10px;
+            display: none;
+            z-index: 100;
+        }
+        #active-mission-hud.active { display: block; }
+        #active-mission-hud .mission-title { font-size: 12px; }
+        #active-mission-hud .mission-objective { color: #aaa; font-size: 11px; margin-top: 5px; }
+
+        /* Waypoint Marker */
+        .waypoint-marker {
+            position: fixed;
+            width: 12px;
+            height: 12px;
+            background: #ffd700;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 55;
+            box-shadow: 0 0 10px #ffd700;
+            animation: waypointPulse 1.5s infinite;
+        }
+        @keyframes waypointPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -521,6 +699,7 @@
 
     <div id="game-container"></div>
     <div id="crosshair"></div>
+    <div id="hit-flash" style="background: radial-gradient(ellipse at center, transparent 30%, rgba(255,0,0,0.5) 100%);"></div>
 
     <!-- HAM Bars -->
     <div id="ham-bars" class="swg-panel">
@@ -654,6 +833,24 @@
         <div id="vendor-items" class="vendor-items"></div>
     </div>
 
+    <!-- Mission Terminal Window -->
+    <div id="mission-window" class="swg-panel">
+        <button class="close-btn" onclick="closeMissionWindow()">X</button>
+        <h2>Mission Terminal</h2>
+        <div class="mission-tabs">
+            <div class="mission-tab active" data-tab="available" onclick="switchMissionTab('available')">Available</div>
+            <div class="mission-tab" data-tab="active" onclick="switchMissionTab('active')">Active</div>
+        </div>
+        <div id="mission-list" class="mission-list"></div>
+    </div>
+
+    <!-- Active Mission HUD -->
+    <div id="active-mission-hud" class="swg-panel">
+        <div class="mission-title" id="active-mission-title">No Active Mission</div>
+        <div class="mission-objective" id="active-mission-objective"></div>
+        <div class="mission-progress"><div class="mission-progress-fill" id="active-mission-progress" style="width: 0%"></div></div>
+    </div>
+
     <!-- Cantina UI -->
     <div id="cantina-ui" class="swg-panel">
         <button class="close-btn" onclick="closeCantinaUI()">X</button>
@@ -711,10 +908,38 @@
             buffs: [],
             cooldowns: {},
             inCombat: false,
-            isPointerLocked: false
+            isPointerLocked: false,
+            activeMission: null,
+            missionProgress: {}
         };
 
         const SKILL_XP_REQUIRED = 1000;
+
+        // ==================== MISSION TEMPLATES ====================
+        const MISSION_TEMPLATES = {
+            destroy: [
+                { id: 'hunt_womprats', title: 'Womp Rat Infestation', desc: 'Clear out the womp rat population near the moisture farms.', target: 'womprat', count: 5, credits: 200, xp: 100, difficulty: 'easy' },
+                { id: 'hunt_dewbacks', title: 'Dewback Hunting', desc: 'Local ranchers need dewback hides. Hunt some down.', target: 'dewback', count: 3, credits: 400, xp: 200, difficulty: 'medium' },
+                { id: 'hunt_tuskens', title: 'Tusken Threat', desc: 'Tusken Raiders have been raiding caravans. Eliminate them.', target: 'tusken', count: 4, credits: 600, xp: 350, difficulty: 'medium' },
+                { id: 'hunt_banthas', title: 'Bantha Bounty', desc: 'A wealthy collector wants bantha meat for a feast.', target: 'bantha', count: 2, credits: 800, xp: 400, difficulty: 'hard' },
+                { id: 'krayt_slayer', title: 'Krayt Dragon Slayer', desc: 'Only the bravest dare face a Krayt Dragon. Are you one of them?', target: 'krayt', count: 1, credits: 5000, xp: 2000, difficulty: 'hard' }
+            ],
+            survey: [
+                { id: 'survey_iron', title: 'Iron Survey', desc: 'The mining guild needs iron ore samples from the desert.', resource: 'iron', count: 5, credits: 150, xp: 80, difficulty: 'easy' },
+                { id: 'survey_copper', title: 'Copper Expedition', desc: 'Locate and harvest copper deposits for electronics.', resource: 'copper', count: 5, credits: 150, xp: 80, difficulty: 'easy' },
+                { id: 'survey_chemicals', title: 'Chemical Collection', desc: 'Gather chemical compounds for the medical facilities.', resource: 'chemicals', count: 8, credits: 250, xp: 120, difficulty: 'medium' },
+                { id: 'survey_flora', title: 'Botanical Research', desc: 'Collect flora samples for agricultural research.', resource: 'flora', count: 10, credits: 300, xp: 150, difficulty: 'medium' }
+            ],
+            delivery: [
+                { id: 'deliver_starport', title: 'Starport Delivery', desc: 'Deliver supplies to the Mos Eisley Starport.', waypoint: { x: -30, z: 30 }, credits: 100, xp: 50, difficulty: 'easy' },
+                { id: 'deliver_cantina', title: 'Cantina Resupply', desc: 'Bring beverages to Chalmun\'s Cantina.', waypoint: { x: 70, z: 52 }, credits: 100, xp: 50, difficulty: 'easy' },
+                { id: 'deliver_farm', title: 'Farm Equipment', desc: 'Deliver parts to the remote moisture farm.', waypoint: { x: -100, z: -80 }, credits: 200, xp: 100, difficulty: 'medium' },
+                { id: 'deliver_outpost', title: 'Outpost Supplies', desc: 'Bring critical supplies to a distant outpost.', waypoint: { x: 150, z: -150 }, credits: 350, xp: 175, difficulty: 'hard' }
+            ]
+        };
+
+        let availableMissions = [];
+        let currentMissionTab = 'available';
 
         // ==================== SKILL DEFINITIONS ====================
         const SKILL_TREES = {
@@ -903,6 +1128,8 @@
         const keys = { w: false, a: false, s: false, d: false, shift: false };
         let rotation = { x: 0, y: 0 };
         let interactableNear = null;
+        let floatingTexts = [];
+        let blasterBolts = [];
 
         function init() {
             // Scene setup
@@ -1037,6 +1264,11 @@
             createVendorNPC(cityCenter.x + 5, cityCenter.z, 'weaponVendor');
             createVendorNPC(cityCenter.x - 5, cityCenter.z, 'armorVendor');
             createVendorNPC(cityCenter.x, cityCenter.z + 5, 'generalVendor');
+
+            // Mission Terminal
+            const terminalNPC = createNPCMarker(cityCenter.x, cityCenter.z - 8, 'Mission Terminal', 0xffd700);
+            terminalNPC.userData = { type: 'missionTerminal', interactable: true, name: 'Mission Terminal' };
+            npcs.push(terminalNPC);
         }
 
         function createDomeBuilding(x, z, height) {
@@ -1659,6 +1891,10 @@
                     GameState.player.mind -= ability.mindCost;
                     addChatMessage(`You heal for ${healAmount} health.`, 'combat');
                     gainSkillXP('medic', 30);
+                    // Floating heal text
+                    const healPos = camera.position.clone();
+                    healPos.y += 0.5;
+                    createFloatingText(`+${healAmount}`, healPos, 'healing');
                     break;
 
                 case 'harvest':
@@ -1677,8 +1913,13 @@
                             return;
                         }
                         GameState.inventory = GameState.inventory.filter(i => i !== hasStimpak);
+                        const stimHeal = Math.min(ability.healing, GameState.player.maxHealth - GameState.player.health);
                         GameState.player.health = Math.min(GameState.player.maxHealth, GameState.player.health + ability.healing);
                         addChatMessage(`Used stim pack. Healed for ${ability.healing}.`, 'combat');
+                        // Floating heal text
+                        const stimPos = camera.position.clone();
+                        stimPos.y += 0.5;
+                        createFloatingText(`+${stimHeal}`, stimPos, 'healing');
                         renderInventory();
                     }
                     break;
@@ -1711,12 +1952,128 @@
             requestAnimationFrame(animate);
         }
 
+        // ==================== COMBAT FEEDBACK SYSTEM ====================
+        function createFloatingText(text, worldPosition, type, isCritical = false) {
+            // Convert 3D position to screen coordinates
+            const screenPos = worldPosition.clone().project(camera);
+            const x = (screenPos.x + 1) / 2 * window.innerWidth;
+            const y = (-screenPos.y + 1) / 2 * window.innerHeight;
+
+            // Don't show if behind camera
+            if (screenPos.z > 1) return;
+
+            // Create floating text element
+            const floatEl = document.createElement('div');
+            floatEl.className = `floating-text ${type}${isCritical ? ' critical' : ''}`;
+            floatEl.textContent = text;
+            floatEl.style.left = `${x}px`;
+            floatEl.style.top = `${y}px`;
+            floatEl.style.transform = 'translate(-50%, -50%)';
+            document.body.appendChild(floatEl);
+
+            // Track for cleanup
+            const floatData = {
+                element: floatEl,
+                startTime: Date.now(),
+                duration: 1500
+            };
+            floatingTexts.push(floatData);
+
+            // Auto-remove after animation
+            setTimeout(() => {
+                if (floatEl.parentNode) {
+                    floatEl.parentNode.removeChild(floatEl);
+                }
+                floatingTexts = floatingTexts.filter(f => f !== floatData);
+            }, 1500);
+        }
+
+        function triggerScreenShake(intensity = 1) {
+            const container = document.getElementById('game-container');
+            container.classList.remove('screen-shake');
+            void container.offsetWidth; // Force reflow
+            container.style.setProperty('--shake-intensity', intensity);
+            container.classList.add('screen-shake');
+            setTimeout(() => container.classList.remove('screen-shake'), 300);
+        }
+
+        function triggerHitFlash() {
+            const flash = document.getElementById('hit-flash');
+            flash.classList.remove('active');
+            void flash.offsetWidth; // Force reflow
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 400);
+        }
+
+        function createBlasterBolt(startPos, endPos, color = '#ff0000') {
+            // Convert 3D positions to screen coordinates
+            const startScreen = startPos.clone().project(camera);
+            const endScreen = endPos.clone().project(camera);
+
+            if (startScreen.z > 1 || endScreen.z > 1) return;
+
+            const x1 = (startScreen.x + 1) / 2 * window.innerWidth;
+            const y1 = (-startScreen.y + 1) / 2 * window.innerHeight;
+            const x2 = (endScreen.x + 1) / 2 * window.innerWidth;
+            const y2 = (-endScreen.y + 1) / 2 * window.innerHeight;
+
+            // Calculate angle
+            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+            const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+
+            const bolt = document.createElement('div');
+            bolt.className = 'blaster-bolt';
+            bolt.style.cssText = `
+                left: ${x1}px;
+                top: ${y1}px;
+                width: ${Math.min(distance, 60)}px;
+                color: ${color};
+                background: ${color};
+                transform: rotate(${angle}deg);
+                transform-origin: left center;
+            `;
+            document.body.appendChild(bolt);
+
+            // Animate bolt traveling
+            const startTime = Date.now();
+            const animateBolt = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = elapsed / 150; // 150ms travel time
+
+                if (progress >= 1) {
+                    if (bolt.parentNode) bolt.parentNode.removeChild(bolt);
+                    return;
+                }
+
+                const currentX = x1 + (x2 - x1) * progress;
+                const currentY = y1 + (y2 - y1) * progress;
+                bolt.style.left = `${currentX}px`;
+                bolt.style.top = `${currentY}px`;
+                bolt.style.opacity = 1 - progress * 0.5;
+
+                requestAnimationFrame(animateBolt);
+            };
+            requestAnimationFrame(animateBolt);
+        }
+
         function dealDamage(target, baseDamage) {
             // Calculate damage with some variance
-            const damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4));
+            const isCritical = Math.random() < 0.15; // 15% crit chance
+            let damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4));
+            if (isCritical) damage = Math.floor(damage * 1.5);
             target.userData.currentHealth -= damage;
 
-            addChatMessage(`You hit ${target.userData.name} for ${damage} damage!`, 'combat');
+            addChatMessage(`You hit ${target.userData.name} for ${damage} damage!${isCritical ? ' CRITICAL!' : ''}`, 'combat');
+
+            // Floating damage number
+            const targetPos = target.position.clone();
+            targetPos.y += 2; // Above creature
+            createFloatingText(isCritical ? `${damage}!` : damage.toString(), targetPos, 'damage-dealt', isCritical);
+
+            // Blaster bolt effect from player to target
+            const playerPos = camera.position.clone();
+            playerPos.y -= 0.3; // Slightly below eye level
+            createBlasterBolt(playerPos, target.position.clone(), '#ff0000');
 
             // Aggro the creature
             target.userData.inCombat = true;
@@ -1733,12 +2090,19 @@
         function killCreature(creature) {
             addChatMessage(`You have defeated ${creature.userData.name}!`, 'combat');
 
+            // Store creature position before removal for floating text
+            const creaturePos = creature.position.clone();
+            creaturePos.y += 2;
+
             // Grant XP
             const xpGain = creature.userData.xp;
             const xpBonus = getBuffValue('xpBonus');
             const totalXP = Math.floor(xpGain * (1 + xpBonus / 100));
             gainSkillXP('marksman', totalXP);
             addChatMessage(`You gained ${totalXP} combat experience.`, 'xp');
+
+            // Floating XP text
+            createFloatingText(`+${totalXP} XP`, creaturePos, 'xp-gain');
 
             // Loot
             const loot = creature.userData.loot;
@@ -1763,6 +2127,16 @@
             const credits = creature.userData.credits[0] + Math.floor(Math.random() * (creature.userData.credits[1] - creature.userData.credits[0]));
             GameState.player.credits += credits;
             addChatMessage(`Looted ${credits} credits.`, 'loot');
+
+            // Floating credits text (slightly delayed)
+            setTimeout(() => {
+                const creditPos = creaturePos.clone();
+                creditPos.y += 0.5;
+                createFloatingText(`+${credits}c`, creditPos, 'credits');
+            }, 200);
+
+            // Track mission kills
+            onCreatureKill(creature.userData.creatureType);
 
             updateCreditsDisplay();
             renderInventory();
@@ -1803,6 +2177,9 @@
             gainSkillXP('scout', 15);
             gainSkillXP('artisan', 10);
             renderInventory();
+
+            // Check survey mission progress
+            checkMissionProgress();
 
             if (nearestResource.userData.amount <= 0) {
                 scene.remove(nearestResource);
@@ -2067,6 +2444,13 @@
                 harvestNearbyResource();
             } else if (data.type === 'shuttle') {
                 addChatMessage('Shuttle service coming soon! Travel to other planets...', 'system');
+            } else if (data.type === 'missionTerminal') {
+                openMissionWindow();
+            }
+
+            // Check if we can complete a delivery mission
+            if (checkDeliveryMission()) {
+                completeMission();
             }
         }
 
@@ -2279,6 +2663,256 @@
             closeCraftingWindow();
             closeVendorWindow();
             closeCantinaUI();
+            closeMissionWindow();
+        }
+
+        // ==================== MISSION SYSTEM ====================
+        function generateAvailableMissions() {
+            availableMissions = [];
+
+            // Pick 2-3 random missions from each type
+            ['destroy', 'survey', 'delivery'].forEach(type => {
+                const templates = MISSION_TEMPLATES[type];
+                const shuffled = [...templates].sort(() => Math.random() - 0.5);
+                const count = 1 + Math.floor(Math.random() * 2);
+                for (let i = 0; i < Math.min(count, shuffled.length); i++) {
+                    availableMissions.push({ ...shuffled[i], type });
+                }
+            });
+
+            // Shuffle final list
+            availableMissions.sort(() => Math.random() - 0.5);
+        }
+
+        function openMissionWindow() {
+            if (availableMissions.length === 0) {
+                generateAvailableMissions();
+            }
+            currentMissionTab = 'available';
+            updateMissionTabs();
+            renderMissionList();
+            document.getElementById('mission-window').classList.add('active');
+        }
+
+        function closeMissionWindow() {
+            document.getElementById('mission-window').classList.remove('active');
+        }
+
+        function switchMissionTab(tab) {
+            currentMissionTab = tab;
+            updateMissionTabs();
+            renderMissionList();
+        }
+
+        function updateMissionTabs() {
+            document.querySelectorAll('.mission-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === currentMissionTab);
+            });
+        }
+
+        function renderMissionList() {
+            const container = document.getElementById('mission-list');
+            container.innerHTML = '';
+
+            if (currentMissionTab === 'available') {
+                if (GameState.activeMission) {
+                    container.innerHTML = '<div style="text-align: center; color: #aaa; padding: 20px;">Complete or abandon your current mission first.</div>';
+                    return;
+                }
+
+                availableMissions.forEach((mission, index) => {
+                    const missionEl = document.createElement('div');
+                    missionEl.className = 'mission-item';
+                    missionEl.innerHTML = `
+                        <div class="mission-title">${mission.title}</div>
+                        <div class="mission-desc">${mission.desc}</div>
+                        <div class="mission-reward">Reward: ${mission.credits} credits, ${mission.xp} XP</div>
+                        <div class="mission-difficulty ${mission.difficulty}">${mission.difficulty.toUpperCase()}</div>
+                        <button class="mission-accept-btn" onclick="acceptMission(${index})">Accept Mission</button>
+                    `;
+                    container.appendChild(missionEl);
+                });
+            } else {
+                // Active mission tab
+                if (!GameState.activeMission) {
+                    container.innerHTML = '<div style="text-align: center; color: #aaa; padding: 20px;">No active mission.</div>';
+                    return;
+                }
+
+                const mission = GameState.activeMission;
+                const progress = getMissionProgress();
+                const progressPercent = Math.min(100, (progress.current / progress.required) * 100);
+
+                const missionEl = document.createElement('div');
+                missionEl.className = 'mission-item';
+                missionEl.innerHTML = `
+                    <div class="mission-title">${mission.title}</div>
+                    <div class="mission-desc">${mission.desc}</div>
+                    <div class="mission-objective" style="color: #fff; margin: 10px 0;">
+                        ${getMissionObjectiveText()}
+                    </div>
+                    <div class="mission-progress">
+                        <div class="mission-progress-fill" style="width: ${progressPercent}%"></div>
+                    </div>
+                    <div style="color: #aaa; font-size: 11px; margin-top: 5px;">${progress.current} / ${progress.required}</div>
+                    <div class="mission-reward">Reward: ${mission.credits} credits, ${mission.xp} XP</div>
+                    <button class="mission-accept-btn" style="background: #aa4444;" onclick="abandonMission()">Abandon Mission</button>
+                `;
+                container.appendChild(missionEl);
+            }
+        }
+
+        function acceptMission(index) {
+            const mission = availableMissions[index];
+            GameState.activeMission = mission;
+            GameState.missionProgress = { killCount: 0, harvestCount: 0, startResources: { ...GameState.resources } };
+
+            addChatMessage(`Mission accepted: ${mission.title}`, 'system');
+            updateActiveMissionHUD();
+            closeMissionWindow();
+
+            // Remove from available
+            availableMissions.splice(index, 1);
+        }
+
+        function abandonMission() {
+            if (GameState.activeMission) {
+                addChatMessage(`Mission abandoned: ${GameState.activeMission.title}`, 'system');
+                GameState.activeMission = null;
+                GameState.missionProgress = {};
+                updateActiveMissionHUD();
+                renderMissionList();
+            }
+        }
+
+        function getMissionProgress() {
+            const mission = GameState.activeMission;
+            if (!mission) return { current: 0, required: 1 };
+
+            switch (mission.type) {
+                case 'destroy':
+                    return { current: GameState.missionProgress.killCount || 0, required: mission.count };
+                case 'survey':
+                    const startAmount = GameState.missionProgress.startResources?.[mission.resource] || 0;
+                    const currentAmount = GameState.resources[mission.resource] || 0;
+                    return { current: Math.max(0, currentAmount - startAmount), required: mission.count };
+                case 'delivery':
+                    const dist = Math.sqrt(
+                        Math.pow(camera.position.x - mission.waypoint.x, 2) +
+                        Math.pow(camera.position.z - mission.waypoint.z, 2)
+                    );
+                    return { current: dist < 10 ? 1 : 0, required: 1 };
+                default:
+                    return { current: 0, required: 1 };
+            }
+        }
+
+        function getMissionObjectiveText() {
+            const mission = GameState.activeMission;
+            if (!mission) return '';
+
+            const progress = getMissionProgress();
+
+            switch (mission.type) {
+                case 'destroy':
+                    const creatureName = CREATURE_TYPES[mission.target]?.name || mission.target;
+                    return `Kill ${progress.current}/${mission.count} ${creatureName}s`;
+                case 'survey':
+                    return `Harvest ${progress.current}/${mission.count} ${mission.resource}`;
+                case 'delivery':
+                    if (progress.current >= progress.required) {
+                        return 'Deliver the package! (Press E)';
+                    }
+                    const dist = Math.sqrt(
+                        Math.pow(camera.position.x - mission.waypoint.x, 2) +
+                        Math.pow(camera.position.z - mission.waypoint.z, 2)
+                    );
+                    return `Travel to waypoint (${Math.floor(dist)}m away)`;
+                default:
+                    return '';
+            }
+        }
+
+        function updateActiveMissionHUD() {
+            const hud = document.getElementById('active-mission-hud');
+            const mission = GameState.activeMission;
+
+            if (!mission) {
+                hud.classList.remove('active');
+                return;
+            }
+
+            hud.classList.add('active');
+            document.getElementById('active-mission-title').textContent = mission.title;
+            document.getElementById('active-mission-objective').textContent = getMissionObjectiveText();
+
+            const progress = getMissionProgress();
+            const progressPercent = Math.min(100, (progress.current / progress.required) * 100);
+            document.getElementById('active-mission-progress').style.width = `${progressPercent}%`;
+        }
+
+        function checkMissionProgress() {
+            if (!GameState.activeMission) return;
+
+            const progress = getMissionProgress();
+            updateActiveMissionHUD();
+
+            if (progress.current >= progress.required) {
+                completeMission();
+            }
+        }
+
+        function completeMission() {
+            const mission = GameState.activeMission;
+            if (!mission) return;
+
+            // Grant rewards
+            GameState.player.credits += mission.credits;
+            gainSkillXP('scout', mission.xp);
+
+            addChatMessage(`Mission Complete: ${mission.title}!`, 'system');
+            addChatMessage(`Earned ${mission.credits} credits and ${mission.xp} XP!`, 'xp');
+
+            // Floating reward text
+            const rewardPos = camera.position.clone();
+            rewardPos.y += 1;
+            createFloatingText(`+${mission.credits}c`, rewardPos, 'credits');
+            setTimeout(() => {
+                const xpPos = camera.position.clone();
+                xpPos.y += 1.5;
+                createFloatingText(`+${mission.xp} XP`, xpPos, 'xp-gain');
+            }, 300);
+
+            updateCreditsDisplay();
+
+            // Clear mission
+            GameState.activeMission = null;
+            GameState.missionProgress = {};
+            updateActiveMissionHUD();
+
+            // Generate new missions
+            generateAvailableMissions();
+        }
+
+        function onCreatureKill(creatureType) {
+            if (!GameState.activeMission || GameState.activeMission.type !== 'destroy') return;
+
+            if (GameState.activeMission.target === creatureType) {
+                GameState.missionProgress.killCount = (GameState.missionProgress.killCount || 0) + 1;
+                checkMissionProgress();
+            }
+        }
+
+        function checkDeliveryMission() {
+            if (!GameState.activeMission || GameState.activeMission.type !== 'delivery') return false;
+
+            const mission = GameState.activeMission;
+            const dist = Math.sqrt(
+                Math.pow(camera.position.x - mission.waypoint.x, 2) +
+                Math.pow(camera.position.z - mission.waypoint.z, 2)
+            );
+
+            return dist < 10;
         }
 
         // ==================== CREATURE AI ====================
@@ -2312,6 +2946,15 @@
                             addChatMessage(`${data.name} hits you for ${damage} damage!`, 'combat');
                             data.lastAttack = Date.now();
                             updateHAMBars();
+
+                            // Combat feedback - floating damage on player
+                            const playerDamagePos = camera.position.clone();
+                            playerDamagePos.y += 0.5;
+                            createFloatingText(`-${damage}`, playerDamagePos, 'damage-taken');
+
+                            // Screen shake and hit flash
+                            triggerScreenShake(damage / data.damage); // Intensity based on damage ratio
+                            triggerHitFlash();
 
                             if (GameState.player.health <= 0) {
                                 playerDeath();
@@ -2432,6 +3075,13 @@
                 updateMinimap();
                 updateLocationDisplay();
                 if (GameState.target) updateTargetFrame();
+                if (GameState.activeMission) {
+                    updateActiveMissionHUD();
+                    // Auto-check delivery missions
+                    if (GameState.activeMission.type === 'delivery') {
+                        checkMissionProgress();
+                    }
+                }
             }
 
             renderer.render(scene, camera);
