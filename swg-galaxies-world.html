@@ -688,6 +688,169 @@
             0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
             50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
         }
+
+        /* Ability Tooltip */
+        #ability-tooltip {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 16px;
+            min-width: 220px;
+            max-width: 280px;
+            display: none;
+            z-index: 300;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        #ability-tooltip.active { display: block; }
+        #ability-tooltip .tooltip-name {
+            font-size: 14px;
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #4a6fa5;
+            padding-bottom: 5px;
+        }
+        #ability-tooltip .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        #ability-tooltip .tooltip-label { color: #aaa; }
+        #ability-tooltip .tooltip-value { color: #fff; }
+        #ability-tooltip .tooltip-value.damage { color: #ff6666; }
+        #ability-tooltip .tooltip-value.healing { color: #66ff66; }
+        #ability-tooltip .tooltip-value.cost { color: #ffaa00; }
+        #ability-tooltip .tooltip-value.bonus { color: #00ffff; }
+        #ability-tooltip .tooltip-desc {
+            color: #888;
+            font-size: 11px;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* Achievement System */
+        #achievements-button {
+            position: fixed;
+            top: 150px;
+            left: 10px;
+            padding: 8px 15px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #achievements-button:hover { border-color: #ffd700; }
+
+        #achievements-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 650px;
+            height: 500px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+            overflow: hidden;
+        }
+        #achievements-window.active { display: block; }
+        #achievements-window h2 {
+            color: #ffd700;
+            margin-bottom: 15px;
+            text-align: center;
+            border-bottom: 2px solid #4a6fa5;
+            padding-bottom: 10px;
+        }
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        .achievement-card {
+            padding: 12px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.3);
+            display: flex;
+            gap: 12px;
+            transition: all 0.2s;
+        }
+        .achievement-card.unlocked {
+            border-color: #ffd700;
+            background: rgba(255,215,0,0.1);
+        }
+        .achievement-card.locked { opacity: 0.5; }
+        .achievement-icon {
+            font-size: 28px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(20,30,50,0.8);
+            border-radius: 5px;
+            border: 1px solid #4a6fa5;
+        }
+        .achievement-info { flex: 1; }
+        .achievement-name {
+            color: #ffd700;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .achievement-desc { color: #aaa; font-size: 11px; margin-bottom: 6px; }
+        .achievement-progress {
+            height: 6px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .achievement-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a6fa5, #ffd700);
+            transition: width 0.3s;
+        }
+        .achievement-progress-text {
+            font-size: 10px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        /* Achievement Notification */
+        .achievement-notification {
+            position: fixed;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            animation: achievementSlide 4s ease-out forwards;
+        }
+        .achievement-notification .notif-icon { font-size: 36px; }
+        .achievement-notification .notif-text { }
+        .achievement-notification .notif-title {
+            color: #ffd700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .achievement-notification .notif-name {
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        @keyframes achievementSlide {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+            10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
     </style>
 </head>
 <body>
@@ -777,6 +940,23 @@
             <span class="keybind">6</span>
             <div class="cooldown-overlay" style="height: 0%"></div>
         </div>
+    </div>
+
+    <!-- Ability Tooltip -->
+    <div id="ability-tooltip" class="swg-panel">
+        <div class="tooltip-name">Ability Name</div>
+        <div class="tooltip-stats"></div>
+        <div class="tooltip-desc"></div>
+    </div>
+
+    <!-- Achievements Button -->
+    <div id="achievements-button" class="swg-panel">Achievements (J)</div>
+
+    <!-- Achievements Window -->
+    <div id="achievements-window" class="swg-panel">
+        <button class="close-btn" onclick="closeAchievementsWindow()">X</button>
+        <h2>Achievements</h2>
+        <div id="achievements-grid" class="achievements-grid"></div>
     </div>
 
     <!-- Chat Box -->
@@ -1405,6 +1585,224 @@
             }
         };
 
+        // ==================== ACHIEVEMENTS ====================
+        const ACHIEVEMENT_DEFINITIONS = [
+            // Combat Achievements
+            { id: 'firstBlood', name: 'First Blood', desc: 'Defeat your first creature', icon: '⚔️', check: () => GameState.statistics.totalKills >= 1, threshold: 1 },
+            { id: 'hunter10', name: 'Novice Hunter', desc: 'Defeat 10 creatures', icon: '🎯', check: () => GameState.statistics.totalKills >= 10, threshold: 10 },
+            { id: 'hunter50', name: 'Skilled Hunter', desc: 'Defeat 50 creatures', icon: '🏹', check: () => GameState.statistics.totalKills >= 50, threshold: 50 },
+            { id: 'hunter100', name: 'Master Hunter', desc: 'Defeat 100 creatures', icon: '🏆', check: () => GameState.statistics.totalKills >= 100, threshold: 100 },
+            { id: 'hunter500', name: 'Legendary Hunter', desc: 'Defeat 500 creatures', icon: '👑', check: () => GameState.statistics.totalKills >= 500, threshold: 500 },
+
+            // Critical Hit Achievements
+            { id: 'crit10', name: 'Sharp Shooter', desc: 'Land 10 critical hits', icon: '💥', check: () => GameState.statistics.criticalHits >= 10, threshold: 10 },
+            { id: 'crit50', name: 'Precision Expert', desc: 'Land 50 critical hits', icon: '🎯', check: () => GameState.statistics.criticalHits >= 50, threshold: 50 },
+
+            // Creature-Specific Achievements
+            { id: 'ratSlayer', name: 'Rat Catcher', desc: 'Defeat 20 Womp Rats', icon: '🐀', check: () => (GameState.statistics.creaturesKilled.womprat || 0) >= 20, threshold: 20 },
+            { id: 'kraytSlayer', name: 'Krayt Slayer', desc: 'Defeat a Krayt Dragon', icon: '🐉', check: () => (GameState.statistics.creaturesKilled.krayt || 0) >= 1, threshold: 1 },
+            { id: 'tuskenTerror', name: 'Tusken Terror', desc: 'Defeat 25 Tusken Raiders', icon: '👤', check: () => (GameState.statistics.creaturesKilled.tusken || 0) >= 25, threshold: 25 },
+
+            // Wealth Achievements
+            { id: 'credits1k', name: 'Modest Fortune', desc: 'Earn 1,000 total credits', icon: '💰', check: () => GameState.statistics.totalCreditsEarned >= 1000, threshold: 1000 },
+            { id: 'credits10k', name: 'Wealthy Trader', desc: 'Earn 10,000 total credits', icon: '💎', check: () => GameState.statistics.totalCreditsEarned >= 10000, threshold: 10000 },
+            { id: 'credits100k', name: 'Credit Mogul', desc: 'Earn 100,000 total credits', icon: '🏦', check: () => GameState.statistics.totalCreditsEarned >= 100000, threshold: 100000 },
+
+            // Mission Achievements
+            { id: 'mission1', name: 'Mission Rookie', desc: 'Complete your first mission', icon: '📋', check: () => GameState.statistics.missionsCompleted >= 1, threshold: 1 },
+            { id: 'mission10', name: 'Reliable Contractor', desc: 'Complete 10 missions', icon: '📜', check: () => GameState.statistics.missionsCompleted >= 10, threshold: 10 },
+            { id: 'mission25', name: 'Mission Specialist', desc: 'Complete 25 missions', icon: '🎖️', check: () => GameState.statistics.missionsCompleted >= 25, threshold: 25 },
+
+            // XP Achievements
+            { id: 'xp5k', name: 'Apprentice', desc: 'Earn 5,000 total XP', icon: '📚', check: () => GameState.statistics.totalXPEarned >= 5000, threshold: 5000 },
+            { id: 'xp25k', name: 'Journeyman', desc: 'Earn 25,000 total XP', icon: '🎓', check: () => GameState.statistics.totalXPEarned >= 25000, threshold: 25000 },
+            { id: 'xp100k', name: 'Expert', desc: 'Earn 100,000 total XP', icon: '🌟', check: () => GameState.statistics.totalXPEarned >= 100000, threshold: 100000 }
+        ];
+
+        function checkAchievements() {
+            let newAchievements = [];
+            ACHIEVEMENT_DEFINITIONS.forEach(achievement => {
+                if (!GameState.achievements[achievement.id] && achievement.check()) {
+                    GameState.achievements[achievement.id] = {
+                        unlockedAt: Date.now()
+                    };
+                    newAchievements.push(achievement);
+                }
+            });
+
+            // Show notifications for new achievements
+            newAchievements.forEach((achievement, i) => {
+                setTimeout(() => showAchievementNotification(achievement), i * 500);
+            });
+
+            return newAchievements.length > 0;
+        }
+
+        function showAchievementNotification(achievement) {
+            // Play sound
+            AudioManager.playMissionComplete();
+
+            // Create notification element
+            const notif = document.createElement('div');
+            notif.className = 'achievement-notification swg-panel';
+            notif.innerHTML = `
+                <div class="notif-icon">${achievement.icon}</div>
+                <div class="notif-text">
+                    <div class="notif-title">Achievement Unlocked!</div>
+                    <div class="notif-name">${achievement.name}</div>
+                </div>
+            `;
+            document.body.appendChild(notif);
+
+            // Chat message
+            addChatMessage(`Achievement Unlocked: ${achievement.name} - ${achievement.desc}`, 'xp');
+
+            // Remove after animation
+            setTimeout(() => {
+                if (notif.parentNode) notif.parentNode.removeChild(notif);
+            }, 4000);
+        }
+
+        function renderAchievementsWindow() {
+            const container = document.getElementById('achievements-grid');
+            container.innerHTML = '';
+
+            const unlockedCount = Object.keys(GameState.achievements).length;
+            const totalCount = ACHIEVEMENT_DEFINITIONS.length;
+
+            // Update header with count
+            document.querySelector('#achievements-window h2').textContent = `Achievements (${unlockedCount}/${totalCount})`;
+
+            ACHIEVEMENT_DEFINITIONS.forEach(achievement => {
+                const isUnlocked = !!GameState.achievements[achievement.id];
+                const card = document.createElement('div');
+                card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`;
+
+                // Calculate progress for locked achievements
+                let progressHtml = '';
+                if (!isUnlocked && achievement.threshold) {
+                    const current = getAchievementProgress(achievement);
+                    const percent = Math.min(100, (current / achievement.threshold) * 100);
+                    progressHtml = `
+                        <div class="achievement-progress">
+                            <div class="achievement-progress-fill" style="width: ${percent}%"></div>
+                        </div>
+                        <div class="achievement-progress-text">${current.toLocaleString()} / ${achievement.threshold.toLocaleString()}</div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="achievement-icon">${isUnlocked ? achievement.icon : '🔒'}</div>
+                    <div class="achievement-info">
+                        <div class="achievement-name">${achievement.name}</div>
+                        <div class="achievement-desc">${achievement.desc}</div>
+                        ${progressHtml}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function getAchievementProgress(achievement) {
+            // Extract current progress based on achievement type
+            if (achievement.id.startsWith('hunter')) return GameState.statistics.totalKills;
+            if (achievement.id.startsWith('crit')) return GameState.statistics.criticalHits;
+            if (achievement.id.startsWith('credits')) return GameState.statistics.totalCreditsEarned;
+            if (achievement.id.startsWith('mission')) return GameState.statistics.missionsCompleted;
+            if (achievement.id.startsWith('xp')) return GameState.statistics.totalXPEarned;
+            if (achievement.id === 'ratSlayer') return GameState.statistics.creaturesKilled.womprat || 0;
+            if (achievement.id === 'kraytSlayer') return GameState.statistics.creaturesKilled.krayt || 0;
+            if (achievement.id === 'tuskenTerror') return GameState.statistics.creaturesKilled.tusken || 0;
+            if (achievement.id === 'firstBlood') return GameState.statistics.totalKills;
+            return 0;
+        }
+
+        function toggleAchievementsWindow() {
+            const window = document.getElementById('achievements-window');
+            window.classList.toggle('active');
+            if (window.classList.contains('active')) {
+                renderAchievementsWindow();
+            }
+        }
+
+        function closeAchievementsWindow() {
+            document.getElementById('achievements-window').classList.remove('active');
+        }
+
+        // ==================== ABILITY TOOLTIPS ====================
+        function showAbilityTooltip(abilityId, slotElement) {
+            const ability = ABILITIES[abilityId];
+            if (!ability) return;
+
+            const tooltip = document.getElementById('ability-tooltip');
+            const nameEl = tooltip.querySelector('.tooltip-name');
+            const statsEl = tooltip.querySelector('.tooltip-stats');
+            const descEl = tooltip.querySelector('.tooltip-desc');
+
+            nameEl.textContent = ability.name;
+
+            // Build stats HTML
+            let statsHtml = '';
+            const skillBonuses = calculateSkillBonuses();
+
+            if (ability.damage) {
+                const bonusDamage = Math.floor(ability.damage * skillBonuses.damageBonus / 100);
+                const totalDamage = ability.damage + bonusDamage;
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Damage:</span><span class="tooltip-value damage">${totalDamage}${bonusDamage > 0 ? ` <span class="bonus">(+${bonusDamage})</span>` : ''}</span></div>`;
+            }
+            if (ability.healing) {
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Healing:</span><span class="tooltip-value healing">${ability.healing}</span></div>`;
+            }
+            if (ability.actionCost) {
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Action Cost:</span><span class="tooltip-value cost">${ability.actionCost}</span></div>`;
+            }
+            if (ability.mindCost) {
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Mind Cost:</span><span class="tooltip-value cost">${ability.mindCost}</span></div>`;
+            }
+            if (ability.cooldown) {
+                const cdSeconds = (ability.cooldown / 1000).toFixed(1);
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Cooldown:</span><span class="tooltip-value">${cdSeconds}s</span></div>`;
+            }
+            if (ability.range) {
+                statsHtml += `<div class="tooltip-row"><span class="tooltip-label">Range:</span><span class="tooltip-value">${ability.range}m</span></div>`;
+            }
+
+            // Add skill bonus info if applicable
+            if (ability.type === 'ranged' && (skillBonuses.damageBonus > 0 || skillBonuses.critBonus > 0)) {
+                statsHtml += `<div class="tooltip-row" style="margin-top: 8px; border-top: 1px solid #333; padding-top: 5px;"><span class="tooltip-label">Crit Chance:</span><span class="tooltip-value bonus">${(15 + skillBonuses.critBonus).toFixed(0)}%</span></div>`;
+            }
+
+            statsEl.innerHTML = statsHtml;
+
+            // Add description based on ability type
+            let desc = '';
+            switch (ability.type) {
+                case 'ranged': desc = 'Requires a target. Fires a blaster bolt at the enemy.'; break;
+                case 'heal': desc = 'Restore your own health using the Force.'; break;
+                case 'item': desc = 'Use a stim pack from your inventory.'; break;
+                case 'harvest': desc = 'Gather resources from nearby nodes.'; break;
+                case 'scan': desc = 'Analyze a targeted creature to reveal its stats.'; break;
+            }
+            descEl.textContent = desc;
+
+            tooltip.classList.add('active');
+        }
+
+        function hideAbilityTooltip() {
+            document.getElementById('ability-tooltip').classList.remove('active');
+        }
+
+        function initTooltips() {
+            document.querySelectorAll('.action-slot').forEach(slot => {
+                slot.addEventListener('mouseenter', () => {
+                    const abilityId = slot.dataset.ability;
+                    showAbilityTooltip(abilityId, slot);
+                });
+                slot.addEventListener('mouseleave', hideAbilityTooltip);
+            });
+        }
+
         // ==================== THREE.JS SETUP ====================
         let scene, camera, renderer, clock;
         let creatures = [];
@@ -2032,6 +2430,7 @@
                 // UI hotkeys
                 if (key === 'k') toggleSkillsWindow();
                 if (key === 'i') toggleInventoryWindow();
+                if (key === 'j') toggleAchievementsWindow();
                 if (key === 'e') interactWithNearby();
                 if (key === 'escape') closeAllWindows();
                 if (key === 'tab') {
@@ -2089,6 +2488,7 @@
             // UI button events
             document.getElementById('skills-button').addEventListener('click', toggleSkillsWindow);
             document.getElementById('inventory-button').addEventListener('click', toggleInventoryWindow);
+            document.getElementById('achievements-button').addEventListener('click', toggleAchievementsWindow);
 
             // Action bar clicks
             document.querySelectorAll('.action-slot').forEach(slot => {
@@ -2097,6 +2497,9 @@
                     useAbility(slotNum);
                 });
             });
+
+            // Initialize ability tooltips
+            initTooltips();
         }
 
         function setupUI() {
@@ -2477,23 +2880,60 @@
             // Track mission kills
             onCreatureKill(creature.userData.creatureType);
 
+            // Check for new achievements
+            checkAchievements();
+
             updateCreditsDisplay();
             renderInventory();
 
-            // Remove creature
+            // Clear target
             if (GameState.target === creature) {
                 clearTarget();
             }
-            scene.remove(creature);
+
+            // Remove from creatures array immediately (prevents further targeting)
             creatures = creatures.filter(c => c !== creature);
 
-            // Respawn after delay
-            setTimeout(() => {
-                const type = creature.userData.creatureType;
-                const x = (Math.random() - 0.5) * 400;
-                const z = (Math.random() - 0.5) * 400;
-                spawnCreature(type, x, z);
-            }, 30000);
+            // Death animation - fade out the creature
+            const deathDuration = 500; // ms
+            const startTime = Date.now();
+
+            // Make materials transparent for animation
+            creature.traverse(child => {
+                if (child.isMesh && child.material) {
+                    child.material.transparent = true;
+                }
+            });
+
+            const animateDeath = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(1, elapsed / deathDuration);
+
+                // Fade out and scale down
+                creature.traverse(child => {
+                    if (child.isMesh && child.material) {
+                        child.material.opacity = 1 - progress;
+                    }
+                });
+                creature.scale.setScalar(1 - progress * 0.3);
+                creature.position.y -= 0.02; // Sink into ground
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateDeath);
+                } else {
+                    // Remove from scene after animation
+                    scene.remove(creature);
+
+                    // Respawn after delay
+                    setTimeout(() => {
+                        const type = creature.userData.creatureType;
+                        const x = (Math.random() - 0.5) * 400;
+                        const z = (Math.random() - 0.5) * 400;
+                        spawnCreature(type, x, z);
+                    }, 30000);
+                }
+            };
+            requestAnimationFrame(animateDeath);
         }
 
         function harvestNearbyResource() {
@@ -3003,6 +3443,7 @@
             closeVendorWindow();
             closeCantinaUI();
             closeMissionWindow();
+            closeAchievementsWindow();
         }
 
         // ==================== MISSION SYSTEM ====================
@@ -3230,6 +3671,9 @@
             }, 300);
 
             updateCreditsDisplay();
+
+            // Check for new achievements
+            checkAchievements();
 
             // Clear mission
             GameState.activeMission = null;
