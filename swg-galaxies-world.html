@@ -910,10 +910,296 @@
             inCombat: false,
             isPointerLocked: false,
             activeMission: null,
-            missionProgress: {}
+            missionProgress: {},
+            statistics: {
+                totalKills: 0,
+                creaturesKilled: {},
+                totalCreditsEarned: 0,
+                totalXPEarned: 0,
+                missionsCompleted: 0,
+                criticalHits: 0,
+                deaths: 0,
+                totalPlayTime: 0
+            },
+            achievements: {}
         };
 
         const SKILL_XP_REQUIRED = 1000;
+        const SAVE_VERSION = 1;
+
+        // ==================== SAVE/LOAD SYSTEM ====================
+        function saveGame(silent = false) {
+            try {
+                const saveData = {
+                    version: SAVE_VERSION,
+                    timestamp: Date.now(),
+                    player: {
+                        health: GameState.player.health,
+                        maxHealth: GameState.player.maxHealth,
+                        action: GameState.player.action,
+                        maxAction: GameState.player.maxAction,
+                        mind: GameState.player.mind,
+                        maxMind: GameState.player.maxMind,
+                        credits: GameState.player.credits,
+                        level: GameState.player.level,
+                        position: {
+                            x: camera ? camera.position.x : 0,
+                            z: camera ? camera.position.z : 0
+                        }
+                    },
+                    inventory: GameState.inventory,
+                    resources: GameState.resources,
+                    skills: GameState.skills,
+                    skillXP: GameState.skillXP,
+                    statistics: GameState.statistics,
+                    achievements: GameState.achievements
+                };
+                localStorage.setItem('swg_tatooine_save', JSON.stringify(saveData));
+                if (!silent) addChatMessage('Game saved.', 'system');
+                return true;
+            } catch (e) {
+                console.error('Save failed:', e);
+                if (!silent) addChatMessage('Failed to save game!', 'system');
+                return false;
+            }
+        }
+
+        function loadGame() {
+            try {
+                const saved = localStorage.getItem('swg_tatooine_save');
+                if (!saved) return false;
+
+                const saveData = JSON.parse(saved);
+
+                // Restore player stats
+                Object.assign(GameState.player, saveData.player);
+                GameState.inventory = saveData.inventory || [];
+                GameState.resources = saveData.resources || GameState.resources;
+                GameState.skills = saveData.skills || GameState.skills;
+                GameState.skillXP = saveData.skillXP || GameState.skillXP;
+                GameState.statistics = saveData.statistics || GameState.statistics;
+                GameState.achievements = saveData.achievements || {};
+
+                return saveData;
+            } catch (e) {
+                console.error('Load failed:', e);
+                return false;
+            }
+        }
+
+        function clearSaveData() {
+            if (confirm('Delete all save data? This cannot be undone.')) {
+                localStorage.removeItem('swg_tatooine_save');
+                location.reload();
+            }
+        }
+
+        // ==================== AUDIO SYSTEM ====================
+        const AudioManager = {
+            ctx: null,
+            masterGain: null,
+            enabled: true,
+
+            init() {
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.4;
+                    this.masterGain.connect(this.ctx.destination);
+                } catch (e) {
+                    console.warn('Audio not supported');
+                }
+            },
+
+            resume() {
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            // Blaster shot - laser synth
+            playBlasterShot() {
+                if (!this.ctx || !this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            },
+
+            // Critical hit - enhanced blaster
+            playCritical() {
+                if (!this.ctx || !this.enabled) return;
+                this.playBlasterShot();
+                setTimeout(() => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = 1200;
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.08);
+                }, 40);
+            },
+
+            // Player hurt - low thud
+            playPlayerHurt() {
+                if (!this.ctx || !this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            },
+
+            // Enemy death - descending tone
+            playEnemyDeath() {
+                if (!this.ctx || !this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            },
+
+            // UI click
+            playUIClick() {
+                if (!this.ctx || !this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.04);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.04);
+            },
+
+            // Target acquired
+            playTargetAcquired() {
+                if (!this.ctx || !this.enabled) return;
+                [400, 600].forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'square';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                        osc.connect(gain);
+                        gain.connect(this.masterGain);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.08);
+                    }, i * 80);
+                });
+            },
+
+            // Loot jingle
+            playLootJingle() {
+                if (!this.ctx || !this.enabled) return;
+                [523, 659, 784].forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                        osc.connect(gain);
+                        gain.connect(this.masterGain);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.2);
+                    }, i * 60);
+                });
+            },
+
+            // Mission complete fanfare
+            playMissionComplete() {
+                if (!this.ctx || !this.enabled) return;
+                [392, 494, 587, 784].forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.masterGain);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.3);
+                    }, i * 100);
+                });
+            },
+
+            // Error buzz
+            playError() {
+                if (!this.ctx || !this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 150;
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+        };
+
+        // ==================== SKILL BONUSES SYSTEM ====================
+        function calculateSkillBonuses() {
+            let damageBonus = 0;
+            let critBonus = 0;
+
+            const marksman = GameState.skills.marksman;
+            if (marksman.rifleman1) damageBonus += 5;
+            if (marksman.rifleman2) damageBonus += 10;
+            if (marksman.rifleman3) damageBonus += 15;
+            if (marksman.rifleman4) { damageBonus += 20; critBonus += 5; }
+            if (marksman.pistoleer1) critBonus += 2;
+            if (marksman.pistoleer2) critBonus += 3;
+            if (marksman.pistoleer3) critBonus += 4;
+            if (marksman.pistoleer4) critBonus += 5;
+            if (marksman.carbineer1) damageBonus += 3;
+            if (marksman.carbineer2) damageBonus += 6;
+            if (marksman.carbineer3) damageBonus += 9;
+            if (marksman.carbineer4) damageBonus += 12;
+            if (marksman.master) { damageBonus += 25; critBonus += 10; }
+
+            const brawler = GameState.skills.brawler;
+            if (brawler.unarmed1) damageBonus += 2;
+            if (brawler.unarmed2) damageBonus += 4;
+            if (brawler.unarmed3) damageBonus += 6;
+            if (brawler.unarmed4) damageBonus += 8;
+            if (brawler.master) damageBonus += 15;
+
+            return { damageBonus, critBonus };
+        }
 
         // ==================== MISSION TEMPLATES ====================
         const MISSION_TEMPLATES = {
@@ -1132,13 +1418,24 @@
         let blasterBolts = [];
 
         function init() {
+            // Initialize audio system
+            AudioManager.init();
+
+            // Load saved game if exists
+            const savedGame = loadGame();
+
             // Scene setup
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xd4a574);
             scene.fog = new THREE.Fog(0xd4a574, 50, 500);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 2, 0);
+            // Restore position if saved
+            if (savedGame && savedGame.player.position) {
+                camera.position.set(savedGame.player.position.x, 2, savedGame.player.position.z);
+            } else {
+                camera.position.set(0, 2, 0);
+            }
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1173,12 +1470,25 @@
             setupControls();
             setupUI();
 
+            // Auto-save every 60 seconds
+            setInterval(() => saveGame(true), 60000);
+
+            // Save on page unload
+            window.addEventListener('beforeunload', () => saveGame(true));
+
             // Hide loading screen
             setTimeout(() => {
                 document.getElementById('loading-screen').style.display = 'none';
-                addChatMessage('Welcome to Tatooine! Use WASD to move, mouse to look.', 'system');
-                addChatMessage('Click on creatures to target them. Press 1-6 for abilities.', 'system');
-                addChatMessage('Visit Mos Eisley cantina for buffs, or hunt creatures for XP!', 'system');
+                if (savedGame) {
+                    addChatMessage('Welcome back to Tatooine! Your progress has been restored.', 'system');
+                    addChatMessage(`Credits: ${GameState.player.credits} | Kills: ${GameState.statistics.totalKills}`, 'system');
+                } else {
+                    addChatMessage('Welcome to Tatooine! Use WASD to move, mouse to look.', 'system');
+                    addChatMessage('Click on creatures to target them. Press 1-6 for abilities.', 'system');
+                    addChatMessage('Visit Mos Eisley cantina for buffs, or hunt creatures for XP!', 'system');
+                }
+                updateHAMBars();
+                updateCreditsDisplay();
             }, 2500);
 
             animate();
@@ -1728,7 +2038,14 @@
                     e.preventDefault();
                     cycleTarget();
                 }
+                if (key === 'f5') {
+                    e.preventDefault();
+                    saveGame();
+                }
             });
+
+            // Resume audio on first interaction (browser autoplay policy)
+            document.addEventListener('click', () => AudioManager.resume(), { once: true });
 
             document.addEventListener('keyup', (e) => {
                 const key = e.key.toLowerCase();
@@ -2057,13 +2374,25 @@
         }
 
         function dealDamage(target, baseDamage) {
-            // Calculate damage with some variance
-            const isCritical = Math.random() < 0.15; // 15% crit chance
-            let damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4));
-            if (isCritical) damage = Math.floor(damage * 1.5);
+            // Calculate damage with skill bonuses
+            const skillBonuses = calculateSkillBonuses();
+            const critChance = 0.15 + (skillBonuses.critBonus / 100);
+            const isCritical = Math.random() < critChance;
+            let damage = Math.floor(baseDamage * (1 + skillBonuses.damageBonus / 100) * (0.8 + Math.random() * 0.4));
+            if (isCritical) {
+                damage = Math.floor(damage * 1.5);
+                GameState.statistics.criticalHits++;
+            }
             target.userData.currentHealth -= damage;
 
             addChatMessage(`You hit ${target.userData.name} for ${damage} damage!${isCritical ? ' CRITICAL!' : ''}`, 'combat');
+
+            // Play audio
+            if (isCritical) {
+                AudioManager.playCritical();
+            } else {
+                AudioManager.playBlasterShot();
+            }
 
             // Floating damage number
             const targetPos = target.position.clone();
@@ -2090,6 +2419,15 @@
         function killCreature(creature) {
             addChatMessage(`You have defeated ${creature.userData.name}!`, 'combat');
 
+            // Play death sound and loot jingle
+            AudioManager.playEnemyDeath();
+            setTimeout(() => AudioManager.playLootJingle(), 200);
+
+            // Track statistics
+            GameState.statistics.totalKills++;
+            const creatureType = creature.userData.creatureType;
+            GameState.statistics.creaturesKilled[creatureType] = (GameState.statistics.creaturesKilled[creatureType] || 0) + 1;
+
             // Store creature position before removal for floating text
             const creaturePos = creature.position.clone();
             creaturePos.y += 2;
@@ -2098,6 +2436,7 @@
             const xpGain = creature.userData.xp;
             const xpBonus = getBuffValue('xpBonus');
             const totalXP = Math.floor(xpGain * (1 + xpBonus / 100));
+            GameState.statistics.totalXPEarned += totalXP;
             gainSkillXP('marksman', totalXP);
             addChatMessage(`You gained ${totalXP} combat experience.`, 'xp');
 
@@ -2866,6 +3205,13 @@
             const mission = GameState.activeMission;
             if (!mission) return;
 
+            // Play mission complete fanfare
+            AudioManager.playMissionComplete();
+
+            // Track statistics
+            GameState.statistics.missionsCompleted++;
+            GameState.statistics.totalCreditsEarned += mission.credits;
+
             // Grant rewards
             GameState.player.credits += mission.credits;
             gainSkillXP('scout', mission.xp);
@@ -2952,9 +3298,10 @@
                             playerDamagePos.y += 0.5;
                             createFloatingText(`-${damage}`, playerDamagePos, 'damage-taken');
 
-                            // Screen shake and hit flash
+                            // Screen shake, hit flash, and hurt sound
                             triggerScreenShake(damage / data.damage); // Intensity based on damage ratio
                             triggerHitFlash();
+                            AudioManager.playPlayerHurt();
 
                             if (GameState.player.health <= 0) {
                                 playerDeath();
