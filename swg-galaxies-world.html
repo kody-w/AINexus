@@ -1,0 +1,2451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Star Wars Galaxies - Tatooine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Lucida Console', monospace;
+            background: #000;
+            color: #ffd700;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        #game-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* SWG-style UI */
+        .swg-panel {
+            background: linear-gradient(180deg, rgba(20,30,50,0.95) 0%, rgba(10,15,25,0.98) 100%);
+            border: 2px solid #4a6fa5;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(74,111,165,0.5), inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Top HUD */
+        #top-hud {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        /* HAM Bars (Health/Action/Mind) */
+        #ham-bars {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            width: 250px;
+            z-index: 100;
+        }
+        .ham-bar {
+            height: 20px;
+            margin-bottom: 3px;
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+        .ham-bar-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #333;
+        }
+        .ham-bar-fill {
+            position: absolute;
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .ham-bar-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 11px;
+            line-height: 20px;
+            color: #fff;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #health-bar .ham-bar-fill { background: linear-gradient(180deg, #ff4444, #aa0000); }
+        #action-bar .ham-bar-fill { background: linear-gradient(180deg, #44ff44, #00aa00); }
+        #mind-bar .ham-bar-fill { background: linear-gradient(180deg, #4444ff, #0000aa); }
+
+        /* Target Frame */
+        #target-frame {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 250px;
+            padding: 10px;
+            display: none;
+            z-index: 100;
+        }
+        #target-frame.active { display: block; }
+        #target-name { font-size: 14px; color: #ffd700; margin-bottom: 5px; }
+        #target-health-bar {
+            height: 15px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #target-health-fill {
+            height: 100%;
+            background: linear-gradient(180deg, #ff6666, #cc0000);
+            transition: width 0.3s;
+        }
+
+        /* Action Bar */
+        #action-bar-ui {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+            z-index: 100;
+        }
+        .action-slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(20,30,50,0.9);
+            border: 2px solid #4a6fa5;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .action-slot:hover { border-color: #ffd700; transform: scale(1.1); }
+        .action-slot.on-cooldown { opacity: 0.5; }
+        .action-slot .cooldown-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0,0,0,0.7);
+            transition: height 0.1s;
+        }
+        .action-slot .keybind {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 10px;
+            color: #aaa;
+        }
+        .action-slot .ability-name {
+            position: absolute;
+            top: -20px;
+            font-size: 9px;
+            color: #ffd700;
+            white-space: nowrap;
+            display: none;
+        }
+        .action-slot:hover .ability-name { display: block; }
+
+        /* Chat/System Messages */
+        #chat-box {
+            position: fixed;
+            bottom: 80px;
+            left: 10px;
+            width: 400px;
+            height: 150px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .chat-message { margin-bottom: 3px; }
+        .chat-system { color: #ffcc00; }
+        .chat-combat { color: #ff6666; }
+        .chat-xp { color: #66ff66; }
+        .chat-loot { color: #66ccff; }
+        .chat-spatial { color: #ffffff; }
+
+        /* Credits Display */
+        #credits-display {
+            position: fixed;
+            top: 10px;
+            left: 270px;
+            padding: 5px 15px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #credits-display span { color: #ffd700; }
+
+        /* Profession/Skills Button */
+        #skills-button {
+            position: fixed;
+            top: 80px;
+            left: 10px;
+            padding: 8px 15px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #skills-button:hover { border-color: #ffd700; }
+
+        /* Skills Window */
+        #skills-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 500px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+        }
+        #skills-window.active { display: block; }
+        #skills-window h2 { color: #ffd700; margin-bottom: 15px; text-align: center; }
+        .skill-tree {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .skill-box {
+            padding: 10px;
+            text-align: center;
+            border: 2px solid #333;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .skill-box.unlocked { border-color: #4a6fa5; background: rgba(74,111,165,0.3); }
+        .skill-box.available { border-color: #ffd700; }
+        .skill-box.locked { opacity: 0.5; }
+        .skill-box:hover { transform: scale(1.05); }
+        .skill-name { font-size: 11px; color: #ffd700; }
+        .skill-xp { font-size: 10px; color: #aaa; margin-top: 5px; }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #aa0000;
+            border: none;
+            color: #fff;
+            width: 25px;
+            height: 25px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        /* Inventory Window */
+        #inventory-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 450px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+        }
+        #inventory-window.active { display: block; }
+        #inventory-window h2 { color: #ffd700; margin-bottom: 15px; }
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+        }
+        .inv-slot {
+            width: 40px;
+            height: 40px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid #4a6fa5;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .inv-slot:hover { border-color: #ffd700; }
+        .inv-slot.has-item { background: rgba(74,111,165,0.3); }
+
+        /* Inventory Button */
+        #inventory-button {
+            position: fixed;
+            top: 115px;
+            left: 10px;
+            padding: 8px 15px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        /* Crafting Window */
+        #crafting-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            height: 400px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+        }
+        #crafting-window.active { display: block; }
+        .recipe-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .recipe-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .recipe-item:hover { background: rgba(74,111,165,0.3); }
+        .recipe-item.can-craft { color: #66ff66; }
+        .recipe-item.cannot-craft { color: #666; }
+
+        /* Interaction Prompt */
+        #interact-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 16px;
+            display: none;
+            z-index: 150;
+        }
+        #interact-prompt.active { display: block; }
+
+        /* Buff Display */
+        #buff-display {
+            position: fixed;
+            top: 90px;
+            left: 270px;
+            display: flex;
+            gap: 5px;
+            z-index: 100;
+        }
+        .buff-icon {
+            width: 30px;
+            height: 30px;
+            background: rgba(20,30,50,0.9);
+            border: 1px solid #4a6fa5;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            position: relative;
+        }
+        .buff-timer {
+            position: absolute;
+            bottom: -12px;
+            font-size: 9px;
+            color: #aaa;
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        #loading-screen h1 {
+            font-size: 48px;
+            color: #ffd700;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255,215,0,0.5);
+        }
+        #loading-screen p { color: #4a6fa5; font-size: 18px; }
+        .loading-bar {
+            width: 300px;
+            height: 10px;
+            background: #222;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .loading-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a6fa5, #ffd700);
+            animation: loading 2s ease-in-out;
+        }
+        @keyframes loading { from { width: 0; } to { width: 100%; } }
+
+        /* Minimap */
+        #minimap {
+            position: fixed;
+            bottom: 80px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            overflow: hidden;
+            z-index: 100;
+        }
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Location Display */
+        #location-display {
+            position: fixed;
+            bottom: 240px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 11px;
+            z-index: 100;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 50;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,215,0,0.7);
+        }
+        #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        #crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+        /* Vendor Window */
+        #vendor-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            height: 400px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+        }
+        #vendor-window.active { display: block; }
+        .vendor-items { max-height: 300px; overflow-y: auto; }
+        .vendor-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .vendor-item button {
+            background: #4a6fa5;
+            border: none;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .vendor-item button:hover { background: #5a7fb5; }
+        .vendor-item button:disabled { background: #333; cursor: not-allowed; }
+
+        /* Cantina Buff UI */
+        #cantina-ui {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+            text-align: center;
+        }
+        #cantina-ui.active { display: block; }
+        #cantina-ui h2 { color: #ffd700; margin-bottom: 15px; }
+        .entertainer-list { margin: 20px 0; }
+        .entertainer-item {
+            padding: 10px;
+            border: 1px solid #4a6fa5;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .watch-btn {
+            background: #4a6fa5;
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .watch-btn:hover { background: #5a7fb5; }
+        .buff-progress {
+            width: 100%;
+            height: 10px;
+            background: #222;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .buff-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff, #00ffff);
+            transition: width 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <h1>STAR WARS GALAXIES</h1>
+        <p>Loading Tatooine...</p>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+    </div>
+
+    <div id="game-container"></div>
+    <div id="crosshair"></div>
+
+    <!-- HAM Bars -->
+    <div id="ham-bars" class="swg-panel">
+        <div id="health-bar" class="ham-bar">
+            <div class="ham-bar-bg"></div>
+            <div class="ham-bar-fill" style="width: 100%"></div>
+            <div class="ham-bar-text">Health: 1000/1000</div>
+        </div>
+        <div id="action-bar" class="ham-bar">
+            <div class="ham-bar-bg"></div>
+            <div class="ham-bar-fill" style="width: 100%"></div>
+            <div class="ham-bar-text">Action: 500/500</div>
+        </div>
+        <div id="mind-bar" class="ham-bar">
+            <div class="ham-bar-bg"></div>
+            <div class="ham-bar-fill" style="width: 100%"></div>
+            <div class="ham-bar-text">Mind: 500/500</div>
+        </div>
+    </div>
+
+    <!-- Credits -->
+    <div id="credits-display" class="swg-panel">Credits: <span id="credits-amount">1000</span></div>
+
+    <!-- Buff Display -->
+    <div id="buff-display"></div>
+
+    <!-- Target Frame -->
+    <div id="target-frame" class="swg-panel">
+        <div id="target-name">Target Name</div>
+        <div id="target-level">Level 1</div>
+        <div id="target-health-bar"><div id="target-health-fill" style="width: 100%"></div></div>
+    </div>
+
+    <!-- Skills Button -->
+    <div id="skills-button" class="swg-panel">Skills (K)</div>
+
+    <!-- Inventory Button -->
+    <div id="inventory-button" class="swg-panel">Inventory (I)</div>
+
+    <!-- Action Bar -->
+    <div id="action-bar-ui">
+        <div class="action-slot" data-slot="1" data-ability="rangedShot">
+            <span class="ability-name">Ranged Shot</span>
+            🔫
+            <span class="keybind">1</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+        <div class="action-slot" data-slot="2" data-ability="burstFire">
+            <span class="ability-name">Burst Fire</span>
+            💥
+            <span class="keybind">2</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+        <div class="action-slot" data-slot="3" data-ability="heal">
+            <span class="ability-name">Heal</span>
+            💚
+            <span class="keybind">3</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+        <div class="action-slot" data-slot="4" data-ability="stimpak">
+            <span class="ability-name">Stim Pack</span>
+            💉
+            <span class="keybind">4</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+        <div class="action-slot" data-slot="5" data-ability="harvest">
+            <span class="ability-name">Harvest</span>
+            ⛏️
+            <span class="keybind">5</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+        <div class="action-slot" data-slot="6" data-ability="scan">
+            <span class="ability-name">Creature Scan</span>
+            🔍
+            <span class="keybind">6</span>
+            <div class="cooldown-overlay" style="height: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Chat Box -->
+    <div id="chat-box" class="swg-panel"></div>
+
+    <!-- Minimap -->
+    <div id="minimap" class="swg-panel">
+        <canvas id="minimap-canvas" width="150" height="150"></canvas>
+    </div>
+
+    <!-- Location Display -->
+    <div id="location-display" class="swg-panel">Tatooine (0, 0)</div>
+
+    <!-- Interaction Prompt -->
+    <div id="interact-prompt" class="swg-panel">[E] to interact</div>
+
+    <!-- Skills Window -->
+    <div id="skills-window" class="swg-panel">
+        <button class="close-btn" onclick="closeSkillsWindow()">X</button>
+        <h2>Skill Trees</h2>
+        <div id="profession-tabs" style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button onclick="showProfession('marksman')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Marksman</button>
+            <button onclick="showProfession('brawler')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Brawler</button>
+            <button onclick="showProfession('artisan')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Artisan</button>
+            <button onclick="showProfession('medic')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Medic</button>
+            <button onclick="showProfession('entertainer')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Entertainer</button>
+            <button onclick="showProfession('scout')" class="swg-panel" style="padding: 5px 15px; cursor: pointer;">Scout</button>
+        </div>
+        <div id="skill-tree-container" class="skill-tree"></div>
+    </div>
+
+    <!-- Inventory Window -->
+    <div id="inventory-window" class="swg-panel">
+        <button class="close-btn" onclick="closeInventoryWindow()">X</button>
+        <h2>Inventory</h2>
+        <div id="inventory-grid" class="inventory-grid"></div>
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
+            <h3 style="color: #ffd700; margin-bottom: 10px;">Resources</h3>
+            <div id="resources-display" style="font-size: 12px;"></div>
+        </div>
+    </div>
+
+    <!-- Crafting Window -->
+    <div id="crafting-window" class="swg-panel">
+        <button class="close-btn" onclick="closeCraftingWindow()">X</button>
+        <h2>Crafting Station</h2>
+        <div id="recipe-list" class="recipe-list"></div>
+    </div>
+
+    <!-- Vendor Window -->
+    <div id="vendor-window" class="swg-panel">
+        <button class="close-btn" onclick="closeVendorWindow()">X</button>
+        <h2 id="vendor-name">Vendor</h2>
+        <div id="vendor-items" class="vendor-items"></div>
+    </div>
+
+    <!-- Cantina UI -->
+    <div id="cantina-ui" class="swg-panel">
+        <button class="close-btn" onclick="closeCantinaUI()">X</button>
+        <h2>Chalmun's Cantina</h2>
+        <p style="color: #aaa; margin-bottom: 15px;">Watch entertainers to receive buffs!</p>
+        <div class="entertainer-list">
+            <div class="entertainer-item">
+                <div>🎭 Figrin D'an - Musician</div>
+                <div style="color: #66ff66; font-size: 12px;">+50 Action Regen, +25% XP Bonus</div>
+                <button class="watch-btn" onclick="watchEntertainer('musician')">Watch Performance</button>
+            </div>
+            <div class="entertainer-item">
+                <div>💃 Oola - Dancer</div>
+                <div style="color: #66ff66; font-size: 12px;">+50 Mind Regen, +10% Combat Speed</div>
+                <button class="watch-btn" onclick="watchEntertainer('dancer')">Watch Performance</button>
+            </div>
+        </div>
+        <div id="watching-progress" style="display: none;">
+            <p style="color: #ffd700;">Watching performance...</p>
+            <div class="buff-progress"><div class="buff-progress-fill" style="width: 0%"></div></div>
+            <p id="buff-countdown" style="font-size: 12px; color: #aaa; margin-top: 5px;">Building buff: 0%</p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ==================== GAME STATE ====================
+        const GameState = {
+            player: {
+                health: 1000, maxHealth: 1000,
+                action: 500, maxAction: 500,
+                mind: 500, maxMind: 500,
+                credits: 1000,
+                level: 1,
+                position: { x: 0, y: 0, z: 0 }
+            },
+            target: null,
+            inventory: [],
+            resources: {
+                iron: 0, copper: 0, steel: 0,
+                hide: 0, bone: 0, meat: 0,
+                chemicals: 0, flora: 0
+            },
+            skills: {
+                marksman: { novice: true, rifleman1: false, rifleman2: false, rifleman3: false, rifleman4: false, pistoleer1: false, pistoleer2: false, pistoleer3: false, pistoleer4: false, carbineer1: false, carbineer2: false, carbineer3: false, carbineer4: false, master: false },
+                brawler: { novice: false, unarmed1: false, unarmed2: false, unarmed3: false, unarmed4: false, onehand1: false, onehand2: false, onehand3: false, onehand4: false, twohand1: false, twohand2: false, twohand3: false, twohand4: false, master: false },
+                artisan: { novice: true, engineering1: false, engineering2: false, engineering3: false, engineering4: false, domestic1: false, domestic2: false, domestic3: false, domestic4: false, business1: false, business2: false, business3: false, business4: false, master: false },
+                medic: { novice: false, firstaid1: false, firstaid2: false, firstaid3: false, firstaid4: false, diagnostics1: false, diagnostics2: false, diagnostics3: false, diagnostics4: false, pharmacy1: false, pharmacy2: false, pharmacy3: false, pharmacy4: false, master: false },
+                entertainer: { novice: false, dancing1: false, dancing2: false, dancing3: false, dancing4: false, music1: false, music2: false, music3: false, music4: false, image1: false, image2: false, image3: false, image4: false, master: false },
+                scout: { novice: true, exploration1: false, exploration2: false, exploration3: false, exploration4: false, hunting1: false, hunting2: false, hunting3: false, hunting4: false, survival1: false, survival2: false, survival3: false, survival4: false, master: false }
+            },
+            skillXP: {
+                marksman: 0, brawler: 0, artisan: 0, medic: 0, entertainer: 0, scout: 0
+            },
+            buffs: [],
+            cooldowns: {},
+            inCombat: false,
+            isPointerLocked: false
+        };
+
+        const SKILL_XP_REQUIRED = 1000;
+
+        // ==================== SKILL DEFINITIONS ====================
+        const SKILL_TREES = {
+            marksman: {
+                name: 'Marksman',
+                skills: [
+                    { id: 'novice', name: 'Novice Marksman', row: 0, col: 1.5, requires: null },
+                    { id: 'rifleman1', name: 'Rifles I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'rifleman2', name: 'Rifles II', row: 2, col: 0, requires: 'rifleman1' },
+                    { id: 'rifleman3', name: 'Rifles III', row: 3, col: 0, requires: 'rifleman2' },
+                    { id: 'rifleman4', name: 'Rifles IV', row: 4, col: 0, requires: 'rifleman3' },
+                    { id: 'pistoleer1', name: 'Pistols I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'pistoleer2', name: 'Pistols II', row: 2, col: 1, requires: 'pistoleer1' },
+                    { id: 'pistoleer3', name: 'Pistols III', row: 3, col: 1, requires: 'pistoleer2' },
+                    { id: 'pistoleer4', name: 'Pistols IV', row: 4, col: 1, requires: 'pistoleer3' },
+                    { id: 'carbineer1', name: 'Carbines I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'carbineer2', name: 'Carbines II', row: 2, col: 2, requires: 'carbineer1' },
+                    { id: 'carbineer3', name: 'Carbines III', row: 3, col: 2, requires: 'carbineer2' },
+                    { id: 'carbineer4', name: 'Carbines IV', row: 4, col: 2, requires: 'carbineer3' },
+                    { id: 'master', name: 'Master Marksman', row: 5, col: 1, requires: ['rifleman4', 'pistoleer4', 'carbineer4'] }
+                ]
+            },
+            brawler: {
+                name: 'Brawler',
+                skills: [
+                    { id: 'novice', name: 'Novice Brawler', row: 0, col: 1.5, requires: null },
+                    { id: 'unarmed1', name: 'Unarmed I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'unarmed2', name: 'Unarmed II', row: 2, col: 0, requires: 'unarmed1' },
+                    { id: 'unarmed3', name: 'Unarmed III', row: 3, col: 0, requires: 'unarmed2' },
+                    { id: 'unarmed4', name: 'Unarmed IV', row: 4, col: 0, requires: 'unarmed3' },
+                    { id: 'onehand1', name: 'One-Hand I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'onehand2', name: 'One-Hand II', row: 2, col: 1, requires: 'onehand1' },
+                    { id: 'onehand3', name: 'One-Hand III', row: 3, col: 1, requires: 'onehand2' },
+                    { id: 'onehand4', name: 'One-Hand IV', row: 4, col: 1, requires: 'onehand3' },
+                    { id: 'twohand1', name: 'Two-Hand I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'twohand2', name: 'Two-Hand II', row: 2, col: 2, requires: 'twohand1' },
+                    { id: 'twohand3', name: 'Two-Hand III', row: 3, col: 2, requires: 'twohand2' },
+                    { id: 'twohand4', name: 'Two-Hand IV', row: 4, col: 2, requires: 'twohand3' },
+                    { id: 'master', name: 'Master Brawler', row: 5, col: 1, requires: ['unarmed4', 'onehand4', 'twohand4'] }
+                ]
+            },
+            artisan: {
+                name: 'Artisan',
+                skills: [
+                    { id: 'novice', name: 'Novice Artisan', row: 0, col: 1.5, requires: null },
+                    { id: 'engineering1', name: 'Engineering I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'engineering2', name: 'Engineering II', row: 2, col: 0, requires: 'engineering1' },
+                    { id: 'engineering3', name: 'Engineering III', row: 3, col: 0, requires: 'engineering2' },
+                    { id: 'engineering4', name: 'Engineering IV', row: 4, col: 0, requires: 'engineering3' },
+                    { id: 'domestic1', name: 'Domestic I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'domestic2', name: 'Domestic II', row: 2, col: 1, requires: 'domestic1' },
+                    { id: 'domestic3', name: 'Domestic III', row: 3, col: 1, requires: 'domestic2' },
+                    { id: 'domestic4', name: 'Domestic IV', row: 4, col: 1, requires: 'domestic3' },
+                    { id: 'business1', name: 'Business I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'business2', name: 'Business II', row: 2, col: 2, requires: 'business1' },
+                    { id: 'business3', name: 'Business III', row: 3, col: 2, requires: 'business2' },
+                    { id: 'business4', name: 'Business IV', row: 4, col: 2, requires: 'business3' },
+                    { id: 'master', name: 'Master Artisan', row: 5, col: 1, requires: ['engineering4', 'domestic4', 'business4'] }
+                ]
+            },
+            medic: {
+                name: 'Medic',
+                skills: [
+                    { id: 'novice', name: 'Novice Medic', row: 0, col: 1.5, requires: null },
+                    { id: 'firstaid1', name: 'First Aid I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'firstaid2', name: 'First Aid II', row: 2, col: 0, requires: 'firstaid1' },
+                    { id: 'firstaid3', name: 'First Aid III', row: 3, col: 0, requires: 'firstaid2' },
+                    { id: 'firstaid4', name: 'First Aid IV', row: 4, col: 0, requires: 'firstaid3' },
+                    { id: 'diagnostics1', name: 'Diagnostics I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'diagnostics2', name: 'Diagnostics II', row: 2, col: 1, requires: 'diagnostics1' },
+                    { id: 'diagnostics3', name: 'Diagnostics III', row: 3, col: 1, requires: 'diagnostics2' },
+                    { id: 'diagnostics4', name: 'Diagnostics IV', row: 4, col: 1, requires: 'diagnostics3' },
+                    { id: 'pharmacy1', name: 'Pharmacology I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'pharmacy2', name: 'Pharmacology II', row: 2, col: 2, requires: 'pharmacy1' },
+                    { id: 'pharmacy3', name: 'Pharmacology III', row: 3, col: 2, requires: 'pharmacy2' },
+                    { id: 'pharmacy4', name: 'Pharmacology IV', row: 4, col: 2, requires: 'pharmacy3' },
+                    { id: 'master', name: 'Master Medic', row: 5, col: 1, requires: ['firstaid4', 'diagnostics4', 'pharmacy4'] }
+                ]
+            },
+            entertainer: {
+                name: 'Entertainer',
+                skills: [
+                    { id: 'novice', name: 'Novice Entertainer', row: 0, col: 1.5, requires: null },
+                    { id: 'dancing1', name: 'Dancing I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'dancing2', name: 'Dancing II', row: 2, col: 0, requires: 'dancing1' },
+                    { id: 'dancing3', name: 'Dancing III', row: 3, col: 0, requires: 'dancing2' },
+                    { id: 'dancing4', name: 'Dancing IV', row: 4, col: 0, requires: 'dancing3' },
+                    { id: 'music1', name: 'Musician I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'music2', name: 'Musician II', row: 2, col: 1, requires: 'music1' },
+                    { id: 'music3', name: 'Musician III', row: 3, col: 1, requires: 'music2' },
+                    { id: 'music4', name: 'Musician IV', row: 4, col: 1, requires: 'music3' },
+                    { id: 'image1', name: 'Image Design I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'image2', name: 'Image Design II', row: 2, col: 2, requires: 'image1' },
+                    { id: 'image3', name: 'Image Design III', row: 3, col: 2, requires: 'image2' },
+                    { id: 'image4', name: 'Image Design IV', row: 4, col: 2, requires: 'image3' },
+                    { id: 'master', name: 'Master Entertainer', row: 5, col: 1, requires: ['dancing4', 'music4', 'image4'] }
+                ]
+            },
+            scout: {
+                name: 'Scout',
+                skills: [
+                    { id: 'novice', name: 'Novice Scout', row: 0, col: 1.5, requires: null },
+                    { id: 'exploration1', name: 'Exploration I', row: 1, col: 0, requires: 'novice' },
+                    { id: 'exploration2', name: 'Exploration II', row: 2, col: 0, requires: 'exploration1' },
+                    { id: 'exploration3', name: 'Exploration III', row: 3, col: 0, requires: 'exploration2' },
+                    { id: 'exploration4', name: 'Exploration IV', row: 4, col: 0, requires: 'exploration3' },
+                    { id: 'hunting1', name: 'Hunting I', row: 1, col: 1, requires: 'novice' },
+                    { id: 'hunting2', name: 'Hunting II', row: 2, col: 1, requires: 'hunting1' },
+                    { id: 'hunting3', name: 'Hunting III', row: 3, col: 1, requires: 'hunting2' },
+                    { id: 'hunting4', name: 'Hunting IV', row: 4, col: 1, requires: 'hunting3' },
+                    { id: 'survival1', name: 'Survival I', row: 1, col: 2, requires: 'novice' },
+                    { id: 'survival2', name: 'Survival II', row: 2, col: 2, requires: 'survival1' },
+                    { id: 'survival3', name: 'Survival III', row: 3, col: 2, requires: 'survival2' },
+                    { id: 'survival4', name: 'Survival IV', row: 4, col: 2, requires: 'survival3' },
+                    { id: 'master', name: 'Master Scout', row: 5, col: 1, requires: ['exploration4', 'hunting4', 'survival4'] }
+                ]
+            }
+        };
+
+        // ==================== ABILITIES ====================
+        const ABILITIES = {
+            rangedShot: { name: 'Ranged Shot', damage: 50, actionCost: 20, cooldown: 1000, range: 50, type: 'ranged' },
+            burstFire: { name: 'Burst Fire', damage: 120, actionCost: 60, cooldown: 5000, range: 40, type: 'ranged' },
+            heal: { name: 'Heal', healing: 150, mindCost: 50, cooldown: 8000, type: 'heal' },
+            stimpak: { name: 'Stim Pack', healing: 300, cooldown: 30000, type: 'item', requires: 'stimpak' },
+            harvest: { name: 'Harvest', cooldown: 3000, type: 'harvest' },
+            scan: { name: 'Creature Scan', cooldown: 5000, type: 'scan', range: 30 }
+        };
+
+        // ==================== CREATURES ====================
+        const CREATURE_TYPES = {
+            womprat: { name: 'Womp Rat', health: 150, damage: 15, xp: 50, level: 1, loot: ['hide', 'bone', 'meat'], credits: [5, 15], icon: '🐀' },
+            dewback: { name: 'Dewback', health: 400, damage: 35, xp: 150, level: 5, loot: ['hide', 'bone', 'meat'], credits: [20, 50], icon: '🦎' },
+            bantha: { name: 'Bantha', health: 800, damage: 50, xp: 300, level: 10, loot: ['hide', 'bone', 'meat', 'hide'], credits: [50, 100], icon: '🦬' },
+            tusken: { name: 'Tusken Raider', health: 350, damage: 45, xp: 200, level: 8, loot: ['iron', 'credits'], credits: [30, 80], icon: '👤' },
+            krayt: { name: 'Krayt Dragon', health: 5000, damage: 200, xp: 2000, level: 50, loot: ['bone', 'bone', 'bone', 'kraytPearl'], credits: [500, 1000], icon: '🐉', boss: true },
+            jawa: { name: 'Jawa Scavenger', health: 100, damage: 10, xp: 30, level: 1, loot: ['copper', 'iron'], credits: [10, 30], icon: '🧙', neutral: true },
+            rontoHerd: { name: 'Ronto', health: 600, damage: 40, xp: 180, level: 7, loot: ['hide', 'meat', 'bone'], credits: [40, 80], icon: '🦒' }
+        };
+
+        // ==================== RECIPES ====================
+        const RECIPES = [
+            { id: 'basicBlaster', name: 'Basic Blaster', materials: { iron: 5, copper: 3 }, skill: 'artisan', result: { type: 'weapon', damage: 30 } },
+            { id: 'stimpak', name: 'Stim Pack', materials: { chemicals: 3, flora: 2 }, skill: 'artisan', result: { type: 'consumable', healing: 300 } },
+            { id: 'medpack', name: 'Med Pack', materials: { chemicals: 5, flora: 3 }, skill: 'medic', result: { type: 'consumable', healing: 500 } },
+            { id: 'compositeArmor', name: 'Composite Armor', materials: { steel: 10, hide: 5, bone: 3 }, skill: 'artisan', result: { type: 'armor', defense: 50 } },
+            { id: 'surveyDevice', name: 'Survey Device', materials: { copper: 5, iron: 3 }, skill: 'artisan', result: { type: 'tool' } }
+        ];
+
+        // ==================== VENDORS ====================
+        const VENDORS = {
+            weaponVendor: {
+                name: 'Wuher\'s Arms Dealer',
+                items: [
+                    { name: 'CDEF Pistol', price: 500, type: 'weapon', damage: 40 },
+                    { name: 'DL-44 Heavy Blaster', price: 1500, type: 'weapon', damage: 70 },
+                    { name: 'E-11 Blaster Rifle', price: 2500, type: 'weapon', damage: 100 },
+                    { name: 'Bowcaster', price: 5000, type: 'weapon', damage: 150 }
+                ]
+            },
+            armorVendor: {
+                name: 'Desert Outfitters',
+                items: [
+                    { name: 'Padded Armor', price: 300, type: 'armor', defense: 20 },
+                    { name: 'Battle Armor', price: 1000, type: 'armor', defense: 50 },
+                    { name: 'Composite Armor', price: 3000, type: 'armor', defense: 100 }
+                ]
+            },
+            generalVendor: {
+                name: 'Mos Eisley General Store',
+                items: [
+                    { name: 'Stim Pack', price: 50, type: 'consumable', healing: 300 },
+                    { name: 'Survey Device', price: 200, type: 'tool' },
+                    { name: 'Mineral Survey Tool', price: 500, type: 'tool' },
+                    { name: 'Creature Trap', price: 300, type: 'tool' }
+                ]
+            }
+        };
+
+        // ==================== THREE.JS SETUP ====================
+        let scene, camera, renderer, clock;
+        let creatures = [];
+        let resourceNodes = [];
+        let structures = [];
+        let npcs = [];
+        const keys = { w: false, a: false, s: false, d: false, shift: false };
+        let rotation = { x: 0, y: 0 };
+        let interactableNear = null;
+
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd4a574);
+            scene.fog = new THREE.Fog(0xd4a574, 50, 500);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // Lighting - Tatooine twin suns
+            const sun1 = new THREE.DirectionalLight(0xffffcc, 1.0);
+            sun1.position.set(50, 100, 50);
+            sun1.castShadow = true;
+            scene.add(sun1);
+
+            const sun2 = new THREE.DirectionalLight(0xffccaa, 0.6);
+            sun2.position.set(-30, 80, -20);
+            scene.add(sun2);
+
+            const ambient = new THREE.AmbientLight(0xffd4aa, 0.4);
+            scene.add(ambient);
+
+            // Create world
+            createTerrain();
+            createMosEisley();
+            createCantina();
+            createStarport();
+            createMoistureFarms();
+            createKraytSkeleton();
+            spawnCreatures();
+            spawnResourceNodes();
+
+            setupControls();
+            setupUI();
+
+            // Hide loading screen
+            setTimeout(() => {
+                document.getElementById('loading-screen').style.display = 'none';
+                addChatMessage('Welcome to Tatooine! Use WASD to move, mouse to look.', 'system');
+                addChatMessage('Click on creatures to target them. Press 1-6 for abilities.', 'system');
+                addChatMessage('Visit Mos Eisley cantina for buffs, or hunt creatures for XP!', 'system');
+            }, 2500);
+
+            animate();
+        }
+
+        function createTerrain() {
+            // Sand ground
+            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0xd4a574,
+                roughness: 1,
+                metalness: 0
+            });
+
+            // Add some height variation for dunes
+            const positions = groundGeometry.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                const x = positions[i];
+                const z = positions[i + 1];
+                positions[i + 2] = Math.sin(x * 0.02) * 3 + Math.cos(z * 0.02) * 3 + Math.random() * 0.5;
+            }
+            groundGeometry.computeVertexNormals();
+
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Rock formations
+            for (let i = 0; i < 30; i++) {
+                const rockGeometry = new THREE.DodecahedronGeometry(3 + Math.random() * 5);
+                const rockMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8b7355,
+                    roughness: 0.9
+                });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.position.set(
+                    (Math.random() - 0.5) * 800,
+                    Math.random() * 3,
+                    (Math.random() - 0.5) * 800
+                );
+                rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                rock.scale.y = 0.5 + Math.random() * 0.5;
+                rock.castShadow = true;
+                scene.add(rock);
+            }
+
+            // Twin suns in sky
+            const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff99 });
+            const skybox1 = new THREE.Mesh(sunGeometry, sunMaterial);
+            skybox1.position.set(200, 300, 200);
+            scene.add(skybox1);
+
+            const sun2Mesh = new THREE.Mesh(sunGeometry, new THREE.MeshBasicMaterial({ color: 0xffaa77 }));
+            sun2Mesh.position.set(150, 280, 180);
+            sun2Mesh.scale.set(0.7, 0.7, 0.7);
+            scene.add(sun2Mesh);
+        }
+
+        function createMosEisley() {
+            const cityCenter = { x: 50, z: 50 };
+
+            // Create dome buildings typical of Mos Eisley
+            for (let i = 0; i < 15; i++) {
+                const angle = (i / 15) * Math.PI * 2;
+                const radius = 20 + Math.random() * 30;
+                const x = cityCenter.x + Math.cos(angle) * radius;
+                const z = cityCenter.z + Math.sin(angle) * radius;
+
+                createDomeBuilding(x, z, 3 + Math.random() * 4);
+            }
+
+            // Central marketplace
+            const marketGeometry = new THREE.CylinderGeometry(8, 10, 3, 8);
+            const marketMaterial = new THREE.MeshStandardMaterial({ color: 0xc4a46a });
+            const market = new THREE.Mesh(marketGeometry, marketMaterial);
+            market.position.set(cityCenter.x, 1.5, cityCenter.z);
+            market.castShadow = true;
+            scene.add(market);
+
+            // Add vendors
+            createVendorNPC(cityCenter.x + 5, cityCenter.z, 'weaponVendor');
+            createVendorNPC(cityCenter.x - 5, cityCenter.z, 'armorVendor');
+            createVendorNPC(cityCenter.x, cityCenter.z + 5, 'generalVendor');
+        }
+
+        function createDomeBuilding(x, z, height) {
+            const group = new THREE.Group();
+
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(4, 5, height, 16);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0xd4b896 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = height / 2;
+            base.castShadow = true;
+            group.add(base);
+
+            // Dome
+            const domeGeometry = new THREE.SphereGeometry(4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const dome = new THREE.Mesh(domeGeometry, baseMaterial);
+            dome.position.y = height;
+            dome.castShadow = true;
+            group.add(dome);
+
+            // Door
+            const doorGeometry = new THREE.BoxGeometry(1.5, 2.5, 0.3);
+            const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3520 });
+            const door = new THREE.Mesh(doorGeometry, doorMaterial);
+            door.position.set(0, 1.25, 4.8);
+            group.add(door);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            structures.push(group);
+        }
+
+        function createCantina() {
+            const cantinaPos = { x: 70, z: 40 };
+
+            // Main cantina building - larger dome
+            const group = new THREE.Group();
+
+            const baseGeometry = new THREE.CylinderGeometry(10, 12, 6, 16);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0xc4a46a });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 3;
+            base.castShadow = true;
+            group.add(base);
+
+            const domeGeometry = new THREE.SphereGeometry(10, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const dome = new THREE.Mesh(domeGeometry, baseMaterial);
+            dome.position.y = 6;
+            dome.castShadow = true;
+            group.add(dome);
+
+            // Cantina sign
+            const signGeometry = new THREE.BoxGeometry(8, 2, 0.3);
+            const signMaterial = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+            const sign = new THREE.Mesh(signGeometry, signMaterial);
+            sign.position.set(0, 10, 10);
+            group.add(sign);
+
+            // Entrance marker
+            const entranceLight = new THREE.PointLight(0xff6600, 1, 15);
+            entranceLight.position.set(0, 4, 12);
+            group.add(entranceLight);
+
+            group.position.set(cantinaPos.x, 0, cantinaPos.z);
+            group.userData = { type: 'cantina', name: "Chalmun's Cantina" };
+            scene.add(group);
+            structures.push(group);
+
+            // Create cantina entrance hitbox
+            const hitboxGeometry = new THREE.BoxGeometry(5, 5, 5);
+            const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
+            const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+            hitbox.position.set(cantinaPos.x, 2, cantinaPos.z + 12);
+            hitbox.userData = { type: 'cantina', interactable: true, name: "Chalmun's Cantina" };
+            scene.add(hitbox);
+            npcs.push(hitbox);
+        }
+
+        function createStarport() {
+            const starportPos = { x: -50, z: 30 };
+
+            const group = new THREE.Group();
+
+            // Main hangar
+            const hangarGeometry = new THREE.BoxGeometry(40, 15, 30);
+            const hangarMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+            const hangar = new THREE.Mesh(hangarGeometry, hangarMaterial);
+            hangar.position.y = 7.5;
+            hangar.castShadow = true;
+            group.add(hangar);
+
+            // Control tower
+            const towerGeometry = new THREE.CylinderGeometry(3, 4, 25, 8);
+            const tower = new THREE.Mesh(towerGeometry, hangarMaterial);
+            tower.position.set(-15, 12.5, -10);
+            tower.castShadow = true;
+            group.add(tower);
+
+            // Landing pad
+            const padGeometry = new THREE.CylinderGeometry(15, 15, 0.5, 32);
+            const padMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const pad = new THREE.Mesh(padGeometry, padMaterial);
+            pad.position.set(30, 0.25, 0);
+            group.add(pad);
+
+            // Parked ship (YT-1300 style)
+            const shipGroup = new THREE.Group();
+            const shipBody = new THREE.CylinderGeometry(8, 8, 3, 32);
+            const shipMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+            const ship = new THREE.Mesh(shipBody, shipMaterial);
+            ship.rotation.x = Math.PI / 2;
+            shipGroup.add(ship);
+
+            const cockpitGeometry = new THREE.SphereGeometry(2, 16, 16);
+            const cockpit = new THREE.Mesh(cockpitGeometry, shipMaterial);
+            cockpit.position.set(6, 0, 0);
+            shipGroup.add(cockpit);
+
+            shipGroup.position.set(30, 3, 0);
+            group.add(shipGroup);
+
+            group.position.set(starportPos.x, 0, starportPos.z);
+            group.userData = { type: 'starport', name: 'Mos Eisley Starport' };
+            scene.add(group);
+            structures.push(group);
+
+            // Starport shuttle service NPC
+            const shuttleNPC = createNPCMarker(starportPos.x + 20, starportPos.z, 'Shuttle Pilot', 0x4444ff);
+            shuttleNPC.userData = { type: 'shuttle', interactable: true, name: 'Shuttle to Other Planets' };
+            npcs.push(shuttleNPC);
+        }
+
+        function createMoistureFarms() {
+            const farmLocations = [
+                { x: -100, z: -80 },
+                { x: -150, z: -120 },
+                { x: 120, z: -100 }
+            ];
+
+            farmLocations.forEach(loc => {
+                const group = new THREE.Group();
+
+                // Main homestead dome
+                createDomeBuilding(0, 0, 4);
+
+                // Moisture vaporators
+                for (let i = 0; i < 6; i++) {
+                    const vaporator = new THREE.Group();
+                    const poleGeometry = new THREE.CylinderGeometry(0.3, 0.4, 8, 8);
+                    const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                    const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                    pole.position.y = 4;
+                    vaporator.add(pole);
+
+                    const topGeometry = new THREE.CylinderGeometry(0.8, 0.5, 2, 8);
+                    const top = new THREE.Mesh(topGeometry, poleMaterial);
+                    top.position.y = 8;
+                    vaporator.add(top);
+
+                    const angle = (i / 6) * Math.PI * 2;
+                    vaporator.position.set(Math.cos(angle) * 20, 0, Math.sin(angle) * 20);
+                    group.add(vaporator);
+                }
+
+                group.position.set(loc.x, 0, loc.z);
+                scene.add(group);
+            });
+        }
+
+        function createKraytSkeleton() {
+            const skeletonPos = { x: 200, z: -150 };
+
+            const group = new THREE.Group();
+
+            // Spine
+            for (let i = 0; i < 20; i++) {
+                const vertebra = new THREE.Mesh(
+                    new THREE.SphereGeometry(2 - i * 0.08, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xf5f5dc })
+                );
+                vertebra.position.set(i * 3, 1 + Math.sin(i * 0.3) * 0.5, 0);
+                vertebra.scale.y = 0.6;
+                group.add(vertebra);
+            }
+
+            // Skull
+            const skull = new THREE.Mesh(
+                new THREE.SphereGeometry(4, 8, 8),
+                new THREE.MeshStandardMaterial({ color: 0xf5f5dc })
+            );
+            skull.position.set(-5, 2, 0);
+            skull.scale.set(2, 1, 1.2);
+            group.add(skull);
+
+            // Ribs
+            for (let i = 0; i < 8; i++) {
+                const rib = new THREE.Mesh(
+                    new THREE.TorusGeometry(3, 0.3, 8, 16, Math.PI),
+                    new THREE.MeshStandardMaterial({ color: 0xf5f5dc })
+                );
+                rib.position.set(i * 4 + 10, 2, 0);
+                rib.rotation.y = Math.PI / 2;
+                rib.rotation.x = Math.PI / 6;
+                group.add(rib);
+
+                const rib2 = rib.clone();
+                rib2.rotation.x = -Math.PI / 6;
+                rib2.scale.x = -1;
+                group.add(rib2);
+            }
+
+            group.position.set(skeletonPos.x, 0, skeletonPos.z);
+            scene.add(group);
+
+            // Krayt dragon spawn point (rare boss)
+            setTimeout(() => {
+                if (Math.random() < 0.3) {
+                    spawnCreature('krayt', skeletonPos.x - 30, skeletonPos.z);
+                    addChatMessage('You sense a powerful presence nearby...', 'system');
+                }
+            }, 60000);
+        }
+
+        function createVendorNPC(x, z, vendorType) {
+            const npc = createNPCMarker(x, z, VENDORS[vendorType].name, 0x00ff00);
+            npc.userData = { type: 'vendor', vendorType: vendorType, interactable: true, name: VENDORS[vendorType].name };
+            npcs.push(npc);
+        }
+
+        function createNPCMarker(x, z, name, color) {
+            const group = new THREE.Group();
+
+            const bodyGeometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: color });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.2;
+            group.add(body);
+
+            const headGeometry = new THREE.SphereGeometry(0.35, 8, 8);
+            const head = new THREE.Mesh(headGeometry, bodyMaterial);
+            head.position.y = 2.1;
+            group.add(head);
+
+            // Floating name indicator
+            const indicatorGeometry = new THREE.RingGeometry(0.5, 0.7, 32);
+            const indicatorMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+            const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+            indicator.position.y = 3;
+            indicator.rotation.x = -Math.PI / 2;
+            group.add(indicator);
+
+            group.position.set(x, 0, z);
+            group.userData.name = name;
+            scene.add(group);
+            return group;
+        }
+
+        function spawnCreatures() {
+            // Womp rats near city
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 80 + Math.random() * 100;
+                spawnCreature('womprat', Math.cos(angle) * distance, Math.sin(angle) * distance);
+            }
+
+            // Dewbacks in desert
+            for (let i = 0; i < 10; i++) {
+                spawnCreature('dewback', (Math.random() - 0.5) * 400, (Math.random() - 0.5) * 400 - 100);
+            }
+
+            // Banthas in herds
+            for (let i = 0; i < 3; i++) {
+                const herdX = (Math.random() - 0.5) * 300;
+                const herdZ = (Math.random() - 0.5) * 300 - 150;
+                for (let j = 0; j < 4; j++) {
+                    spawnCreature('bantha', herdX + (Math.random() - 0.5) * 30, herdZ + (Math.random() - 0.5) * 30);
+                }
+            }
+
+            // Tusken raiders in canyon areas
+            for (let i = 0; i < 8; i++) {
+                spawnCreature('tusken', 150 + (Math.random() - 0.5) * 100, -200 + (Math.random() - 0.5) * 100);
+            }
+
+            // Jawas near moisture farms
+            for (let i = 0; i < 5; i++) {
+                spawnCreature('jawa', -120 + (Math.random() - 0.5) * 50, -100 + (Math.random() - 0.5) * 50);
+            }
+
+            // Rontos
+            for (let i = 0; i < 6; i++) {
+                spawnCreature('rontoHerd', (Math.random() - 0.5) * 300, (Math.random() - 0.5) * 300);
+            }
+        }
+
+        function spawnCreature(type, x, z) {
+            const creatureData = CREATURE_TYPES[type];
+            const group = new THREE.Group();
+
+            let bodySize = 0.5;
+            let bodyColor = 0x8b4513;
+
+            switch(type) {
+                case 'womprat':
+                    bodySize = 0.3;
+                    bodyColor = 0x8b7355;
+                    break;
+                case 'dewback':
+                    bodySize = 1.2;
+                    bodyColor = 0x556b2f;
+                    break;
+                case 'bantha':
+                    bodySize = 2;
+                    bodyColor = 0x8b4513;
+                    break;
+                case 'tusken':
+                    bodySize = 0.5;
+                    bodyColor = 0x8b8378;
+                    break;
+                case 'krayt':
+                    bodySize = 5;
+                    bodyColor = 0x4a4a4a;
+                    break;
+                case 'jawa':
+                    bodySize = 0.3;
+                    bodyColor = 0x4a3520;
+                    break;
+                case 'rontoHerd':
+                    bodySize = 1.5;
+                    bodyColor = 0x8b7355;
+                    break;
+            }
+
+            // Simple creature mesh
+            const bodyGeometry = new THREE.SphereGeometry(bodySize, 8, 8);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: bodyColor });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = bodySize;
+            body.scale.set(1.5, 1, 1);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(bodySize * 0.5, 8, 8);
+            const head = new THREE.Mesh(headGeometry, bodyMaterial);
+            head.position.set(bodySize * 1.2, bodySize * 1.2, 0);
+            group.add(head);
+
+            // Health bar (hidden until targeted)
+            const healthBarBg = new THREE.Mesh(
+                new THREE.PlaneGeometry(2, 0.2),
+                new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide })
+            );
+            healthBarBg.position.y = bodySize * 2.5;
+            healthBarBg.visible = false;
+            group.add(healthBarBg);
+
+            const healthBarFill = new THREE.Mesh(
+                new THREE.PlaneGeometry(2, 0.2),
+                new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide })
+            );
+            healthBarFill.position.y = bodySize * 2.5;
+            healthBarFill.position.z = 0.01;
+            healthBarFill.visible = false;
+            group.add(healthBarFill);
+
+            group.position.set(x, 0, z);
+            group.userData = {
+                type: 'creature',
+                creatureType: type,
+                ...creatureData,
+                currentHealth: creatureData.health,
+                maxHealth: creatureData.health,
+                targetable: true,
+                healthBarBg: healthBarBg,
+                healthBarFill: healthBarFill,
+                wanderTarget: null,
+                lastWander: 0,
+                inCombat: false,
+                combatTarget: null
+            };
+
+            scene.add(group);
+            creatures.push(group);
+            return group;
+        }
+
+        function spawnResourceNodes() {
+            const resourceTypes = [
+                { type: 'iron', color: 0x555555, icon: '�ite' },
+                { type: 'copper', color: 0xb87333, icon: '🟤' },
+                { type: 'chemicals', color: 0x00ff00, icon: '🧪' },
+                { type: 'flora', color: 0x228b22, icon: '🌿' }
+            ];
+
+            for (let i = 0; i < 40; i++) {
+                const resType = resourceTypes[Math.floor(Math.random() * resourceTypes.length)];
+                const x = (Math.random() - 0.5) * 600;
+                const z = (Math.random() - 0.5) * 600;
+
+                const node = new THREE.Group();
+
+                if (resType.type === 'iron' || resType.type === 'copper') {
+                    const rockGeometry = new THREE.DodecahedronGeometry(1);
+                    const rockMaterial = new THREE.MeshStandardMaterial({ color: resType.color });
+                    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                    rock.position.y = 0.5;
+                    node.add(rock);
+                } else {
+                    const plantGeometry = new THREE.ConeGeometry(0.5, 1.5, 8);
+                    const plantMaterial = new THREE.MeshStandardMaterial({ color: resType.color });
+                    const plant = new THREE.Mesh(plantGeometry, plantMaterial);
+                    plant.position.y = 0.75;
+                    node.add(plant);
+                }
+
+                // Glow indicator
+                const glowGeometry = new THREE.RingGeometry(0.8, 1, 16);
+                const glowMaterial = new THREE.MeshBasicMaterial({ color: resType.color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.rotation.x = -Math.PI / 2;
+                glow.position.y = 0.05;
+                node.add(glow);
+
+                node.position.set(x, 0, z);
+                node.userData = {
+                    type: 'resource',
+                    resourceType: resType.type,
+                    amount: 5 + Math.floor(Math.random() * 10),
+                    interactable: true
+                };
+
+                scene.add(node);
+                resourceNodes.push(node);
+            }
+        }
+
+        // ==================== CONTROLS ====================
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+                if (key in keys) keys[key] = true;
+                if (key === 'shift') keys.shift = true;
+
+                // Ability hotkeys
+                if (e.key >= '1' && e.key <= '6') {
+                    e.preventDefault();
+                    useAbility(parseInt(e.key));
+                }
+
+                // UI hotkeys
+                if (key === 'k') toggleSkillsWindow();
+                if (key === 'i') toggleInventoryWindow();
+                if (key === 'e') interactWithNearby();
+                if (key === 'escape') closeAllWindows();
+                if (key === 'tab') {
+                    e.preventDefault();
+                    cycleTarget();
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (key in keys) keys[key] = false;
+                if (key === 'shift') keys.shift = false;
+            });
+
+            renderer.domElement.addEventListener('click', () => {
+                if (!GameState.isPointerLocked) {
+                    renderer.domElement.requestPointerLock();
+                } else {
+                    // Click to target
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+                    const creatureHits = raycaster.intersectObjects(creatures, true);
+                    if (creatureHits.length > 0) {
+                        let targetGroup = creatureHits[0].object;
+                        while (targetGroup.parent && !targetGroup.userData.type) {
+                            targetGroup = targetGroup.parent;
+                        }
+                        if (targetGroup.userData.targetable) {
+                            setTarget(targetGroup);
+                        }
+                    }
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                GameState.isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (GameState.isPointerLocked) {
+                    rotation.y -= e.movementX * 0.002;
+                    rotation.x -= e.movementY * 0.002;
+                    rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.x));
+                }
+            });
+
+            // UI button events
+            document.getElementById('skills-button').addEventListener('click', toggleSkillsWindow);
+            document.getElementById('inventory-button').addEventListener('click', toggleInventoryWindow);
+
+            // Action bar clicks
+            document.querySelectorAll('.action-slot').forEach(slot => {
+                slot.addEventListener('click', () => {
+                    const slotNum = parseInt(slot.dataset.slot);
+                    useAbility(slotNum);
+                });
+            });
+        }
+
+        function setupUI() {
+            updateHAMBars();
+            updateCreditsDisplay();
+            renderInventory();
+        }
+
+        // ==================== TARGETING ====================
+        function setTarget(creature) {
+            // Clear previous target
+            if (GameState.target) {
+                GameState.target.userData.healthBarBg.visible = false;
+                GameState.target.userData.healthBarFill.visible = false;
+            }
+
+            GameState.target = creature;
+            creature.userData.healthBarBg.visible = true;
+            creature.userData.healthBarFill.visible = true;
+
+            updateTargetFrame();
+            document.getElementById('target-frame').classList.add('active');
+
+            addChatMessage(`Target: ${creature.userData.name} (Level ${creature.userData.level})`, 'system');
+        }
+
+        function clearTarget() {
+            if (GameState.target) {
+                GameState.target.userData.healthBarBg.visible = false;
+                GameState.target.userData.healthBarFill.visible = false;
+            }
+            GameState.target = null;
+            document.getElementById('target-frame').classList.remove('active');
+        }
+
+        function cycleTarget() {
+            const nearbyCreatures = creatures.filter(c => {
+                const dist = camera.position.distanceTo(c.position);
+                return dist < 50 && c.userData.currentHealth > 0;
+            }).sort((a, b) => camera.position.distanceTo(a.position) - camera.position.distanceTo(b.position));
+
+            if (nearbyCreatures.length === 0) return;
+
+            const currentIndex = GameState.target ? nearbyCreatures.indexOf(GameState.target) : -1;
+            const nextIndex = (currentIndex + 1) % nearbyCreatures.length;
+            setTarget(nearbyCreatures[nextIndex]);
+        }
+
+        function updateTargetFrame() {
+            if (!GameState.target) return;
+
+            const target = GameState.target;
+            document.getElementById('target-name').textContent = `${target.userData.icon} ${target.userData.name}`;
+            document.getElementById('target-level').textContent = `Level ${target.userData.level}`;
+
+            const healthPercent = (target.userData.currentHealth / target.userData.maxHealth) * 100;
+            document.getElementById('target-health-fill').style.width = `${healthPercent}%`;
+
+            // Update 3D health bar
+            target.userData.healthBarFill.scale.x = healthPercent / 100;
+            target.userData.healthBarFill.position.x = -(1 - healthPercent / 100);
+        }
+
+        // ==================== ABILITIES ====================
+        function useAbility(slotNum) {
+            const slot = document.querySelector(`.action-slot[data-slot="${slotNum}"]`);
+            if (!slot) return;
+
+            const abilityId = slot.dataset.ability;
+            const ability = ABILITIES[abilityId];
+            if (!ability) return;
+
+            // Check cooldown
+            if (GameState.cooldowns[abilityId] && Date.now() < GameState.cooldowns[abilityId]) {
+                addChatMessage(`${ability.name} is on cooldown!`, 'combat');
+                return;
+            }
+
+            // Check resources
+            if (ability.actionCost && GameState.player.action < ability.actionCost) {
+                addChatMessage('Not enough action!', 'combat');
+                return;
+            }
+            if (ability.mindCost && GameState.player.mind < ability.mindCost) {
+                addChatMessage('Not enough mind!', 'combat');
+                return;
+            }
+
+            // Execute ability
+            switch (ability.type) {
+                case 'ranged':
+                    if (!GameState.target) {
+                        addChatMessage('No target selected!', 'combat');
+                        return;
+                    }
+                    const dist = camera.position.distanceTo(GameState.target.position);
+                    if (dist > ability.range) {
+                        addChatMessage('Target out of range!', 'combat');
+                        return;
+                    }
+                    dealDamage(GameState.target, ability.damage);
+                    GameState.player.action -= ability.actionCost;
+                    gainSkillXP('marksman', 20);
+                    break;
+
+                case 'heal':
+                    const healAmount = Math.min(ability.healing, GameState.player.maxHealth - GameState.player.health);
+                    GameState.player.health += healAmount;
+                    GameState.player.mind -= ability.mindCost;
+                    addChatMessage(`You heal for ${healAmount} health.`, 'combat');
+                    gainSkillXP('medic', 30);
+                    break;
+
+                case 'harvest':
+                    harvestNearbyResource();
+                    break;
+
+                case 'scan':
+                    scanCreature();
+                    break;
+
+                case 'item':
+                    if (ability.requires === 'stimpak') {
+                        const hasStimpak = GameState.inventory.find(i => i.type === 'stimpak');
+                        if (!hasStimpak) {
+                            addChatMessage('No stim packs in inventory!', 'system');
+                            return;
+                        }
+                        GameState.inventory = GameState.inventory.filter(i => i !== hasStimpak);
+                        GameState.player.health = Math.min(GameState.player.maxHealth, GameState.player.health + ability.healing);
+                        addChatMessage(`Used stim pack. Healed for ${ability.healing}.`, 'combat');
+                        renderInventory();
+                    }
+                    break;
+            }
+
+            // Set cooldown
+            GameState.cooldowns[abilityId] = Date.now() + ability.cooldown;
+            startCooldownAnimation(slot, ability.cooldown);
+
+            updateHAMBars();
+        }
+
+        function startCooldownAnimation(slot, duration) {
+            const overlay = slot.querySelector('.cooldown-overlay');
+            slot.classList.add('on-cooldown');
+            overlay.style.height = '100%';
+
+            const startTime = Date.now();
+            const animate = () => {
+                const elapsed = Date.now() - startTime;
+                const remaining = 1 - (elapsed / duration);
+                if (remaining <= 0) {
+                    overlay.style.height = '0%';
+                    slot.classList.remove('on-cooldown');
+                } else {
+                    overlay.style.height = `${remaining * 100}%`;
+                    requestAnimationFrame(animate);
+                }
+            };
+            requestAnimationFrame(animate);
+        }
+
+        function dealDamage(target, baseDamage) {
+            // Calculate damage with some variance
+            const damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4));
+            target.userData.currentHealth -= damage;
+
+            addChatMessage(`You hit ${target.userData.name} for ${damage} damage!`, 'combat');
+
+            // Aggro the creature
+            target.userData.inCombat = true;
+            target.userData.combatTarget = camera;
+            GameState.inCombat = true;
+
+            if (target.userData.currentHealth <= 0) {
+                killCreature(target);
+            } else {
+                updateTargetFrame();
+            }
+        }
+
+        function killCreature(creature) {
+            addChatMessage(`You have defeated ${creature.userData.name}!`, 'combat');
+
+            // Grant XP
+            const xpGain = creature.userData.xp;
+            const xpBonus = getBuffValue('xpBonus');
+            const totalXP = Math.floor(xpGain * (1 + xpBonus / 100));
+            gainSkillXP('marksman', totalXP);
+            addChatMessage(`You gained ${totalXP} combat experience.`, 'xp');
+
+            // Loot
+            const loot = creature.userData.loot;
+            loot.forEach(item => {
+                if (Math.random() < 0.7) {
+                    if (item === 'credits') {
+                        const credits = creature.userData.credits[0] + Math.floor(Math.random() * (creature.userData.credits[1] - creature.userData.credits[0]));
+                        GameState.player.credits += credits;
+                        addChatMessage(`Looted ${credits} credits.`, 'loot');
+                    } else if (GameState.resources[item] !== undefined) {
+                        const amount = 1 + Math.floor(Math.random() * 3);
+                        GameState.resources[item] += amount;
+                        addChatMessage(`Looted ${amount} ${item}.`, 'loot');
+                    } else if (item === 'kraytPearl') {
+                        GameState.inventory.push({ type: 'kraytPearl', name: 'Krayt Dragon Pearl', value: 10000 });
+                        addChatMessage('RARE LOOT: Krayt Dragon Pearl!', 'loot');
+                    }
+                }
+            });
+
+            // Credit drop
+            const credits = creature.userData.credits[0] + Math.floor(Math.random() * (creature.userData.credits[1] - creature.userData.credits[0]));
+            GameState.player.credits += credits;
+            addChatMessage(`Looted ${credits} credits.`, 'loot');
+
+            updateCreditsDisplay();
+            renderInventory();
+
+            // Remove creature
+            if (GameState.target === creature) {
+                clearTarget();
+            }
+            scene.remove(creature);
+            creatures = creatures.filter(c => c !== creature);
+
+            // Respawn after delay
+            setTimeout(() => {
+                const type = creature.userData.creatureType;
+                const x = (Math.random() - 0.5) * 400;
+                const z = (Math.random() - 0.5) * 400;
+                spawnCreature(type, x, z);
+            }, 30000);
+        }
+
+        function harvestNearbyResource() {
+            const nearestResource = resourceNodes.find(r => {
+                const dist = camera.position.distanceTo(r.position);
+                return dist < 5 && r.userData.amount > 0;
+            });
+
+            if (!nearestResource) {
+                addChatMessage('No harvestable resources nearby.', 'system');
+                return;
+            }
+
+            const resType = nearestResource.userData.resourceType;
+            const amount = 1 + Math.floor(Math.random() * 3);
+            GameState.resources[resType] += amount;
+            nearestResource.userData.amount -= 1;
+
+            addChatMessage(`Harvested ${amount} ${resType}.`, 'loot');
+            gainSkillXP('scout', 15);
+            gainSkillXP('artisan', 10);
+            renderInventory();
+
+            if (nearestResource.userData.amount <= 0) {
+                scene.remove(nearestResource);
+                resourceNodes = resourceNodes.filter(r => r !== nearestResource);
+
+                // Respawn
+                setTimeout(() => {
+                    const types = ['iron', 'copper', 'chemicals', 'flora'];
+                    const newType = types[Math.floor(Math.random() * types.length)];
+                    // Simplified respawn
+                }, 60000);
+            }
+        }
+
+        function scanCreature() {
+            if (!GameState.target) {
+                addChatMessage('No target to scan.', 'system');
+                return;
+            }
+
+            const target = GameState.target;
+            addChatMessage(`--- Creature Scan: ${target.userData.name} ---`, 'system');
+            addChatMessage(`Level: ${target.userData.level}`, 'system');
+            addChatMessage(`Health: ${target.userData.currentHealth}/${target.userData.maxHealth}`, 'system');
+            addChatMessage(`Damage: ~${target.userData.damage}`, 'system');
+            addChatMessage(`Loot: ${target.userData.loot.join(', ')}`, 'system');
+
+            gainSkillXP('scout', 25);
+        }
+
+        // ==================== SKILL SYSTEM ====================
+        function gainSkillXP(profession, amount) {
+            const xpBonus = getBuffValue('xpBonus');
+            const totalXP = Math.floor(amount * (1 + xpBonus / 100));
+            GameState.skillXP[profession] += totalXP;
+
+            // Check for skill unlocks
+            checkSkillUnlocks(profession);
+        }
+
+        function checkSkillUnlocks(profession) {
+            const tree = SKILL_TREES[profession];
+            if (!tree) return;
+
+            const currentXP = GameState.skillXP[profession];
+            const skills = GameState.skills[profession];
+
+            tree.skills.forEach(skill => {
+                if (skills[skill.id]) return; // Already unlocked
+
+                // Check requirements
+                let canUnlock = false;
+                if (skill.requires === null) {
+                    canUnlock = true;
+                } else if (Array.isArray(skill.requires)) {
+                    canUnlock = skill.requires.every(req => skills[req]);
+                } else {
+                    canUnlock = skills[skill.requires];
+                }
+
+                if (canUnlock && currentXP >= SKILL_XP_REQUIRED * (skill.row + 1)) {
+                    // Auto-unlock novice, prompt for others
+                    if (skill.id.includes('novice') || skill.row === 0) {
+                        skills[skill.id] = true;
+                        addChatMessage(`Skill unlocked: ${skill.name}!`, 'xp');
+                    }
+                }
+            });
+        }
+
+        function showProfession(profession) {
+            const container = document.getElementById('skill-tree-container');
+            container.innerHTML = '';
+
+            const tree = SKILL_TREES[profession];
+            if (!tree) return;
+
+            tree.skills.forEach(skill => {
+                const box = document.createElement('div');
+                box.className = 'skill-box';
+
+                const isUnlocked = GameState.skills[profession][skill.id];
+                let canUnlock = false;
+
+                if (skill.requires === null) {
+                    canUnlock = true;
+                } else if (Array.isArray(skill.requires)) {
+                    canUnlock = skill.requires.every(req => GameState.skills[profession][req]);
+                } else {
+                    canUnlock = GameState.skills[profession][skill.requires];
+                }
+
+                if (isUnlocked) {
+                    box.classList.add('unlocked');
+                } else if (canUnlock) {
+                    box.classList.add('available');
+                } else {
+                    box.classList.add('locked');
+                }
+
+                box.innerHTML = `
+                    <div class="skill-name">${skill.name}</div>
+                    <div class="skill-xp">${isUnlocked ? 'LEARNED' : `${GameState.skillXP[profession]}/${SKILL_XP_REQUIRED * (skill.row + 1)} XP`}</div>
+                `;
+
+                box.addEventListener('click', () => {
+                    if (!isUnlocked && canUnlock && GameState.skillXP[profession] >= SKILL_XP_REQUIRED * (skill.row + 1)) {
+                        GameState.skills[profession][skill.id] = true;
+                        addChatMessage(`Learned: ${skill.name}!`, 'xp');
+                        showProfession(profession);
+                    }
+                });
+
+                container.appendChild(box);
+            });
+        }
+
+        // ==================== BUFFS ====================
+        function addBuff(name, icon, duration, effects) {
+            GameState.buffs.push({
+                name, icon, duration, effects,
+                startTime: Date.now(),
+                endTime: Date.now() + duration
+            });
+
+            renderBuffs();
+            addChatMessage(`Buff gained: ${name}`, 'xp');
+        }
+
+        function renderBuffs() {
+            const container = document.getElementById('buff-display');
+            container.innerHTML = '';
+
+            GameState.buffs.forEach(buff => {
+                const remaining = Math.max(0, buff.endTime - Date.now());
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+
+                const buffEl = document.createElement('div');
+                buffEl.className = 'buff-icon';
+                buffEl.innerHTML = `
+                    ${buff.icon}
+                    <span class="buff-timer">${minutes}:${seconds.toString().padStart(2, '0')}</span>
+                `;
+                buffEl.title = buff.name;
+                container.appendChild(buffEl);
+            });
+        }
+
+        function getBuffValue(effectName) {
+            let total = 0;
+            GameState.buffs.forEach(buff => {
+                if (buff.effects[effectName]) {
+                    total += buff.effects[effectName];
+                }
+            });
+            return total;
+        }
+
+        function updateBuffs() {
+            const now = Date.now();
+            const expiredBuffs = GameState.buffs.filter(b => now >= b.endTime);
+            expiredBuffs.forEach(buff => {
+                addChatMessage(`Buff expired: ${buff.name}`, 'system');
+            });
+            GameState.buffs = GameState.buffs.filter(b => now < b.endTime);
+
+            if (expiredBuffs.length > 0 || GameState.buffs.length > 0) {
+                renderBuffs();
+            }
+        }
+
+        // ==================== CANTINA ====================
+        let watchingEntertainer = false;
+        let watchProgress = 0;
+
+        function watchEntertainer(type) {
+            if (watchingEntertainer) return;
+
+            watchingEntertainer = true;
+            watchProgress = 0;
+
+            document.getElementById('watching-progress').style.display = 'block';
+            document.querySelectorAll('.watch-btn').forEach(btn => btn.disabled = true);
+
+            const interval = setInterval(() => {
+                watchProgress += 2;
+                document.querySelector('.buff-progress-fill').style.width = `${watchProgress}%`;
+                document.getElementById('buff-countdown').textContent = `Building buff: ${watchProgress}%`;
+
+                if (watchProgress >= 100) {
+                    clearInterval(interval);
+                    watchingEntertainer = false;
+                    document.getElementById('watching-progress').style.display = 'none';
+                    document.querySelectorAll('.watch-btn').forEach(btn => btn.disabled = false);
+
+                    if (type === 'musician') {
+                        addBuff('Musician Inspiration', '🎵', 30 * 60 * 1000, { actionRegen: 50, xpBonus: 25 });
+                    } else {
+                        addBuff('Dance of Mind', '💃', 30 * 60 * 1000, { mindRegen: 50, combatSpeed: 10 });
+                    }
+
+                    closeCantinaUI();
+                }
+            }, 500);
+        }
+
+        // ==================== VENDORS ====================
+        function openVendorWindow(vendorType) {
+            const vendor = VENDORS[vendorType];
+            if (!vendor) return;
+
+            document.getElementById('vendor-name').textContent = vendor.name;
+            const container = document.getElementById('vendor-items');
+            container.innerHTML = '';
+
+            vendor.items.forEach(item => {
+                const canAfford = GameState.player.credits >= item.price;
+                const itemEl = document.createElement('div');
+                itemEl.className = 'vendor-item';
+                itemEl.innerHTML = `
+                    <div>
+                        <div style="color: #ffd700;">${item.name}</div>
+                        <div style="font-size: 11px; color: #aaa;">${item.type} ${item.damage ? `(Damage: ${item.damage})` : ''} ${item.defense ? `(Defense: ${item.defense})` : ''}</div>
+                    </div>
+                    <div>
+                        <span style="color: ${canAfford ? '#66ff66' : '#ff6666'};">${item.price} credits</span>
+                        <button ${canAfford ? '' : 'disabled'} onclick="buyItem('${vendorType}', '${item.name}')">Buy</button>
+                    </div>
+                `;
+                container.appendChild(itemEl);
+            });
+
+            document.getElementById('vendor-window').classList.add('active');
+        }
+
+        function buyItem(vendorType, itemName) {
+            const vendor = VENDORS[vendorType];
+            const item = vendor.items.find(i => i.name === itemName);
+            if (!item || GameState.player.credits < item.price) return;
+
+            GameState.player.credits -= item.price;
+            GameState.inventory.push({ ...item });
+
+            addChatMessage(`Purchased ${item.name} for ${item.price} credits.`, 'loot');
+            updateCreditsDisplay();
+            renderInventory();
+            openVendorWindow(vendorType); // Refresh
+        }
+
+        // ==================== INTERACTION ====================
+        function interactWithNearby() {
+            if (!interactableNear) return;
+
+            const data = interactableNear.userData;
+
+            if (data.type === 'vendor') {
+                openVendorWindow(data.vendorType);
+            } else if (data.type === 'cantina') {
+                document.getElementById('cantina-ui').classList.add('active');
+            } else if (data.type === 'resource') {
+                harvestNearbyResource();
+            } else if (data.type === 'shuttle') {
+                addChatMessage('Shuttle service coming soon! Travel to other planets...', 'system');
+            }
+        }
+
+        function checkInteractables() {
+            let nearest = null;
+            let nearestDist = 10;
+
+            [...npcs, ...resourceNodes].forEach(obj => {
+                if (!obj.userData.interactable) return;
+                const dist = camera.position.distanceTo(obj.position);
+                if (dist < nearestDist) {
+                    nearest = obj;
+                    nearestDist = dist;
+                }
+            });
+
+            // Check cantina entrance
+            structures.forEach(s => {
+                if (s.userData.type === 'cantina') {
+                    const dist = camera.position.distanceTo(new THREE.Vector3(s.position.x, 2, s.position.z + 12));
+                    if (dist < 8) {
+                        nearest = s;
+                        nearestDist = dist;
+                    }
+                }
+            });
+
+            interactableNear = nearest;
+
+            const prompt = document.getElementById('interact-prompt');
+            if (nearest) {
+                prompt.textContent = `[E] ${nearest.userData.name || 'Interact'}`;
+                prompt.classList.add('active');
+            } else {
+                prompt.classList.remove('active');
+            }
+        }
+
+        // ==================== UI UPDATES ====================
+        function updateHAMBars() {
+            const p = GameState.player;
+
+            document.querySelector('#health-bar .ham-bar-fill').style.width = `${(p.health / p.maxHealth) * 100}%`;
+            document.querySelector('#health-bar .ham-bar-text').textContent = `Health: ${Math.floor(p.health)}/${p.maxHealth}`;
+
+            document.querySelector('#action-bar .ham-bar-fill').style.width = `${(p.action / p.maxAction) * 100}%`;
+            document.querySelector('#action-bar .ham-bar-text').textContent = `Action: ${Math.floor(p.action)}/${p.maxAction}`;
+
+            document.querySelector('#mind-bar .ham-bar-fill').style.width = `${(p.mind / p.maxMind) * 100}%`;
+            document.querySelector('#mind-bar .ham-bar-text').textContent = `Mind: ${Math.floor(p.mind)}/${p.maxMind}`;
+        }
+
+        function updateCreditsDisplay() {
+            document.getElementById('credits-amount').textContent = GameState.player.credits.toLocaleString();
+        }
+
+        function renderInventory() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 32; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'inv-slot';
+
+                if (GameState.inventory[i]) {
+                    slot.classList.add('has-item');
+                    slot.textContent = getItemIcon(GameState.inventory[i].type);
+                    slot.title = GameState.inventory[i].name;
+                }
+
+                grid.appendChild(slot);
+            }
+
+            // Resources display
+            const resDisplay = document.getElementById('resources-display');
+            resDisplay.innerHTML = Object.entries(GameState.resources)
+                .filter(([k, v]) => v > 0)
+                .map(([k, v]) => `<span style="margin-right: 15px;">${k}: ${v}</span>`)
+                .join('');
+        }
+
+        function getItemIcon(type) {
+            const icons = {
+                weapon: '🔫',
+                armor: '🛡️',
+                consumable: '💊',
+                tool: '🔧',
+                kraytPearl: '💎'
+            };
+            return icons[type] || '📦';
+        }
+
+        function addChatMessage(text, type = 'system') {
+            const chatBox = document.getElementById('chat-box');
+            const msg = document.createElement('div');
+            msg.className = `chat-message chat-${type}`;
+            msg.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            chatBox.appendChild(msg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Limit messages
+            while (chatBox.children.length > 50) {
+                chatBox.removeChild(chatBox.firstChild);
+            }
+        }
+
+        function updateMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, 150, 150);
+
+            const scale = 0.15;
+            const centerX = 75;
+            const centerY = 75;
+
+            // Draw structures
+            ctx.fillStyle = '#888';
+            structures.forEach(s => {
+                const x = centerX + (s.position.x - camera.position.x) * scale;
+                const y = centerY + (s.position.z - camera.position.z) * scale;
+                if (x > 0 && x < 150 && y > 0 && y < 150) {
+                    ctx.fillRect(x - 3, y - 3, 6, 6);
+                }
+            });
+
+            // Draw creatures
+            ctx.fillStyle = '#ff4444';
+            creatures.forEach(c => {
+                const x = centerX + (c.position.x - camera.position.x) * scale;
+                const y = centerY + (c.position.z - camera.position.z) * scale;
+                if (x > 0 && x < 150 && y > 0 && y < 150) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw NPCs
+            ctx.fillStyle = '#44ff44';
+            npcs.forEach(n => {
+                const x = centerX + (n.position.x - camera.position.x) * scale;
+                const y = centerY + (n.position.z - camera.position.z) * scale;
+                if (x > 0 && x < 150 && y > 0 && y < 150) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw player
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw direction indicator
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + Math.sin(rotation.y) * 10, centerY - Math.cos(rotation.y) * 10);
+            ctx.stroke();
+        }
+
+        function updateLocationDisplay() {
+            const x = Math.floor(camera.position.x);
+            const z = Math.floor(camera.position.z);
+            document.getElementById('location-display').textContent = `Tatooine (${x}, ${z})`;
+        }
+
+        // ==================== WINDOW TOGGLES ====================
+        function toggleSkillsWindow() {
+            const window = document.getElementById('skills-window');
+            window.classList.toggle('active');
+            if (window.classList.contains('active')) {
+                showProfession('marksman');
+            }
+        }
+
+        function closeSkillsWindow() {
+            document.getElementById('skills-window').classList.remove('active');
+        }
+
+        function toggleInventoryWindow() {
+            document.getElementById('inventory-window').classList.toggle('active');
+            renderInventory();
+        }
+
+        function closeInventoryWindow() {
+            document.getElementById('inventory-window').classList.remove('active');
+        }
+
+        function closeCraftingWindow() {
+            document.getElementById('crafting-window').classList.remove('active');
+        }
+
+        function closeVendorWindow() {
+            document.getElementById('vendor-window').classList.remove('active');
+        }
+
+        function closeCantinaUI() {
+            document.getElementById('cantina-ui').classList.remove('active');
+        }
+
+        function closeAllWindows() {
+            closeSkillsWindow();
+            closeInventoryWindow();
+            closeCraftingWindow();
+            closeVendorWindow();
+            closeCantinaUI();
+        }
+
+        // ==================== CREATURE AI ====================
+        function updateCreatures(delta) {
+            creatures.forEach(creature => {
+                if (creature.userData.currentHealth <= 0) return;
+
+                const data = creature.userData;
+
+                // Face health bars to camera
+                if (data.healthBarBg) {
+                    data.healthBarBg.lookAt(camera.position);
+                    data.healthBarFill.lookAt(camera.position);
+                }
+
+                if (data.inCombat && data.combatTarget) {
+                    // Chase player
+                    const direction = new THREE.Vector3()
+                        .subVectors(camera.position, creature.position)
+                        .normalize();
+
+                    const distToPlayer = camera.position.distanceTo(creature.position);
+
+                    if (distToPlayer > 3) {
+                        creature.position.add(direction.multiplyScalar(data.level * 0.02 + 0.05));
+                    } else {
+                        // Attack player
+                        if (!data.lastAttack || Date.now() - data.lastAttack > 2000) {
+                            const damage = Math.floor(data.damage * (0.8 + Math.random() * 0.4));
+                            GameState.player.health -= damage;
+                            addChatMessage(`${data.name} hits you for ${damage} damage!`, 'combat');
+                            data.lastAttack = Date.now();
+                            updateHAMBars();
+
+                            if (GameState.player.health <= 0) {
+                                playerDeath();
+                            }
+                        }
+                    }
+
+                    // De-aggro if player is far
+                    if (distToPlayer > 60) {
+                        data.inCombat = false;
+                        data.combatTarget = null;
+                    }
+                } else if (!data.neutral) {
+                    // Wander
+                    if (!data.wanderTarget || Date.now() - data.lastWander > 5000) {
+                        data.wanderTarget = new THREE.Vector3(
+                            creature.position.x + (Math.random() - 0.5) * 30,
+                            0,
+                            creature.position.z + (Math.random() - 0.5) * 30
+                        );
+                        data.lastWander = Date.now();
+                    }
+
+                    const direction = new THREE.Vector3()
+                        .subVectors(data.wanderTarget, creature.position)
+                        .normalize();
+
+                    if (creature.position.distanceTo(data.wanderTarget) > 2) {
+                        creature.position.add(direction.multiplyScalar(0.02));
+                    }
+                }
+
+                // Rotate to face movement direction
+                if (data.wanderTarget || data.combatTarget) {
+                    const target = data.combatTarget ? camera.position : data.wanderTarget;
+                    const angle = Math.atan2(
+                        target.x - creature.position.x,
+                        target.z - creature.position.z
+                    );
+                    creature.rotation.y = angle;
+                }
+            });
+        }
+
+        function playerDeath() {
+            addChatMessage('You have been incapacitated!', 'combat');
+
+            // Respawn at starport
+            setTimeout(() => {
+                GameState.player.health = GameState.player.maxHealth;
+                GameState.player.action = GameState.player.maxAction;
+                GameState.player.mind = GameState.player.maxMind;
+                camera.position.set(-30, 2, 30);
+                clearTarget();
+                updateHAMBars();
+                addChatMessage('You have been cloned at the nearest cloning facility.', 'system');
+            }, 3000);
+        }
+
+        // ==================== REGENERATION ====================
+        function regenerate(delta) {
+            const p = GameState.player;
+
+            // Base regen
+            let healthRegen = 1;
+            let actionRegen = 2 + getBuffValue('actionRegen') * 0.1;
+            let mindRegen = 2 + getBuffValue('mindRegen') * 0.1;
+
+            // Slower regen in combat
+            if (GameState.inCombat) {
+                healthRegen *= 0.2;
+                actionRegen *= 0.5;
+                mindRegen *= 0.5;
+            }
+
+            p.health = Math.min(p.maxHealth, p.health + healthRegen * delta);
+            p.action = Math.min(p.maxAction, p.action + actionRegen * delta);
+            p.mind = Math.min(p.maxMind, p.mind + mindRegen * delta);
+        }
+
+        // ==================== MAIN LOOP ====================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            // Player movement
+            const moveSpeed = keys.shift ? 0.3 : 0.15;
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+            if (keys.w) camera.position.add(forward.clone().multiplyScalar(moveSpeed));
+            if (keys.s) camera.position.add(forward.clone().multiplyScalar(-moveSpeed));
+            if (keys.a) camera.position.add(right.clone().multiplyScalar(-moveSpeed));
+            if (keys.d) camera.position.add(right.clone().multiplyScalar(moveSpeed));
+
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = rotation.y;
+            camera.rotation.x = rotation.x;
+
+            // Keep camera above ground
+            camera.position.y = 2;
+
+            // Update game systems
+            updateCreatures(delta);
+            regenerate(delta);
+            updateBuffs();
+            checkInteractables();
+
+            // Update UI
+            if (Math.random() < 0.1) {
+                updateHAMBars();
+                updateMinimap();
+                updateLocationDisplay();
+                if (GameState.target) updateTargetFrame();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // ==================== WINDOW RESIZE ====================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ==================== START ====================
+        init();
+    </script>
+</body>
+</html>
