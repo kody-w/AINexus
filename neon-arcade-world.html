@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Neon Arcade</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Scanline overlay effect */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1) 0px,
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            opacity: 0.3;
+        }
+
+        .world-ui {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: env(safe-area-inset-left, 20px);
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .world-title {
+            font-size: 3em;
+            font-weight: 100;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff00ff, #00ffff, #ff6600, #9900ff);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 4s ease-in-out infinite;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .world-description {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+        }
+
+        .world-origin {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            right: env(safe-area-inset-right, 20px);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 0, 255, 0.3);
+            display: none;
+        }
+
+        .world-origin.visible {
+            display: block;
+        }
+
+        .origin-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+        }
+
+        .origin-world {
+            color: #00ffff;
+            font-weight: 500;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 30px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            border: 1px solid rgba(255, 0, 255, 0.3);
+        }
+
+        .portal-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(255, 0, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 300px;
+            display: none;
+            z-index: 1002;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+        }
+
+        .portal-tooltip.visible {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-size: 1.4em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #ff00ff;
+        }
+
+        .tooltip-description {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .tooltip-instruction {
+            font-size: 0.85em;
+            color: #00ffff;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            left: 0;
+            right: 0;
+            display: none;
+            z-index: 1001;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .mobile-controls.show {
+            display: block;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .joystick-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 0, 255, 0.5);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.3);
+        }
+
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 0, 255, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+
+        .look-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 200px;
+            z-index: 999;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: rgba(255, 0, 255, 0.6);
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            z-index: 2000;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ff00ff, #00ffff, transparent);
+            margin: 30px auto;
+            animation: scan 1.5s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(100px); }
+        }
+
+        @media (max-width: 768px) {
+            .world-title {
+                font-size: 2em;
+            }
+
+            .world-description {
+                font-size: 1em;
+                max-width: 300px;
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                position: fixed;
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+
+            #three-container {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    <div class="scanlines"></div>
+
+    <div class="look-area" id="look-area"></div>
+
+    <div class="world-ui">
+        <h1 class="world-title" id="world-title">NEON ARCADE</h1>
+        <p class="world-description" id="world-description">A retro-futuristic arcade with pulsing lights and classic games</p>
+    </div>
+
+    <div class="world-origin" id="world-origin">
+        <span class="origin-label">Arrived from:</span>
+        <span class="origin-world" id="origin-world-name">Origin</span>
+    </div>
+
+    <div class="controls-hint" id="controls-hint">Use WASD to move, Mouse to look around, Click on portals to travel</div>
+
+    <div class="mobile-controls" id="mobile-controls">
+        <div class="controls-container">
+            <div class="joystick-container" id="movement-joystick">
+                <div class="joystick-handle" id="movement-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="portal-tooltip" id="portal-tooltip">
+        <h3 class="tooltip-title"></h3>
+        <p class="tooltip-description"></p>
+        <p class="tooltip-instruction">Tap to enter world</p>
+    </div>
+
+    <div class="loading" id="loading">Initializing neon arcade...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration
+        const REPO_OWNER = 'kody-w';
+        const REPO_NAME = 'AINexus';
+        const BRANCH = 'main';
+
+        // Default world attributes - Neon Arcade theme
+        const DEFAULT_WORLD_ATTRIBUTES = {
+            name: "Neon Arcade",
+            description: "A retro-futuristic arcade with pulsing lights and classic games",
+            ambientColor: 0x110022,
+            fogColor: 0x0a0015,
+            groundColor: 0x050510,
+            neonColors: [0xff00ff, 0x00ffff, 0xff6600, 0x9900ff],
+            moveSpeed: 0.15,
+            lookSpeed: 0.002,
+            portalColor1: 0xff00ff,
+            portalColor2: 0x00ffff,
+            particleCount: 500,
+            cameraHeight: 2,
+            fogNear: 5,
+            fogFar: 60
+        };
+
+        // Parse inherited attributes from URL or injected params
+        function parseInheritedAttributes() {
+            let paramString = window.INJECTED_PARAMS || window.location.search;
+
+            if (window.location.protocol === 'blob:') {
+                const storedParams = sessionStorage.getItem('worldInheritanceParams');
+                if (storedParams) {
+                    paramString = storedParams;
+                }
+            }
+
+            if (!paramString || paramString === '?') {
+                const transitionData = localStorage.getItem('worldTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        if (Date.now() - data.timestamp < 5000) {
+                            paramString = '?' + data.params;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                    }
+                    localStorage.removeItem('worldTransition');
+                }
+            }
+
+            const params = new URLSearchParams(paramString);
+            const inherited = {};
+
+            inherited.sourceWorld = params.get('from') || null;
+            inherited.sourceWorldName = params.get('fromName') || null;
+
+            if (params.has('moveSpeed')) inherited.moveSpeed = parseFloat(params.get('moveSpeed'));
+            if (params.has('lookSpeed')) inherited.lookSpeed = parseFloat(params.get('lookSpeed'));
+            if (params.has('ambientColor')) inherited.ambientColor = parseInt(params.get('ambientColor'), 16);
+            if (params.has('fogColor')) inherited.fogColor = parseInt(params.get('fogColor'), 16);
+            if (params.has('portalColor1')) inherited.portalColor1 = parseInt(params.get('portalColor1'), 16);
+            if (params.has('portalColor2')) inherited.portalColor2 = parseInt(params.get('portalColor2'), 16);
+            if (params.has('particleCount')) inherited.particleCount = parseInt(params.get('particleCount'));
+            if (params.has('cameraHeight')) inherited.cameraHeight = parseFloat(params.get('cameraHeight'));
+            if (params.has('fogNear')) inherited.fogNear = parseFloat(params.get('fogNear'));
+            if (params.has('fogFar')) inherited.fogFar = parseFloat(params.get('fogFar'));
+
+            console.log('Parsed inherited attributes:', inherited);
+            return inherited;
+        }
+
+        const inheritedAttributes = parseInheritedAttributes();
+        const CURRENT_WORLD = { ...DEFAULT_WORLD_ATTRIBUTES, ...inheritedAttributes };
+
+        if (inheritedAttributes.portalColor1 || inheritedAttributes.portalColor2) {
+            const color1 = inheritedAttributes.portalColor1 || DEFAULT_WORLD_ATTRIBUTES.portalColor1;
+            const color2 = inheritedAttributes.portalColor2 || DEFAULT_WORLD_ATTRIBUTES.portalColor2;
+
+            CURRENT_WORLD.neonColors = [
+                color1,
+                color2,
+                ((color1 & 0xFF0000) + (color2 & 0xFF0000)) / 2 & 0xFF0000 |
+                ((color1 & 0x00FF00) + (color2 & 0x00FF00)) / 2 & 0x00FF00 |
+                ((color1 & 0x0000FF) + (color2 & 0x0000FF)) / 2 & 0x0000FF,
+                0xff6600,
+                0x9900ff
+            ];
+        }
+
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) ||
+                        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        class NeonArcadeWorld {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.portals = [];
+                this.worlds = [];
+                this.arcadeCabinets = [];
+                this.neonLights = [];
+                this.raycaster = new THREE.Raycaster();
+                this.clock = new THREE.Clock();
+
+                this.moveSpeed = CURRENT_WORLD.moveSpeed;
+                this.lookSpeed = CURRENT_WORLD.lookSpeed;
+                this.keys = { w: false, a: false, s: false, d: false };
+                this.rotation = { x: 0, y: 0 };
+
+                this.isMobile = isMobile;
+                this.isIOS = isIOS;
+                this.joystickActive = false;
+                this.joystickVector = new THREE.Vector2();
+                this.lookTouch = null;
+                this.joystickTouch = null;
+
+                this.touches = new Map();
+                this.lastTap = 0;
+
+                this.hoveredPortal = null;
+                this.tooltip = document.getElementById('portal-tooltip');
+                this.tooltipTitle = this.tooltip.querySelector('.tooltip-title');
+                this.tooltipDescription = this.tooltip.querySelector('.tooltip-description');
+                this.isPointerLocked = false;
+
+                this.inheritedAttributes = inheritedAttributes;
+
+                if (this.isIOS) {
+                    document.body.addEventListener('touchmove', (e) => {
+                        if (e.target === document.body) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+
+            async init() {
+                if (this.inheritedAttributes.sourceWorldName) {
+                    const originDiv = document.getElementById('world-origin');
+                    const originName = document.getElementById('origin-world-name');
+                    originName.textContent = this.inheritedAttributes.sourceWorldName;
+                    originDiv.classList.add('visible');
+                    console.log('Arrived from:', this.inheritedAttributes.sourceWorldName);
+                }
+
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 1000);
+
+                document.getElementById('world-title').textContent = CURRENT_WORLD.name;
+                document.getElementById('world-description').textContent = CURRENT_WORLD.description;
+
+                this.setupScene();
+                this.setupLighting();
+                await this.loadWorlds();
+                this.createArcadeEnvironment();
+                this.createArcadeCabinets();
+                this.createPixelArtDecorations();
+                this.createPortals();
+                this.setupEventListeners();
+
+                if (this.isMobile) {
+                    document.getElementById('controls-hint').textContent = 'Touch & drag to look around, Use joystick to move, Tap on portals to travel';
+                    document.getElementById('mobile-controls').classList.add('show');
+
+                    const instruction = this.tooltip.querySelector('.tooltip-instruction');
+                    if (instruction) {
+                        instruction.textContent = 'Tap to enter world';
+                    }
+                }
+
+                this.animate();
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
+
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true,
+                    powerPreference: "high-performance"
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('three-container').appendChild(this.renderer.domElement);
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(CURRENT_WORLD.ambientColor, 0.3);
+                this.scene.add(ambientLight);
+
+                // Add some overhead neon tube lights
+                for (let i = 0; i < 5; i++) {
+                    const color = CURRENT_WORLD.neonColors[i % CURRENT_WORLD.neonColors.length];
+                    const light = new THREE.PointLight(color, 0.5, 20);
+                    light.position.set((i - 2) * 10, 8, 0);
+                    this.scene.add(light);
+                    this.neonLights.push({ light, baseIntensity: 0.5, phase: Math.random() * Math.PI * 2 });
+                }
+            }
+
+            async loadWorlds() {
+                try {
+                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const response = await fetch(apiUrl);
+
+                    if (!response.ok) {
+                        throw new Error(`GitHub API error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    this.worlds = data.tree
+                        .filter(item =>
+                            item.type === 'blob' &&
+                            item.path.endsWith('.html') &&
+                            !item.path.includes('/') &&
+                            !item.path.toLowerCase().includes('index') &&
+                            !item.path.toLowerCase().includes('readme') &&
+                            !item.path.toLowerCase().includes('neon-arcade')
+                        )
+                        .map(item => ({
+                            path: item.path,
+                            name: this.formatWorldName(item.path),
+                            url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+                            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`
+                        }));
+
+                    console.log(`Found ${this.worlds.length} worlds to connect`);
+
+                } catch (error) {
+                    console.error("Error loading worlds:", error);
+                    this.worlds = this.getDemoWorlds();
+                }
+            }
+
+            formatWorldName(filename) {
+                return filename
+                    .replace('.html', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+
+            getDemoWorlds() {
+                return [
+                    { name: "Nexus Hub", description: "Return to the central hub" },
+                    { name: "Crystal Caves", description: "A mystical underground realm with glowing crystals" },
+                    { name: "Cyber City", description: "A neon-lit metropolis of the future" },
+                    { name: "Pixel Paradise", description: "An 8-bit dreamscape of retro gaming" }
+                ];
+            }
+
+            createArcadeEnvironment() {
+                // Create dark floor with neon grid lines
+                const floorSize = 100;
+                const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: CURRENT_WORLD.groundColor,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+
+                // Create neon grid lines on floor
+                const gridMaterial = new THREE.LineBasicMaterial({
+                    color: 0xff00ff,
+                    transparent: true,
+                    opacity: 0.3
+                });
+
+                const gridSize = 80;
+                const gridDivisions = 40;
+                const gridStep = gridSize / gridDivisions;
+
+                for (let i = -gridDivisions / 2; i <= gridDivisions / 2; i++) {
+                    // X lines (hot pink)
+                    const pointsX = [];
+                    pointsX.push(new THREE.Vector3(i * gridStep, 0.01, -gridSize / 2));
+                    pointsX.push(new THREE.Vector3(i * gridStep, 0.01, gridSize / 2));
+                    const geometryX = new THREE.BufferGeometry().setFromPoints(pointsX);
+                    const lineX = new THREE.Line(geometryX, gridMaterial);
+                    this.scene.add(lineX);
+
+                    // Z lines (cyan)
+                    const pointsZ = [];
+                    pointsZ.push(new THREE.Vector3(-gridSize / 2, 0.01, i * gridStep));
+                    pointsZ.push(new THREE.Vector3(gridSize / 2, 0.01, i * gridStep));
+                    const geometryZ = new THREE.BufferGeometry().setFromPoints(pointsZ);
+                    const cyanMaterial = new THREE.LineBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const lineZ = new THREE.Line(geometryZ, cyanMaterial);
+                    this.scene.add(lineZ);
+                }
+
+                // Create ceiling
+                const ceilingGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
+                const ceilingMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x0a0a15,
+                    roughness: 1,
+                    metalness: 0
+                });
+                const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = 10;
+                this.scene.add(ceiling);
+
+                // Add some walls with neon trim
+                this.createNeonWalls();
+            }
+
+            createNeonWalls() {
+                const wallHeight = 10;
+                const wallLength = 80;
+
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x0a0a15,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+
+                // Back wall
+                const backWallGeometry = new THREE.BoxGeometry(wallLength, wallHeight, 0.5);
+                const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+                backWall.position.set(0, wallHeight / 2, -40);
+                this.scene.add(backWall);
+
+                // Side walls
+                const sideWallGeometry = new THREE.BoxGeometry(0.5, wallHeight, wallLength);
+
+                const leftWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+                leftWall.position.set(-40, wallHeight / 2, 0);
+                this.scene.add(leftWall);
+
+                const rightWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+                rightWall.position.set(40, wallHeight / 2, 0);
+                this.scene.add(rightWall);
+
+                // Add neon strips along walls
+                this.createNeonStrip(-40, 0.5, 0, wallLength, 0xff00ff);
+                this.createNeonStrip(40, 0.5, 0, wallLength, 0x00ffff);
+                this.createNeonStrip(0, 0.5, -40, wallLength, 0xff6600, true);
+            }
+
+            createNeonStrip(x, y, z, length, color, isHorizontal = false) {
+                const stripGeometry = new THREE.BoxGeometry(
+                    isHorizontal ? length : 0.1,
+                    0.1,
+                    isHorizontal ? 0.1 : length
+                );
+                const stripMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const strip = new THREE.Mesh(stripGeometry, stripMaterial);
+                strip.position.set(x, y, z);
+                this.scene.add(strip);
+
+                // Add glow light
+                const light = new THREE.PointLight(color, 0.3, 10);
+                light.position.copy(strip.position);
+                this.scene.add(light);
+                this.neonLights.push({ light, baseIntensity: 0.3, phase: Math.random() * Math.PI * 2 });
+            }
+
+            createArcadeCabinets() {
+                const cabinetPositions = [
+                    { x: -12, z: -15 },
+                    { x: -6, z: -15 },
+                    { x: 0, z: -15 },
+                    { x: 6, z: -15 },
+                    { x: 12, z: -15 },
+                    { x: -15, z: -5 },
+                    { x: 15, z: -5 },
+                    { x: -15, z: 5 },
+                    { x: 15, z: 5 },
+                    { x: -8, z: 10 },
+                    { x: 8, z: 10 }
+                ];
+
+                cabinetPositions.forEach((pos, index) => {
+                    const color = CURRENT_WORLD.neonColors[index % CURRENT_WORLD.neonColors.length];
+                    this.createArcadeCabinet(pos.x, pos.z, color);
+                });
+            }
+
+            createArcadeCabinet(x, z, accentColor) {
+                const cabinetGroup = new THREE.Group();
+
+                // Main cabinet body
+                const bodyGeometry = new THREE.BoxGeometry(1.5, 4, 1.2);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a2e,
+                    roughness: 0.5,
+                    metalness: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 2;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                cabinetGroup.add(body);
+
+                // Screen
+                const screenGeometry = new THREE.BoxGeometry(1.2, 1.2, 0.1);
+                const screenMaterial = new THREE.MeshBasicMaterial({
+                    color: accentColor,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+                screen.position.set(0, 3, 0.6);
+                cabinetGroup.add(screen);
+
+                // Pixel art on screen (simple pattern)
+                const pixelGeometry = new THREE.PlaneGeometry(1, 1);
+                const pixelMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 },
+                        color1: { value: new THREE.Color(accentColor) },
+                        color2: { value: new THREE.Color(0x000000) }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float time;
+                        uniform vec3 color1;
+                        uniform vec3 color2;
+                        varying vec2 vUv;
+
+                        void main() {
+                            vec2 grid = floor(vUv * 8.0);
+                            float pattern = mod(grid.x + grid.y + floor(time * 2.0), 2.0);
+                            vec3 color = mix(color2, color1, pattern);
+                            gl_FragColor = vec4(color, 1.0);
+                        }
+                    `
+                });
+                const pixelScreen = new THREE.Mesh(pixelGeometry, pixelMaterial);
+                pixelScreen.position.set(0, 3, 0.66);
+                cabinetGroup.add(pixelScreen);
+
+                // Control panel
+                const panelGeometry = new THREE.BoxGeometry(1.5, 0.5, 0.8);
+                const panelMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a4e,
+                    roughness: 0.4,
+                    metalness: 0.4
+                });
+                const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+                panel.position.set(0, 1.5, 0.5);
+                panel.rotation.x = -0.3;
+                cabinetGroup.add(panel);
+
+                // Buttons
+                const buttonColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
+                buttonColors.forEach((color, i) => {
+                    const buttonGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 16);
+                    const buttonMaterial = new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5
+                    });
+                    const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+                    button.position.set(-0.3 + i * 0.2, 1.65, 0.7);
+                    button.rotation.x = -0.3;
+                    cabinetGroup.add(button);
+                });
+
+                // Joystick
+                const stickGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 8);
+                const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                const stick = new THREE.Mesh(stickGeometry, stickMaterial);
+                stick.position.set(-0.5, 1.7, 0.5);
+                cabinetGroup.add(stick);
+
+                const ballGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+                const ballMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xff0000,
+                    emissive: 0xff0000,
+                    emissiveIntensity: 0.3
+                });
+                const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                ball.position.set(-0.5, 1.8, 0.5);
+                cabinetGroup.add(ball);
+
+                // Neon trim
+                const trimGeometry = new THREE.BoxGeometry(1.6, 0.05, 0.05);
+                const trimMaterial = new THREE.MeshBasicMaterial({
+                    color: accentColor,
+                    transparent: true,
+                    opacity: 0.9
+                });
+
+                const topTrim = new THREE.Mesh(trimGeometry, trimMaterial);
+                topTrim.position.set(0, 4.1, 0.6);
+                cabinetGroup.add(topTrim);
+
+                const bottomTrim = new THREE.Mesh(trimGeometry, trimMaterial);
+                bottomTrim.position.set(0, 2.3, 0.6);
+                cabinetGroup.add(bottomTrim);
+
+                // Add light from screen
+                const cabinetLight = new THREE.PointLight(accentColor, 0.3, 5);
+                cabinetLight.position.set(0, 3, 1);
+                cabinetGroup.add(cabinetLight);
+
+                cabinetGroup.position.set(x, 0, z);
+
+                // Rotate some cabinets to face center
+                cabinetGroup.lookAt(0, 0, 0);
+                cabinetGroup.rotation.y += Math.PI;
+
+                this.scene.add(cabinetGroup);
+
+                this.arcadeCabinets.push({
+                    group: cabinetGroup,
+                    pixelMaterial: pixelMaterial,
+                    light: cabinetLight,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            createPixelArtDecorations() {
+                // Create floating pixel art shapes
+                const shapes = [
+                    { type: 'invader', x: -20, y: 6, z: -30 },
+                    { type: 'heart', x: 20, y: 5, z: -25 },
+                    { type: 'star', x: -25, y: 7, z: 0 },
+                    { type: 'invader', x: 25, y: 6, z: 5 },
+                    { type: 'heart', x: 0, y: 8, z: -35 }
+                ];
+
+                shapes.forEach((shape, index) => {
+                    const color = CURRENT_WORLD.neonColors[index % CURRENT_WORLD.neonColors.length];
+                    this.createPixelShape(shape.type, shape.x, shape.y, shape.z, color);
+                });
+
+                // Create some neon signs
+                this.createNeonSign("PLAY", -30, 7, -38, 0xff00ff);
+                this.createNeonSign("WIN", 30, 7, -38, 0x00ffff);
+            }
+
+            createPixelShape(type, x, y, z, color) {
+                const group = new THREE.Group();
+                const pixelSize = 0.3;
+                const material = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.9
+                });
+
+                let pattern = [];
+
+                if (type === 'invader') {
+                    pattern = [
+                        [0,0,1,0,0,0,0,0,1,0,0],
+                        [0,0,0,1,0,0,0,1,0,0,0],
+                        [0,0,1,1,1,1,1,1,1,0,0],
+                        [0,1,1,0,1,1,1,0,1,1,0],
+                        [1,1,1,1,1,1,1,1,1,1,1],
+                        [1,0,1,1,1,1,1,1,1,0,1],
+                        [1,0,1,0,0,0,0,0,1,0,1],
+                        [0,0,0,1,1,0,1,1,0,0,0]
+                    ];
+                } else if (type === 'heart') {
+                    pattern = [
+                        [0,1,1,0,0,0,1,1,0],
+                        [1,1,1,1,0,1,1,1,1],
+                        [1,1,1,1,1,1,1,1,1],
+                        [1,1,1,1,1,1,1,1,1],
+                        [0,1,1,1,1,1,1,1,0],
+                        [0,0,1,1,1,1,1,0,0],
+                        [0,0,0,1,1,1,0,0,0],
+                        [0,0,0,0,1,0,0,0,0]
+                    ];
+                } else if (type === 'star') {
+                    pattern = [
+                        [0,0,0,0,1,0,0,0,0],
+                        [0,0,0,1,1,1,0,0,0],
+                        [1,1,1,1,1,1,1,1,1],
+                        [0,1,1,1,1,1,1,1,0],
+                        [0,0,1,1,1,1,1,0,0],
+                        [0,1,1,0,0,0,1,1,0],
+                        [1,1,0,0,0,0,0,1,1]
+                    ];
+                }
+
+                const offsetX = (pattern[0].length * pixelSize) / 2;
+                const offsetY = (pattern.length * pixelSize) / 2;
+
+                pattern.forEach((row, rowIndex) => {
+                    row.forEach((pixel, colIndex) => {
+                        if (pixel) {
+                            const geometry = new THREE.BoxGeometry(pixelSize, pixelSize, pixelSize * 0.5);
+                            const cube = new THREE.Mesh(geometry, material);
+                            cube.position.set(
+                                colIndex * pixelSize - offsetX,
+                                (pattern.length - rowIndex) * pixelSize - offsetY,
+                                0
+                            );
+                            group.add(cube);
+                        }
+                    });
+                });
+
+                group.position.set(x, y, z);
+
+                // Add glow
+                const light = new THREE.PointLight(color, 0.4, 8);
+                light.position.set(0, 0, 1);
+                group.add(light);
+
+                group.userData = {
+                    rotationSpeed: 0.005 + Math.random() * 0.005,
+                    bobSpeed: 0.5 + Math.random() * 0.5,
+                    bobPhase: Math.random() * Math.PI * 2,
+                    baseY: y
+                };
+
+                this.scene.add(group);
+                this.arcadeCabinets.push({
+                    group: group,
+                    isDecoration: true,
+                    light: light,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            createNeonSign(text, x, y, z, color) {
+                // Create simple 3D text-like structure
+                const group = new THREE.Group();
+
+                const letters = text.split('');
+                const letterWidth = 1.5;
+                const startX = -(letters.length * letterWidth) / 2;
+
+                letters.forEach((letter, index) => {
+                    const geometry = new THREE.BoxGeometry(1.2, 1.8, 0.2);
+                    const material = new THREE.MeshBasicMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.x = startX + index * letterWidth;
+                    group.add(mesh);
+                });
+
+                group.position.set(x, y, z);
+
+                const light = new THREE.PointLight(color, 0.5, 15);
+                light.position.set(0, 0, 2);
+                group.add(light);
+
+                this.scene.add(group);
+                this.neonLights.push({ light, baseIntensity: 0.5, phase: Math.random() * Math.PI * 2 });
+            }
+
+            createPortals() {
+                const numPortals = Math.min(this.worlds.length, 4);
+
+                for (let i = 0; i < numPortals; i++) {
+                    const world = this.worlds[i] || this.getDemoWorlds()[i];
+
+                    const portalGroup = new THREE.Group();
+
+                    // Create hexagonal frame for arcade feel
+                    const frameGeometry = new THREE.TorusGeometry(2.5, 0.3, 6, 6);
+                    const frameMaterial = new THREE.MeshStandardMaterial({
+                        color: CURRENT_WORLD.portalColor1,
+                        emissive: CURRENT_WORLD.portalColor1,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.7,
+                        roughness: 0.2
+                    });
+                    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+
+                    const portalGeometry = new THREE.CircleGeometry(2.1, 6);
+                    const portalMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            time: { value: 0 },
+                            color1: { value: new THREE.Color(CURRENT_WORLD.portalColor1) },
+                            color2: { value: new THREE.Color(CURRENT_WORLD.portalColor2) }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float time;
+                            uniform vec3 color1;
+                            uniform vec3 color2;
+                            varying vec2 vUv;
+
+                            void main() {
+                                vec2 center = vUv - 0.5;
+                                float dist = length(center);
+                                float angle = atan(center.y, center.x);
+
+                                // Pixelated spiral effect
+                                float pixelSize = 0.05;
+                                vec2 pixelUv = floor(vUv / pixelSize) * pixelSize;
+                                vec2 pixelCenter = pixelUv - 0.5;
+                                float pixelDist = length(pixelCenter);
+
+                                float spiral = sin(pixelDist * 15.0 - time * 4.0 + angle * 3.0) * 0.5 + 0.5;
+                                vec3 color = mix(color1, color2, spiral);
+
+                                // Add scanline effect
+                                float scanline = sin(vUv.y * 50.0) * 0.1 + 0.9;
+                                color *= scanline;
+
+                                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                                gl_FragColor = vec4(color, alpha * 0.95);
+                            }
+                        `,
+                        transparent: true,
+                        side: THREE.DoubleSide
+                    });
+                    const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+                    portal.position.z = 0.1;
+
+                    portalGroup.add(frame);
+                    portalGroup.add(portal);
+
+                    const positions = [
+                        { x: -20, z: -25 },
+                        { x: 20, z: -25 },
+                        { x: -25, z: 10 },
+                        { x: 25, z: 10 }
+                    ];
+
+                    const pos = positions[i % positions.length];
+                    portalGroup.position.x = pos.x;
+                    portalGroup.position.z = pos.z;
+                    portalGroup.position.y = 3;
+
+                    portalGroup.lookAt(0, 3, 0);
+
+                    const light = new THREE.PointLight(CURRENT_WORLD.portalColor1, 1, 15);
+                    light.position.copy(portalGroup.position);
+                    this.scene.add(light);
+
+                    portal.userData = {
+                        world: world,
+                        material: portalMaterial,
+                        light: light,
+                        url: world.url || world.raw_url,
+                        name: world.name,
+                        description: world.description || `Enter the ${world.name} world`
+                    };
+
+                    this.portals.push(portal);
+                    this.scene.add(portalGroup);
+                }
+            }
+
+            buildInheritanceParams() {
+                const params = new URLSearchParams();
+
+                params.set('from', window.location.pathname.split('/').pop() || 'neon-arcade-world.html');
+                params.set('fromName', CURRENT_WORLD.name);
+                params.set('moveSpeed', this.moveSpeed.toString());
+                params.set('lookSpeed', this.lookSpeed.toString());
+                params.set('ambientColor', CURRENT_WORLD.ambientColor.toString(16).padStart(6, '0'));
+                params.set('fogColor', CURRENT_WORLD.fogColor.toString(16).padStart(6, '0'));
+                params.set('portalColor1', CURRENT_WORLD.portalColor1.toString(16).padStart(6, '0'));
+                params.set('portalColor2', CURRENT_WORLD.portalColor2.toString(16).padStart(6, '0'));
+                params.set('particleCount', CURRENT_WORLD.particleCount.toString());
+                params.set('cameraHeight', this.camera.position.y.toString());
+                params.set('fogNear', CURRENT_WORLD.fogNear.toString());
+                params.set('fogFar', CURRENT_WORLD.fogFar.toString());
+
+                return params.toString();
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                if (this.isMobile) {
+                    this.setupMobileControls();
+                } else {
+                    this.setupDesktopControls();
+                }
+            }
+
+            setupDesktopControls() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = true;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.key.toLowerCase() in this.keys) {
+                        this.keys[e.key.toLowerCase()] = false;
+                    }
+                });
+
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    if (!this.isPointerLocked) {
+                        this.renderer.domElement.requestPointerLock();
+                    } else {
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                        const intersects = this.raycaster.intersectObjects(this.portals);
+
+                        if (intersects.length > 0) {
+                            const portal = intersects[0].object;
+                            if (portal.userData.url) {
+                                this.enterWorld(portal.userData.url);
+                            }
+                        }
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked) {
+                        this.rotation.y -= e.movementX * this.lookSpeed;
+                        this.rotation.x -= e.movementY * this.lookSpeed;
+                        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+                    }
+                });
+            }
+
+            setupMobileControls() {
+                const lookArea = document.getElementById('look-area');
+
+                lookArea.addEventListener('touchstart', (e) => {
+                    const touch = e.touches[0];
+
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.portals);
+
+                    if (intersects.length > 0) {
+                        const portal = intersects[0].object;
+                        if (portal.userData.url) {
+                            e.preventDefault();
+                            this.enterWorld(portal.userData.url);
+                            return;
+                        }
+                    }
+
+                    this.lookTouch = {
+                        id: touch.identifier,
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        currentX: touch.clientX,
+                        currentY: touch.clientY
+                    };
+                }, { passive: true });
+
+                lookArea.addEventListener('touchmove', (e) => {
+                    if (!this.lookTouch) return;
+
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.lookTouch.id) {
+                            const deltaX = touch.clientX - this.lookTouch.currentX;
+                            const deltaY = touch.clientY - this.lookTouch.currentY;
+
+                            this.rotation.y -= deltaX * this.lookSpeed * 2;
+                            this.rotation.x -= deltaY * this.lookSpeed * 2;
+                            this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+                            this.lookTouch.currentX = touch.clientX;
+                            this.lookTouch.currentY = touch.clientY;
+
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                lookArea.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+                            this.lookTouch = null;
+                            break;
+                        }
+                    }
+                }, { passive: true });
+
+                const joystick = document.getElementById('movement-joystick');
+                const handle = document.getElementById('movement-handle');
+
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const touch = e.touches[0];
+                    this.joystickTouch = {
+                        id: touch.identifier
+                    };
+
+                    this.joystickActive = true;
+                    this.updateJoystick(touch, joystick, handle);
+                }, { passive: false });
+
+                joystick.addEventListener('touchmove', (e) => {
+                    if (!this.joystickActive || !this.joystickTouch) return;
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        if (touch.identifier === this.joystickTouch.id) {
+                            this.updateJoystick(touch, joystick, handle);
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                joystick.addEventListener('touchend', (e) => {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (this.joystickTouch && touch.identifier === this.joystickTouch.id) {
+                            this.joystickActive = false;
+                            this.joystickTouch = null;
+                            this.joystickVector.set(0, 0);
+                            handle.style.transform = 'translate(-50%, -50%)';
+
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                        }
+                    }
+                }, { passive: false });
+
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+
+            updateJoystick(touch, joystick, handle) {
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2 - 25;
+
+                if (distance > maxDistance) {
+                    deltaX = (deltaX / distance) * maxDistance;
+                    deltaY = (deltaY / distance) * maxDistance;
+                }
+
+                handle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+                this.joystickVector.x = deltaX / maxDistance;
+                this.joystickVector.y = -deltaY / maxDistance;
+            }
+
+            updateMovement() {
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (this.isMobile) {
+                    if (this.joystickActive) {
+                        const moveForward = forward.multiplyScalar(this.joystickVector.y * this.moveSpeed);
+                        const moveRight = right.multiplyScalar(this.joystickVector.x * this.moveSpeed);
+                        this.camera.position.add(moveForward);
+                        this.camera.position.add(moveRight);
+                    }
+                } else {
+                    if (this.keys.w) this.camera.position.add(forward.multiplyScalar(this.moveSpeed));
+                    if (this.keys.s) this.camera.position.add(forward.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.a) this.camera.position.add(right.multiplyScalar(-this.moveSpeed));
+                    if (this.keys.d) this.camera.position.add(right.multiplyScalar(this.moveSpeed));
+                }
+
+                this.camera.position.y = Math.max(1, Math.min(10, this.camera.position.y));
+
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.rotation.y;
+                this.camera.rotation.x = this.rotation.x;
+            }
+
+            updateHover() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const intersects = this.raycaster.intersectObjects(this.portals);
+
+                if (intersects.length > 0) {
+                    const portal = intersects[0].object;
+
+                    if (portal !== this.hoveredPortal) {
+                        this.hoveredPortal = portal;
+
+                        this.tooltipTitle.textContent = portal.userData.name;
+                        this.tooltipDescription.textContent = portal.userData.description;
+                        this.tooltip.classList.add('visible');
+
+                        const vector = new THREE.Vector3();
+                        portal.getWorldPosition(vector);
+                        vector.project(this.camera);
+
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                        this.tooltip.style.left = `${Math.min(x + 20, window.innerWidth - 320)}px`;
+                        this.tooltip.style.top = `${Math.min(y - 50, window.innerHeight - 200)}px`;
+                    }
+                } else {
+                    if (this.hoveredPortal) {
+                        this.hoveredPortal = null;
+                        this.tooltip.classList.remove('visible');
+                    }
+                }
+            }
+
+            async enterWorld(url) {
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = 'Traveling to new world...';
+
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load world (${response.status})`);
+                    }
+
+                    let htmlContent = await response.text();
+
+                    const inheritanceParams = this.buildInheritanceParams();
+
+                    sessionStorage.setItem('worldInheritanceParams', '?' + inheritanceParams);
+
+                    const inheritanceData = {
+                        params: inheritanceParams,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('worldTransition', JSON.stringify(inheritanceData));
+
+                    const paramScript = `<script>
+                        window.INJECTED_PARAMS = '?${inheritanceParams}';
+                        sessionStorage.setItem('worldInheritanceParams', '?${inheritanceParams}');
+                        console.log('Injected params:', window.INJECTED_PARAMS);
+                    <\/script>`;
+
+                    htmlContent = htmlContent.replace('<body>', `<body>${paramScript}`);
+
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    window.location.href = blobUrl;
+
+                } catch (error) {
+                    console.error('Error entering world:', error);
+                    document.getElementById('loading').innerHTML = 'Failed to enter world. Please try again.';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 3000);
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const time = this.clock.getElapsedTime();
+
+                this.updateMovement();
+                this.updateHover();
+
+                // Update portals
+                this.portals.forEach((portal, index) => {
+                    if (portal.userData.material) {
+                        portal.userData.material.uniforms.time.value = time;
+
+                        const intensity = 0.8 + Math.sin(time * 3 + index) * 0.3;
+                        portal.userData.light.intensity = intensity;
+                    }
+                });
+
+                // Update arcade cabinets and decorations
+                this.arcadeCabinets.forEach((cabinet, index) => {
+                    if (cabinet.pixelMaterial) {
+                        cabinet.pixelMaterial.uniforms.time.value = time;
+                    }
+
+                    if (cabinet.isDecoration && cabinet.group.userData) {
+                        // Rotate and bob floating decorations
+                        cabinet.group.rotation.y += cabinet.group.userData.rotationSpeed;
+                        cabinet.group.position.y = cabinet.group.userData.baseY +
+                            Math.sin(time * cabinet.group.userData.bobSpeed + cabinet.group.userData.bobPhase) * 0.3;
+                    }
+
+                    // Pulse cabinet lights
+                    if (cabinet.light) {
+                        const intensity = 0.2 + Math.sin(time * 2 + cabinet.phase) * 0.15;
+                        cabinet.light.intensity = intensity;
+                    }
+                });
+
+                // Update neon lights with pulsing effect
+                this.neonLights.forEach((neon) => {
+                    const pulse = Math.sin(time * 2 + neon.phase) * 0.3 + 0.7;
+                    neon.light.intensity = neon.baseIntensity * pulse;
+                });
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const world = new NeonArcadeWorld();
+            world.init();
+        });
+
+        let lastY = 0;
+        window.addEventListener('touchstart', (e) => {
+            lastY = e.touches[0].clientY;
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            const y = e.touches[0].clientY;
+            const scrollingUp = y > lastY;
+            const atTop = window.pageYOffset === 0;
+
+            if (scrollingUp && atTop) {
+                e.preventDefault();
+            }
+            lastY = y;
+        }, { passive: false });
+    </script>
+</body>
+</html>
