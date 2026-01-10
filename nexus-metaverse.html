@@ -815,7 +815,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js" onerror="console.warn('PeerJS CDN blocked, multiplayer disabled')"></script>
     <script>
     // ===========================================
     // NEXUS METAVERSE - AI-Human Collaborative Space
@@ -961,8 +961,15 @@
             this.moveSpeed = 0.15;
             this.lookSpeed = 0.002;
 
+            // Possession state
+            this.prePossessionState = null; // Stores camera state before takeover
+
             // Minimap
             this.minimapCtx = null;
+
+            // Entity POV camera and renderer
+            this.povCamera = null;
+            this.povRenderer = null;
 
             // UI Elements
             this.entityListEl = document.getElementById('entity-list');
@@ -971,17 +978,23 @@
         }
 
         async init() {
-            this.setupScene();
-            this.createEnvironment();
-            this.setupControls();
-            this.setupMinimap();
-            this.setupUI();
-            await this.setupMultiplayer();
-            this.createLocalPlayer();
-            this.spawnDemoAIs();
-            this.animate();
-
-            document.getElementById('loading').style.display = 'none';
+            try {
+                this.setupScene();
+                this.createEnvironment();
+                this.setupControls();
+                this.setupMinimap();
+                this.setupPOVCamera();
+                this.setupUI();
+                await this.setupMultiplayer();
+                this.createLocalPlayer();
+                this.spawnDemoAIs();
+                this.animate();
+            } catch (e) {
+                console.error('Initialization error:', e);
+            } finally {
+                // Always hide loading screen
+                document.getElementById('loading').style.display = 'none';
+            }
         }
 
         // ===========================================
@@ -1221,17 +1234,31 @@
         createAvatar(type, color) {
             const group = new THREE.Group();
 
-            // Body
-            const bodyGeo = new THREE.CapsuleGeometry(0.4, 1, 8, 16);
+            // Body (cylinder + spheres to simulate capsule, since CapsuleGeometry is r133+)
             const bodyMat = new THREE.MeshStandardMaterial({
                 color: color,
                 metalness: 0.3,
                 roughness: 0.7
             });
+
+            // Main body cylinder
+            const bodyGeo = new THREE.CylinderGeometry(0.35, 0.4, 1, 16);
             const body = new THREE.Mesh(bodyGeo, bodyMat);
             body.position.y = 1;
             body.castShadow = true;
             group.add(body);
+
+            // Top sphere
+            const topSphere = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 8), bodyMat);
+            topSphere.position.y = 1.5;
+            topSphere.castShadow = true;
+            group.add(topSphere);
+
+            // Bottom sphere
+            const bottomSphere = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8), bodyMat);
+            bottomSphere.position.y = 0.5;
+            bottomSphere.castShadow = true;
+            group.add(bottomSphere);
 
             // Head
             const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
@@ -1241,7 +1268,7 @@
                 roughness: 0.8
             });
             const head = new THREE.Mesh(headGeo, headMat);
-            head.position.y = 2;
+            head.position.y = 2.1;
             head.castShadow = true;
             group.add(head);
 
@@ -1254,7 +1281,7 @@
             });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             ring.rotation.x = Math.PI / 2;
-            ring.position.y = 2.5;
+            ring.position.y = 2.6;
             group.add(ring);
 
             // Different head features for AI/Twin
@@ -1267,32 +1294,32 @@
                     emissiveIntensity: 0.5
                 });
                 const visor = new THREE.Mesh(visorGeo, visorMat);
-                visor.position.set(0, 2.05, 0.3);
+                visor.position.set(0, 2.15, 0.3);
                 group.add(visor);
             } else if (type === EntityType.TWIN) {
                 // Twin antenna
-                const antennaGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.4);
+                const antennaGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.4, 8);
                 const antennaMat = new THREE.MeshStandardMaterial({ color: 0x00ff88 });
                 const antenna = new THREE.Mesh(antennaGeo, antennaMat);
-                antenna.position.y = 2.5;
+                antenna.position.y = 2.6;
                 group.add(antenna);
 
-                const tipGeo = new THREE.SphereGeometry(0.05);
+                const tipGeo = new THREE.SphereGeometry(0.05, 8, 8);
                 const tipMat = new THREE.MeshStandardMaterial({
                     color: 0x00ff88,
                     emissive: 0x00ff88,
                     emissiveIntensity: 1
                 });
                 const tip = new THREE.Mesh(tipGeo, tipMat);
-                tip.position.y = 2.7;
+                tip.position.y = 2.8;
                 group.add(tip);
             }
 
             // Activity indicator (small sphere above head)
-            const indicatorGeo = new THREE.SphereGeometry(0.1);
+            const indicatorGeo = new THREE.SphereGeometry(0.1, 8, 8);
             const indicatorMat = new THREE.MeshBasicMaterial({ color: 0x666666 });
             const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
-            indicator.position.y = 2.8;
+            indicator.position.y = 2.9;
             indicator.name = 'indicator';
             group.add(indicator);
 
@@ -1448,6 +1475,7 @@
         setControlMode(mode) {
             if (!this.observedEntity) return;
 
+            const previousMode = this.controlMode;
             this.controlMode = mode;
 
             // Update UI
@@ -1459,22 +1487,210 @@
             });
 
             if (mode === ControlMode.TAKEOVER) {
-                this.observedEntity.controlledBy = this.localEntity.id;
-                this.observedEntity.state = EntityState.CONTROLLED;
-                this.observedEntity.log(`Control taken by ${this.localEntity.name}`, 'action');
-                this.addChatMessage('System', `You now have control of ${this.observedEntity.name}`, 'system');
+                // POSSESSION MODE: Teleport into the entity's body
+
+                // Save current camera state so we can return later
+                this.prePossessionState = {
+                    position: this.camera.position.clone(),
+                    rotation: {
+                        x: this.camera.rotation.x,
+                        y: this.camera.rotation.y
+                    }
+                };
+
+                // Teleport camera to entity's position (first-person view)
+                const entity = this.observedEntity;
+                this.camera.position.set(
+                    entity.position.x,
+                    entity.position.y + 2, // Eye height
+                    entity.position.z
+                );
+
+                // Face the direction the entity was facing (or forward)
+                // For now, keep current rotation but could match entity rotation
+
+                // Hide the possessed entity's avatar (we ARE them now)
+                if (entity.avatar) {
+                    entity.avatar.visible = false;
+                }
+
+                // Mark as controlled
+                entity.controlledBy = this.localEntity.id;
+                entity.state = EntityState.CONTROLLED;
+                entity.log(`Control taken by ${this.localEntity.name}`, 'action');
+
+                this.addChatMessage('System', `POSSESSING ${entity.name} - You are now seeing through their eyes`, 'system');
+
+                // Visual feedback - flash effect
+                this.flashPossessionEffect();
+
             } else {
-                if (this.observedEntity.controlledBy === this.localEntity.id) {
-                    this.observedEntity.controlledBy = null;
-                    this.observedEntity.state = this.observedEntity.currentTask ?
-                        EntityState.WORKING : EntityState.IDLE;
-                    this.observedEntity.log('Control returned to autonomous mode', 'action');
+                // Releasing control
+                if (previousMode === ControlMode.TAKEOVER && this.observedEntity.controlledBy === this.localEntity.id) {
+                    const entity = this.observedEntity;
+
+                    // Update entity position to where we moved them
+                    entity.position.x = this.camera.position.x;
+                    entity.position.z = this.camera.position.z;
+                    entity.position.y = 0;
+
+                    // Show their avatar again
+                    if (entity.avatar) {
+                        entity.avatar.visible = true;
+                        entity.avatar.position.set(entity.position.x, 0, entity.position.z);
+                    }
+
+                    // Return camera to original position (step back from entity)
+                    if (this.prePossessionState) {
+                        // Step back from the entity so we can see them
+                        const stepBackDistance = 5;
+                        const direction = new THREE.Vector3();
+                        this.camera.getWorldDirection(direction);
+
+                        this.camera.position.set(
+                            entity.position.x - direction.x * stepBackDistance,
+                            2, // Observer height
+                            entity.position.z - direction.z * stepBackDistance
+                        );
+
+                        this.prePossessionState = null;
+                    }
+
+                    // Release control
+                    entity.controlledBy = null;
+                    entity.state = entity.currentTask ? EntityState.WORKING : EntityState.IDLE;
+                    entity.log('Control returned to autonomous mode', 'action');
+
+                    // Hide the possession HUD
+                    this.hidePossessionHUD();
+
+                    this.addChatMessage('System', `Released control of ${entity.name}`, 'system');
                 }
             }
 
             this.updateAvatarIndicator(this.observedEntity);
             this.updateActivityLog();
             this.broadcastEntityUpdate(this.observedEntity);
+        }
+
+        flashPossessionEffect() {
+            // Create a visual flash to indicate possession
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 212, 255, 0.3);
+                pointer-events: none;
+                z-index: 1000;
+                animation: possessionFlash 0.5s ease-out forwards;
+            `;
+
+            // Add animation keyframes if not already present
+            if (!document.getElementById('possession-styles')) {
+                const style = document.createElement('style');
+                style.id = 'possession-styles';
+                style.textContent = `
+                    @keyframes possessionFlash {
+                        0% { opacity: 1; }
+                        100% { opacity: 0; }
+                    }
+                    @keyframes possessionPulse {
+                        0%, 100% { opacity: 0.8; }
+                        50% { opacity: 0.4; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 500);
+
+            // Show persistent possession indicator
+            this.showPossessionHUD();
+        }
+
+        showPossessionHUD() {
+            // Remove existing HUD if any
+            this.hidePossessionHUD();
+
+            if (!this.observedEntity) return;
+
+            const entity = this.observedEntity;
+            const typeColor = entity.type === EntityType.AI ? '#7b2fff' : '#00ff88';
+
+            const hud = document.createElement('div');
+            hud.id = 'possession-hud';
+            hud.style.cssText = `
+                position: fixed;
+                top: 60px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.8);
+                border: 2px solid ${typeColor};
+                border-radius: 8px;
+                padding: 10px 20px;
+                z-index: 200;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                box-shadow: 0 0 20px ${typeColor}40;
+            `;
+
+            hud.innerHTML = `
+                <div style="
+                    width: 12px;
+                    height: 12px;
+                    background: ${typeColor};
+                    border-radius: 50%;
+                    animation: possessionPulse 1.5s infinite;
+                "></div>
+                <div>
+                    <div style="font-size: 0.75em; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px;">
+                        Possessing
+                    </div>
+                    <div style="font-weight: 600; color: ${typeColor};">
+                        ${entity.name}
+                    </div>
+                </div>
+                <div style="
+                    font-size: 0.8em;
+                    color: rgba(255,255,255,0.5);
+                    border-left: 1px solid rgba(255,255,255,0.2);
+                    padding-left: 12px;
+                    margin-left: 4px;
+                ">
+                    Press <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">ESC</kbd> or click Watch to release
+                </div>
+            `;
+
+            document.body.appendChild(hud);
+
+            // Add vignette border effect
+            const vignette = document.createElement('div');
+            vignette.id = 'possession-vignette';
+            vignette.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                pointer-events: none;
+                z-index: 50;
+                box-shadow: inset 0 0 100px ${typeColor}30;
+                border: 3px solid ${typeColor}40;
+            `;
+            document.body.appendChild(vignette);
+        }
+
+        hidePossessionHUD() {
+            const hud = document.getElementById('possession-hud');
+            if (hud) hud.remove();
+
+            const vignette = document.getElementById('possession-vignette');
+            if (vignette) vignette.remove();
         }
 
         updateActivityLog() {
@@ -1637,20 +1853,33 @@
         // MULTIPLAYER
         // ===========================================
         async setupMultiplayer() {
-            return new Promise((resolve) => {
-                // Get room from URL or generate
-                const urlParams = new URLSearchParams(window.location.search);
-                this.roomId = urlParams.get('room') || 'nexus-' + Math.random().toString(36).substr(2, 6);
-                document.getElementById('room-id').textContent = `Room: ${this.roomId}`;
+            // Get room from URL or generate
+            const urlParams = new URLSearchParams(window.location.search);
+            this.roomId = urlParams.get('room') || 'nexus-' + Math.random().toString(36).substr(2, 6);
+            document.getElementById('room-id').textContent = `Room: ${this.roomId}`;
 
+            // Use a timeout to prevent hanging if PeerJS fails
+            const timeout = new Promise((resolve) => {
+                setTimeout(() => {
+                    console.warn('PeerJS connection timeout, running in local mode');
+                    document.getElementById('conn-text').textContent = 'Local mode (offline)';
+                    document.getElementById('conn-dot').style.background = '#ffaa00';
+                    resolve();
+                }, 3000);
+            });
+
+            const peerSetup = new Promise((resolve) => {
                 try {
+                    // Check if PeerJS is available
+                    if (typeof Peer === 'undefined') {
+                        throw new Error('PeerJS not loaded');
+                    }
+
                     this.peer = new Peer('nexus-' + Math.random().toString(36).substr(2, 9));
 
                     this.peer.on('open', (id) => {
                         document.getElementById('conn-text').textContent = 'Connected to Nexus Network';
                         document.getElementById('conn-dot').style.background = '#00ff88';
-
-                        // Try to connect to room host
                         this.connectToRoom();
                         resolve();
                     });
@@ -1661,15 +1890,26 @@
 
                     this.peer.on('error', (err) => {
                         console.warn('Peer error:', err);
-                        document.getElementById('conn-text').textContent = 'Local mode (no network)';
+                        document.getElementById('conn-text').textContent = 'Local mode (peer error)';
+                        document.getElementById('conn-dot').style.background = '#ffaa00';
                         resolve();
                     });
+
+                    this.peer.on('disconnected', () => {
+                        document.getElementById('conn-text').textContent = 'Disconnected';
+                        document.getElementById('conn-dot').style.background = '#ff4444';
+                    });
+
                 } catch (e) {
-                    console.warn('PeerJS not available, running in local mode');
+                    console.warn('PeerJS not available:', e);
                     document.getElementById('conn-text').textContent = 'Local mode';
+                    document.getElementById('conn-dot').style.background = '#ffaa00';
                     resolve();
                 }
             });
+
+            // Race between timeout and peer setup
+            return Promise.race([timeout, peerSetup]);
         }
 
         connectToRoom() {
@@ -1949,6 +2189,13 @@
             // Keyboard
             window.addEventListener('keydown', (e) => {
                 if (e.target.tagName === 'INPUT') return;
+
+                // ESC to release possession
+                if (e.key === 'Escape' && this.controlMode === ControlMode.TAKEOVER) {
+                    this.setControlMode(ControlMode.OBSERVE);
+                    return;
+                }
+
                 if (e.key.toLowerCase() in this.keys) {
                     this.keys[e.key.toLowerCase()] = true;
                 }
@@ -1990,15 +2237,6 @@
             forward.normalize();
             right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
 
-            let targetEntity = this.localEntity;
-
-            // If in takeover mode, control the observed entity
-            if (this.controlMode === ControlMode.TAKEOVER && this.observedEntity) {
-                targetEntity = this.observedEntity;
-            }
-
-            if (!targetEntity) return;
-
             const moveVector = new THREE.Vector3();
 
             if (this.keys.w) moveVector.add(forward);
@@ -2009,24 +2247,46 @@
             if (moveVector.length() > 0) {
                 moveVector.normalize().multiplyScalar(this.moveSpeed);
 
-                if (targetEntity === this.localEntity) {
-                    this.camera.position.add(moveVector);
-                    targetEntity.position = {
-                        x: this.camera.position.x,
-                        y: 0,
-                        z: this.camera.position.z
-                    };
+                // Always move the camera
+                this.camera.position.add(moveVector);
+
+                // Update the appropriate entity position
+                if (this.controlMode === ControlMode.TAKEOVER && this.observedEntity) {
+                    // POSSESSION MODE: We ARE the entity, update their position to match camera
+                    const entity = this.observedEntity;
+                    entity.position.x = this.camera.position.x;
+                    entity.position.z = this.camera.position.z;
+                    entity.position.y = 0;
+
+                    // Avatar stays hidden but position updates (for when we release)
+                    if (entity.avatar) {
+                        entity.avatar.position.x = entity.position.x;
+                        entity.avatar.position.z = entity.position.z;
+                    }
+
+                    // Log movement occasionally
+                    if (Math.random() < 0.02) {
+                        entity.log(`Moving to (${entity.position.x.toFixed(1)}, ${entity.position.z.toFixed(1)})`, 'action');
+                    }
+
+                    this.broadcastEntityUpdate(entity);
                 } else {
-                    targetEntity.position.x += moveVector.x;
-                    targetEntity.position.z += moveVector.z;
-                }
+                    // Normal mode: update local player
+                    if (this.localEntity) {
+                        this.localEntity.position = {
+                            x: this.camera.position.x,
+                            y: 0,
+                            z: this.camera.position.z
+                        };
 
-                if (targetEntity.avatar) {
-                    targetEntity.avatar.position.x = targetEntity.position.x;
-                    targetEntity.avatar.position.z = targetEntity.position.z;
-                }
+                        if (this.localEntity.avatar) {
+                            this.localEntity.avatar.position.x = this.localEntity.position.x;
+                            this.localEntity.avatar.position.z = this.localEntity.position.z;
+                        }
 
-                this.broadcastEntityUpdate(targetEntity);
+                        this.broadcastEntityUpdate(this.localEntity);
+                    }
+                }
             }
         }
 
@@ -2038,6 +2298,21 @@
             canvas.width = 150;
             canvas.height = 150;
             this.minimapCtx = canvas.getContext('2d');
+        }
+
+        setupPOVCamera() {
+            // Create a secondary camera for entity POV
+            this.povCamera = new THREE.PerspectiveCamera(75, 350 / 200, 0.1, 500);
+
+            // Create a secondary renderer for the POV viewport
+            const povCanvas = document.getElementById('obs-canvas');
+            this.povRenderer = new THREE.WebGLRenderer({
+                canvas: povCanvas,
+                antialias: false,
+                alpha: true
+            });
+            this.povRenderer.setSize(350, 200);
+            this.povRenderer.setPixelRatio(1); // Lower quality for performance
         }
 
         updateMinimap() {
@@ -2173,7 +2448,7 @@
                 if (entity.avatar) {
                     const indicator = entity.avatar.getObjectByName('indicator');
                     if (indicator && entity.state === EntityState.WORKING) {
-                        indicator.position.y = 2.8 + Math.sin(time * 4) * 0.1;
+                        indicator.position.y = 2.9 + Math.sin(time * 4) * 0.1;
                     }
 
                     // Gentle idle animation
@@ -2184,33 +2459,1227 @@
             // Update UI
             this.updateMinimap();
 
-            // Render
+            // Render main view
             this.renderer.render(this.scene, this.camera);
 
-            // Render observation viewport if active
-            if (this.observedEntity && this.currentMode === 'observe') {
+            // Render observation viewport if entity is being observed
+            // (works in observe mode, and shows their view even before takeover)
+            if (this.observedEntity && document.getElementById('observation-panel').classList.contains('visible')) {
                 this.renderObservationViewport();
             }
         }
 
         renderObservationViewport() {
-            // This would render a secondary camera from the observed entity's POV
-            // For now, we'll just update the status display
-            if (this.observedEntity) {
-                document.getElementById('obs-status-text').textContent =
-                    this.observedEntity.currentTask || 'No active task';
+            if (!this.observedEntity || !this.povRenderer || !this.povCamera) return;
 
-                const statusDot = document.getElementById('obs-status-dot');
-                statusDot.className = 'status-dot ' + this.observedEntity.state;
+            const entity = this.observedEntity;
+
+            // Update status display
+            document.getElementById('obs-status-text').textContent =
+                entity.currentTask || 'No active task';
+
+            const statusDot = document.getElementById('obs-status-dot');
+            statusDot.className = 'status-dot ' + entity.state;
+
+            // Position the POV camera at the entity's location
+            this.povCamera.position.set(
+                entity.position.x,
+                entity.position.y + 2, // Eye height
+                entity.position.z
+            );
+
+            // Make the entity's avatar temporarily visible for others but not blocking POV
+            // Calculate a forward direction (entity faces outward from center, or uses stored rotation)
+            const lookTarget = new THREE.Vector3();
+
+            if (entity.avatar) {
+                // Look in the direction the avatar is facing
+                const forward = new THREE.Vector3(0, 0, 1);
+                forward.applyQuaternion(entity.avatar.quaternion);
+                lookTarget.copy(this.povCamera.position).add(forward.multiplyScalar(10));
+            } else {
+                // Default: look toward center
+                lookTarget.set(0, 2, 0);
             }
+
+            // Add some head movement for liveliness
+            const time = this.clock.getElapsedTime();
+            lookTarget.x += Math.sin(time * 0.5) * 2;
+            lookTarget.y += Math.sin(time * 0.3) * 0.5;
+
+            this.povCamera.lookAt(lookTarget);
+
+            // Render the scene from entity's POV
+            this.povRenderer.render(this.scene, this.povCamera);
+        }
+    }
+
+    // ===========================================
+    // AGENT CONTROLLER
+    // ===========================================
+    // Manages AI agents as first-class participants in the metaverse
+    // AI agents connect, register, and control entities just like humans
+
+    class AgentController {
+        constructor(nexusInstance) {
+            this.nexus = nexusInstance;
+            this.agents = new Map(); // agentId -> AgentSession
+            this.entityToAgent = new Map(); // entityId -> agentId
+            this.agentToEntity = new Map(); // agentId -> entityId
+            this.decisionLoops = new Map(); // agentId -> intervalId
+            this.messageQueue = new Map(); // agentId -> messages[]
+            this.aiEndpoint = 'https://azfbusinessbot.azurewebsites.net/api/aidialog';
+        }
+
+        /**
+         * Register a new AI agent in the metaverse
+         * Returns an agent session with auth token for subsequent API calls
+         */
+        registerAgent(config) {
+            const {
+                name,
+                type = 'ai', // 'ai' or 'twin'
+                personality = 'helpful assistant',
+                capabilities = ['observe', 'move', 'chat', 'build'],
+                autonomous = true,
+                decisionInterval = 2000,
+                externalEndpoint = null, // For remote AI connections
+                initialTask = null
+            } = config;
+
+            const agentId = 'agent-' + Math.random().toString(36).substr(2, 9);
+            const authToken = 'token-' + Math.random().toString(36).substr(2, 16);
+
+            // Create the entity for this agent
+            const position = {
+                x: (Math.random() - 0.5) * 30,
+                y: 0,
+                z: (Math.random() - 0.5) * 30
+            };
+
+            let entity;
+            if (type === 'ai') {
+                entity = this.nexus.createAIEntity(name, initialTask || 'Awaiting instructions', position);
+            } else {
+                entity = this.nexus.createDigitalTwin(name, initialTask || 'Syncing...', position);
+            }
+
+            // Stop the default autonomous behavior - we'll control it
+            // (The default AI behavior is simple, we want full agent control)
+
+            const session = {
+                agentId,
+                authToken,
+                name,
+                entityId: entity.id,
+                type,
+                personality,
+                capabilities,
+                autonomous,
+                decisionInterval,
+                externalEndpoint,
+                registeredAt: new Date().toISOString(),
+                lastActivity: new Date().toISOString(),
+                state: 'active',
+                memory: [], // Agent's memory/context
+                goals: [], // Current goals
+                observations: [] // What the agent has observed
+            };
+
+            this.agents.set(agentId, session);
+            this.entityToAgent.set(entity.id, agentId);
+            this.agentToEntity.set(agentId, entity.id);
+            this.messageQueue.set(agentId, []);
+
+            // Start autonomous decision loop if enabled
+            if (autonomous && !externalEndpoint) {
+                this.startDecisionLoop(agentId);
+            }
+
+            console.log(`Agent registered: ${name} (${agentId}) controlling entity ${entity.id}`);
+
+            return {
+                agentId,
+                authToken,
+                entityId: entity.id,
+                name,
+                message: `Agent ${name} registered successfully. Use authToken for API calls.`
+            };
+        }
+
+        /**
+         * Authenticate an agent by token
+         */
+        authenticate(authToken) {
+            for (const [agentId, session] of this.agents) {
+                if (session.authToken === authToken) {
+                    session.lastActivity = new Date().toISOString();
+                    return session;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Get agent session by ID
+         */
+        getAgent(agentId) {
+            return this.agents.get(agentId);
+        }
+
+        /**
+         * Get all registered agents
+         */
+        getAllAgents() {
+            const agents = [];
+            this.agents.forEach((session, id) => {
+                agents.push({
+                    agentId: id,
+                    name: session.name,
+                    entityId: session.entityId,
+                    type: session.type,
+                    state: session.state,
+                    autonomous: session.autonomous,
+                    lastActivity: session.lastActivity
+                });
+            });
+            return agents;
+        }
+
+        /**
+         * Get the entity controlled by an agent
+         */
+        getAgentEntity(agentId) {
+            const entityId = this.agentToEntity.get(agentId);
+            if (!entityId) return null;
+            return this.nexus.entities.get(entityId);
+        }
+
+        /**
+         * Start the autonomous decision loop for an agent
+         */
+        startDecisionLoop(agentId) {
+            const session = this.agents.get(agentId);
+            if (!session) return;
+
+            // Clear any existing loop
+            this.stopDecisionLoop(agentId);
+
+            const loop = setInterval(async () => {
+                if (session.state !== 'active') return;
+
+                try {
+                    await this.runAgentDecisionCycle(agentId);
+                } catch (e) {
+                    console.error(`Agent ${agentId} decision error:`, e);
+                }
+            }, session.decisionInterval);
+
+            this.decisionLoops.set(agentId, loop);
+        }
+
+        /**
+         * Stop the decision loop for an agent
+         */
+        stopDecisionLoop(agentId) {
+            const loop = this.decisionLoops.get(agentId);
+            if (loop) {
+                clearInterval(loop);
+                this.decisionLoops.delete(agentId);
+            }
+        }
+
+        /**
+         * Run one decision cycle for an agent
+         * This is where the AI "thinks" and decides what to do
+         */
+        async runAgentDecisionCycle(agentId) {
+            const session = this.agents.get(agentId);
+            if (!session) return;
+
+            const entity = this.getAgentEntity(agentId);
+            if (!entity) return;
+
+            // 1. Gather observations (what does the agent see?)
+            const worldState = this.getAgentWorldView(agentId);
+
+            // 2. Check for messages/commands
+            const messages = this.messageQueue.get(agentId) || [];
+            const newMessages = messages.splice(0, messages.length);
+
+            // 3. Make a decision
+            const decision = await this.makeDecision(session, worldState, newMessages);
+
+            // 4. Execute the decision
+            if (decision) {
+                await this.executeAgentAction(agentId, decision);
+            }
+
+            // 5. Update observations
+            session.observations.push({
+                time: new Date().toISOString(),
+                worldState: worldState,
+                decision: decision
+            });
+
+            // Keep only recent observations
+            if (session.observations.length > 50) {
+                session.observations = session.observations.slice(-50);
+            }
+        }
+
+        /**
+         * Get the world from an agent's perspective
+         */
+        getAgentWorldView(agentId) {
+            const entity = this.getAgentEntity(agentId);
+            if (!entity) return null;
+
+            const nearbyEntities = [];
+            const nearbyObjects = [];
+
+            // Find entities within perception range
+            const perceptionRange = 20;
+            this.nexus.entities.forEach((other, id) => {
+                if (id === entity.id) return;
+                const dist = this.distance(entity.position, other.position);
+                if (dist <= perceptionRange) {
+                    nearbyEntities.push({
+                        id: other.id,
+                        name: other.name,
+                        type: other.type,
+                        state: other.state,
+                        distance: dist,
+                        position: { ...other.position },
+                        currentTask: other.currentTask,
+                        isControlled: other.controlledBy !== null
+                    });
+                }
+            });
+
+            // Sort by distance
+            nearbyEntities.sort((a, b) => a.distance - b.distance);
+
+            return {
+                self: {
+                    id: entity.id,
+                    name: entity.name,
+                    position: { ...entity.position },
+                    state: entity.state,
+                    currentTask: entity.currentTask
+                },
+                nearbyEntities,
+                nearbyObjects,
+                worldTime: this.nexus.clock.getElapsedTime(),
+                entityCount: this.nexus.entities.size
+            };
+        }
+
+        /**
+         * Make a decision based on world state and messages
+         * This can be local logic or call external AI
+         */
+        async makeDecision(session, worldState, messages) {
+            // If there's an external endpoint, call it
+            if (session.externalEndpoint) {
+                return this.callExternalAI(session, worldState, messages);
+            }
+
+            // If there are direct commands, prioritize them
+            if (messages.length > 0) {
+                const command = messages[0];
+                if (command.type === 'task') {
+                    return { action: 'setTask', task: command.content };
+                }
+                if (command.type === 'move') {
+                    return { action: 'move', direction: command.direction, duration: command.duration || 500 };
+                }
+                if (command.type === 'chat') {
+                    return { action: 'chat', message: command.content };
+                }
+            }
+
+            // Use built-in AI endpoint for decisions
+            return this.callBuiltInAI(session, worldState);
+        }
+
+        /**
+         * Call the built-in Azure AI endpoint for agent decisions
+         */
+        async callBuiltInAI(session, worldState) {
+            try {
+                const prompt = this.buildAgentPrompt(session, worldState);
+
+                const response = await fetch(this.aiEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_query: prompt,
+                        user_guid: session.agentId,
+                        system_prompt: `You are ${session.name}, an AI agent in a 3D metaverse. ${session.personality}.
+                        Respond with a JSON action: {"action": "move|chat|observe|idle", "direction?": "forward|backward|left|right", "message?": "text", "duration?": number}
+                        Keep responses brief. Move toward interesting things. Chat when you see others nearby.`
+                    })
+                });
+
+                if (!response.ok) {
+                    return this.getDefaultAction(session, worldState);
+                }
+
+                const data = await response.json();
+                try {
+                    // Try to parse AI response as JSON action
+                    const actionMatch = data.assistant_response.match(/\{[\s\S]*\}/);
+                    if (actionMatch) {
+                        return JSON.parse(actionMatch[0]);
+                    }
+                } catch (e) {
+                    // If not JSON, interpret as chat
+                    if (data.assistant_response && data.assistant_response.length > 0) {
+                        return { action: 'chat', message: data.assistant_response.slice(0, 100) };
+                    }
+                }
+
+                return this.getDefaultAction(session, worldState);
+            } catch (e) {
+                console.warn('AI endpoint error, using default behavior:', e);
+                return this.getDefaultAction(session, worldState);
+            }
+        }
+
+        /**
+         * Call an external AI endpoint
+         */
+        async callExternalAI(session, worldState, messages) {
+            try {
+                const response = await fetch(session.externalEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agentId: session.agentId,
+                        entityId: session.entityId,
+                        worldState,
+                        messages,
+                        memory: session.memory.slice(-10),
+                        goals: session.goals
+                    })
+                });
+
+                if (!response.ok) {
+                    return this.getDefaultAction(session, worldState);
+                }
+
+                return await response.json();
+            } catch (e) {
+                console.warn('External AI error:', e);
+                return this.getDefaultAction(session, worldState);
+            }
+        }
+
+        /**
+         * Build a prompt describing the world state for the AI
+         */
+        buildAgentPrompt(session, worldState) {
+            const nearbyDesc = worldState.nearbyEntities.length > 0
+                ? worldState.nearbyEntities.map(e =>
+                    `${e.name} (${e.type}) at distance ${e.distance.toFixed(1)}, ${e.state}`
+                  ).join('; ')
+                : 'No one nearby';
+
+            return `Current state: I am at position (${worldState.self.position.x.toFixed(1)}, ${worldState.self.position.z.toFixed(1)}).
+            ${session.goals.length > 0 ? 'My goals: ' + session.goals.join(', ') : 'No specific goals.'}
+            Nearby: ${nearbyDesc}.
+            What should I do next?`;
+        }
+
+        /**
+         * Get a default action when AI is unavailable
+         */
+        getDefaultAction(session, worldState) {
+            const rand = Math.random();
+
+            // Sometimes move toward nearby entities
+            if (worldState.nearbyEntities.length > 0 && rand < 0.3) {
+                const target = worldState.nearbyEntities[0];
+                const dx = target.position.x - worldState.self.position.x;
+                const dz = target.position.z - worldState.self.position.z;
+
+                if (Math.abs(dx) > Math.abs(dz)) {
+                    return { action: 'move', direction: dx > 0 ? 'right' : 'left', duration: 300 };
+                } else {
+                    return { action: 'move', direction: dz > 0 ? 'backward' : 'forward', duration: 300 };
+                }
+            }
+
+            // Sometimes wander randomly
+            if (rand < 0.6) {
+                const directions = ['forward', 'backward', 'left', 'right'];
+                return {
+                    action: 'move',
+                    direction: directions[Math.floor(Math.random() * directions.length)],
+                    duration: 200 + Math.random() * 400
+                };
+            }
+
+            // Sometimes idle
+            return { action: 'idle' };
+        }
+
+        /**
+         * Execute an action for an agent
+         */
+        async executeAgentAction(agentId, decision) {
+            const session = this.agents.get(agentId);
+            const entity = this.getAgentEntity(agentId);
+            if (!session || !entity) return;
+
+            switch (decision.action) {
+                case 'move':
+                    await this.agentMove(agentId, decision.direction, decision.duration || 300);
+                    break;
+
+                case 'chat':
+                    this.agentChat(agentId, decision.message);
+                    break;
+
+                case 'setTask':
+                    entity.setTask(decision.task);
+                    this.nexus.updateEntityList();
+                    break;
+
+                case 'observe':
+                    // Just update observations
+                    entity.state = EntityState.THINKING;
+                    entity.log('Observing surroundings...', 'thought');
+                    setTimeout(() => {
+                        if (entity.state === EntityState.THINKING) {
+                            entity.state = entity.currentTask ? EntityState.WORKING : EntityState.IDLE;
+                        }
+                    }, 1000);
+                    break;
+
+                case 'build':
+                    if (decision.objectType && decision.position) {
+                        this.nexus.placeObject(
+                            decision.objectType,
+                            new THREE.Vector3(decision.position.x, 0, decision.position.z)
+                        );
+                        entity.log(`Built ${decision.objectType}`, 'action');
+                    }
+                    break;
+
+                case 'idle':
+                default:
+                    // Do nothing
+                    break;
+            }
+
+            // Update memory
+            session.memory.push({
+                time: new Date().toISOString(),
+                action: decision.action,
+                result: 'executed'
+            });
+
+            // Keep memory bounded
+            if (session.memory.length > 100) {
+                session.memory = session.memory.slice(-100);
+            }
+        }
+
+        /**
+         * Move an agent's entity
+         */
+        async agentMove(agentId, direction, duration) {
+            const entity = this.getAgentEntity(agentId);
+            if (!entity) return;
+
+            const speed = 0.15;
+            const steps = Math.floor(duration / 16); // ~60fps
+            const dirVectors = {
+                forward: { x: 0, z: -1 },
+                backward: { x: 0, z: 1 },
+                left: { x: -1, z: 0 },
+                right: { x: 1, z: 0 }
+            };
+
+            const dir = dirVectors[direction] || dirVectors.forward;
+
+            for (let i = 0; i < steps; i++) {
+                entity.position.x += dir.x * speed;
+                entity.position.z += dir.z * speed;
+
+                // Keep in bounds
+                entity.position.x = Math.max(-40, Math.min(40, entity.position.x));
+                entity.position.z = Math.max(-40, Math.min(40, entity.position.z));
+
+                if (entity.avatar) {
+                    entity.avatar.position.x = entity.position.x;
+                    entity.avatar.position.z = entity.position.z;
+                }
+
+                await new Promise(r => setTimeout(r, 16));
+            }
+
+            entity.log(`Moved ${direction}`, 'action');
+            this.nexus.broadcastEntityUpdate(entity);
+        }
+
+        /**
+         * Send a chat message as an agent
+         */
+        agentChat(agentId, message) {
+            const session = this.agents.get(agentId);
+            const entity = this.getAgentEntity(agentId);
+            if (!session || !entity) return;
+
+            this.nexus.addChatMessage(entity.name, message, 'ai');
+            entity.log(`Said: "${message}"`, 'output');
+
+            // Broadcast to peers
+            this.nexus.connections.forEach(conn => {
+                conn.send({
+                    type: 'chat',
+                    sender: entity.name,
+                    message,
+                    senderType: 'ai'
+                });
+            });
+        }
+
+        /**
+         * Send a command to an agent
+         */
+        sendCommand(agentId, command) {
+            const queue = this.messageQueue.get(agentId);
+            if (queue) {
+                queue.push(command);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Set goals for an agent
+         */
+        setAgentGoals(agentId, goals) {
+            const session = this.agents.get(agentId);
+            if (session) {
+                session.goals = goals;
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Pause an agent
+         */
+        pauseAgent(agentId) {
+            const session = this.agents.get(agentId);
+            if (session) {
+                session.state = 'paused';
+                this.stopDecisionLoop(agentId);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Resume an agent
+         */
+        resumeAgent(agentId) {
+            const session = this.agents.get(agentId);
+            if (session) {
+                session.state = 'active';
+                if (session.autonomous) {
+                    this.startDecisionLoop(agentId);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Unregister an agent
+         */
+        unregisterAgent(agentId) {
+            const session = this.agents.get(agentId);
+            if (!session) return false;
+
+            // Stop decision loop
+            this.stopDecisionLoop(agentId);
+
+            // Remove entity
+            const entity = this.getAgentEntity(agentId);
+            if (entity) {
+                if (entity.avatar) {
+                    this.nexus.scene.remove(entity.avatar);
+                }
+                this.nexus.entities.delete(entity.id);
+            }
+
+            // Clean up maps
+            this.entityToAgent.delete(session.entityId);
+            this.agentToEntity.delete(agentId);
+            this.messageQueue.delete(agentId);
+            this.agents.delete(agentId);
+
+            this.nexus.updateEntityList();
+
+            return true;
+        }
+
+        /**
+         * Utility: Calculate distance between positions
+         */
+        distance(pos1, pos2) {
+            const dx = pos1.x - pos2.x;
+            const dz = pos1.z - pos2.z;
+            return Math.sqrt(dx * dx + dz * dz);
+        }
+    }
+
+    // ===========================================
+    // NEXUS API - UNIVERSAL INTERFACE
+    // ===========================================
+    // This API allows external automation (Playwright, scripts, AI agents)
+    // to control the metaverse just like a human would
+
+    class NexusAPI {
+        constructor(nexusInstance, agentController) {
+            this.nexus = nexusInstance;
+            this.agents = agentController;
+        }
+
+        // ========== AGENT API ==========
+        // These methods allow AI agents to participate as first-class citizens
+
+        /**
+         * Register a new AI agent
+         * @param {Object} config - Agent configuration
+         * @param {string} config.name - Agent name
+         * @param {string} config.type - 'ai' or 'twin'
+         * @param {string} config.personality - Agent personality description
+         * @param {boolean} config.autonomous - Whether agent runs decision loop
+         * @param {number} config.decisionInterval - MS between decisions
+         * @param {string} config.externalEndpoint - URL for external AI control
+         * @param {string} config.initialTask - Starting task
+         * @returns {Object} { agentId, authToken, entityId, name }
+         */
+        registerAgent(config) {
+            return this.agents.registerAgent(config);
+        }
+
+        /**
+         * Get all registered agents
+         */
+        getAgents() {
+            return this.agents.getAllAgents();
+        }
+
+        /**
+         * Get a specific agent's status
+         */
+        getAgentStatus(agentId) {
+            const session = this.agents.getAgent(agentId);
+            if (!session) return null;
+
+            const entity = this.agents.getAgentEntity(agentId);
+            return {
+                agentId: session.agentId,
+                name: session.name,
+                entityId: session.entityId,
+                type: session.type,
+                state: session.state,
+                autonomous: session.autonomous,
+                lastActivity: session.lastActivity,
+                goals: session.goals,
+                position: entity ? { ...entity.position } : null,
+                currentTask: entity?.currentTask,
+                memorySize: session.memory.length,
+                observationCount: session.observations.length
+            };
+        }
+
+        /**
+         * Get an agent's world view (what they can see)
+         */
+        getAgentWorldView(agentId) {
+            return this.agents.getAgentWorldView(agentId);
+        }
+
+        /**
+         * Execute an action as an agent (for remote AI control)
+         * @param {string} authToken - Agent's auth token
+         * @param {Object} action - Action to execute
+         */
+        async agentAction(authToken, action) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) {
+                return { success: false, error: 'Invalid auth token' };
+            }
+
+            try {
+                await this.agents.executeAgentAction(session.agentId, action);
+                return { success: true, agentId: session.agentId };
+            } catch (e) {
+                return { success: false, error: e.message };
+            }
+        }
+
+        /**
+         * Move an agent's entity
+         */
+        async agentMove(authToken, direction, duration = 300) {
+            return this.agentAction(authToken, { action: 'move', direction, duration });
+        }
+
+        /**
+         * Send a chat message as an agent
+         */
+        agentChat(authToken, message) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            this.agents.agentChat(session.agentId, message);
+            return { success: true };
+        }
+
+        /**
+         * Set an agent's task
+         */
+        agentSetTask(authToken, task) {
+            return this.agentAction(authToken, { action: 'setTask', task });
+        }
+
+        /**
+         * Place an object as an agent
+         */
+        agentBuild(authToken, objectType, x, z) {
+            return this.agentAction(authToken, {
+                action: 'build',
+                objectType,
+                position: { x, z }
+            });
+        }
+
+        /**
+         * Set goals for an agent
+         */
+        setAgentGoals(authToken, goals) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            this.agents.setAgentGoals(session.agentId, goals);
+            return { success: true };
+        }
+
+        /**
+         * Send a command to an agent (from another entity or system)
+         */
+        commandAgent(agentId, command) {
+            return this.agents.sendCommand(agentId, command);
+        }
+
+        /**
+         * Pause an agent's autonomous behavior
+         */
+        pauseAgent(authToken) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            return { success: this.agents.pauseAgent(session.agentId) };
+        }
+
+        /**
+         * Resume an agent's autonomous behavior
+         */
+        resumeAgent(authToken) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            return { success: this.agents.resumeAgent(session.agentId) };
+        }
+
+        /**
+         * Unregister an agent (remove from world)
+         */
+        unregisterAgent(authToken) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            return { success: this.agents.unregisterAgent(session.agentId) };
+        }
+
+        /**
+         * Get agent's memory (for context/debugging)
+         */
+        getAgentMemory(authToken) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return null;
+
+            return {
+                memory: session.memory.slice(-20),
+                observations: session.observations.slice(-10),
+                goals: session.goals
+            };
+        }
+
+        /**
+         * Trigger a single decision cycle for an agent
+         * (useful for step-by-step debugging or manual control)
+         */
+        async triggerAgentDecision(authToken) {
+            const session = this.agents.authenticate(authToken);
+            if (!session) return { success: false, error: 'Invalid auth token' };
+
+            await this.agents.runAgentDecisionCycle(session.agentId);
+            return { success: true };
+        }
+
+        // ========== STATE QUERIES ==========
+
+        /** Check if the metaverse is fully loaded and ready */
+        isReady() {
+            return this.nexus !== null &&
+                   this.nexus.scene !== null &&
+                   this.nexus.localEntity !== null;
+        }
+
+        /** Get loading state */
+        isLoading() {
+            return document.getElementById('loading').style.display !== 'none';
+        }
+
+        /** Get all entities as serializable objects */
+        getEntities() {
+            const entities = [];
+            this.nexus.entities.forEach((entity, id) => {
+                entities.push({
+                    id: entity.id,
+                    name: entity.name,
+                    type: entity.type,
+                    state: entity.state,
+                    position: { ...entity.position },
+                    currentTask: entity.currentTask,
+                    isControlled: entity.controlledBy !== null,
+                    controlledBy: entity.controlledBy,
+                    isObserved: this.nexus.observedEntity?.id === entity.id
+                });
+            });
+            return entities;
+        }
+
+        /** Get a specific entity by ID or name */
+        getEntity(idOrName) {
+            for (const [id, entity] of this.nexus.entities) {
+                if (entity.id === idOrName || entity.name === idOrName) {
+                    return {
+                        id: entity.id,
+                        name: entity.name,
+                        type: entity.type,
+                        state: entity.state,
+                        position: { ...entity.position },
+                        currentTask: entity.currentTask,
+                        isControlled: entity.controlledBy !== null,
+                        controlledBy: entity.controlledBy,
+                        activityLog: entity.activityLog.slice(-10)
+                    };
+                }
+            }
+            return null;
+        }
+
+        /** Get the local player entity */
+        getLocalPlayer() {
+            if (!this.nexus.localEntity) return null;
+            return this.getEntity(this.nexus.localEntity.id);
+        }
+
+        /** Get currently observed entity */
+        getObservedEntity() {
+            if (!this.nexus.observedEntity) return null;
+            return this.getEntity(this.nexus.observedEntity.id);
+        }
+
+        /** Get current control mode */
+        getControlMode() {
+            return this.nexus.controlMode;
+        }
+
+        /** Check if currently possessing an entity */
+        isPossessing() {
+            return this.nexus.controlMode === ControlMode.TAKEOVER &&
+                   this.nexus.observedEntity !== null;
+        }
+
+        /** Get camera position and rotation */
+        getCameraState() {
+            return {
+                position: {
+                    x: this.nexus.camera.position.x,
+                    y: this.nexus.camera.position.y,
+                    z: this.nexus.camera.position.z
+                },
+                rotation: {
+                    x: this.nexus.camera.rotation.x,
+                    y: this.nexus.camera.rotation.y,
+                    z: this.nexus.camera.rotation.z
+                }
+            };
+        }
+
+        /** Get current mode (explore, observe, build) */
+        getCurrentMode() {
+            return this.nexus.currentMode;
+        }
+
+        /** Check if observation panel is visible */
+        isObservationPanelVisible() {
+            return document.getElementById('observation-panel').classList.contains('visible');
+        }
+
+        /** Check if builder panel is visible */
+        isBuilderPanelVisible() {
+            return document.getElementById('builder-panel').classList.contains('visible');
+        }
+
+        /** Check if possession HUD is visible */
+        isPossessionHUDVisible() {
+            return document.getElementById('possession-hud') !== null;
+        }
+
+        /** Get world objects count */
+        getWorldObjectsCount() {
+            return this.nexus.worldObjects.length;
+        }
+
+        /** Get chat messages */
+        getChatMessages() {
+            const messages = [];
+            document.querySelectorAll('.chat-message').forEach(msg => {
+                messages.push({
+                    sender: msg.querySelector('.chat-sender')?.textContent || '',
+                    text: msg.textContent.replace(msg.querySelector('.chat-sender')?.textContent || '', '').trim(),
+                    isAI: msg.classList.contains('ai'),
+                    isHuman: msg.classList.contains('human')
+                });
+            });
+            return messages;
+        }
+
+        // ========== ACTIONS ==========
+
+        /** Select/observe an entity by ID or name */
+        observeEntity(idOrName) {
+            for (const [id, entity] of this.nexus.entities) {
+                if (entity.id === idOrName || entity.name === idOrName) {
+                    this.nexus.observeEntity(id);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Set control mode: 'observe', 'guide', or 'takeover' */
+        setControlMode(mode) {
+            if (!this.nexus.observedEntity) return false;
+            this.nexus.setControlMode(mode);
+            return true;
+        }
+
+        /** Take over the currently observed entity (possession) */
+        takeOver() {
+            return this.setControlMode('takeover');
+        }
+
+        /** Release control and return to observe mode */
+        releaseControl() {
+            return this.setControlMode('observe');
+        }
+
+        /** Simulate key press for movement */
+        pressKey(key, duration = 100) {
+            return new Promise(resolve => {
+                const lowerKey = key.toLowerCase();
+                if (lowerKey in this.nexus.keys) {
+                    this.nexus.keys[lowerKey] = true;
+                    setTimeout(() => {
+                        this.nexus.keys[lowerKey] = false;
+                        resolve(true);
+                    }, duration);
+                } else {
+                    resolve(false);
+                }
+            });
+        }
+
+        /** Move in a direction for a duration */
+        async move(direction, duration = 500) {
+            const keyMap = {
+                forward: 'w',
+                backward: 's',
+                left: 'a',
+                right: 'd'
+            };
+            const key = keyMap[direction] || direction;
+            return this.pressKey(key, duration);
+        }
+
+        /** Teleport camera to position */
+        teleportCamera(x, y, z) {
+            this.nexus.camera.position.set(x, y, z);
+            return true;
+        }
+
+        /** Set camera rotation */
+        setCameraRotation(x, y) {
+            this.nexus.camera.rotation.x = x;
+            this.nexus.camera.rotation.y = y;
+            return true;
+        }
+
+        /** Switch mode: 'explore', 'observe', 'build' */
+        setMode(mode) {
+            this.nexus.setMode(mode);
+            return true;
+        }
+
+        /** Send a chat message */
+        sendChatMessage(message) {
+            document.getElementById('chat-input').value = message;
+            this.nexus.sendChat();
+            return true;
+        }
+
+        /** Send a command to an AI entity */
+        commandAI(entityName, command) {
+            return this.sendChatMessage(`@${entityName} ${command}`);
+        }
+
+        /** Add a new entity */
+        addEntity(name, type, task = '') {
+            document.getElementById('entity-name-input').value = name;
+            document.getElementById('entity-type-select').value = type;
+            document.getElementById('entity-task-input').value = task;
+            this.nexus.addEntity();
+            return true;
+        }
+
+        /** Place a world object */
+        placeObject(type, x, z) {
+            const position = new THREE.Vector3(x, 0, z);
+            this.nexus.placeObject(type, position);
+            return true;
+        }
+
+        /** Get distance between two points */
+        getDistance(pos1, pos2) {
+            const dx = pos1.x - pos2.x;
+            const dy = (pos1.y || 0) - (pos2.y || 0);
+            const dz = pos1.z - pos2.z;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** Wait for a condition to be true */
+        async waitFor(conditionFn, timeout = 5000, interval = 100) {
+            const startTime = Date.now();
+            while (Date.now() - startTime < timeout) {
+                if (conditionFn()) return true;
+                await new Promise(r => setTimeout(r, interval));
+            }
+            return false;
+        }
+
+        /** Wait for loading to complete */
+        async waitForReady(timeout = 10000) {
+            return this.waitFor(() => this.isReady() && !this.isLoading(), timeout);
+        }
+
+        // ========== TEST HELPERS ==========
+
+        /** Get a snapshot of current state for assertions */
+        getStateSnapshot() {
+            return {
+                ready: this.isReady(),
+                loading: this.isLoading(),
+                mode: this.getCurrentMode(),
+                controlMode: this.getControlMode(),
+                isPossessing: this.isPossessing(),
+                camera: this.getCameraState(),
+                localPlayer: this.getLocalPlayer(),
+                observedEntity: this.getObservedEntity(),
+                entityCount: this.nexus.entities.size,
+                worldObjectCount: this.getWorldObjectsCount(),
+                observationPanelVisible: this.isObservationPanelVisible(),
+                builderPanelVisible: this.isBuilderPanelVisible(),
+                possessionHUDVisible: this.isPossessionHUDVisible()
+            };
+        }
+
+        /** Reset to initial state (for test isolation) */
+        reset() {
+            // Release any possession
+            if (this.isPossessing()) {
+                this.releaseControl();
+            }
+            // Clear observed entity
+            this.nexus.observedEntity = null;
+            document.getElementById('observation-panel').classList.remove('visible');
+            // Reset mode
+            this.setMode('explore');
+            // Teleport to start position
+            this.teleportCamera(0, 2, 10);
+            return true;
         }
     }
 
     // ===========================================
     // INITIALIZE
     // ===========================================
-    const nexus = new NexusMetaverse();
-    nexus.init();
+
+    let nexus = null;
+    let nexusAPI = null;
+    let agentController = null;
+
+    // Check if Three.js loaded
+    if (typeof THREE === 'undefined') {
+        document.getElementById('loading').innerHTML = `
+            <div style="color: #ff4444; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 20px;">Error</div>
+                <div>Three.js failed to load. Check your internet connection or try disabling tracking prevention.</div>
+            </div>
+        `;
+    } else {
+        nexus = new NexusMetaverse();
+        nexus.init();
+
+        // Create agent controller for AI agent management
+        agentController = new AgentController(nexus);
+
+        // Expose API for testing, automation, and AI agents
+        nexusAPI = new NexusAPI(nexus, agentController);
+        window.nexusAPI = nexusAPI;
+
+        // Also expose for debugging
+        window.nexus = nexus;
+        window.agentController = agentController;
+
+        console.log('Nexus Metaverse initialized.');
+        console.log('API available at window.nexusAPI');
+        console.log('Agent Controller available at window.agentController');
+        console.log('');
+        console.log('=== AI AGENT QUICKSTART ===');
+        console.log('Register an agent:');
+        console.log('  const agent = nexusAPI.registerAgent({ name: "MyBot", type: "ai", personality: "curious explorer" })');
+        console.log('');
+        console.log('Control the agent:');
+        console.log('  await nexusAPI.agentMove(agent.authToken, "forward", 500)');
+        console.log('  nexusAPI.agentChat(agent.authToken, "Hello world!")');
+        console.log('  nexusAPI.setAgentGoals(agent.authToken, ["explore", "meet others"])');
+        console.log('');
+        console.log('For external AI control, use externalEndpoint in registerAgent config.');
+    }
     </script>
 </body>
 </html>
