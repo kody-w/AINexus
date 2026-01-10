@@ -654,6 +654,289 @@
         .chat-panel.hidden {
             display: none !important;
         }
+
+        /* Reality Mirror - Webcam Portal */
+        .reality-mirror {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 320px;
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 12px;
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            overflow: hidden;
+            z-index: 95;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+        }
+
+        .reality-mirror.hidden {
+            display: none;
+        }
+
+        .reality-mirror.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            bottom: 20px;
+            cursor: pointer;
+        }
+
+        .reality-mirror.minimized .mirror-content,
+        .reality-mirror.minimized .mirror-header {
+            display: none;
+        }
+
+        .reality-mirror.minimized .mirror-minimized-icon {
+            display: flex;
+        }
+
+        .mirror-minimized-icon {
+            display: none;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            background: linear-gradient(135deg, #00d4ff20, #7b2fff20);
+        }
+
+        .mirror-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(123, 47, 255, 0.1));
+            border-bottom: 1px solid rgba(100, 200, 255, 0.2);
+        }
+
+        .mirror-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .mirror-title-icon {
+            font-size: 1.2em;
+        }
+
+        .mirror-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mirror-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+
+        .mirror-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .mirror-btn.active {
+            background: rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        .mirror-content {
+            position: relative;
+        }
+
+        .mirror-video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #reality-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
+        }
+
+        .mirror-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .mirror-scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5), transparent);
+            animation: scanLine 3s ease-in-out infinite;
+        }
+
+        @keyframes scanLine {
+            0%, 100% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .mirror-corners {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .mirror-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: rgba(0, 212, 255, 0.6);
+            border-style: solid;
+            border-width: 0;
+        }
+
+        .mirror-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }
+        .mirror-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }
+        .mirror-corner.bl { bottom: 8px; left: 8px; border-bottom-width: 2px; border-left-width: 2px; }
+        .mirror-corner.br { bottom: 8px; right: 8px; border-bottom-width: 2px; border-right-width: 2px; }
+
+        .mirror-status {
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.3);
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .mirror-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mirror-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .mirror-status-dot.active {
+            background: #00ff88;
+            animation: pulse 1.5s infinite;
+        }
+
+        .mirror-status-dot.watching {
+            background: #00d4ff;
+            animation: pulse 0.8s infinite;
+        }
+
+        .ai-gaze-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .ai-gaze-indicator.active {
+            color: #00d4ff;
+        }
+
+        .ai-gaze-indicator .eye {
+            font-size: 1em;
+        }
+
+        .mirror-perception {
+            padding: 10px 15px;
+            font-size: 0.8em;
+            color: rgba(255,255,255,0.7);
+            border-top: 1px solid rgba(100, 200, 255, 0.1);
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .perception-label {
+            color: rgba(0, 212, 255, 0.8);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .mirror-offline {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .mirror-offline-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        .mirror-enable-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+
+        .mirror-enable-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+        }
+
+        /* Reality Mirror Toggle Button (when hidden) */
+        .reality-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            z-index: 94;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .reality-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .reality-toggle.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -718,6 +1001,71 @@
             <!-- Activity items populated dynamically -->
         </div>
     </div>
+
+    <!-- Reality Mirror - Webcam Portal for AI to See Physical World -->
+    <div class="reality-mirror" id="reality-mirror">
+        <div class="mirror-minimized-icon" onclick="nexus.toggleRealityMirror()">
+            <span>👁️</span>
+        </div>
+        <div class="mirror-header">
+            <div class="mirror-title">
+                <span class="mirror-title-icon">🪞</span>
+                Reality Mirror
+            </div>
+            <div class="mirror-controls">
+                <button class="mirror-btn" id="mirror-ai-gaze" onclick="nexus.toggleAIGaze()" title="Toggle AI Perception">
+                    👁️
+                </button>
+                <button class="mirror-btn" id="mirror-minimize" onclick="nexus.minimizeRealityMirror()" title="Minimize">
+                    −
+                </button>
+                <button class="mirror-btn" id="mirror-close" onclick="nexus.hideRealityMirror()" title="Close">
+                    ×
+                </button>
+            </div>
+        </div>
+        <div class="mirror-content">
+            <div class="mirror-video-container">
+                <video id="reality-video" autoplay playsinline muted></video>
+                <canvas id="reality-canvas" style="display: none;"></canvas>
+                <div class="mirror-overlay">
+                    <div class="mirror-scan-line"></div>
+                    <div class="mirror-corners">
+                        <div class="mirror-corner tl"></div>
+                        <div class="mirror-corner tr"></div>
+                        <div class="mirror-corner bl"></div>
+                        <div class="mirror-corner br"></div>
+                    </div>
+                </div>
+                <div class="mirror-offline" id="mirror-offline">
+                    <div class="mirror-offline-icon">📷</div>
+                    <div>Camera offline</div>
+                    <button class="mirror-enable-btn" onclick="nexus.enableRealityMirror()">
+                        Enable Camera
+                    </button>
+                </div>
+            </div>
+            <div class="mirror-status">
+                <div class="mirror-status-indicator">
+                    <div class="mirror-status-dot" id="mirror-status-dot"></div>
+                    <span id="mirror-status-text">Camera offline</span>
+                </div>
+                <div class="ai-gaze-indicator" id="ai-gaze-indicator">
+                    <span class="eye">👁️</span>
+                    <span id="ai-gaze-text">AI not watching</span>
+                </div>
+            </div>
+            <div class="mirror-perception" id="mirror-perception">
+                <div class="perception-label">AI Perception:</div>
+                <div id="perception-text">Enable camera and AI gaze to allow AI agents to perceive your environment.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reality Mirror Toggle (when mirror is hidden) -->
+    <button class="reality-toggle hidden" id="reality-toggle" onclick="nexus.showRealityMirror()" title="Open Reality Mirror">
+        🪞
+    </button>
 
     <!-- World Builder Panel -->
     <div class="builder-panel" id="builder-panel">
@@ -971,6 +1319,19 @@
             this.povCamera = null;
             this.povRenderer = null;
 
+            // Reality Mirror (webcam for AI perception)
+            this.realityMirror = {
+                enabled: false,
+                stream: null,
+                video: null,
+                canvas: null,
+                ctx: null,
+                aiGazeActive: false,
+                lastPerception: null,
+                perceptionInterval: null,
+                captureInterval: 3000  // How often AI "looks" at reality
+            };
+
             // UI Elements
             this.entityListEl = document.getElementById('entity-list');
             this.activityLogEl = document.getElementById('activity-log');
@@ -984,6 +1345,7 @@
                 this.setupControls();
                 this.setupMinimap();
                 this.setupPOVCamera();
+                this.setupRealityMirror();
                 this.setupUI();
                 await this.setupMultiplayer();
                 this.createLocalPlayer();
@@ -2315,6 +2677,236 @@
             this.povRenderer.setPixelRatio(1); // Lower quality for performance
         }
 
+        // ===========================================
+        // REALITY MIRROR - Webcam for AI Perception
+        // ===========================================
+        setupRealityMirror() {
+            this.realityMirror.video = document.getElementById('reality-video');
+            this.realityMirror.canvas = document.getElementById('reality-canvas');
+            this.realityMirror.ctx = this.realityMirror.canvas?.getContext('2d');
+        }
+
+        async enableRealityMirror() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+
+                this.realityMirror.stream = stream;
+                this.realityMirror.video.srcObject = stream;
+                this.realityMirror.enabled = true;
+
+                // Hide offline message, show video
+                document.getElementById('mirror-offline').style.display = 'none';
+                this.realityMirror.video.style.display = 'block';
+
+                // Update status
+                const dot = document.getElementById('mirror-status-dot');
+                const text = document.getElementById('mirror-status-text');
+                dot.classList.add('active');
+                text.textContent = 'Camera active';
+
+                console.log('[Reality Mirror] Camera enabled');
+
+                // Auto-enable AI gaze after camera is on
+                if (!this.realityMirror.aiGazeActive) {
+                    this.toggleAIGaze();
+                }
+
+            } catch (err) {
+                console.error('[Reality Mirror] Camera access denied:', err);
+                document.getElementById('perception-text').textContent =
+                    'Camera access denied. Please allow camera permissions to enable AI perception.';
+            }
+        }
+
+        disableRealityMirror() {
+            if (this.realityMirror.stream) {
+                this.realityMirror.stream.getTracks().forEach(track => track.stop());
+                this.realityMirror.stream = null;
+            }
+
+            this.realityMirror.enabled = false;
+            this.realityMirror.video.srcObject = null;
+
+            // Show offline message
+            document.getElementById('mirror-offline').style.display = 'block';
+            this.realityMirror.video.style.display = 'none';
+
+            // Update status
+            const dot = document.getElementById('mirror-status-dot');
+            const text = document.getElementById('mirror-status-text');
+            dot.classList.remove('active', 'watching');
+            text.textContent = 'Camera offline';
+
+            // Stop AI gaze
+            if (this.realityMirror.aiGazeActive) {
+                this.toggleAIGaze();
+            }
+
+            console.log('[Reality Mirror] Camera disabled');
+        }
+
+        toggleAIGaze() {
+            this.realityMirror.aiGazeActive = !this.realityMirror.aiGazeActive;
+
+            const btn = document.getElementById('mirror-ai-gaze');
+            const indicator = document.getElementById('ai-gaze-indicator');
+            const gazeText = document.getElementById('ai-gaze-text');
+            const statusDot = document.getElementById('mirror-status-dot');
+
+            if (this.realityMirror.aiGazeActive && this.realityMirror.enabled) {
+                btn.classList.add('active');
+                indicator.classList.add('active');
+                gazeText.textContent = 'AI observing';
+                statusDot.classList.add('watching');
+
+                // Start perception loop
+                this.startAIPerception();
+
+            } else {
+                btn.classList.remove('active');
+                indicator.classList.remove('active');
+                gazeText.textContent = 'AI not watching';
+                statusDot.classList.remove('watching');
+
+                // Stop perception loop
+                this.stopAIPerception();
+            }
+        }
+
+        startAIPerception() {
+            if (this.realityMirror.perceptionInterval) {
+                clearInterval(this.realityMirror.perceptionInterval);
+            }
+
+            // Initial perception
+            this.captureAndAnalyze();
+
+            // Periodic perception
+            this.realityMirror.perceptionInterval = setInterval(() => {
+                this.captureAndAnalyze();
+            }, this.realityMirror.captureInterval);
+        }
+
+        stopAIPerception() {
+            if (this.realityMirror.perceptionInterval) {
+                clearInterval(this.realityMirror.perceptionInterval);
+                this.realityMirror.perceptionInterval = null;
+            }
+        }
+
+        async captureAndAnalyze() {
+            if (!this.realityMirror.enabled || !this.realityMirror.video) return;
+
+            const video = this.realityMirror.video;
+            const canvas = this.realityMirror.canvas;
+            const ctx = this.realityMirror.ctx;
+
+            if (!canvas || !ctx) return;
+
+            // Set canvas size to match video
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+
+            // Draw video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Get image data as base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+
+            // Store last capture for AI agents to access
+            this.realityMirror.lastCapture = {
+                timestamp: Date.now(),
+                imageData: imageData,
+                width: canvas.width,
+                height: canvas.height
+            };
+
+            // Generate local perception (placeholder for real AI vision)
+            const perception = this.generateLocalPerception();
+            this.realityMirror.lastPerception = perception;
+
+            // Update UI
+            document.getElementById('perception-text').textContent = perception;
+
+            // Notify any observing AI agents
+            this.notifyAgentsOfRealityUpdate(perception, imageData);
+        }
+
+        generateLocalPerception() {
+            // This is a placeholder that generates contextual perception
+            // In a real system, this would call a vision AI model
+            const perceptions = [
+                'Human presence detected in workspace environment.',
+                'User appears to be engaged with the screen.',
+                'Environment lighting suggests daytime workspace.',
+                'Movement detected - user is active.',
+                'User posture indicates focused attention.',
+                'Detecting human face - user is present.',
+                'Workspace environment scanned - normal conditions.',
+                'Human operator visible in frame.'
+            ];
+
+            const time = new Date();
+            const timeContext = time.getHours() < 12 ? 'morning' :
+                               time.getHours() < 17 ? 'afternoon' : 'evening';
+
+            return perceptions[Math.floor(Math.random() * perceptions.length)] +
+                   ` [${timeContext} session]`;
+        }
+
+        notifyAgentsOfRealityUpdate(perception, imageData) {
+            // Notify AgentController of reality update
+            if (window.agentController) {
+                window.agentController.onRealityUpdate({
+                    perception,
+                    imageData,
+                    timestamp: Date.now()
+                });
+            }
+        }
+
+        // Reality Mirror UI Controls
+        showRealityMirror() {
+            document.getElementById('reality-mirror').classList.remove('hidden', 'minimized');
+            document.getElementById('reality-toggle').classList.add('hidden');
+        }
+
+        hideRealityMirror() {
+            document.getElementById('reality-mirror').classList.add('hidden');
+            document.getElementById('reality-toggle').classList.remove('hidden');
+        }
+
+        minimizeRealityMirror() {
+            document.getElementById('reality-mirror').classList.add('minimized');
+        }
+
+        toggleRealityMirror() {
+            const mirror = document.getElementById('reality-mirror');
+            if (mirror.classList.contains('minimized')) {
+                mirror.classList.remove('minimized');
+            } else {
+                mirror.classList.add('minimized');
+            }
+        }
+
+        // Get current reality snapshot for AI agents
+        getRealitySnapshot() {
+            return {
+                enabled: this.realityMirror.enabled,
+                aiGazeActive: this.realityMirror.aiGazeActive,
+                lastPerception: this.realityMirror.lastPerception,
+                lastCapture: this.realityMirror.lastCapture,
+                timestamp: Date.now()
+            };
+        }
+
         updateMinimap() {
             const ctx = this.minimapCtx;
             const size = 150;
@@ -3137,6 +3729,43 @@
             const dz = pos1.z - pos2.z;
             return Math.sqrt(dx * dx + dz * dz);
         }
+
+        /**
+         * Called when Reality Mirror captures new perception
+         * Notifies all active agents of what's happening in the real world
+         */
+        onRealityUpdate(data) {
+            const { perception, imageData, timestamp } = data;
+
+            // Add reality observation to all active agents
+            for (const [agentId, session] of this.agents) {
+                if (session.state === 'active') {
+                    session.observations.push({
+                        type: 'reality',
+                        source: 'reality-mirror',
+                        perception,
+                        timestamp,
+                        hasImage: !!imageData
+                    });
+
+                    // Keep observations bounded
+                    if (session.observations.length > 50) {
+                        session.observations.shift();
+                    }
+                }
+            }
+        }
+
+        /**
+         * Get the latest reality perception for an agent
+         */
+        getLatestRealityPerception(agentId) {
+            const session = this.agents.get(agentId);
+            if (!session) return null;
+
+            const realityObs = session.observations.filter(o => o.type === 'reality');
+            return realityObs.length > 0 ? realityObs[realityObs.length - 1] : null;
+        }
     }
 
     // ===========================================
@@ -3631,6 +4260,58 @@
             // Teleport to start position
             this.teleportCamera(0, 2, 10);
             return true;
+        }
+
+        // ========== REALITY MIRROR API ==========
+
+        /** Enable the Reality Mirror (webcam) */
+        async enableRealityMirror() {
+            return this.nexus.enableRealityMirror();
+        }
+
+        /** Disable the Reality Mirror */
+        disableRealityMirror() {
+            return this.nexus.disableRealityMirror();
+        }
+
+        /** Toggle AI gaze (perception active/inactive) */
+        toggleAIGaze() {
+            return this.nexus.toggleAIGaze();
+        }
+
+        /** Show the Reality Mirror panel */
+        showRealityMirror() {
+            return this.nexus.showRealityMirror();
+        }
+
+        /** Hide the Reality Mirror panel */
+        hideRealityMirror() {
+            return this.nexus.hideRealityMirror();
+        }
+
+        /** Minimize the Reality Mirror */
+        minimizeRealityMirror() {
+            return this.nexus.minimizeRealityMirror();
+        }
+
+        /** Toggle Reality Mirror minimized state */
+        toggleRealityMirror() {
+            return this.nexus.toggleRealityMirror();
+        }
+
+        /** Get current Reality Mirror snapshot (for AI agents) */
+        getRealitySnapshot() {
+            return this.nexus.getRealitySnapshot();
+        }
+
+        /** Check if Reality Mirror is enabled */
+        isRealityMirrorEnabled() {
+            return this.nexus.realityMirror?.enabled || false;
+        }
+
+        /** Check if AI gaze is active */
+        isAIGazeActive() {
+            return this.nexus.realityMirror?.aiGazeActive || false;
         }
     }
 

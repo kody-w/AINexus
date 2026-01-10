@@ -10,11 +10,15 @@
     "test:chromium": "playwright test --project=chromium",
     "test:firefox": "playwright test --project=firefox",
     "test:webkit": "playwright test --project=webkit",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "observatory": "npx ts-node agent-observatory.ts",
+    "observatory:4": "npx ts-node agent-observatory.ts --agents=4",
+    "observatory:8": "npx ts-node agent-observatory.ts --agents=8"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
   }
 }
