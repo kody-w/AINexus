@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Metaverse - AI-Human Collaborative Space</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0a0f;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(10, 10, 20, 0.95);
+            border-bottom: 1px solid rgba(100, 200, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .logo-icon {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mode-indicator {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .mode-pill {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-pill.active {
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+        }
+
+        .mode-pill:not(.active) {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .mode-pill:hover:not(.active) {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Entity List Panel */
+        .entity-panel {
+            position: fixed;
+            left: 0;
+            top: 50px;
+            width: 280px;
+            height: calc(100% - 50px);
+            background: rgba(10, 10, 20, 0.95);
+            border-right: 1px solid rgba(100, 200, 255, 0.2);
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(100, 200, 255, 0.1);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .entity-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .entity-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .entity-card:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(100, 200, 255, 0.3);
+        }
+
+        .entity-card.selected {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .entity-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .entity-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+        }
+
+        .entity-avatar.human { background: linear-gradient(135deg, #00d4ff, #0088ff); }
+        .entity-avatar.ai { background: linear-gradient(135deg, #7b2fff, #ff2f8b); }
+        .entity-avatar.twin { background: linear-gradient(135deg, #00ff88, #00d4ff); }
+
+        .entity-name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .entity-type {
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .entity-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.working { background: #00ff88; animation: pulse 1.5s infinite; }
+        .status-dot.thinking { background: #ffaa00; animation: pulse 0.8s infinite; }
+        .status-dot.idle { background: #666; }
+        .status-dot.controlled { background: #00d4ff; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .entity-task {
+            font-size: 0.8em;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        /* Over-the-Shoulder Panel */
+        .observation-panel {
+            position: fixed;
+            right: 0;
+            top: 50px;
+            width: 350px;
+            height: calc(100% - 50px);
+            background: rgba(10, 10, 20, 0.95);
+            border-left: 1px solid rgba(100, 200, 255, 0.2);
+            z-index: 90;
+            display: none;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        .observation-panel.visible { display: flex; }
+
+        .obs-viewport {
+            height: 200px;
+            background: #000;
+            border-bottom: 1px solid rgba(100, 200, 255, 0.2);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .obs-viewport-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 0.75em;
+            padding: 4px 10px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 4px;
+        }
+
+        .obs-entity-info {
+            padding: 15px;
+            border-bottom: 1px solid rgba(100, 200, 255, 0.1);
+        }
+
+        .obs-entity-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .obs-control-mode {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .control-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .control-btn.observe {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .control-btn.guide {
+            background: rgba(255, 170, 0, 0.2);
+            color: #ffaa00;
+            border: 1px solid rgba(255, 170, 0, 0.3);
+        }
+
+        .control-btn.takeover {
+            background: rgba(0, 212, 255, 0.2);
+            color: #00d4ff;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .control-btn.active {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .obs-activity-log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .activity-item {
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            font-size: 0.85em;
+            border-left: 3px solid #444;
+        }
+
+        .activity-item.action { border-left-color: #00d4ff; }
+        .activity-item.thought { border-left-color: #7b2fff; }
+        .activity-item.output { border-left-color: #00ff88; }
+
+        .activity-time {
+            font-size: 0.75em;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 3px;
+        }
+
+        /* World Builder Panel */
+        .builder-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 20, 0.95);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            z-index: 95;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .builder-panel.visible { display: block; }
+
+        .builder-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .builder-tool {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            transition: all 0.2s;
+        }
+
+        .builder-tool:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+
+        .builder-tool.selected {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .object-palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            max-width: 400px;
+        }
+
+        .palette-item {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            transition: all 0.2s;
+        }
+
+        .palette-item:hover {
+            background: rgba(255,255,255,0.1);
+            transform: scale(1.05);
+        }
+
+        .palette-item span {
+            font-size: 0.5em;
+            margin-top: 4px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* Chat Panel */
+        .chat-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 370px;
+            width: 350px;
+            height: 300px;
+            background: rgba(10, 10, 20, 0.95);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 12px;
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+
+        .chat-message.ai {
+            background: rgba(123, 47, 255, 0.1);
+            border-left: 3px solid #7b2fff;
+        }
+
+        .chat-message.human {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 3px solid #00d4ff;
+        }
+
+        .chat-sender {
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .chat-input-area {
+            padding: 10px;
+            border-top: 1px solid rgba(100, 200, 255, 0.1);
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 6px;
+            padding: 10px;
+            color: #fff;
+            font-size: 0.9em;
+        }
+
+        .chat-input::placeholder { color: rgba(255,255,255,0.4); }
+
+        .chat-send {
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 15px;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        /* Connection Status */
+        .connection-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background: rgba(10, 10, 20, 0.95);
+            border-top: 1px solid rgba(100, 200, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 0.8em;
+            color: rgba(255,255,255,0.6);
+            z-index: 85;
+        }
+
+        .conn-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff88;
+        }
+
+        /* Controls Help */
+        .controls-help {
+            position: fixed;
+            bottom: 40px;
+            left: 300px;
+            background: rgba(10, 10, 20, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(100, 200, 255, 0.1);
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #0a0a0f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(100, 200, 255, 0.2);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Minimap */
+        .minimap {
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            background: rgba(10, 10, 20, 0.9);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 8px;
+            z-index: 80;
+        }
+
+        .minimap canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+
+        /* Add Entity Button */
+        .add-entity-btn {
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        /* Modal for adding entities */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        .modal-overlay.visible { display: flex; }
+
+        .modal {
+            background: rgba(20, 20, 35, 0.98);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .modal-field {
+            margin-bottom: 15px;
+        }
+
+        .modal-field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .modal-field input,
+        .modal-field select {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.95em;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .modal-btn.primary {
+            background: linear-gradient(135deg, #00d4ff, #7b2fff);
+            color: #fff;
+        }
+
+        .modal-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        /* Hide panels when not needed */
+        .entity-panel.hidden,
+        .observation-panel.hidden,
+        .chat-panel.hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading">
+        <div class="loading-spinner"></div>
+        <div>Initializing Nexus Metaverse...</div>
+    </div>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="logo">
+            <div class="logo-icon">N</div>
+            Nexus Metaverse
+        </div>
+        <div class="mode-indicator">
+            <div class="mode-pill active" data-mode="explore">Explore</div>
+            <div class="mode-pill" data-mode="observe">Observe</div>
+            <div class="mode-pill" data-mode="build">Build</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="room-id" style="font-size: 0.85em; color: rgba(255,255,255,0.5);">Room: ---</span>
+            <button class="add-entity-btn" onclick="nexus.showAddEntityModal()">+ Add Entity</button>
+        </div>
+    </div>
+
+    <!-- Entity List Panel -->
+    <div class="entity-panel" id="entity-panel">
+        <div class="panel-header">
+            <span>Entities</span>
+            <span id="entity-count">0</span>
+        </div>
+        <div class="entity-list" id="entity-list">
+            <!-- Entities populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Over-the-Shoulder Observation Panel -->
+    <div class="observation-panel" id="observation-panel">
+        <div class="obs-viewport" id="obs-viewport">
+            <div class="obs-viewport-label">Entity POV</div>
+            <canvas id="obs-canvas" width="350" height="200"></canvas>
+        </div>
+        <div class="obs-entity-info">
+            <div class="obs-entity-name" id="obs-entity-name">Select an entity</div>
+            <div class="entity-status">
+                <div class="status-dot" id="obs-status-dot"></div>
+                <span id="obs-status-text">No entity selected</span>
+            </div>
+            <div class="obs-control-mode">
+                <button class="control-btn observe active" onclick="nexus.setControlMode('observe')">Watch</button>
+                <button class="control-btn guide" onclick="nexus.setControlMode('guide')">Guide</button>
+                <button class="control-btn takeover" onclick="nexus.setControlMode('takeover')">Take Over</button>
+            </div>
+        </div>
+        <div class="panel-header" style="border-bottom: 1px solid rgba(100, 200, 255, 0.1);">
+            Activity Log
+        </div>
+        <div class="obs-activity-log" id="activity-log">
+            <!-- Activity items populated dynamically -->
+        </div>
+    </div>
+
+    <!-- World Builder Panel -->
+    <div class="builder-panel" id="builder-panel">
+        <div class="builder-toolbar">
+            <div class="builder-tool selected" data-tool="select" title="Select">
+                <span>👆</span>
+            </div>
+            <div class="builder-tool" data-tool="move" title="Move">
+                <span>✋</span>
+            </div>
+            <div class="builder-tool" data-tool="rotate" title="Rotate">
+                <span>🔄</span>
+            </div>
+            <div class="builder-tool" data-tool="delete" title="Delete">
+                <span>🗑️</span>
+            </div>
+            <div class="builder-tool" data-tool="save" title="Save World">
+                <span>💾</span>
+            </div>
+        </div>
+        <div class="object-palette" id="object-palette">
+            <div class="palette-item" data-object="cube"><span>Cube</span>📦</div>
+            <div class="palette-item" data-object="sphere"><span>Sphere</span>🔮</div>
+            <div class="palette-item" data-object="cylinder"><span>Pillar</span>🏛️</div>
+            <div class="palette-item" data-object="tree"><span>Tree</span>🌲</div>
+            <div class="palette-item" data-object="light"><span>Light</span>💡</div>
+            <div class="palette-item" data-object="portal"><span>Portal</span>🌀</div>
+        </div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel" id="chat-panel">
+        <div class="panel-header">
+            <span>Chat</span>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-message ai">
+                <div class="chat-sender">AI Assistant</div>
+                <div>Welcome to Nexus Metaverse. I'm here to help with any tasks.</div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Type a message or command...">
+            <button class="chat-send" onclick="nexus.sendChat()">Send</button>
+        </div>
+    </div>
+
+    <!-- Controls Help -->
+    <div class="controls-help">
+        <strong>Controls:</strong> WASD to move | Mouse to look | Click to interact | Tab to toggle panels
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-bar">
+        <div class="conn-status">
+            <div class="conn-dot" id="conn-dot"></div>
+            <span id="conn-text">Connecting to Nexus Network...</span>
+        </div>
+        <div>
+            <span id="peer-count">0 peers connected</span> |
+            <span id="entity-total">0 entities in world</span>
+        </div>
+    </div>
+
+    <!-- Minimap -->
+    <div class="minimap">
+        <canvas id="minimap-canvas"></canvas>
+    </div>
+
+    <!-- Add Entity Modal -->
+    <div class="modal-overlay" id="add-entity-modal">
+        <div class="modal">
+            <div class="modal-title">Add New Entity</div>
+            <div class="modal-field">
+                <label>Entity Name</label>
+                <input type="text" id="entity-name-input" placeholder="Enter entity name...">
+            </div>
+            <div class="modal-field">
+                <label>Entity Type</label>
+                <select id="entity-type-select">
+                    <option value="ai">AI Agent</option>
+                    <option value="twin">Digital Twin</option>
+                    <option value="human">Human Player</option>
+                </select>
+            </div>
+            <div class="modal-field">
+                <label>Initial Task (for AI/Twin)</label>
+                <input type="text" id="entity-task-input" placeholder="e.g., 'Monitor system health'">
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="nexus.hideAddEntityModal()">Cancel</button>
+                <button class="modal-btn primary" onclick="nexus.addEntity()">Create Entity</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script>
+    // ===========================================
+    // NEXUS METAVERSE - AI-Human Collaborative Space
+    // ===========================================
+
+    // Entity Types
+    const EntityType = {
+        HUMAN: 'human',
+        AI: 'ai',
+        TWIN: 'twin'
+    };
+
+    // Entity States
+    const EntityState = {
+        IDLE: 'idle',
+        WORKING: 'working',
+        THINKING: 'thinking',
+        CONTROLLED: 'controlled'
+    };
+
+    // Control Modes (for observation)
+    const ControlMode = {
+        OBSERVE: 'observe',    // Just watching
+        GUIDE: 'guide',        // Can send suggestions
+        TAKEOVER: 'takeover'   // Full control
+    };
+
+    // ===========================================
+    // ENTITY CLASS - Core unit for humans & AIs
+    // ===========================================
+    class Entity {
+        constructor(id, name, type, position = { x: 0, y: 0, z: 0 }) {
+            this.id = id;
+            this.name = name;
+            this.type = type;
+            this.position = position;
+            this.rotation = { x: 0, y: 0, z: 0 };
+            this.state = EntityState.IDLE;
+            this.currentTask = null;
+            this.taskQueue = [];
+            this.activityLog = [];
+            this.avatar = null;
+            this.controlledBy = null; // null = autonomous, or entity ID of controller
+            this.observers = []; // List of entities observing this one
+
+            // For AI entities
+            this.aiConfig = {
+                autonomous: true,
+                decisionInterval: 2000,
+                personality: 'helpful'
+            };
+
+            // For Digital Twins
+            this.twinConfig = {
+                externalSystemUrl: null,
+                syncInterval: 1000,
+                lastSyncTime: null
+            };
+        }
+
+        log(message, type = 'action') {
+            const entry = {
+                time: new Date().toISOString(),
+                message,
+                type
+            };
+            this.activityLog.push(entry);
+            if (this.activityLog.length > 100) {
+                this.activityLog.shift();
+            }
+            return entry;
+        }
+
+        moveTo(x, y, z) {
+            this.position = { x, y, z };
+            this.log(`Moved to (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
+        }
+
+        setTask(task) {
+            this.currentTask = task;
+            this.state = EntityState.WORKING;
+            this.log(`Started task: ${task}`, 'action');
+        }
+
+        completeTask() {
+            const completed = this.currentTask;
+            this.log(`Completed task: ${completed}`, 'output');
+            this.currentTask = null;
+
+            if (this.taskQueue.length > 0) {
+                this.setTask(this.taskQueue.shift());
+            } else {
+                this.state = EntityState.IDLE;
+            }
+        }
+
+        serialize() {
+            return {
+                id: this.id,
+                name: this.name,
+                type: this.type,
+                position: this.position,
+                rotation: this.rotation,
+                state: this.state,
+                currentTask: this.currentTask
+            };
+        }
+    }
+
+    // ===========================================
+    // NEXUS METAVERSE MAIN CLASS
+    // ===========================================
+    class NexusMetaverse {
+        constructor() {
+            // Three.js
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.clock = new THREE.Clock();
+
+            // Entity management
+            this.entities = new Map();
+            this.localEntity = null; // The human player
+            this.observedEntity = null;
+            this.controlMode = ControlMode.OBSERVE;
+
+            // Multiplayer
+            this.peer = null;
+            this.connections = new Map();
+            this.roomId = null;
+            this.isHost = false;
+
+            // World objects
+            this.worldObjects = [];
+            this.selectedObject = null;
+
+            // Mode
+            this.currentMode = 'explore'; // explore, observe, build
+
+            // Controls
+            this.keys = { w: false, a: false, s: false, d: false };
+            this.isPointerLocked = false;
+            this.moveSpeed = 0.15;
+            this.lookSpeed = 0.002;
+
+            // Minimap
+            this.minimapCtx = null;
+
+            // UI Elements
+            this.entityListEl = document.getElementById('entity-list');
+            this.activityLogEl = document.getElementById('activity-log');
+            this.chatMessagesEl = document.getElementById('chat-messages');
+        }
+
+        async init() {
+            this.setupScene();
+            this.createEnvironment();
+            this.setupControls();
+            this.setupMinimap();
+            this.setupUI();
+            await this.setupMultiplayer();
+            this.createLocalPlayer();
+            this.spawnDemoAIs();
+            this.animate();
+
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // ===========================================
+        // SCENE SETUP
+        // ===========================================
+        setupScene() {
+            this.scene = new THREE.Scene();
+            this.scene.fog = new THREE.Fog(0x0a0a0f, 30, 100);
+
+            this.camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            this.camera.position.set(0, 2, 10);
+
+            this.renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                powerPreference: 'high-performance'
+            });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x404060, 0.5);
+            this.scene.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 40, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            this.scene.add(dirLight);
+
+            // Hemisphere light for better ambient
+            const hemiLight = new THREE.HemisphereLight(0x4488ff, 0x002244, 0.4);
+            this.scene.add(hemiLight);
+
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        createEnvironment() {
+            // Ground plane with grid
+            const groundGeo = new THREE.PlaneGeometry(200, 200);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: 0x111122,
+                roughness: 0.9
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            this.scene.add(ground);
+
+            // Grid overlay
+            const grid = new THREE.GridHelper(200, 100, 0x00d4ff, 0x1a1a2e);
+            grid.position.y = 0.01;
+            this.scene.add(grid);
+
+            // Central hub platform
+            const platformGeo = new THREE.CylinderGeometry(8, 10, 0.5, 32);
+            const platformMat = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4a,
+                metalness: 0.5,
+                roughness: 0.3
+            });
+            const platform = new THREE.Mesh(platformGeo, platformMat);
+            platform.position.y = 0.25;
+            platform.castShadow = true;
+            platform.receiveShadow = true;
+            this.scene.add(platform);
+
+            // Portal ring on platform
+            const ringGeo = new THREE.TorusGeometry(6, 0.3, 16, 100);
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: 0x00d4ff,
+                emissive: 0x00d4ff,
+                emissiveIntensity: 0.5
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.6;
+            this.scene.add(ring);
+
+            // Ambient particles
+            this.createParticleField();
+
+            // Some environmental structures
+            this.createWorldStructures();
+        }
+
+        createParticleField() {
+            const particleCount = 500;
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 100;
+                positions[i * 3 + 1] = Math.random() * 30;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+
+                const color = new THREE.Color();
+                color.setHSL(0.55 + Math.random() * 0.1, 0.8, 0.6);
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+
+            const particleGeo = new THREE.BufferGeometry();
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            this.particles = new THREE.Points(particleGeo, particleMat);
+            this.scene.add(this.particles);
+        }
+
+        createWorldStructures() {
+            // Create some interesting structures around the hub
+            const structures = [
+                { pos: [20, 0, 0], type: 'tower' },
+                { pos: [-20, 0, 0], type: 'dome' },
+                { pos: [0, 0, 20], type: 'arch' },
+                { pos: [0, 0, -20], type: 'pillar' }
+            ];
+
+            structures.forEach(s => {
+                let mesh;
+                const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.4);
+
+                if (s.type === 'tower') {
+                    const geo = new THREE.CylinderGeometry(2, 3, 15, 8);
+                    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.y = 7.5;
+                } else if (s.type === 'dome') {
+                    const geo = new THREE.SphereGeometry(5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, side: THREE.DoubleSide });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.y = 0;
+                } else if (s.type === 'arch') {
+                    const geo = new THREE.TorusGeometry(5, 1, 16, 32, Math.PI);
+                    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.4 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.rotation.x = Math.PI / 2;
+                    mesh.position.y = 5;
+                } else {
+                    const geo = new THREE.CylinderGeometry(1, 1, 10, 6);
+                    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.y = 5;
+                }
+
+                mesh.position.x = s.pos[0];
+                mesh.position.z = s.pos[2];
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                this.scene.add(mesh);
+                this.worldObjects.push(mesh);
+            });
+        }
+
+        // ===========================================
+        // ENTITY MANAGEMENT
+        // ===========================================
+        createLocalPlayer() {
+            const id = 'local-' + Math.random().toString(36).substr(2, 9);
+            this.localEntity = new Entity(id, 'You', EntityType.HUMAN, { x: 0, y: 0, z: 10 });
+            this.localEntity.avatar = this.createAvatar(EntityType.HUMAN, 0x00d4ff);
+            this.localEntity.avatar.position.set(0, 0, 10);
+            this.scene.add(this.localEntity.avatar);
+            this.entities.set(id, this.localEntity);
+            this.updateEntityList();
+        }
+
+        spawnDemoAIs() {
+            // Create a few demo AI entities
+            const aiConfigs = [
+                { name: 'Atlas', task: 'Monitoring system resources', pos: { x: 5, y: 0, z: 5 } },
+                { name: 'Nova', task: 'Analyzing data patterns', pos: { x: -5, y: 0, z: 5 } },
+                { name: 'Echo', task: 'Processing user requests', pos: { x: 0, y: 0, z: -5 } }
+            ];
+
+            aiConfigs.forEach(config => {
+                this.createAIEntity(config.name, config.task, config.pos);
+            });
+
+            // Create a digital twin example
+            this.createDigitalTwin('Factory-Bot-1', 'Monitoring assembly line', { x: 8, y: 0, z: -8 });
+        }
+
+        createAIEntity(name, task, position) {
+            const id = 'ai-' + Math.random().toString(36).substr(2, 9);
+            const entity = new Entity(id, name, EntityType.AI, position);
+            entity.setTask(task);
+            entity.avatar = this.createAvatar(EntityType.AI, 0x7b2fff);
+            entity.avatar.position.set(position.x, position.y, position.z);
+            this.scene.add(entity.avatar);
+            this.entities.set(id, entity);
+
+            // Start autonomous behavior
+            this.startAIBehavior(entity);
+
+            this.updateEntityList();
+            return entity;
+        }
+
+        createDigitalTwin(name, task, position) {
+            const id = 'twin-' + Math.random().toString(36).substr(2, 9);
+            const entity = new Entity(id, name, EntityType.TWIN, position);
+            entity.setTask(task);
+            entity.avatar = this.createAvatar(EntityType.TWIN, 0x00ff88);
+            entity.avatar.position.set(position.x, position.y, position.z);
+            this.scene.add(entity.avatar);
+            this.entities.set(id, entity);
+
+            // Start twin sync behavior
+            this.startTwinSync(entity);
+
+            this.updateEntityList();
+            return entity;
+        }
+
+        createAvatar(type, color) {
+            const group = new THREE.Group();
+
+            // Body
+            const bodyGeo = new THREE.CapsuleGeometry(0.4, 1, 8, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({
+                color: 0xffddcc,
+                metalness: 0.1,
+                roughness: 0.8
+            });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 2;
+            head.castShadow = true;
+            group.add(head);
+
+            // Type indicator ring
+            const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 32);
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.8
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 2.5;
+            group.add(ring);
+
+            // Different head features for AI/Twin
+            if (type === EntityType.AI) {
+                // AI visor
+                const visorGeo = new THREE.BoxGeometry(0.5, 0.15, 0.1);
+                const visorMat = new THREE.MeshStandardMaterial({
+                    color: 0x00ffff,
+                    emissive: 0x00ffff,
+                    emissiveIntensity: 0.5
+                });
+                const visor = new THREE.Mesh(visorGeo, visorMat);
+                visor.position.set(0, 2.05, 0.3);
+                group.add(visor);
+            } else if (type === EntityType.TWIN) {
+                // Twin antenna
+                const antennaGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.4);
+                const antennaMat = new THREE.MeshStandardMaterial({ color: 0x00ff88 });
+                const antenna = new THREE.Mesh(antennaGeo, antennaMat);
+                antenna.position.y = 2.5;
+                group.add(antenna);
+
+                const tipGeo = new THREE.SphereGeometry(0.05);
+                const tipMat = new THREE.MeshStandardMaterial({
+                    color: 0x00ff88,
+                    emissive: 0x00ff88,
+                    emissiveIntensity: 1
+                });
+                const tip = new THREE.Mesh(tipGeo, tipMat);
+                tip.position.y = 2.7;
+                group.add(tip);
+            }
+
+            // Activity indicator (small sphere above head)
+            const indicatorGeo = new THREE.SphereGeometry(0.1);
+            const indicatorMat = new THREE.MeshBasicMaterial({ color: 0x666666 });
+            const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
+            indicator.position.y = 2.8;
+            indicator.name = 'indicator';
+            group.add(indicator);
+
+            return group;
+        }
+
+        updateAvatarIndicator(entity) {
+            if (!entity.avatar) return;
+            const indicator = entity.avatar.getObjectByName('indicator');
+            if (!indicator) return;
+
+            const colors = {
+                [EntityState.IDLE]: 0x666666,
+                [EntityState.WORKING]: 0x00ff88,
+                [EntityState.THINKING]: 0xffaa00,
+                [EntityState.CONTROLLED]: 0x00d4ff
+            };
+
+            indicator.material.color.setHex(colors[entity.state] || 0x666666);
+        }
+
+        // ===========================================
+        // AI BEHAVIOR
+        // ===========================================
+        startAIBehavior(entity) {
+            const behaviors = [
+                () => this.aiWander(entity),
+                () => this.aiThink(entity),
+                () => this.aiWork(entity)
+            ];
+
+            const runBehavior = () => {
+                if (entity.controlledBy) {
+                    // Entity is controlled by human, skip autonomous behavior
+                    setTimeout(runBehavior, 1000);
+                    return;
+                }
+
+                const behavior = behaviors[Math.floor(Math.random() * behaviors.length)];
+                behavior();
+
+                const nextInterval = 2000 + Math.random() * 3000;
+                setTimeout(runBehavior, nextInterval);
+            };
+
+            setTimeout(runBehavior, 1000 + Math.random() * 2000);
+        }
+
+        aiWander(entity) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 1 + Math.random() * 3;
+            const newX = entity.position.x + Math.cos(angle) * distance;
+            const newZ = entity.position.z + Math.sin(angle) * distance;
+
+            // Keep within bounds
+            const clampedX = Math.max(-30, Math.min(30, newX));
+            const clampedZ = Math.max(-30, Math.min(30, newZ));
+
+            entity.moveTo(clampedX, 0, clampedZ);
+            if (entity.avatar) {
+                entity.avatar.position.x = clampedX;
+                entity.avatar.position.z = clampedZ;
+            }
+            this.broadcastEntityUpdate(entity);
+        }
+
+        aiThink(entity) {
+            entity.state = EntityState.THINKING;
+            entity.log('Processing...', 'thought');
+            this.updateAvatarIndicator(entity);
+
+            setTimeout(() => {
+                if (entity.state === EntityState.THINKING) {
+                    entity.state = entity.currentTask ? EntityState.WORKING : EntityState.IDLE;
+                    entity.log('Analysis complete', 'output');
+                    this.updateAvatarIndicator(entity);
+                }
+            }, 1000 + Math.random() * 2000);
+        }
+
+        aiWork(entity) {
+            if (!entity.currentTask) {
+                const tasks = [
+                    'Optimizing neural pathways',
+                    'Analyzing environmental data',
+                    'Processing knowledge graph',
+                    'Synchronizing state vectors',
+                    'Compiling response patterns'
+                ];
+                entity.setTask(tasks[Math.floor(Math.random() * tasks.length)]);
+            }
+            this.updateAvatarIndicator(entity);
+            this.updateActivityLog();
+        }
+
+        // ===========================================
+        // DIGITAL TWIN SYNC
+        // ===========================================
+        startTwinSync(entity) {
+            // Simulate external system sync
+            const sync = () => {
+                if (entity.controlledBy) {
+                    setTimeout(sync, 1000);
+                    return;
+                }
+
+                // Simulate receiving data from external system
+                const systemStatus = ['nominal', 'processing', 'calibrating', 'standby'][
+                    Math.floor(Math.random() * 4)
+                ];
+
+                entity.log(`System status: ${systemStatus}`, 'output');
+                entity.twinConfig.lastSyncTime = new Date().toISOString();
+
+                if (systemStatus === 'processing') {
+                    entity.state = EntityState.WORKING;
+                } else if (systemStatus === 'calibrating') {
+                    entity.state = EntityState.THINKING;
+                } else {
+                    entity.state = EntityState.IDLE;
+                }
+
+                this.updateAvatarIndicator(entity);
+                setTimeout(sync, 3000 + Math.random() * 2000);
+            };
+
+            setTimeout(sync, 2000);
+        }
+
+        // ===========================================
+        // OBSERVATION & CONTROL
+        // ===========================================
+        observeEntity(entityId) {
+            const entity = this.entities.get(entityId);
+            if (!entity || entity === this.localEntity) return;
+
+            this.observedEntity = entity;
+            this.currentMode = 'observe';
+            this.updateModeUI();
+
+            document.getElementById('observation-panel').classList.add('visible');
+            document.getElementById('obs-entity-name').textContent = entity.name;
+
+            const statusDot = document.getElementById('obs-status-dot');
+            statusDot.className = 'status-dot ' + entity.state;
+            document.getElementById('obs-status-text').textContent =
+                entity.currentTask || 'No active task';
+
+            this.updateActivityLog();
+            entity.log(`Being observed by ${this.localEntity.name}`, 'action');
+        }
+
+        setControlMode(mode) {
+            if (!this.observedEntity) return;
+
+            this.controlMode = mode;
+
+            // Update UI
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.classList.contains(mode)) {
+                    btn.classList.add('active');
+                }
+            });
+
+            if (mode === ControlMode.TAKEOVER) {
+                this.observedEntity.controlledBy = this.localEntity.id;
+                this.observedEntity.state = EntityState.CONTROLLED;
+                this.observedEntity.log(`Control taken by ${this.localEntity.name}`, 'action');
+                this.addChatMessage('System', `You now have control of ${this.observedEntity.name}`, 'system');
+            } else {
+                if (this.observedEntity.controlledBy === this.localEntity.id) {
+                    this.observedEntity.controlledBy = null;
+                    this.observedEntity.state = this.observedEntity.currentTask ?
+                        EntityState.WORKING : EntityState.IDLE;
+                    this.observedEntity.log('Control returned to autonomous mode', 'action');
+                }
+            }
+
+            this.updateAvatarIndicator(this.observedEntity);
+            this.updateActivityLog();
+            this.broadcastEntityUpdate(this.observedEntity);
+        }
+
+        updateActivityLog() {
+            if (!this.observedEntity) return;
+
+            this.activityLogEl.innerHTML = this.observedEntity.activityLog
+                .slice(-20)
+                .reverse()
+                .map(entry => `
+                    <div class="activity-item ${entry.type}">
+                        <div class="activity-time">${new Date(entry.time).toLocaleTimeString()}</div>
+                        <div>${entry.message}</div>
+                    </div>
+                `).join('');
+        }
+
+        // ===========================================
+        // WORLD BUILDER
+        // ===========================================
+        placeObject(type, position) {
+            let mesh;
+            const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.5);
+
+            switch (type) {
+                case 'cube':
+                    mesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(2, 2, 2),
+                        new THREE.MeshStandardMaterial({ color })
+                    );
+                    break;
+                case 'sphere':
+                    mesh = new THREE.Mesh(
+                        new THREE.SphereGeometry(1, 32, 32),
+                        new THREE.MeshStandardMaterial({ color })
+                    );
+                    break;
+                case 'cylinder':
+                    mesh = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.5, 0.5, 4, 16),
+                        new THREE.MeshStandardMaterial({ color })
+                    );
+                    mesh.position.y = 2;
+                    break;
+                case 'tree':
+                    mesh = this.createTree();
+                    break;
+                case 'light':
+                    const light = new THREE.PointLight(0xffaa00, 1, 15);
+                    light.position.copy(position);
+                    light.position.y += 3;
+                    this.scene.add(light);
+
+                    mesh = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.3),
+                        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+                    );
+                    mesh.position.y = 3;
+                    break;
+                case 'portal':
+                    mesh = this.createPortal();
+                    break;
+                default:
+                    return;
+            }
+
+            mesh.position.x = position.x;
+            mesh.position.z = position.z;
+            if (type !== 'cylinder' && type !== 'light') {
+                mesh.position.y = mesh.geometry?.parameters?.height / 2 || 1;
+            }
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData.type = type;
+            mesh.userData.placedBy = this.localEntity?.id;
+
+            this.scene.add(mesh);
+            this.worldObjects.push(mesh);
+
+            this.localEntity?.log(`Placed ${type} at (${position.x.toFixed(1)}, ${position.z.toFixed(1)})`, 'action');
+            this.broadcastObjectPlaced(mesh);
+
+            return mesh;
+        }
+
+        createTree() {
+            const group = new THREE.Group();
+
+            // Trunk
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.2, 0.3, 2, 8),
+                new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+            );
+            trunk.position.y = 1;
+            group.add(trunk);
+
+            // Foliage
+            const foliage = new THREE.Mesh(
+                new THREE.ConeGeometry(1.5, 3, 8),
+                new THREE.MeshStandardMaterial({ color: 0x228b22 })
+            );
+            foliage.position.y = 3.5;
+            group.add(foliage);
+
+            return group;
+        }
+
+        createPortal() {
+            const group = new THREE.Group();
+
+            // Frame
+            const frame = new THREE.Mesh(
+                new THREE.TorusGeometry(2, 0.2, 16, 32),
+                new THREE.MeshStandardMaterial({
+                    color: 0x7b2fff,
+                    emissive: 0x7b2fff,
+                    emissiveIntensity: 0.5
+                })
+            );
+            frame.position.y = 2;
+            group.add(frame);
+
+            // Portal surface
+            const surface = new THREE.Mesh(
+                new THREE.CircleGeometry(1.8, 32),
+                new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float time;
+                        varying vec2 vUv;
+                        void main() {
+                            vec2 center = vUv - 0.5;
+                            float dist = length(center);
+                            float wave = sin(dist * 20.0 - time * 3.0) * 0.5 + 0.5;
+                            vec3 color = mix(vec3(0.5, 0.2, 1.0), vec3(0.0, 0.8, 1.0), wave);
+                            float alpha = 1.0 - dist * 1.5;
+                            gl_FragColor = vec4(color, alpha * 0.8);
+                        }
+                    `,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                })
+            );
+            surface.position.y = 2;
+            surface.userData.isPortalSurface = true;
+            group.add(surface);
+
+            return group;
+        }
+
+        // ===========================================
+        // MULTIPLAYER
+        // ===========================================
+        async setupMultiplayer() {
+            return new Promise((resolve) => {
+                // Get room from URL or generate
+                const urlParams = new URLSearchParams(window.location.search);
+                this.roomId = urlParams.get('room') || 'nexus-' + Math.random().toString(36).substr(2, 6);
+                document.getElementById('room-id').textContent = `Room: ${this.roomId}`;
+
+                try {
+                    this.peer = new Peer('nexus-' + Math.random().toString(36).substr(2, 9));
+
+                    this.peer.on('open', (id) => {
+                        document.getElementById('conn-text').textContent = 'Connected to Nexus Network';
+                        document.getElementById('conn-dot').style.background = '#00ff88';
+
+                        // Try to connect to room host
+                        this.connectToRoom();
+                        resolve();
+                    });
+
+                    this.peer.on('connection', (conn) => {
+                        this.handleConnection(conn);
+                    });
+
+                    this.peer.on('error', (err) => {
+                        console.warn('Peer error:', err);
+                        document.getElementById('conn-text').textContent = 'Local mode (no network)';
+                        resolve();
+                    });
+                } catch (e) {
+                    console.warn('PeerJS not available, running in local mode');
+                    document.getElementById('conn-text').textContent = 'Local mode';
+                    resolve();
+                }
+            });
+        }
+
+        connectToRoom() {
+            // For demo, just mark as connected
+            this.isHost = true;
+            this.updatePeerCount();
+        }
+
+        handleConnection(conn) {
+            conn.on('open', () => {
+                this.connections.set(conn.peer, conn);
+                this.updatePeerCount();
+
+                // Send current world state
+                conn.send({
+                    type: 'world-state',
+                    entities: Array.from(this.entities.values()).map(e => e.serialize()),
+                    objects: this.worldObjects.map(o => ({
+                        type: o.userData.type,
+                        position: o.position.toArray()
+                    }))
+                });
+            });
+
+            conn.on('data', (data) => {
+                this.handlePeerData(conn.peer, data);
+            });
+
+            conn.on('close', () => {
+                this.connections.delete(conn.peer);
+                this.updatePeerCount();
+            });
+        }
+
+        handlePeerData(peerId, data) {
+            switch (data.type) {
+                case 'entity-update':
+                    this.handleRemoteEntityUpdate(data.entity);
+                    break;
+                case 'object-placed':
+                    this.placeObject(data.objectType, new THREE.Vector3(...data.position));
+                    break;
+                case 'chat':
+                    this.addChatMessage(data.sender, data.message, data.senderType);
+                    break;
+            }
+        }
+
+        broadcastEntityUpdate(entity) {
+            const data = {
+                type: 'entity-update',
+                entity: entity.serialize()
+            };
+            this.connections.forEach(conn => conn.send(data));
+        }
+
+        broadcastObjectPlaced(mesh) {
+            const data = {
+                type: 'object-placed',
+                objectType: mesh.userData.type,
+                position: mesh.position.toArray()
+            };
+            this.connections.forEach(conn => conn.send(data));
+        }
+
+        updatePeerCount() {
+            const count = this.connections.size;
+            document.getElementById('peer-count').textContent = `${count} peer${count !== 1 ? 's' : ''} connected`;
+            document.getElementById('entity-total').textContent = `${this.entities.size} entities in world`;
+        }
+
+        // ===========================================
+        // UI MANAGEMENT
+        // ===========================================
+        setupUI() {
+            // Mode switching
+            document.querySelectorAll('.mode-pill').forEach(pill => {
+                pill.addEventListener('click', () => {
+                    const mode = pill.dataset.mode;
+                    this.setMode(mode);
+                });
+            });
+
+            // Builder tools
+            document.querySelectorAll('.builder-tool').forEach(tool => {
+                tool.addEventListener('click', () => {
+                    document.querySelectorAll('.builder-tool').forEach(t => t.classList.remove('selected'));
+                    tool.classList.add('selected');
+                    this.selectedTool = tool.dataset.tool;
+
+                    if (this.selectedTool === 'save') {
+                        this.saveWorld();
+                    }
+                });
+            });
+
+            // Object palette
+            document.querySelectorAll('.palette-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const type = item.dataset.object;
+                    const pos = new THREE.Vector3(
+                        this.camera.position.x + Math.sin(this.camera.rotation.y) * 5,
+                        0,
+                        this.camera.position.z + Math.cos(this.camera.rotation.y) * 5
+                    );
+                    this.placeObject(type, pos);
+                });
+            });
+
+            // Chat input
+            document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendChat();
+                }
+            });
+
+            // Tab to toggle panels
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    document.getElementById('entity-panel').classList.toggle('hidden');
+                    document.getElementById('chat-panel').classList.toggle('hidden');
+                }
+            });
+        }
+
+        setMode(mode) {
+            this.currentMode = mode;
+            this.updateModeUI();
+
+            // Show/hide panels based on mode
+            document.getElementById('observation-panel').classList.toggle('visible', mode === 'observe');
+            document.getElementById('builder-panel').classList.toggle('visible', mode === 'build');
+
+            if (mode === 'observe' && !this.observedEntity && this.entities.size > 1) {
+                // Auto-observe first AI entity
+                for (const [id, entity] of this.entities) {
+                    if (entity.type !== EntityType.HUMAN) {
+                        this.observeEntity(id);
+                        break;
+                    }
+                }
+            }
+        }
+
+        updateModeUI() {
+            document.querySelectorAll('.mode-pill').forEach(pill => {
+                pill.classList.toggle('active', pill.dataset.mode === this.currentMode);
+            });
+        }
+
+        updateEntityList() {
+            this.entityListEl.innerHTML = '';
+
+            this.entities.forEach((entity, id) => {
+                const card = document.createElement('div');
+                card.className = 'entity-card' + (this.observedEntity?.id === id ? ' selected' : '');
+                card.innerHTML = `
+                    <div class="entity-header">
+                        <div class="entity-avatar ${entity.type}">
+                            ${entity.type === EntityType.HUMAN ? '👤' :
+                              entity.type === EntityType.AI ? '🤖' : '⚙️'}
+                        </div>
+                        <div class="entity-name">${entity.name}</div>
+                        <div class="entity-type">${entity.type.toUpperCase()}</div>
+                    </div>
+                    <div class="entity-status">
+                        <div class="status-dot ${entity.state}"></div>
+                        <span>${entity.state}</span>
+                    </div>
+                    ${entity.currentTask ? `<div class="entity-task">${entity.currentTask}</div>` : ''}
+                `;
+
+                card.addEventListener('click', () => {
+                    if (entity.type !== EntityType.HUMAN) {
+                        this.observeEntity(id);
+                        document.querySelectorAll('.entity-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                    }
+                });
+
+                this.entityListEl.appendChild(card);
+            });
+
+            document.getElementById('entity-count').textContent = this.entities.size;
+        }
+
+        showAddEntityModal() {
+            document.getElementById('add-entity-modal').classList.add('visible');
+        }
+
+        hideAddEntityModal() {
+            document.getElementById('add-entity-modal').classList.remove('visible');
+        }
+
+        addEntity() {
+            const name = document.getElementById('entity-name-input').value || 'New Entity';
+            const type = document.getElementById('entity-type-select').value;
+            const task = document.getElementById('entity-task-input').value;
+
+            const position = {
+                x: (Math.random() - 0.5) * 20,
+                y: 0,
+                z: (Math.random() - 0.5) * 20
+            };
+
+            if (type === EntityType.AI) {
+                this.createAIEntity(name, task || 'Awaiting instructions', position);
+            } else if (type === EntityType.TWIN) {
+                this.createDigitalTwin(name, task || 'Syncing with external system', position);
+            }
+
+            this.hideAddEntityModal();
+            this.addChatMessage('System', `New entity "${name}" has joined the world`, 'system');
+        }
+
+        sendChat() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            this.addChatMessage(this.localEntity?.name || 'You', message, 'human');
+
+            // Broadcast to peers
+            this.connections.forEach(conn => {
+                conn.send({
+                    type: 'chat',
+                    sender: this.localEntity?.name || 'Anonymous',
+                    message,
+                    senderType: 'human'
+                });
+            });
+
+            // If message is a command to an AI
+            if (message.startsWith('@')) {
+                this.handleAICommand(message);
+            }
+
+            input.value = '';
+        }
+
+        handleAICommand(message) {
+            const match = message.match(/@(\w+)\s+(.+)/);
+            if (!match) return;
+
+            const [, targetName, command] = match;
+
+            for (const entity of this.entities.values()) {
+                if (entity.name.toLowerCase() === targetName.toLowerCase() && entity.type !== EntityType.HUMAN) {
+                    entity.setTask(command);
+                    this.updateAvatarIndicator(entity);
+                    this.addChatMessage(entity.name, `Understood. Starting: ${command}`, 'ai');
+
+                    if (this.observedEntity?.id === entity.id) {
+                        this.updateActivityLog();
+                    }
+                    break;
+                }
+            }
+        }
+
+        addChatMessage(sender, message, type) {
+            const msgEl = document.createElement('div');
+            msgEl.className = `chat-message ${type}`;
+            msgEl.innerHTML = `
+                <div class="chat-sender">${sender}</div>
+                <div>${message}</div>
+            `;
+            this.chatMessagesEl.appendChild(msgEl);
+            this.chatMessagesEl.scrollTop = this.chatMessagesEl.scrollHeight;
+        }
+
+        // ===========================================
+        // CONTROLS
+        // ===========================================
+        setupControls() {
+            // Keyboard
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = true;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key.toLowerCase() in this.keys) {
+                    this.keys[e.key.toLowerCase()] = false;
+                }
+            });
+
+            // Mouse
+            this.renderer.domElement.addEventListener('click', (e) => {
+                if (!this.isPointerLocked) {
+                    this.renderer.domElement.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (this.isPointerLocked) {
+                    this.camera.rotation.order = 'YXZ';
+                    this.camera.rotation.y -= e.movementX * this.lookSpeed;
+                    this.camera.rotation.x -= e.movementY * this.lookSpeed;
+                    this.camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.camera.rotation.x));
+                }
+            });
+        }
+
+        updateMovement() {
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+
+            this.camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+            let targetEntity = this.localEntity;
+
+            // If in takeover mode, control the observed entity
+            if (this.controlMode === ControlMode.TAKEOVER && this.observedEntity) {
+                targetEntity = this.observedEntity;
+            }
+
+            if (!targetEntity) return;
+
+            const moveVector = new THREE.Vector3();
+
+            if (this.keys.w) moveVector.add(forward);
+            if (this.keys.s) moveVector.sub(forward);
+            if (this.keys.a) moveVector.sub(right);
+            if (this.keys.d) moveVector.add(right);
+
+            if (moveVector.length() > 0) {
+                moveVector.normalize().multiplyScalar(this.moveSpeed);
+
+                if (targetEntity === this.localEntity) {
+                    this.camera.position.add(moveVector);
+                    targetEntity.position = {
+                        x: this.camera.position.x,
+                        y: 0,
+                        z: this.camera.position.z
+                    };
+                } else {
+                    targetEntity.position.x += moveVector.x;
+                    targetEntity.position.z += moveVector.z;
+                }
+
+                if (targetEntity.avatar) {
+                    targetEntity.avatar.position.x = targetEntity.position.x;
+                    targetEntity.avatar.position.z = targetEntity.position.z;
+                }
+
+                this.broadcastEntityUpdate(targetEntity);
+            }
+        }
+
+        // ===========================================
+        // MINIMAP
+        // ===========================================
+        setupMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            canvas.width = 150;
+            canvas.height = 150;
+            this.minimapCtx = canvas.getContext('2d');
+        }
+
+        updateMinimap() {
+            const ctx = this.minimapCtx;
+            const size = 150;
+            const scale = 2; // 1 unit = 2 pixels
+
+            // Clear
+            ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
+            ctx.fillRect(0, 0, size, size);
+
+            // Grid
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < size; i += 10) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, size);
+                ctx.moveTo(0, i);
+                ctx.lineTo(size, i);
+                ctx.stroke();
+            }
+
+            // Center (origin)
+            const centerX = size / 2;
+            const centerY = size / 2;
+
+            // Draw entities
+            this.entities.forEach(entity => {
+                const x = centerX + entity.position.x * scale;
+                const y = centerY - entity.position.z * scale;
+
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+
+                if (entity.type === EntityType.HUMAN) {
+                    ctx.fillStyle = '#00d4ff';
+                } else if (entity.type === EntityType.AI) {
+                    ctx.fillStyle = '#7b2fff';
+                } else {
+                    ctx.fillStyle = '#00ff88';
+                }
+
+                ctx.fill();
+
+                // Direction indicator for local player
+                if (entity === this.localEntity) {
+                    ctx.strokeStyle = '#00d4ff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+
+            // Camera direction indicator
+            const dirLen = 15;
+            const camDir = new THREE.Vector3();
+            this.camera.getWorldDirection(camDir);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX + this.localEntity?.position.x * scale || centerX,
+                       centerY - (this.localEntity?.position.z * scale || 0));
+            ctx.lineTo(centerX + (this.localEntity?.position.x || 0) * scale + camDir.x * dirLen,
+                       centerY - ((this.localEntity?.position.z || 0) * scale + camDir.z * dirLen));
+            ctx.stroke();
+        }
+
+        // ===========================================
+        // WORLD SAVE/LOAD
+        // ===========================================
+        saveWorld() {
+            const worldData = {
+                name: 'Nexus World',
+                timestamp: new Date().toISOString(),
+                entities: Array.from(this.entities.values())
+                    .filter(e => e.type !== EntityType.HUMAN)
+                    .map(e => e.serialize()),
+                objects: this.worldObjects.map(o => ({
+                    type: o.userData.type,
+                    position: o.position.toArray(),
+                    rotation: o.rotation.toArray()
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(worldData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nexus-world.json';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            this.addChatMessage('System', 'World saved successfully!', 'system');
+        }
+
+        // ===========================================
+        // ANIMATION LOOP
+        // ===========================================
+        animate() {
+            requestAnimationFrame(() => this.animate());
+
+            const time = this.clock.getElapsedTime();
+
+            // Update movement
+            this.updateMovement();
+
+            // Animate particles
+            if (this.particles) {
+                this.particles.rotation.y = time * 0.02;
+                const positions = this.particles.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] += Math.sin(time + i) * 0.002;
+                }
+                this.particles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Animate portals
+            this.worldObjects.forEach(obj => {
+                if (obj.userData.type === 'portal') {
+                    obj.traverse(child => {
+                        if (child.userData.isPortalSurface && child.material.uniforms) {
+                            child.material.uniforms.time.value = time;
+                        }
+                    });
+                    obj.rotation.y = time * 0.5;
+                }
+            });
+
+            // Animate entity indicators
+            this.entities.forEach(entity => {
+                if (entity.avatar) {
+                    const indicator = entity.avatar.getObjectByName('indicator');
+                    if (indicator && entity.state === EntityState.WORKING) {
+                        indicator.position.y = 2.8 + Math.sin(time * 4) * 0.1;
+                    }
+
+                    // Gentle idle animation
+                    entity.avatar.position.y = Math.sin(time * 2 + entity.id.charCodeAt(0)) * 0.05;
+                }
+            });
+
+            // Update UI
+            this.updateMinimap();
+
+            // Render
+            this.renderer.render(this.scene, this.camera);
+
+            // Render observation viewport if active
+            if (this.observedEntity && this.currentMode === 'observe') {
+                this.renderObservationViewport();
+            }
+        }
+
+        renderObservationViewport() {
+            // This would render a secondary camera from the observed entity's POV
+            // For now, we'll just update the status display
+            if (this.observedEntity) {
+                document.getElementById('obs-status-text').textContent =
+                    this.observedEntity.currentTask || 'No active task';
+
+                const statusDot = document.getElementById('obs-status-dot');
+                statusDot.className = 'status-dot ' + this.observedEntity.state;
+            }
+        }
+    }
+
+    // ===========================================
+    // INITIALIZE
+    // ===========================================
+    const nexus = new NexusMetaverse();
+    nexus.init();
+    </script>
+</body>
+</html>
