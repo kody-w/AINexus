@@ -510,6 +510,45 @@
             border: 1px solid rgba(100, 200, 255, 0.1);
         }
 
+        /* Portal View - The window into the metaverse */
+        .portal-view-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 320px;
+            height: 240px;
+            background: #000;
+            border: 2px solid #00d4ff;
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 90;
+            display: none; /* Hidden until portal created */
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .portal-view-panel.active {
+            display: block;
+            animation: portalOpen 0.5s ease-out;
+        }
+
+        .portal-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00d4ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        @keyframes portalOpen {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
         /* Loading Overlay */
         .loading-overlay {
             position: fixed;
@@ -1487,6 +1526,11 @@
     <main id="main-content">
     <div id="canvas-container"></div>
 
+    <div class="portal-view-panel" id="portal-view-panel">
+        <div class="portal-label">PORTAL REMOTE FEED</div>
+        <canvas id="portal-canvas" width="320" height="240"></canvas>
+    </div>
+
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loading">
         <div class="loading-spinner"></div>
@@ -1968,6 +2012,28 @@
             }
         }
 
+        dispose() {
+            // Dispose internal resources
+            if (this.behaviorTimeoutId) {
+                clearTimeout(this.behaviorTimeoutId);
+                this.behaviorTimeoutId = null;
+            }
+            if (this.syncTimeoutId) {
+                clearTimeout(this.syncTimeoutId);
+                this.syncTimeoutId = null;
+            }
+        }
+
+        setEmotion(emotion, intensity = 0.5) {
+            this.emotion = emotion;
+            this.emotionIntensity = intensity;
+            this.log(`Emotion changed to ${emotion} (${Math.round(intensity * 100)}%)`, 'thought');
+        }
+
+        setAttention(target) {
+            this.attentionTarget = target;
+        }
+
         serialize() {
             return {
                 id: this.id,
@@ -2019,6 +2085,11 @@
 
             // Possession state
             this.prePossessionState = null; // Stores camera state before takeover
+
+            // Portal system
+            this.activePortal = null;
+            this.portalCamera = null;
+            this.portalRenderer = null;
 
             // Minimap
             this.minimapCtx = null;
@@ -2539,6 +2610,14 @@
         }
 
         createParticleField() {
+            // Cleanup existing particles
+            if (this.particles) {
+                this.scene.remove(this.particles);
+                if (this.particles.geometry) this.particles.geometry.dispose();
+                if (this.particles.material) this.particles.material.dispose();
+                this.particles = null;
+            }
+
             const particleCount = 500;
             const positions = new Float32Array(particleCount * 3);
             const colors = new Float32Array(particleCount * 3);
@@ -2642,6 +2721,33 @@
 
             // Store reference for when user possesses another entity
             this.userOriginalAvatar = this.localEntity.avatar;
+
+            // Attempt to apply webcam face
+            this.updateAvatarFace();
+        }
+
+        updateAvatarFace() {
+            if (!this.localEntity || !this.localEntity.avatar) return;
+            // Use faceRef (the monitor plate) instead of headRef
+            const facePlate = this.localEntity.avatar.userData.faceRef;
+            
+            if (facePlate && this.realityMirror && this.realityMirror.enabled && this.realityMirror.video) {
+                const videoTexture = new THREE.VideoTexture(this.realityMirror.video);
+                
+                // Monitor effect
+                facePlate.material = new THREE.MeshBasicMaterial({
+                    map: videoTexture,
+                    side: THREE.DoubleSide
+                });
+                
+                // Correct texture orientation for "mirror" feel or "window" feel
+                // If looking "through" a window, it shouldn't be mirrored to the observer?
+                // Standard webcam is often mirrored for user self-view, but for others it should be normal.
+                // However, VideoTexture usually plays raw.
+                
+                // facePlate.visible = true; // Controlled by render loop/control mode now
+                console.log("[Avatar] Face monitor activated");
+            }
         }
 
         // AI Personality profiles for distinct behaviors
@@ -2803,6 +2909,37 @@
             head.castShadow = true;
             group.add(head);
             group.userData.headRef = head; // CYCLE 3: Cache head reference for animation
+
+            // "Monitor" Face Plate for Portal Video (Human only or all)
+            // A flat plane slightly in front of the head
+            const faceGeo = new THREE.PlaneGeometry(0.5, 0.4);
+            const faceMat = new THREE.MeshBasicMaterial({ 
+                color: 0x000000, 
+                side: THREE.DoubleSide
+            });
+            const facePlate = new THREE.Mesh(faceGeo, faceMat);
+            facePlate.position.set(0, 2.1, 0.28); // Slightly offset from center of head
+            facePlate.rotation.y = Math.PI; // Face outwards (Z+) -> actually the avatar faces Z+ usually?
+            // Actually avatars usually face Z+ or Z- depending on model. 
+            // Let's assume standard Z+ forward.
+            // Wait, standard LookAt(0,0,0) from (0,0,10) means looking at -Z.
+            // The avatar mesh is usually created facing +Z or -Z. 
+            // Let's check click interaction: `entity.avatar.rotation.y = Math.atan2(dx, dz);`
+            // If we put the face plate at Z+ relative to head, it's the "front" if avatar faces Z+.
+            // Let's adjust rotation if needed. For now, place it on "front".
+            facePlate.rotation.y = Math.PI; // If the avatar mesh is Z-forward, this faces back. 
+            // If the avatar is created at (0,0,0) and we view it from (0,0,10), it faces us (+Z) or away (-Z)?
+            // Usually we add 180 deg to face camera. 
+            // Let's attach it to +Z side for now, rotation 0.
+            facePlate.rotation.set(0, Math.PI, 0); // Face "backward" in local space? 
+            // Actually, let's just place it at z = 0.35 (radius of head) 
+            facePlate.position.set(0, 2.1, 0.36); 
+            facePlate.rotation.y = 0; // Face +Z
+            
+            // We only want this visible if it's the local player OR if we have video
+            facePlate.visible = false; 
+            group.add(facePlate);
+            group.userData.faceRef = facePlate;
 
             // Type indicator ring
             const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 32);
@@ -3539,57 +3676,89 @@
             return group;
         }
 
-        createPortal() {
-            const group = new THREE.Group();
+        createPortal(position = new THREE.Vector3(0, 5, -15)) {
+            // 1. Setup the UI canvas & Renderer
+            const portalCanvas = document.getElementById('portal-canvas');
+            if (portalCanvas && !this.portalRenderer) {
+                this.portalRenderer = new THREE.WebGLRenderer({
+                    canvas: portalCanvas,
+                    antialias: false,
+                    alpha: true
+                });
+                this.portalRenderer.setSize(320, 240);
+            }
+            
+            // Show the UI panel
+            const panel = document.getElementById('portal-view-panel');
+            if (panel) panel.classList.add('active');
+
+            // 2. Create the Portal Mesh
+            const geometry = new THREE.CircleGeometry(5, 64);
+            // Default fallback material
+            let material = new THREE.MeshStandardMaterial({ 
+                color: 0x00d4ff,
+                emissive: 0x00d4ff,
+                emissiveIntensity: 0.5,
+                metalness: 0.8,
+                roughness: 0.2,
+                side: THREE.DoubleSide
+            });
+
+            const portalMesh = new THREE.Mesh(geometry, material);
+            portalMesh.position.copy(position);
+            portalMesh.rotation.y = Math.PI; 
 
             // Frame
-            const frame = new THREE.Mesh(
-                new THREE.TorusGeometry(2, 0.2, 16, 32),
-                new THREE.MeshStandardMaterial({
-                    color: 0x7b2fff,
-                    emissive: 0x7b2fff,
-                    emissiveIntensity: 0.5
-                })
-            );
-            frame.position.y = 2;
-            group.add(frame);
+            const frameGeo = new THREE.TorusGeometry(5.2, 0.2, 16, 64);
+            const frameMat = new THREE.MeshStandardMaterial({ 
+                color: 0x00d4ff, 
+                emissive: 0x00d4ff,
+                emissiveIntensity: 2
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            portalMesh.add(frame);
 
-            // Portal surface
-            const surface = new THREE.Mesh(
-                new THREE.CircleGeometry(1.8, 32),
-                new THREE.ShaderMaterial({
-                    uniforms: {
-                        time: { value: 0 }
-                    },
-                    vertexShader: `
-                        varying vec2 vUv;
-                        void main() {
-                            vUv = uv;
-                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                        }
-                    `,
-                    fragmentShader: `
-                        uniform float time;
-                        varying vec2 vUv;
-                        void main() {
-                            vec2 center = vUv - 0.5;
-                            float dist = length(center);
-                            float wave = sin(dist * 20.0 - time * 3.0) * 0.5 + 0.5;
-                            vec3 color = mix(vec3(0.5, 0.2, 1.0), vec3(0.0, 0.8, 1.0), wave);
-                            float alpha = 1.0 - dist * 1.5;
-                            gl_FragColor = vec4(color, alpha * 0.8);
-                        }
-                    `,
-                    transparent: true,
-                    side: THREE.DoubleSide,
-                    fog: false // Disable fog for portal (prevents uniform errors)
-                })
-            );
-            surface.position.y = 2;
-            surface.userData.isPortalSurface = true;
-            group.add(surface);
+            this.scene.add(portalMesh);
+            this.activePortal = portalMesh;
+            
+            // 3. Handle Video Texture (Async)
+            const setupVideo = async () => {
+                if (!this.realityMirror.enabled) {
+                    try {
+                        await this.enableRealityMirror();
+                    } catch (e) {
+                        console.warn("Could not enable camera for portal", e);
+                        return;
+                    }
+                }
+                
+                if (this.realityMirror.video && this.realityMirror.enabled) {
+                    const videoTexture = new THREE.VideoTexture(this.realityMirror.video);
+                    portalMesh.material = new THREE.MeshBasicMaterial({ 
+                        map: videoTexture,
+                        side: THREE.DoubleSide
+                    });
+                }
+            };
+            
+            // Trigger video setup without awaiting
+            setupVideo().catch(e => console.error("Failed to setup portal video:", e));
 
-            return group;
+            // 4. Setup Portal Camera (Virtual -> UI)
+            this.portalCamera = new THREE.PerspectiveCamera(75, 320 / 240, 0.1, 100);
+            this.portalCamera.position.copy(position);
+            this.portalCamera.lookAt(0, 0, 0);
+            this.portalCamera.rotation.y += Math.PI; // Look out
+
+            this.addChatMessage('System', 'Portal opened. Reality Video linked.', 'system');
+            return portalMesh;
+        }
+
+        renderPortalView() {
+            const panel = document.getElementById('portal-view-panel');
+            if (this.portalRenderer && this.portalCamera && panel && panel.classList.contains('active')) {
+                 this.portalRenderer.render(this.scene, this.portalCamera);
+            }
         }
 
         // ===========================================
@@ -4885,6 +5054,9 @@
                 if (!this.realityMirror.aiGazeActive) {
                     this.toggleAIGaze();
                 }
+
+                // Update Avatar Face if local player exists
+                this.updateAvatarFace();
 
             } catch (err) {
                 console.error('[Reality Portal] Camera access denied:', err);
@@ -6208,6 +6380,28 @@
                 }
             });
 
+            // Update Avatar Face Visibility (Hide if looking at self in first-person)
+            if (this.localEntity && this.localEntity.avatar && this.localEntity.avatar.userData.faceRef) {
+                const facePlate = this.localEntity.avatar.userData.faceRef;
+                // If control mode is OBSERVE:
+                // 1. If we are watching an entity (observedEntity is set), we are viewing from THEIR perspective (or 3rd person of them).
+                //    We might see OURSELVES in their view. So face should be VISIBLE.
+                // 2. If we are just walking around (observedEntity is null), we are in first person. Face should be HIDDEN.
+                
+                if (this.controlMode === ControlMode.OBSERVE) {
+                    if (this.observedEntity) {
+                         facePlate.visible = true;
+                    } else {
+                         facePlate.visible = false;
+                    }
+                } else if (this.controlMode === ControlMode.TAKEOVER) {
+                    facePlate.visible = true; 
+                } else {
+                    // Default fallback
+                    facePlate.visible = false;
+                }
+            }
+
             // Animate particles
             if (this.particles) {
                 this.particles.rotation.y = time * 0.02;
@@ -6257,11 +6451,25 @@
             // OPTIMIZATION: Only render POV when observation panel is actually visible
             const obsPanel = document.getElementById('observation-panel');
             if (this.observedEntity && obsPanel && obsPanel.classList.contains('visible')) {
+                // When rendering the POV of another entity, we want to ensure OUR face is visible 
+                // regardless of what the main loop decided for the main camera.
+                // But Three.js shares scene state. We might need to toggle it just for this render pass.
+                
+                const facePlate = this.localEntity?.avatar?.userData?.faceRef;
+                const wasVisible = facePlate ? facePlate.visible : false;
+                if (facePlate) facePlate.visible = true; // Force visible for POV render
+                
                 this.renderObservationViewport();
+                
+                if (facePlate) facePlate.visible = wasVisible; // Restore state
+                
                 this.perfStats.renderMode = 'both';
             } else {
                 this.perfStats.renderMode = 'main';
             }
+
+            // Render Portal View (Virtual -> UI)
+            this.renderPortalView();
         }
 
         renderObservationViewport() {
@@ -7154,6 +7362,11 @@
             // Remove entity
             const entity = this.getAgentEntity(agentId);
             if (entity) {
+                // Call dispose to clear timeouts
+                if (typeof entity.dispose === 'function') {
+                    entity.dispose();
+                }
+
                 if (entity.avatar) {
                     this.nexus.scene.remove(entity.avatar);
                 }
@@ -7679,7 +7892,11 @@
         /** Place a world object */
         placeObject(type, x, z) {
             const position = new THREE.Vector3(x, 0, z);
-            this.nexus.placeObject(type, position);
+            if (type === 'portal') {
+                this.nexus.createPortal(position);
+            } else {
+                this.nexus.placeObject(type, position);
+            }
             return true;
         }
 
