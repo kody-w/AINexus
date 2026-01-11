@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brian Tracy's Focus List</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            /* Legacy container, now using layout-wrapper inline but keeping this for fallback/inner spacing */
+            width: 100%;
+        }
+
+        /* Sidebar Styles */
+        .sidebar-item {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .sidebar-item:hover {
+            background-color: #f1f5f9;
+            color: var(--text-main);
+        }
+
+        .sidebar-item.active {
+            background-color: #e0e7ff;
+            color: var(--primary);
+        }
+
+        .sidebar-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .delete-list-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s, color 0.2s;
+        }
+
+        .sidebar-item:hover .delete-list-btn {
+            opacity: 1;
+        }
+
+        .delete-list-btn:hover {
+            color: var(--danger);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        /* Adjust header for main content area */
+        main header {
+            text-align: left;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.125rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .input-group {
+            padding: 1.5rem;
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        button.add-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button.add-btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .list-container {
+            padding: 0;
+            list-style: none;
+            margin: 0;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            transition: background-color 0.1s;
+        }
+
+        .task-item:last-child {
+            border-bottom: none;
+        }
+
+        .task-item:hover {
+            background-color: #f9fafb;
+        }
+
+        .task-checkbox {
+            margin-right: 1rem;
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .task-content {
+            flex: 1;
+        }
+
+        .task-text {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .task-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .task-item:hover .task-actions {
+            opacity: 1;
+        }
+
+        .priority-select {
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.875rem;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+        }
+
+        .btn-icon:hover {
+            background-color: #f1f5f9;
+            color: var(--danger);
+        }
+
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .priority-A {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .priority-B {
+            background-color: #ffedd5;
+            color: #c2410c;
+        }
+
+        .priority-C {
+            background-color: #fef9c3;
+            color: #a16207;
+        }
+
+        .priority-D {
+            background-color: #ecfccb;
+            color: #4d7c0f;
+        }
+
+        .priority-E {
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+
+        .completed .task-text {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .empty-state {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .section-title {
+            margin: 2rem 0 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .sort-btn {
+            background: none;
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .sort-btn:hover {
+            background: white;
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="layout-wrapper"
+        style="display: flex; gap: 2rem; max-width: 1000px; margin: 2rem auto; padding: 0 1rem;">
+        <!-- Sidebar -->
+        <aside style="width: 250px; flex-shrink: 0;">
+            <div class="card" style="padding: 1rem; height: 100%; min-height: 400px;">
+                <h3
+                    style="margin-top: 0; font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Your Lists</h3>
+                <ul id="sidebarList" style="list-style: none; padding: 0; margin: 1rem 0;">
+                    <!-- Lists injected here -->
+                </ul>
+                <button class="add-btn" style="width: 100%; font-size: 0.875rem;" onclick="createNewList()">+ New
+                    List</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main style="flex: 1;">
+            <header style="text-align: left; margin-bottom: 2rem;">
+                <h1>Make a List for Everything</h1>
+                <p class="subtitle">Brian Tracy's Method</p>
+            </header>
+
+            <div class="card">
+                <div class="input-group">
+                    <input type="text" id="newTaskInput" placeholder="What needs to be done?">
+                    <button class="add-btn" onclick="addTask()">Add Task</button>
+                </div>
+
+                <div class="controls"
+                    style="padding: 1rem 1.5rem; background: #fafafa; border-bottom: 1px solid var(--border); justify-content: space-between;">
+                    <span id="listTitle"
+                        style="font-weight: 600; color: var(--text-main); font-size: 1rem;">TASKS</span>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="sort-btn" onclick="sortTasks()">Sort</button>
+                        <button class="sort-btn" onclick="exportToMarkdown()">Export</button>
+                        <button class="sort-btn" onclick="triggerImport()">Import</button>
+                        <input type="file" id="importFile" accept=".md,.txt" style="display: none;"
+                            onchange="importFromMarkdown(event)">
+                    </div>
+                </div>
+
+                <ul class="list-container" id="taskList">
+                    <!-- Tasks will be injected here -->
+                </ul>
+            </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+
+        const REHAB_TASKS = [
+            // Phase 1: Mobility & Release (Weeks 1-2)
+            { id: 'r1', text: "[Phase 1] Pendulums: 1-2 min each direction", priority: 'A', completed: false },
+            { id: 'r2', text: "[Phase 1] Water Walking with Arm Swings: 3-5 min", priority: 'A', completed: false },
+            { id: 'r3', text: "[Phase 1] Wall Slides (Underwater): 2 sets of 10", priority: 'A', completed: false },
+            { id: 'r4', text: "[Phase 1] Floating Stretch: Hold 30-60 sec", priority: 'A', completed: false },
+            { id: 'r5', text: "[Phase 1] Cross-Body Pulls: Hold 20 sec, 5x each side", priority: 'A', completed: false },
+
+            // Phase 2: Activation (Weeks 2-4)
+            { id: 'r6', text: "[Phase 2] Figure 8s: 2 sets of 10 each arm", priority: 'B', completed: false },
+            { id: 'r7', text: "[Phase 2] Chest Fly / Reverse Fly: 2 sets of 12", priority: 'B', completed: false },
+            { id: 'r8', text: "[Phase 2] External Rotation: 2 sets of 12 each arm", priority: 'B', completed: false },
+            { id: 'r9', text: "[Phase 2] Arm Circles: 30 sec each direction", priority: 'B', completed: false },
+            { id: 'r10', text: "[Phase 2] Scapular Squeezes: 2 sets of 15", priority: 'B', completed: false },
+            { id: 'r11', text: "[Phase 2] Trunk Rotation: 2 sets of 10 each side", priority: 'B', completed: false },
+            { id: 'r12', text: "[Phase 2] Side Bends: Hold 10 sec, 5x", priority: 'B', completed: false },
+            { id: 'r13', text: "[Phase 2] Noodle Lat Stretch: Hold 30 sec", priority: 'B', completed: false },
+
+            // Phase 3: Strengthening (Weeks 4-8)
+            { id: 'r14', text: "[Phase 3] Paddle/Webbed Glove Work: 3 sets of 10-12", priority: 'C', completed: false },
+            { id: 'r15', text: "[Phase 3] Noodle Press: 3 sets of 12", priority: 'C', completed: false },
+            { id: 'r16', text: "[Phase 3] Kickboard Punches: 3 sets of 10 each arm", priority: 'C', completed: false },
+            { id: 'r17', text: "[Phase 3] Noodle Pull-Downs: 3 sets of 10", priority: 'C', completed: false },
+
+            // Functional
+            { id: 'r18', text: "[Functional] Walking with Resistance: 5 min total", priority: 'D', completed: false },
+            { id: 'r19', text: "[Functional] Deep Water Jogging: 5-10 min", priority: 'D', completed: false },
+            { id: 'r20', text: "[Functional] Swimming (Modified): 5-10 min, no freestyle", priority: 'D', completed: false },
+
+            // Quick Session
+            { id: 'r21', text: "[Quick Session] Water walking with swings (3 min)", priority: 'E', completed: false },
+            { id: 'r22', text: "[Quick Session] Pendulums (2 min)", priority: 'E', completed: false },
+            { id: 'r23', text: "[Quick Session] Figure 8s (2 min)", priority: 'E', completed: false },
+            { id: 'r24', text: "[Quick Session] Chest fly / reverse fly (2 sets)", priority: 'E', completed: false },
+
+            // Equipment
+            { id: 'r25', text: "[Equipment] Pool noodle, Kickboard", priority: 'E', completed: false },
+            { id: 'r26', text: "[Equipment] Webbed gloves, Aqua dumbbells", priority: 'E', completed: false }
+        ];
+
+        const initialDefaultTasks = [
+            { id: '1', text: "Write demo script for RAPP", priority: "A", completed: false },
+            { id: '2', text: "Film demo", priority: "A", completed: false },
+            { id: '3', text: "Edit demo", priority: "B", completed: false },
+            { id: '4', text: "Uploaded to clipchamp. Make final edits", priority: "B", completed: false },
+            { id: '5', text: "Hook up Sharepoint integration to agent", priority: "C", completed: false }
+        ];
+
+        // Data Structure: { lists: [{id, name, tasks: []}], currentListId: string }
+        let appData = JSON.parse(localStorage.getItem('brianTracyAppData')) || null;
+
+        // Migration or Initialization
+        if (!appData) {
+            // Check for old legacy data
+            let oldTasks = JSON.parse(localStorage.getItem('brianTracyTasks')) || initialDefaultTasks;
+
+            appData = {
+                lists: [
+                    { id: 'default', name: 'Tasks for Tomorrow', tasks: oldTasks },
+                    { id: 'rehab', name: 'Aquatic Rehab Guide', tasks: REHAB_TASKS }
+                ],
+                currentListId: 'default'
+            };
+            saveData();
+        }
+
+        // Ensure Rehab list exists if user already has data but not this list (idempotency)
+        if (!appData.lists.find(l => l.id === 'rehab')) {
+            appData.lists.push({ id: 'rehab', name: 'Aquatic Rehab Guide', tasks: REHAB_TASKS });
+            saveData();
+        }
+
+        function saveData() {
+            localStorage.setItem('brianTracyAppData', JSON.stringify(appData));
+            renderApp();
+        }
+
+        function getCurrentList() {
+            return appData.lists.find(l => l.id === appData.currentListId) || appData.lists[0];
+        }
+
+        // --- RENDER ---
+
+        function renderApp() {
+            renderSidebar();
+            renderTasks();
+        }
+
+        function renderSidebar() {
+            const sidebarList = document.getElementById('sidebarList');
+            // If sidebar doesn't exist yet in DOM (will be added in HTML step), return
+            if (!sidebarList) return;
+
+            sidebarList.innerHTML = '';
+            appData.lists.forEach(list => {
+                const li = document.createElement('li');
+                li.className = `sidebar-item ${list.id === appData.currentListId ? 'active' : ''}`;
+                li.onclick = () => switchList(list.id);
+                li.innerHTML = `
+                <span class="sidebar-name">${list.name}</span>
+                ${list.id !== 'default' && list.id !== 'rehab' ?
+                        `<button class="delete-list-btn" onclick="deleteList('${list.id}', event)">×</button>` : ''}
+            `;
+                sidebarList.appendChild(li);
+            });
+        }
+
+        function renderTasks() {
+            const currentList = getCurrentList();
+            document.getElementById('listTitle').textContent = currentList.name;
+
+            const listContainer = document.getElementById('taskList');
+            listContainer.innerHTML = '';
+
+            if (currentList.tasks.length === 0) {
+                listContainer.innerHTML = '<div class="empty-state">No tasks. Add one or Import MD!</div>';
+                return;
+            }
+
+            currentList.tasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = `task-item ${task.completed ? 'completed' : ''}`;
+
+                li.innerHTML = `
+                <div class="priority-badge priority-${task.priority}">${task.priority}</div>
+                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
+                <div class="task-content">
+                    <div class="task-text">${task.text}</div>
+                    <div class="task-meta" style="font-size: 0.75rem; color: #94a3b8;">${task.id.toString().startsWith('r') ? 'Guide Item' : ''}</div>
+                </div>
+                <div class="task-actions">
+                    <select class="priority-select" onchange="updatePriority('${task.id}', this.value)" onclick="event.stopPropagation()">
+                        <option value="A" ${task.priority === 'A' ? 'selected' : ''}>A</option>
+                        <option value="B" ${task.priority === 'B' ? 'selected' : ''}>B</option>
+                        <option value="C" ${task.priority === 'C' ? 'selected' : ''}>C</option>
+                        <option value="D" ${task.priority === 'D' ? 'selected' : ''}>D</option>
+                        <option value="E" ${task.priority === 'E' ? 'selected' : ''}>E</option>
+                    </select>
+                    <button class="btn-icon" onclick="deleteTask('${task.id}')" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
+            `;
+                listContainer.appendChild(li);
+            });
+        }
+
+        // --- ACTIONS ---
+
+        function switchList(id) {
+            appData.currentListId = id;
+            saveData();
+        }
+
+        function createNewList() {
+            const name = prompt("Enter new list name:");
+            if (name) {
+                const newList = {
+                    id: 'list_' + Date.now(),
+                    name: name,
+                    tasks: []
+                };
+                appData.lists.push(newList);
+                appData.currentListId = newList.id;
+                saveData();
+            }
+        }
+
+        function deleteList(id, event) {
+            event.stopPropagation();
+            if (confirm('Delete this list?')) {
+                appData.lists = appData.lists.filter(l => l.id !== id);
+                if (appData.currentListId === id) {
+                    appData.currentListId = appData.lists[0].id;
+                }
+                saveData();
+            }
+        }
+
+        function addTask() {
+            const input = document.getElementById('newTaskInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const currentList = getCurrentList();
+            const newTask = {
+                id: Date.now().toString(),
+                text: text,
+                priority: 'C',
+                completed: false
+            };
+
+            currentList.tasks.push(newTask);
+            input.value = '';
+            saveData();
+        }
+
+        function toggleTask(id) {
+            const currentList = getCurrentList();
+            const task = currentList.tasks.find(t => t.id == id); // strict vs loose equality for string/number ids
+            if (task) {
+                task.completed = !task.completed;
+                saveData();
+            }
+        }
+
+        function updatePriority(id, newPriority) {
+            const currentList = getCurrentList();
+            const task = currentList.tasks.find(t => t.id == id);
+            if (task) {
+                task.priority = newPriority;
+                saveData();
+            }
+        }
+
+        function deleteTask(id) {
+            if (confirm('Delete task?')) {
+                const currentList = getCurrentList();
+                currentList.tasks = currentList.tasks.filter(t => t.id != id);
+                saveData();
+            }
+        }
+
+        function sortTasks() {
+            const currentList = getCurrentList();
+            const priorityOrder = { 'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5 };
+            currentList.tasks.sort((a, b) => {
+                if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                return priorityOrder[a.priority] - priorityOrder[b.priority];
+            });
+            saveData();
+        }
+
+        // --- Import / Export Logic (UPDATED) ---
+
+        function exportToMarkdown() {
+            const currentList = getCurrentList();
+            let mdContent = `# ${currentList.name}\n\n`;
+            currentList.tasks.forEach(task => {
+                const check = task.completed ? 'x' : ' ';
+                mdContent += `- [${check}] (${task.priority}) ${task.text}\n`;
+            });
+
+            const blob = new Blob([mdContent], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentList.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Import logic remains largely same but updates currentList
+        function parseMarkdown(md) {
+            const lines = md.split('\n');
+            const newTasks = [];
+
+            lines.forEach(line => {
+                const match = line.match(/^- \[([ xX])\](?:\s*\(([ABCDE])\))?\s*(.*)$/);
+                if (match) {
+                    const isCompleted = match[1].toLowerCase() === 'x';
+                    const priority = match[2] ? match[2] : 'C';
+                    const text = match[3].trim();
+
+                    if (text) {
+                        newTasks.push({
+                            id: Date.now() + Math.random().toString(),
+                            text: text,
+                            priority: priority,
+                            completed: isCompleted
+                        });
+                    }
+                }
+            });
+
+            if (newTasks.length > 0) {
+                if (confirm(`Found ${newTasks.length} tasks. Replace current list?`)) {
+                    getCurrentList().tasks = newTasks;
+                    saveData();
+                    alert('Tasks imported successfully!');
+                }
+            } else {
+                alert('No valid tasks found.');
+            }
+        }
+
+        // Handle Enter key in input
+        document.getElementById('newTaskInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                addTask();
+            }
+        });
+
+        // Initial render
+        renderApp();
+    </script>
+
+</body>
+
+</html>

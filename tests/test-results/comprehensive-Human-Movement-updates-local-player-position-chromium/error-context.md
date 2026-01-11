@@ -1,0 +1,117 @@
+# Page snapshot
+
+```yaml
+- generic [active]:
+  - link "Skip to main content" [ref=e1] [cursor=pointer]:
+    - /url: "#main-content"
+  - main:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: "N"
+        - text: Nexus Metaverse
+      - generic [ref=e7]:
+        - generic [ref=e8] [cursor=pointer]: Explore
+        - generic [ref=e9] [cursor=pointer]: Observe
+        - generic [ref=e10] [cursor=pointer]: Build
+      - generic [ref=e11]:
+        - generic [ref=e12]: "Room: nexus-p1dcac"
+        - button "+ Add Entity" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]: Entities
+        - generic [ref=e17]: "5"
+      - generic [ref=e18]:
+        - generic [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]:
+            - generic [ref=e21]: 👤
+            - generic [ref=e22]: You
+            - generic [ref=e23]: HUMAN
+          - generic [ref=e26]: idle
+        - generic [ref=e27] [cursor=pointer]:
+          - generic [ref=e28]:
+            - generic [ref=e29]: 🤖
+            - generic [ref=e30]: Atlas
+            - generic [ref=e31]: AI
+          - generic [ref=e34]: working
+          - generic [ref=e35]: Monitoring system resources
+        - generic [ref=e36] [cursor=pointer]:
+          - generic [ref=e37]:
+            - generic [ref=e38]: 🤖
+            - generic [ref=e39]: Nova
+            - generic [ref=e40]: AI
+          - generic [ref=e43]: working
+          - generic [ref=e44]: Analyzing data patterns
+        - generic [ref=e45] [cursor=pointer]:
+          - generic [ref=e46]:
+            - generic [ref=e47]: 🤖
+            - generic [ref=e48]: Echo
+            - generic [ref=e49]: AI
+          - generic [ref=e52]: working
+          - generic [ref=e53]: Processing user requests
+        - generic [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]:
+            - generic [ref=e56]: ⚙️
+            - generic [ref=e57]: Factory-Bot-1
+            - generic [ref=e58]: TWIN
+          - generic [ref=e61]: working
+          - generic [ref=e62]: Monitoring assembly line
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]: 🪞
+          - text: Reality Portal
+        - generic [ref=e67]:
+          - button "Toggle pinch cursor tracking" [ref=e68] [cursor=pointer]: 🎯
+          - button "Toggle hand gesture recognition" [ref=e69] [cursor=pointer]: 🤚
+          - button "Toggle AI perception of camera feed" [ref=e70] [cursor=pointer]: 👁️
+          - button "Minimize reality portal" [ref=e71] [cursor=pointer]: −
+          - button "Close reality portal" [ref=e72] [cursor=pointer]: ×
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: ✋
+            - generic [ref=e78]: No gesture
+          - generic [ref=e79]:
+            - generic [ref=e80]: 📷
+            - generic [ref=e81]: Camera offline
+            - button "Enable Camera" [ref=e82] [cursor=pointer]
+        - generic [ref=e83]:
+          - generic [ref=e86]: Camera offline
+          - generic [ref=e87]:
+            - generic [ref=e88]: 👁️
+            - generic [ref=e89]: AI not watching
+        - generic [ref=e90]:
+          - generic [ref=e91]: "AI Perception:"
+          - generic [ref=e92]: Enable camera and AI gaze to allow AI agents to perceive your environment.
+    - generic [ref=e93]:
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - generic [ref=e96]: 🧠
+          - generic [ref=e97]: Shared Knowledge
+        - button "Toggle shared knowledge panel" [ref=e98] [cursor=pointer]: −
+      - generic [ref=e100]:
+        - generic [ref=e101]: System
+        - generic [ref=e102]: Nexus Metaverse
+        - generic [ref=e103]: Knowledge base initialized. AI and human discoveries will appear here.
+        - generic [ref=e104]: system
+    - generic [ref=e105]:
+      - strong [ref=e106]: "Controls:"
+      - text: WASD to move | Mouse to look | Click to interact | Tab to toggle panels
+    - generic [ref=e107]:
+      - generic [ref=e110]: Local mode (offline)
+      - generic [ref=e111]: 0 peers connected | 0 entities in world
+    - generic [ref=e114]:
+      - generic [ref=e115]: Performance
+      - generic [ref=e116]:
+        - generic [ref=e117]: "FPS:"
+        - generic [ref=e118]: "6"
+      - generic [ref=e119]:
+        - generic [ref=e120]: "Entities:"
+        - generic [ref=e121]: "5"
+      - generic [ref=e122]:
+        - generic [ref=e123]: "Objects:"
+        - generic [ref=e124]: "4"
+      - generic [ref=e125]:
+        - generic [ref=e126]: "Render:"
+        - generic [ref=e127]: Main
+```
