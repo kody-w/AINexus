@@ -1608,6 +1608,12 @@
                 <button class="mirror-btn" id="mirror-gesture-toggle" onclick="nexus.toggleGestureRecognition()" title="Toggle Gesture Recognition" aria-label="Toggle hand gesture recognition">
                     🤚
                 </button>
+                <button class="mirror-btn" id="mirror-godhand-toggle" onclick="nexus.toggleGodHand()" title="Toggle Hand of God" aria-label="Toggle Hand of God Physics">
+                    ⚡
+                </button>
+                <button class="mirror-btn" id="mirror-audio-toggle" onclick="nexus.toggleAudioReactivity()" title="Toggle Audio Biomes" aria-label="Toggle Audio-Reactive World">
+                    🎵
+                </button>
                 <button class="mirror-btn" id="mirror-ai-gaze" onclick="nexus.toggleAIGaze()" title="Toggle AI Perception" aria-label="Toggle AI perception of camera feed">
                     👁️
                 </button>
@@ -2139,6 +2145,17 @@
                 cameraDir: new THREE.Vector3()
             };
 
+            // Audio Reactivity State
+            this.audioReactive = {
+                enabled: false,
+                context: null,
+                analyser: null,
+                source: null,
+                dataArray: null,
+                beatDetected: false,
+                bassVolume: 0
+            };
+
             // Post-processing for bloom effects
             this.composer = null;
             this.bloomPass = null;
@@ -2272,6 +2289,137 @@
                 }
             });
             console.log(`[Init] Disabled fog on ${count} materials`);
+        }
+
+        // ===========================================
+        // AUDIO REACTIVE BIOMES
+        // ===========================================
+        async toggleAudioReactivity() {
+            if (this.audioReactive.enabled) {
+                this.stopAudioReactivity();
+            } else {
+                await this.startAudioReactivity();
+            }
+        }
+
+        async startAudioReactivity() {
+            try {
+                if (!this.audioReactive.context) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioReactive.context = new AudioContext();
+                    this.audioReactive.analyser = this.audioReactive.context.createAnalyser();
+                    this.audioReactive.analyser.fftSize = 256;
+                    this.audioReactive.dataArray = new Uint8Array(this.audioReactive.analyser.frequencyBinCount);
+                }
+
+                if (this.audioReactive.context.state === 'suspended') {
+                    await this.audioReactive.context.resume();
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.audioReactive.source = this.audioReactive.context.createMediaStreamSource(stream);
+                this.audioReactive.source.connect(this.audioReactive.analyser);
+                
+                this.audioReactive.enabled = true;
+                
+                // UI Update
+                const btn = document.getElementById('mirror-audio-toggle');
+                if(btn) btn.classList.add('active');
+                this.addChatMessage('System', 'Audio Reactivity Enabled. Biomes syncing to mic...', 'system');
+
+            } catch (e) {
+                console.error('Audio setup failed:', e);
+                this.addChatMessage('System', 'Microphone access denied for audio reactivity.', 'error');
+            }
+        }
+
+        stopAudioReactivity() {
+            this.audioReactive.enabled = false;
+            // Stop source tracks if we want to release mic completely, 
+            // but keeping context alive is usually fine for toggling.
+            if (this.audioReactive.source) {
+                this.audioReactive.source.mediaStream.getTracks().forEach(track => track.stop());
+                this.audioReactive.source.disconnect();
+                this.audioReactive.source = null;
+            }
+            
+            const btn = document.getElementById('mirror-audio-toggle');
+            if(btn) btn.classList.remove('active');
+            this.addChatMessage('System', 'Audio Reactivity Disabled.', 'system');
+            
+            // Reset world state
+            if (this.ground) {
+                const positions = this.ground.geometry.attributes.position;
+                for(let i=0; i<positions.count; i++) {
+                    positions.setZ(i, 0); // Z is up in local space for rotated plane
+                }
+                positions.needsUpdate = true;
+            }
+        }
+
+        updateAudioBiomes(time) {
+            if (!this.audioReactive.enabled || !this.audioReactive.analyser) return;
+
+            this.audioReactive.analyser.getByteFrequencyData(this.audioReactive.dataArray);
+            
+            // Calculate averages
+            let sum = 0;
+            const data = this.audioReactive.dataArray;
+            // Bass: roughly first 10 bins
+            let bassSum = 0;
+            for(let i=0; i<10; i++) bassSum += data[i];
+            const bass = bassSum / 10 / 255; // 0.0 to 1.0
+            this.audioReactive.bassVolume = bass;
+
+            // Mids/Highs
+            for(let i=0; i<data.length; i++) sum += data[i];
+            const volume = sum / data.length / 255;
+
+            // 1. Ripple Terrain (Ground)
+            if (this.ground) {
+                const positions = this.ground.geometry.attributes.position;
+                const count = positions.count;
+                // We'll use a circular ripple from center based on bass
+                for (let i = 0; i < count; i++) {
+                    const x = positions.getX(i);
+                    const y = positions.getY(i);
+                    const dist = Math.sqrt(x*x + y*y);
+                    
+                    // Wave calculation
+                    const wave = Math.sin(dist * 0.2 - time * 5) * bass * 2;
+                    positions.setZ(i, wave); 
+                }
+                positions.needsUpdate = true;
+            }
+
+            // 2. Pulse Trees
+            this.worldObjects.forEach(obj => {
+                if (obj.userData.type === 'tree') {
+                    // Scale based on bass beat
+                    const scale = 1 + bass * 0.5;
+                    obj.scale.set(scale, 1 + bass * 0.8, scale);
+                    
+                    // Color shift foliage if possible
+                    obj.traverse(child => {
+                        if (child.isMesh && child.geometry.type === 'ConeGeometry') {
+                            // Foliage
+                            if (!child.userData.originalColor) child.userData.originalColor = child.material.color.clone();
+                            const hsl = {};
+                            child.userData.originalColor.getHSL(hsl);
+                            // Shift hue based on volume
+                            child.material.color.setHSL((hsl.h + volume) % 1, hsl.s, hsl.l);
+                        }
+                    });
+                }
+            });
+
+            // 3. Sky/Lights Color Shift
+            const hemiLight = this.scene.children.find(c => c.isHemisphereLight);
+            if (hemiLight) {
+                const targetHue = (time * 0.1 + bass) % 1;
+                hemiLight.color.setHSL(targetHue, 0.6, 0.6);
+                hemiLight.groundColor.setHSL((targetHue + 0.5) % 1, 0.6, 0.2);
+            }
         }
 
         // ===========================================
@@ -2553,29 +2701,30 @@
         }
 
         createEnvironment() {
-            // Ground plane with grid
-            const groundGeo = new THREE.PlaneGeometry(200, 200);
+            // Ground plane with grid - High segment count for audio rippling
+            const groundGeo = new THREE.PlaneGeometry(200, 200, 64, 64);
             const groundMat = new THREE.MeshStandardMaterial({
                 color: 0x111122,
-                roughness: 0.9
+                roughness: 0.9,
+                wireframe: false
             });
-            const ground = new THREE.Mesh(groundGeo, groundMat);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            this.scene.add(ground);
+            this.ground = new THREE.Mesh(groundGeo, groundMat);
+            this.ground.rotation.x = -Math.PI / 2;
+            this.ground.receiveShadow = true;
+            this.scene.add(this.ground);
 
             // Grid overlay
-            const grid = new THREE.GridHelper(200, 100, 0x00d4ff, 0x1a1a2e);
-            grid.position.y = 0.01;
+            this.grid = new THREE.GridHelper(200, 100, 0x00d4ff, 0x1a1a2e);
+            this.grid.position.y = 0.01;
             // Disable fog on grid materials to prevent uniform errors
-            if (grid.material) {
-                if (Array.isArray(grid.material)) {
-                    grid.material.forEach(m => m.fog = false);
+            if (this.grid.material) {
+                if (Array.isArray(this.grid.material)) {
+                    this.grid.material.forEach(m => m.fog = false);
                 } else {
-                    grid.material.fog = false;
+                    this.grid.material.fog = false;
                 }
             }
-            this.scene.add(grid);
+            this.scene.add(this.grid);
 
             // Central hub platform
             const platformGeo = new THREE.CylinderGeometry(8, 10, 0.5, 32);
@@ -5405,6 +5554,18 @@
                 width: 640,
                 height: 480
             });
+            
+            // Hand of God Physics State
+            this.godHand = {
+                active: false,
+                mesh: null,
+                targetPos: new THREE.Vector3(),
+                velocity: new THREE.Vector3(),
+                lastPos: new THREE.Vector3(),
+                isPinching: false,
+                grabbedObject: null,
+                forceRadius: 3
+            };
 
             await this.mediaPipe.camera.start();
             this.mediaPipe.enabled = true;
@@ -5438,6 +5599,125 @@
             console.log('[MediaPipe] Gesture recognition stopped');
         }
 
+        toggleGodHand() {
+             this.godHand.active = !this.godHand.active;
+             const btn = document.getElementById('mirror-godhand-toggle');
+             
+             if (this.godHand.active) {
+                 btn.classList.add('active');
+                 this.addChatMessage('System', 'Hand of God activated. Reach out!', 'system');
+                 
+                 // Ensure MediaPipe is running
+                 if (!this.mediaPipe.enabled) {
+                     this.startGestureRecognition();
+                 }
+                 
+                 // Create the hand mesh if it doesn't exist
+                 if (!this.godHand.mesh) {
+                     // A glowing, translucent hand sphere or detailed model
+                     const geometry = new THREE.IcosahedronGeometry(1.5, 1);
+                     const material = new THREE.MeshBasicMaterial({
+                         color: 0xffaa00,
+                         wireframe: true,
+                         transparent: true,
+                         opacity: 0.5
+                     });
+                     this.godHand.mesh = new THREE.Mesh(geometry, material);
+                     
+                     // Add an inner core
+                     const coreGeo = new THREE.SphereGeometry(0.5, 8, 8);
+                     const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                     const core = new THREE.Mesh(coreGeo, coreMat);
+                     this.godHand.mesh.add(core);
+                     
+                     this.scene.add(this.godHand.mesh);
+                 }
+                 this.godHand.mesh.visible = true;
+             } else {
+                 btn.classList.remove('active');
+                 if (this.godHand.mesh) {
+                     this.godHand.mesh.visible = false;
+                 }
+                 this.addChatMessage('System', 'Hand of God deactivated.', 'system');
+             }
+        }
+
+        updateGodHandPhysics(landmarks) {
+            if (!this.godHand.active || !this.godHand.mesh || !landmarks) return;
+            
+            // 1. Map 2D hand position to 3D world coordinates relative to camera
+            // Landmarks are 0-1. 0,0 is top-left.
+            const indexTip = landmarks[8]; // Index finger tip
+            
+            // Map x/y to normalized device coordinates (-1 to +1)
+            // Flip x because webcam is mirrored
+            const ndcX = (1 - indexTip.x) * 2 - 1; 
+            const ndcY = -(indexTip.y * 2 - 1); // Flip Y
+            
+            // Depth/Z is tricky. We'll use landmark size or just a fixed distance
+            // Or allow scroll/keys to adjust reach. For now, fixed "reach" distance.
+            const reachDistance = 10; 
+            
+            // Project out from camera
+            const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+            vector.unproject(this.camera);
+            const dir = vector.sub(this.camera.position).normalize();
+            const targetPos = this.camera.position.clone().add(dir.multiplyScalar(reachDistance));
+            
+            // Smooth movement
+            this.godHand.mesh.position.lerp(targetPos, 0.2);
+            
+            // Calculate velocity for impact
+            const velocity = this.godHand.mesh.position.clone().sub(this.godHand.lastPos).divideScalar(this.clock.getDelta() || 0.016);
+            this.godHand.velocity.copy(velocity);
+            this.godHand.lastPos.copy(this.godHand.mesh.position);
+            
+            // 2. Interaction / Collision
+            // Repel particles
+             if (this.particles) {
+                const positions = this.particles.geometry.attributes.position.array;
+                const handPos = this.godHand.mesh.position;
+                const radiusSq = this.godHand.forceRadius * this.godHand.forceRadius;
+                
+                for (let i = 0; i < positions.length; i += 3) {
+                    const dx = positions[i] - handPos.x;
+                    const dy = positions[i+1] - handPos.y;
+                    const dz = positions[i+2] - handPos.z;
+                    const distSq = dx*dx + dy*dy + dz*dz;
+                    
+                    if (distSq < radiusSq) {
+                        // Push away
+                        const dist = Math.sqrt(distSq);
+                        const force = (this.godHand.forceRadius - dist) * 0.1;
+                        positions[i] += (dx / dist) * force;
+                        positions[i+1] += (dy / dist) * force;
+                        positions[i+2] += (dz / dist) * force;
+                    }
+                }
+                this.particles.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Interact with Entities (Slap/Push)
+            const speed = this.godHand.velocity.length();
+            if (speed > 10) { // Fast movement threshold
+                this.entities.forEach(entity => {
+                     if (entity === this.localEntity) return;
+                     const dist = entity.position.distanceTo(this.godHand.mesh.position);
+                     if (dist < 2.0) {
+                         // Apply impulse
+                         const pushDir = this.godHand.velocity.clone().normalize();
+                         entity.position.x += pushDir.x * 2;
+                         entity.position.z += pushDir.z * 2;
+                         entity.avatar.rotation.z = Math.random() * 0.5 - 0.25; // Tilt
+                         setTimeout(() => { if(entity.avatar) entity.avatar.rotation.z = 0; }, 500);
+                         
+                         this.playSound('step'); // Or hit sound
+                         this.addChatMessage('System', `You slapped ${entity.name}!`, 'system');
+                     }
+                });
+            }
+        }
+
         onHandsResults(results) {
             if (!this.mediaPipe.gestureCtx || !this.mediaPipe.gestureCanvas) return;
 
@@ -5455,6 +5735,9 @@
 
                 // Update pinch cursor with first hand landmarks
                 this.updatePinchCursor(results.multiHandLandmarks[0]);
+                
+                // Update God Hand Physics
+                this.updateGodHandPhysics(results.multiHandLandmarks[0]);
 
                 // Recognize gesture from first hand (only if cursor not in use or gesture is clear)
                 const gesture = this.recognizeGesture(results.multiHandLandmarks[0]);
@@ -6406,10 +6689,24 @@
             if (this.particles) {
                 this.particles.rotation.y = time * 0.02;
                 const positions = this.particles.geometry.attributes.position.array;
+                
+                // Audio reactive particles
+                const bass = this.audioReactive?.bassVolume || 0;
+                
                 for (let i = 0; i < positions.length; i += 3) {
                     positions[i + 1] += Math.sin(time + i) * 0.002;
+                    
+                    // Explode out on beat if enabled
+                    if (this.audioReactive?.enabled && bass > 0.4) {
+                         positions[i + 1] += (Math.random() - 0.5) * bass;
+                    }
                 }
                 this.particles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Update Audio Reactive Biomes
+            if (this.audioReactive && this.audioReactive.enabled) {
+                this.updateAudioBiomes(time);
             }
 
             // Animate portals
