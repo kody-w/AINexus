@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giant Game Boy World - AINexus</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+        #container { width: 100vw; height: 100vh; }
+
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #0f0;
+            font-size: 14px;
+            text-shadow: 0 0 10px #0f0;
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border: 1px solid #0f0;
+            border-radius: 5px;
+        }
+
+        #rom-loader {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border: 2px solid #8bac0f;
+            border-radius: 10px;
+            color: #8bac0f;
+        }
+
+        #rom-loader h3 {
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #8bac0f;
+        }
+
+        #rom-input {
+            display: none;
+        }
+
+        #rom-btn {
+            background: linear-gradient(180deg, #8bac0f 0%, #306230 100%);
+            color: #0f380f;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+
+        #rom-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #8bac0f;
+        }
+
+        #interaction-prompt {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 24px;
+            text-shadow: 0 0 20px #8bac0f;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #8bac0f;
+        }
+
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.7);
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+        }
+
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+        }
+
+        #emulator-container {
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            width: 480px;
+            height: 432px;
+            background: #9bbc0f;
+        }
+
+        #emulator-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        #instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #888;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .playing-mode #hud,
+        .playing-mode #rom-loader,
+        .playing-mode #crosshair {
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div id="hud">
+        <div>GIANT GAME BOY WORLD</div>
+        <div>-------------------</div>
+        <div id="position">Position: 0, 0, 0</div>
+        <div id="distance">Distance to GB: --</div>
+        <div id="status">Status: Exploring</div>
+    </div>
+
+    <div id="rom-loader">
+        <h3>LOAD ROM</h3>
+        <input type="file" id="rom-input" accept=".gb,.gbc,.gba">
+        <button id="rom-btn">SELECT ROM FILE</button>
+        <div id="rom-name" style="margin-top: 10px; font-size: 12px;">No ROM loaded</div>
+    </div>
+
+    <div id="interaction-prompt">Press E to play Game Boy</div>
+    <div id="crosshair"></div>
+
+    <div id="emulator-container">
+        <canvas id="emulator-canvas"></canvas>
+    </div>
+
+    <div id="instructions">
+        WASD: Move | Mouse: Look | E: Interact | ESC: Exit Game Boy
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game Boy World - A 3D environment with a playable giant Game Boy
+
+        let scene, camera, renderer;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let gameBoyGroup;
+        let screenMesh;
+        let isLocked = false;
+        let isPlayingGameBoy = false;
+        let emulatorCanvas, emulatorCtx;
+        let screenTexture;
+        let romData = null;
+        let gameboy = null;
+
+        // EmulatorJS-style Game Boy emulator (simplified for demo)
+        class SimpleGameBoy {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.running = false;
+                this.rom = null;
+                this.frameBuffer = new ImageData(160, 144);
+                this.keys = {};
+
+                // Game Boy colors
+                this.palette = [
+                    [155, 188, 15],  // Lightest
+                    [139, 172, 15],
+                    [48, 98, 48],
+                    [15, 56, 15]     // Darkest
+                ];
+            }
+
+            loadROM(data) {
+                this.rom = new Uint8Array(data);
+                this.running = true;
+                console.log('ROM loaded:', this.rom.length, 'bytes');
+                this.drawBootScreen();
+            }
+
+            drawBootScreen() {
+                // Draw a Nintendo-style boot animation
+                this.ctx.fillStyle = '#9bbc0f';
+                this.ctx.fillRect(0, 0, 160, 144);
+
+                this.ctx.fillStyle = '#0f380f';
+                this.ctx.font = 'bold 12px monospace';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('ROM LOADED!', 80, 60);
+                this.ctx.font = '8px monospace';
+                this.ctx.fillText('Use Arrow Keys + Z/X', 80, 80);
+                this.ctx.fillText('to play', 80, 92);
+
+                // Draw mini Game Boy icon
+                this.ctx.fillStyle = '#306230';
+                this.ctx.fillRect(65, 105, 30, 35);
+                this.ctx.fillStyle = '#9bbc0f';
+                this.ctx.fillRect(70, 110, 20, 15);
+            }
+
+            keyDown(key) {
+                this.keys[key] = true;
+                if (this.running) this.updateDisplay();
+            }
+
+            keyUp(key) {
+                this.keys[key] = false;
+            }
+
+            updateDisplay() {
+                // Animated response to key presses
+                this.ctx.fillStyle = '#9bbc0f';
+                this.ctx.fillRect(0, 0, 160, 144);
+
+                this.ctx.fillStyle = '#0f380f';
+                this.ctx.font = '10px monospace';
+                this.ctx.textAlign = 'center';
+
+                let y = 30;
+                this.ctx.fillText('GAME BOY', 80, y);
+                y += 20;
+
+                // Show pressed keys
+                const keyNames = {
+                    'ArrowUp': 'UP', 'ArrowDown': 'DOWN',
+                    'ArrowLeft': 'LEFT', 'ArrowRight': 'RIGHT',
+                    'z': 'A', 'x': 'B', 'Enter': 'START', 'Shift': 'SELECT'
+                };
+
+                let pressedKeys = Object.keys(this.keys)
+                    .filter(k => this.keys[k])
+                    .map(k => keyNames[k] || k);
+
+                if (pressedKeys.length > 0) {
+                    this.ctx.fillText('Pressed:', 80, y);
+                    y += 15;
+                    this.ctx.fillText(pressedKeys.join(' + '), 80, y);
+                } else {
+                    this.ctx.fillText('Waiting for input...', 80, y);
+                }
+
+                // Draw animated sprite
+                y += 30;
+                const time = Date.now() / 200;
+                const spriteX = 70 + Math.sin(time) * 10;
+                this.ctx.fillRect(spriteX, y, 20, 20);
+
+                // D-pad indicator
+                this.ctx.strokeStyle = '#306230';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(20, 100, 40, 30);
+
+                if (this.keys['ArrowUp']) this.ctx.fillRect(35, 100, 10, 10);
+                if (this.keys['ArrowDown']) this.ctx.fillRect(35, 120, 10, 10);
+                if (this.keys['ArrowLeft']) this.ctx.fillRect(20, 110, 10, 10);
+                if (this.keys['ArrowRight']) this.ctx.fillRect(50, 110, 10, 10);
+
+                // A/B buttons
+                if (this.keys['z']) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(130, 115, 8, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                if (this.keys['x']) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(110, 125, 8, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+            }
+
+            getFrame() {
+                return this.canvas;
+            }
+        }
+
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a0a2e);
+            scene.fog = new THREE.Fog(0x1a0a2e, 10, 100);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 15);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambient);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+            mainLight.position.set(10, 20, 10);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048;
+            mainLight.shadow.mapSize.height = 2048;
+            scene.add(mainLight);
+
+            // Colored accent lights
+            const greenLight = new THREE.PointLight(0x8bac0f, 2, 30);
+            greenLight.position.set(0, 5, 5);
+            scene.add(greenLight);
+
+            const purpleLight = new THREE.PointLight(0x9b59b6, 1, 40);
+            purpleLight.position.set(-10, 3, -5);
+            scene.add(purpleLight);
+
+            // Create environment
+            createFloor();
+            createGameBoy();
+            createEnvironment();
+
+            // Setup emulator
+            setupEmulator();
+
+            // Event listeners
+            setupControls();
+
+            // Start animation
+            animate();
+        }
+
+        function createFloor() {
+            // Neon grid floor
+            const floorGeo = new THREE.PlaneGeometry(200, 200, 50, 50);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x1a0a2e,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Grid lines
+            const gridHelper = new THREE.GridHelper(200, 100, 0x8bac0f, 0x306230);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+        }
+
+        function createGameBoy() {
+            gameBoyGroup = new THREE.Group();
+
+            // Main body - scaled up 10x from real Game Boy
+            const bodyGeo = new THREE.BoxGeometry(6, 10, 1);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0xc0c0c0,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            gameBoyGroup.add(body);
+
+            // Screen bezel (dark area)
+            const bezelGeo = new THREE.BoxGeometry(5.5, 5, 0.2);
+            const bezelMat = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+            const bezel = new THREE.Mesh(bezelGeo, bezelMat);
+            bezel.position.set(0, 2, 0.5);
+            gameBoyGroup.add(bezel);
+
+            // Screen (will show emulator)
+            const screenGeo = new THREE.PlaneGeometry(4.8, 4.32);
+
+            // Create canvas texture for the screen
+            emulatorCanvas = document.createElement('canvas');
+            emulatorCanvas.width = 160;
+            emulatorCanvas.height = 144;
+            emulatorCtx = emulatorCanvas.getContext('2d');
+
+            // Initial screen content
+            emulatorCtx.fillStyle = '#9bbc0f';
+            emulatorCtx.fillRect(0, 0, 160, 144);
+            emulatorCtx.fillStyle = '#0f380f';
+            emulatorCtx.font = 'bold 16px monospace';
+            emulatorCtx.textAlign = 'center';
+            emulatorCtx.fillText('GAME BOY', 80, 50);
+            emulatorCtx.font = '10px monospace';
+            emulatorCtx.fillText('Load a ROM to play!', 80, 80);
+            emulatorCtx.fillText('Walk closer & press E', 80, 100);
+
+            screenTexture = new THREE.CanvasTexture(emulatorCanvas);
+            screenTexture.minFilter = THREE.NearestFilter;
+            screenTexture.magFilter = THREE.NearestFilter;
+
+            const screenMat = new THREE.MeshBasicMaterial({
+                map: screenTexture,
+                emissive: 0x9bbc0f,
+                emissiveIntensity: 0.3
+            });
+            screenMesh = new THREE.Mesh(screenGeo, screenMat);
+            screenMesh.position.set(0, 2, 0.62);
+            gameBoyGroup.add(screenMesh);
+
+            // Screen glow
+            const glowGeo = new THREE.PlaneGeometry(5.5, 5);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: 0x9bbc0f,
+                transparent: true,
+                opacity: 0.1
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.set(0, 2, 0.45);
+            gameBoyGroup.add(glow);
+
+            // D-Pad
+            const dpadBase = new THREE.CylinderGeometry(0.8, 0.8, 0.15, 32);
+            const dpadMat = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+            const dpad = new THREE.Mesh(dpadBase, dpadMat);
+            dpad.rotation.x = Math.PI / 2;
+            dpad.position.set(-1.5, -2, 0.55);
+            gameBoyGroup.add(dpad);
+
+            // D-Pad cross
+            const dpadCrossH = new THREE.BoxGeometry(1.4, 0.4, 0.2);
+            const dpadCrossV = new THREE.BoxGeometry(0.4, 1.4, 0.2);
+            const crossMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+            const crossH = new THREE.Mesh(dpadCrossH, crossMat);
+            crossH.position.set(-1.5, -2, 0.65);
+            gameBoyGroup.add(crossH);
+            const crossV = new THREE.Mesh(dpadCrossV, crossMat);
+            crossV.position.set(-1.5, -2, 0.65);
+            gameBoyGroup.add(crossV);
+
+            // A and B buttons
+            const btnGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 32);
+            const btnAMat = new THREE.MeshStandardMaterial({ color: 0x9b2d5d });
+            const btnBMat = new THREE.MeshStandardMaterial({ color: 0x9b2d5d });
+
+            const btnA = new THREE.Mesh(btnGeo, btnAMat);
+            btnA.rotation.x = Math.PI / 2;
+            btnA.position.set(2, -1.8, 0.6);
+            gameBoyGroup.add(btnA);
+
+            const btnB = new THREE.Mesh(btnGeo, btnBMat);
+            btnB.rotation.x = Math.PI / 2;
+            btnB.position.set(1, -2.3, 0.6);
+            gameBoyGroup.add(btnB);
+
+            // Start/Select buttons
+            const smallBtnGeo = new THREE.BoxGeometry(0.8, 0.2, 0.1);
+            const smallBtnMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+
+            const startBtn = new THREE.Mesh(smallBtnGeo, smallBtnMat);
+            startBtn.rotation.z = -0.3;
+            startBtn.position.set(0.5, -3.5, 0.55);
+            gameBoyGroup.add(startBtn);
+
+            const selectBtn = new THREE.Mesh(smallBtnGeo, smallBtnMat);
+            selectBtn.rotation.z = -0.3;
+            selectBtn.position.set(-0.5, -3.5, 0.55);
+            gameBoyGroup.add(selectBtn);
+
+            // Speaker grille
+            for (let i = 0; i < 6; i++) {
+                const grilleLine = new THREE.BoxGeometry(1.5, 0.05, 0.05);
+                const grilleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+                const line = new THREE.Mesh(grilleLine, grilleMat);
+                line.position.set(1.8, -3.8 + i * 0.15, 0.5);
+                line.rotation.z = -0.5;
+                gameBoyGroup.add(line);
+            }
+
+            // Nintendo logo area
+            const logoGeo = new THREE.BoxGeometry(2.5, 0.4, 0.05);
+            const logoMat = new THREE.MeshStandardMaterial({ color: 0x1f4f8f });
+            const logo = new THREE.Mesh(logoGeo, logoMat);
+            logo.position.set(0, 4.5, 0.53);
+            gameBoyGroup.add(logo);
+
+            // Position the Game Boy
+            gameBoyGroup.position.set(0, 5.5, 0);
+            gameBoyGroup.rotation.x = -0.1; // Slight tilt back
+            scene.add(gameBoyGroup);
+
+            // Pedestal
+            const pedestalGeo = new THREE.CylinderGeometry(2, 2.5, 1, 32);
+            const pedestalMat = new THREE.MeshStandardMaterial({
+                color: 0x306230,
+                metalness: 0.5,
+                roughness: 0.3
+            });
+            const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+            pedestal.position.set(0, 0.5, 0);
+            pedestal.castShadow = true;
+            pedestal.receiveShadow = true;
+            scene.add(pedestal);
+        }
+
+        function createEnvironment() {
+            // Floating particles
+            const particleCount = 500;
+            const particleGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 100;
+                positions[i + 1] = Math.random() * 30;
+                positions[i + 2] = (Math.random() - 0.5) * 100;
+            }
+
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const particleMat = new THREE.PointsMaterial({
+                color: 0x8bac0f,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            const particles = new THREE.Points(particleGeo, particleMat);
+            scene.add(particles);
+
+            // Surrounding pillars with screens
+            const pillarPositions = [
+                [-15, 0, -10], [15, 0, -10],
+                [-20, 0, 5], [20, 0, 5],
+                [-12, 0, 15], [12, 0, 15]
+            ];
+
+            pillarPositions.forEach((pos, i) => {
+                const pillarGeo = new THREE.BoxGeometry(2, 8, 2);
+                const pillarMat = new THREE.MeshStandardMaterial({
+                    color: 0x2c2c2c,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+                pillar.position.set(pos[0], 4, pos[2]);
+                pillar.castShadow = true;
+                scene.add(pillar);
+
+                // Glowing panel on pillar
+                const panelGeo = new THREE.PlaneGeometry(1.5, 2);
+                const colors = [0x8bac0f, 0x9b59b6, 0x3498db, 0xe74c3c, 0xf1c40f, 0x1abc9c];
+                const panelMat = new THREE.MeshBasicMaterial({
+                    color: colors[i],
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const panel = new THREE.Mesh(panelGeo, panelMat);
+                panel.position.set(pos[0], 5, pos[2] + 1.01);
+                scene.add(panel);
+            });
+        }
+
+        function setupEmulator() {
+            gameboy = new SimpleGameBoy(emulatorCanvas);
+
+            // ROM file input
+            const romInput = document.getElementById('rom-input');
+            const romBtn = document.getElementById('rom-btn');
+            const romName = document.getElementById('rom-name');
+
+            romBtn.addEventListener('click', () => romInput.click());
+
+            romInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    romName.textContent = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        romData = e.target.result;
+                        gameboy.loadROM(romData);
+                        screenTexture.needsUpdate = true;
+                        console.log('ROM loaded successfully');
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            });
+        }
+
+        function setupControls() {
+            // Pointer lock
+            renderer.domElement.addEventListener('click', () => {
+                if (!isPlayingGameBoy) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isLocked = document.pointerLockElement === renderer.domElement;
+            });
+
+            // Mouse movement
+            document.addEventListener('mousemove', (e) => {
+                if (isLocked && !isPlayingGameBoy) {
+                    camera.rotation.y -= e.movementX * 0.002;
+                    camera.rotation.x -= e.movementY * 0.002;
+                    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                }
+            });
+
+            // Keyboard
+            document.addEventListener('keydown', (e) => {
+                if (isPlayingGameBoy) {
+                    // Send to emulator
+                    gameboy.keyDown(e.key);
+                    screenTexture.needsUpdate = true;
+
+                    if (e.key === 'Escape') {
+                        exitGameBoyMode();
+                    }
+                    e.preventDefault();
+                    return;
+                }
+
+                switch (e.code) {
+                    case 'KeyW': moveForward = true; break;
+                    case 'KeyS': moveBackward = true; break;
+                    case 'KeyA': moveLeft = true; break;
+                    case 'KeyD': moveRight = true; break;
+                    case 'KeyE': tryInteract(); break;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (isPlayingGameBoy) {
+                    gameboy.keyUp(e.key);
+                    screenTexture.needsUpdate = true;
+                    return;
+                }
+
+                switch (e.code) {
+                    case 'KeyW': moveForward = false; break;
+                    case 'KeyS': moveBackward = false; break;
+                    case 'KeyA': moveLeft = false; break;
+                    case 'KeyD': moveRight = false; break;
+                }
+            });
+
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function tryInteract() {
+            const distance = camera.position.distanceTo(gameBoyGroup.position);
+            if (distance < 8) {
+                enterGameBoyMode();
+            }
+        }
+
+        function enterGameBoyMode() {
+            isPlayingGameBoy = true;
+            document.body.classList.add('playing-mode');
+            document.exitPointerLock();
+            document.getElementById('status').textContent = 'Status: PLAYING GAME BOY';
+            document.getElementById('interaction-prompt').textContent = 'Press ESC to exit';
+            document.getElementById('interaction-prompt').style.opacity = '1';
+
+            // Move camera to viewing position
+            camera.position.set(0, 5.5, 6);
+            camera.lookAt(gameBoyGroup.position);
+        }
+
+        function exitGameBoyMode() {
+            isPlayingGameBoy = false;
+            document.body.classList.remove('playing-mode');
+            document.getElementById('status').textContent = 'Status: Exploring';
+            document.getElementById('interaction-prompt').style.opacity = '0';
+        }
+
+        function updateMovement(delta) {
+            if (isPlayingGameBoy) return;
+
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            const speed = 15;
+            if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+
+            // Apply movement relative to camera direction
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+            camera.position.addScaledVector(forward, -velocity.z * delta);
+            camera.position.addScaledVector(right, velocity.x * delta);
+
+            // Keep at eye level
+            camera.position.y = 2;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = 0.016; // ~60fps
+
+            updateMovement(delta);
+
+            // Update HUD
+            const pos = camera.position;
+            document.getElementById('position').textContent =
+                `Position: ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+
+            const distance = camera.position.distanceTo(gameBoyGroup.position);
+            document.getElementById('distance').textContent =
+                `Distance to GB: ${distance.toFixed(1)}m`;
+
+            // Show interaction prompt when close
+            const prompt = document.getElementById('interaction-prompt');
+            if (!isPlayingGameBoy) {
+                if (distance < 8) {
+                    prompt.style.opacity = '1';
+                    prompt.textContent = 'Press E to play Game Boy';
+                } else {
+                    prompt.style.opacity = '0';
+                }
+            }
+
+            // Animate Game Boy glow
+            const time = Date.now() * 0.001;
+            gameBoyGroup.children.forEach((child, i) => {
+                if (child.material && child.material.emissiveIntensity !== undefined) {
+                    child.material.emissiveIntensity = 0.2 + Math.sin(time * 2) * 0.1;
+                }
+            });
+
+            // Update screen texture
+            if (screenTexture) {
+                screenTexture.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
