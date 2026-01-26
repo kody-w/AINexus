@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nexus - The Third Space</title>
+  <meta name="description" content="A federated metaverse where AIs and humans collaborate across infinite linked worlds">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌌</text></svg>">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      background: #0a0a1a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* Loading Screen */
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      transition: opacity 0.5s ease-out;
+    }
+
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #00ffff, #ff00ff, #06ffa5);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 20px;
+      animation: shimmer 3s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { filter: hue-rotate(0deg); }
+      50% { filter: hue-rotate(30deg); }
+    }
+
+    .loading-subtitle {
+      font-size: 18px;
+      color: #888;
+      margin-bottom: 40px;
+    }
+
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 3px solid #2a2a4e;
+      border-top-color: #00ffff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-status {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+    }
+
+    .hud-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 2px 10px rgba(0, 255, 255, 0.5);
+    }
+
+    .hud-subtitle {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    /* Controls hint */
+    #controls-hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26, 26, 46, 0.9);
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      color: #888;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .key {
+      display: inline-block;
+      background: #2a2a4e;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 2px;
+      font-family: monospace;
+      color: #fff;
+    }
+
+    /* Click to start overlay */
+    #click-to-start {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      cursor: pointer;
+    }
+
+    #click-to-start.hidden {
+      display: none;
+    }
+
+    .start-text {
+      font-size: 24px;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .start-hint {
+      font-size: 14px;
+      color: #888;
+    }
+
+    /* Portal info */
+    #portal-info {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(26, 26, 46, 0.95);
+      padding: 20px 30px;
+      border-radius: 16px;
+      text-align: center;
+      z-index: 500;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: none;
+    }
+
+    #portal-info.visible {
+      display: block;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    .portal-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .portal-name {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .portal-desc {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 15px;
+    }
+
+    .portal-hint {
+      font-size: 12px;
+      color: #06ffa5;
+    }
+
+    /* Mobile joystick */
+    #joystick-container {
+      position: fixed;
+      bottom: 80px;
+      left: 40px;
+      width: 120px;
+      height: 120px;
+      z-index: 200;
+      display: none;
+    }
+
+    .joystick-base {
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .joystick-stick {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+    }
+
+    /* Mobile detection */
+    @media (max-width: 768px), (pointer: coarse) {
+      #joystick-container {
+        display: block;
+      }
+      #controls-hint {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Loading Screen -->
+  <div id="loading">
+    <div class="loading-title">NEXUS</div>
+    <div class="loading-subtitle">The Third Space</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-status">Initializing...</div>
+  </div>
+
+  <!-- Click to start -->
+  <div id="click-to-start" class="hidden">
+    <div class="start-text">Click to Enter</div>
+    <div class="start-hint">Move: WASD | Look: Mouse</div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-title">Origin Hub</div>
+    <div class="hud-subtitle">The Nexus of All Worlds</div>
+  </div>
+
+  <!-- Controls hint -->
+  <div id="controls-hint">
+    <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Move
+    &nbsp;|&nbsp;
+    <span class="key">Mouse</span> Look
+    &nbsp;|&nbsp;
+    <span class="key">ESC</span> Release
+  </div>
+
+  <!-- Portal info -->
+  <div id="portal-info">
+    <div class="portal-icon">🌀</div>
+    <div class="portal-name">Portal Name</div>
+    <div class="portal-desc">Portal description</div>
+    <div class="portal-hint">Walk into the portal to enter</div>
+  </div>
+
+  <!-- Mobile joystick -->
+  <div id="joystick-container">
+    <div class="joystick-base">
+      <div class="joystick-stick"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+    // Make THREE available globally for our modules
+    window.THREE = THREE;
+
+    const loadingStatus = document.querySelector('.loading-status');
+    const loading = document.getElementById('loading');
+    const clickToStart = document.getElementById('click-to-start');
+    const portalInfo = document.getElementById('portal-info');
+
+    // World configuration
+    const config = {
+      ambientColor: 0x1a1a2e,
+      fogColor: 0x0a0a1a,
+      fogNear: 30,
+      fogFar: 200,
+      particleCount: 3000,
+      moveSpeed: 0.15,
+      lookSpeed: 0.002,
+    };
+
+    // Scene setup
+    loadingStatus.textContent = 'Creating scene...';
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a1a);
+    scene.fog = new THREE.Fog(config.fogColor, config.fogNear, config.fogFar);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2, 10);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('app').appendChild(renderer.domElement);
+
+    // Controls state
+    let isLocked = false;
+    const moveState = { forward: false, backward: false, left: false, right: false };
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    let yaw = 0, pitch = 0;
+
+    // Animation arrays
+    const crystals = [];
+    const floatingIslands = [];
+    const butterflies = [];
+    const clouds = [];
+    const npcs = [];
+    const agentCrystals = [];
+    const glowLights = [];
+    const orbRings = [];
+    let centralCrystal, starfield, fireflies;
+    let worldTime = 0;
+
+    // Portal definitions
+    const portals = [];
+    const portalDefs = [
+      { id: 'crystal-caves', name: 'Crystal Caves', icon: '💎', desc: 'Explore glowing crystalline caverns', pos: [25, 0, 0], c1: 0x00ffff, c2: 0x0088ff },
+      { id: 'floating-gardens', name: 'Floating Gardens', icon: '🌸', desc: 'Serene floating islands in the sky', pos: [0, 0, 25], c1: 0x06ffa5, c2: 0x00ff88 },
+      { id: 'galaxy-zoo', name: 'Galaxy Zoo', icon: '🌌', desc: 'Journey through the cosmos', pos: [-25, 0, 0], c1: 0x8338ec, c2: 0x3a86ff },
+      { id: 'ai-dojo', name: 'AI Dojo', icon: '🥋', desc: 'Train with AI companions', pos: [0, 0, -25], c1: 0xffd700, c2: 0xff6b35 },
+      { id: 'hacker-den', name: 'Hacker Den', icon: '💻', desc: 'Neural network visualization', pos: [17.7, 0, 17.7], c1: 0x00ff00, c2: 0x00ffff },
+      { id: 'hobbiton', name: 'Hobbiton Vale', icon: '🏡', desc: 'A peaceful hobbit settlement', pos: [-17.7, 0, 17.7], c1: 0x228b22, c2: 0xffd700 },
+    ];
+
+    // ============ CREATE WORLD ============
+    loadingStatus.textContent = 'Building world...';
+
+    // Sky dome
+    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const skyMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x000022) },
+        bottomColor: { value: new THREE.Color(0x1a1a2e) },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition).y;
+          gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+    });
+    scene.add(new THREE.Mesh(skyGeometry, skyMaterial));
+
+    // Starfield
+    loadingStatus.textContent = 'Creating stars...';
+    const starCount = 5000;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const radius = 300 + Math.random() * 150;
+      starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+      starPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      starPositions[i * 3 + 2] = radius * Math.cos(phi);
+    }
+    const starGeometry = new THREE.BufferGeometry();
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starfield = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 0.8 }));
+    scene.add(starfield);
+
+    // Ground
+    const groundGeometry = new THREE.CircleGeometry(100, 64);
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Central platform
+    loadingStatus.textContent = 'Building central platform...';
+    const platformGroup = new THREE.Group();
+
+    const platform = new THREE.Mesh(
+      new THREE.CylinderGeometry(12, 15, 1, 64),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a4e, metalness: 0.8, roughness: 0.2, emissive: 0x1a1a3e, emissiveIntensity: 0.3 })
+    );
+    platform.position.y = -0.5;
+    platform.receiveShadow = true;
+    platformGroup.add(platform);
+
+    // Glow rings
+    const innerRing = new THREE.Mesh(
+      new THREE.TorusGeometry(6, 0.15, 16, 64),
+      new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 })
+    );
+    innerRing.rotation.x = Math.PI / 2;
+    innerRing.position.y = 0.1;
+    platformGroup.add(innerRing);
+
+    const outerRing = new THREE.Mesh(
+      new THREE.TorusGeometry(10, 0.15, 16, 64),
+      new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.6 })
+    );
+    outerRing.rotation.x = Math.PI / 2;
+    outerRing.position.y = 0.1;
+    platformGroup.add(outerRing);
+
+    // Central pillar
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.8, 1.2, 5, 16),
+      new THREE.MeshStandardMaterial({ color: 0x3a3a6e, metalness: 0.9, roughness: 0.1, emissive: 0x6366f1, emissiveIntensity: 0.4 })
+    );
+    pillar.position.y = 2.5;
+    pillar.castShadow = true;
+    platformGroup.add(pillar);
+
+    // Central crystal
+    centralCrystal = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.2),
+      new THREE.MeshStandardMaterial({ color: 0x8338ec, metalness: 0.4, roughness: 0.1, transparent: true, opacity: 0.9, emissive: 0x8338ec, emissiveIntensity: 0.6 })
+    );
+    centralCrystal.position.y = 6;
+    centralCrystal.castShadow = true;
+    platformGroup.add(centralCrystal);
+
+    const crystalLight = new THREE.PointLight(0x8338ec, 3, 25);
+    crystalLight.position.y = 6;
+    platformGroup.add(crystalLight);
+    glowLights.push(crystalLight);
+
+    // Orbiting rings
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(2 + i * 0.5, 0.03, 8, 32),
+        new THREE.MeshBasicMaterial({ color: i === 0 ? 0x00ffff : i === 1 ? 0xff00ff : 0x06ffa5, transparent: true, opacity: 0.5 })
+      );
+      ring.position.y = 6;
+      ring.rotation.x = Math.PI / 3 + i * 0.3;
+      ring.rotation.y = i * 1.2;
+      orbRings.push(ring);
+      platformGroup.add(ring);
+    }
+
+    scene.add(platformGroup);
+
+    // Crystal formations
+    loadingStatus.textContent = 'Growing crystals...';
+    const crystalPositions = [
+      { x: -25, z: 0, scale: 2 }, { x: 25, z: 0, scale: 1.8 },
+      { x: 0, z: -25, scale: 2.2 }, { x: 0, z: 25, scale: 1.6 },
+      { x: -18, z: -18, scale: 1.5 }, { x: 18, z: -18, scale: 1.7 },
+      { x: -18, z: 18, scale: 1.4 }, { x: 18, z: 18, scale: 1.9 },
+    ];
+    const crystalColors = [0x00ffff, 0xff00ff, 0x06ffa5, 0xffd700, 0xff6b6b];
+
+    crystalPositions.forEach((pos, i) => {
+      const color = crystalColors[i % crystalColors.length];
+      const crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(pos.scale),
+        new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.1, transparent: true, opacity: 0.85, emissive: color, emissiveIntensity: 0.5 })
+      );
+      crystal.position.set(pos.x, pos.scale, pos.z);
+      crystal.rotation.y = Math.random() * Math.PI;
+      crystal.castShadow = true;
+      scene.add(crystal);
+
+      const light = new THREE.PointLight(color, 1.5, 15);
+      light.position.set(pos.x, pos.scale + 1, pos.z);
+      scene.add(light);
+
+      crystals.push({ mesh: crystal, light, baseIntensity: 1.5, phase: Math.random() * Math.PI * 2 });
+
+      // Smaller crystals
+      for (let j = 0; j < 3; j++) {
+        const small = new THREE.Mesh(
+          new THREE.OctahedronGeometry(pos.scale * 0.4),
+          new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.1, transparent: true, opacity: 0.85, emissive: color, emissiveIntensity: 0.5 })
+        );
+        const angle = (j / 3) * Math.PI * 2;
+        small.position.set(pos.x + Math.cos(angle) * 2, pos.scale * 0.2, pos.z + Math.sin(angle) * 2);
+        small.rotation.y = Math.random() * Math.PI;
+        scene.add(small);
+      }
+    });
+
+    // Floating islands
+    loadingStatus.textContent = 'Raising islands...';
+    const islandConfigs = [
+      { x: -40, y: 30, z: -40, scale: 8 },
+      { x: 40, y: 25, z: -30, scale: 6 },
+      { x: -35, y: 35, z: 35, scale: 7 },
+      { x: 45, y: 28, z: 40, scale: 5 },
+      { x: 0, y: 40, z: -50, scale: 10 },
+    ];
+
+    function createIsland(scale) {
+      const group = new THREE.Group();
+
+      const base = new THREE.Mesh(
+        new THREE.ConeGeometry(scale, scale * 1.5, 16),
+        new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.8 })
+      );
+      base.rotation.x = Math.PI;
+      base.position.y = -scale * 0.5;
+      group.add(base);
+
+      const grass = new THREE.Mesh(
+        new THREE.CylinderGeometry(scale, scale, 0.5, 16),
+        new THREE.MeshStandardMaterial({ color: 0x7ec850, roughness: 0.9 })
+      );
+      grass.position.y = 0.25;
+      group.add(grass);
+
+      // Trees
+      for (let i = 0; i < Math.floor(scale / 2); i++) {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2, 0.3, 2, 8),
+          new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+        );
+        trunk.position.y = 1;
+        tree.add(trunk);
+
+        const foliage = new THREE.Mesh(
+          new THREE.ConeGeometry(1.2, 2.5, 8),
+          new THREE.MeshStandardMaterial({ color: 0x228b22 })
+        );
+        foliage.position.y = 3;
+        tree.add(foliage);
+
+        const angle = (i / Math.floor(scale / 2)) * Math.PI * 2 + Math.random() * 0.5;
+        const dist = Math.random() * scale * 0.6;
+        tree.position.set(Math.cos(angle) * dist, 0.5, Math.sin(angle) * dist);
+        group.add(tree);
+      }
+
+      // Flowers
+      for (let i = 0; i < scale * 2; i++) {
+        const flower = new THREE.Mesh(
+          new THREE.SphereGeometry(0.15, 8, 8),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6) })
+        );
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * scale * 0.8;
+        flower.position.set(Math.cos(angle) * dist, 0.5, Math.sin(angle) * dist);
+        group.add(flower);
+      }
+
+      return group;
+    }
+
+    islandConfigs.forEach(cfg => {
+      const island = createIsland(cfg.scale);
+      island.position.set(cfg.x, cfg.y, cfg.z);
+      scene.add(island);
+      floatingIslands.push({ group: island, baseY: cfg.y, phase: Math.random() * Math.PI * 2 });
+    });
+
+    // Butterflies
+    loadingStatus.textContent = 'Releasing butterflies...';
+    for (let i = 0; i < 20; i++) {
+      const butterfly = new THREE.Group();
+
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.3, 6),
+        new THREE.MeshBasicMaterial({ color: 0x000000 })
+      );
+      body.rotation.z = Math.PI / 2;
+      butterfly.add(body);
+
+      const wingColor = new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
+      const wingMat = new THREE.MeshBasicMaterial({ color: wingColor, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+
+      const leftWing = new THREE.Mesh(new THREE.CircleGeometry(0.2, 8), wingMat);
+      leftWing.position.set(0, 0.15, 0);
+      leftWing.rotation.x = Math.PI / 4;
+      butterfly.add(leftWing);
+
+      const rightWing = new THREE.Mesh(new THREE.CircleGeometry(0.2, 8), wingMat);
+      rightWing.position.set(0, -0.15, 0);
+      rightWing.rotation.x = -Math.PI / 4;
+      butterfly.add(rightWing);
+
+      const centerX = (Math.random() - 0.5) * 80;
+      const centerZ = (Math.random() - 0.5) * 80;
+      const height = 3 + Math.random() * 10;
+      butterfly.position.set(centerX, height, centerZ);
+      scene.add(butterfly);
+
+      butterflies.push({
+        mesh: butterfly,
+        center: new THREE.Vector3(centerX, height, centerZ),
+        radius: 3 + Math.random() * 5,
+        height,
+        angle: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 0.5,
+        wingPhase: Math.random() * Math.PI * 2,
+      });
+    }
+
+    // Clouds
+    loadingStatus.textContent = 'Forming clouds...';
+    for (let i = 0; i < 10; i++) {
+      const cloud = new THREE.Group();
+      const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+
+      for (let j = 0; j < 5 + Math.floor(Math.random() * 4); j++) {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(3 + Math.random() * 4, 8, 8), cloudMat);
+        puff.position.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 4);
+        cloud.add(puff);
+      }
+
+      cloud.position.set((Math.random() - 0.5) * 200, 50 + Math.random() * 30, (Math.random() - 0.5) * 200);
+      scene.add(cloud);
+      clouds.push(cloud);
+    }
+
+    // NPCs
+    loadingStatus.textContent = 'Summoning guides...';
+    const npcConfigs = [
+      { name: 'Sage', pattern: 'stationary', x: 8, z: 0, color: 0x8338ec },
+      { name: 'Wanderer', pattern: 'circle', x: 15, z: 15, color: 0x06ffa5 },
+      { name: 'Scholar', pattern: 'line', x: -15, z: 10, color: 0x3b82f6 },
+      { name: 'Trader', pattern: 'wander', x: 10, z: -15, color: 0xffd700 },
+      { name: 'Sentinel', pattern: 'circle', x: -10, z: -10, color: 0xff6b6b },
+    ];
+
+    npcConfigs.forEach(cfg => {
+      const npc = new THREE.Group();
+
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.4, 1.2, 8),
+        new THREE.MeshStandardMaterial({ color: cfg.color, metalness: 0.2, roughness: 0.8, emissive: cfg.color, emissiveIntensity: 0.2 })
+      );
+      body.position.y = 0.8;
+      npc.add(body);
+
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.25, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 })
+      );
+      head.position.y = 1.6;
+      npc.add(head);
+
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 8, 8),
+        new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.8 })
+      );
+      orb.position.y = 2;
+      npc.add(orb);
+
+      const light = new THREE.PointLight(cfg.color, 0.5, 5);
+      light.position.y = 2;
+      npc.add(light);
+
+      npc.position.set(cfg.x, 0, cfg.z);
+      scene.add(npc);
+
+      npcs.push({
+        mesh: npc,
+        name: cfg.name,
+        pattern: cfg.pattern,
+        center: new THREE.Vector3(cfg.x, 0, cfg.z),
+        radius: 5,
+        angle: 0,
+        speed: 0.3 + Math.random() * 0.2,
+        walkCycle: Math.random() * Math.PI * 2,
+        targetPos: null,
+      });
+    });
+
+    // Agent crystals
+    loadingStatus.textContent = 'Connecting agents...';
+    const agentColors = [
+      { color: 0xff6600, name: 'Copilot' },
+      { color: 0x0078d4, name: 'Teams' },
+      { color: 0x9b59b6, name: 'Dynamics' },
+      { color: 0x06ffa5, name: 'Custom' },
+    ];
+
+    agentColors.forEach((agent, i) => {
+      const angle = (i / agentColors.length) * Math.PI * 2;
+      const crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.5),
+        new THREE.MeshStandardMaterial({ color: agent.color, metalness: 0.4, roughness: 0.1, emissive: agent.color, emissiveIntensity: 0.5, transparent: true, opacity: 0.9 })
+      );
+      crystal.position.set(Math.cos(angle) * 4, 5, Math.sin(angle) * 4);
+      scene.add(crystal);
+      agentCrystals.push(crystal);
+
+      // Energy beam
+      const beamMat = new THREE.LineBasicMaterial({ color: agent.color, transparent: true, opacity: 0.5 });
+      const beamGeo = new THREE.BufferGeometry().setFromPoints([crystal.position, new THREE.Vector3(0, 6, 0)]);
+      scene.add(new THREE.Line(beamGeo, beamMat));
+    });
+
+    // Fireflies
+    loadingStatus.textContent = 'Awakening fireflies...';
+    const fireflyCount = 200;
+    const fireflyPositions = new Float32Array(fireflyCount * 3);
+    for (let i = 0; i < fireflyCount; i++) {
+      fireflyPositions[i * 3] = (Math.random() - 0.5) * 100;
+      fireflyPositions[i * 3 + 1] = 1 + Math.random() * 10;
+      fireflyPositions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+    }
+    const fireflyGeo = new THREE.BufferGeometry();
+    fireflyGeo.setAttribute('position', new THREE.BufferAttribute(fireflyPositions, 3));
+    fireflies = new THREE.Points(fireflyGeo, new THREE.PointsMaterial({ color: 0xffff00, size: 0.2, transparent: true, opacity: 0.8 }));
+    scene.add(fireflies);
+
+    // Lighting
+    loadingStatus.textContent = 'Illuminating...';
+    scene.add(new THREE.AmbientLight(0x1a1a2e, 0.4));
+    scene.add(new THREE.HemisphereLight(0x87ceeb, 0x1a1a2e, 0.3));
+
+    const directional = new THREE.DirectionalLight(0xffffff, 0.5);
+    directional.position.set(50, 100, 50);
+    directional.castShadow = true;
+    directional.shadow.mapSize.width = 2048;
+    directional.shadow.mapSize.height = 2048;
+    scene.add(directional);
+
+    // Accent lights
+    [[30, 0x00ffff], [-30, 0xff00ff], [0, 0x06ffa5]].forEach(([x, color], i) => {
+      const z = i === 2 ? 30 : 0;
+      const light = new THREE.PointLight(color, 1, 40);
+      light.position.set(x, 3, z);
+      scene.add(light);
+      glowLights.push(light);
+    });
+
+    // Particles
+    loadingStatus.textContent = 'Spawning particles...';
+    const particleCount = config.particleCount;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = (Math.random() - 0.5) * 200;
+      particlePositions[i * 3 + 1] = Math.random() * 100;
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+    }
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particles = new THREE.Points(particleGeo, new THREE.PointsMaterial({
+      color: 0x6366f1,
+      size: 0.1,
+      transparent: true,
+      opacity: 0.6,
+      sizeAttenuation: true,
+    }));
+    scene.add(particles);
+
+    // Portals
+    loadingStatus.textContent = 'Opening portals...';
+    portalDefs.forEach(def => {
+      const portalGroup = new THREE.Group();
+
+      // Outer ring
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(2, 0.15, 16, 32),
+        new THREE.MeshBasicMaterial({ color: def.c1 })
+      );
+      portalGroup.add(ring);
+
+      // Inner surface
+      const surface = new THREE.Mesh(
+        new THREE.CircleGeometry(1.8, 32),
+        new THREE.MeshBasicMaterial({ color: def.c2, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+      );
+      portalGroup.add(surface);
+
+      // Glow
+      const glow = new THREE.PointLight(def.c1, 2, 10);
+      portalGroup.add(glow);
+
+      portalGroup.position.set(def.pos[0], 2.5, def.pos[2]);
+      portalGroup.lookAt(0, 2.5, 0);
+
+      scene.add(portalGroup);
+      portals.push({ group: portalGroup, def, ring, surface });
+    });
+
+    // ============ CONTROLS ============
+    loadingStatus.textContent = 'Setting up controls...';
+
+    function onKeyDown(e) {
+      switch (e.code) {
+        case 'KeyW': case 'ArrowUp': moveState.forward = true; break;
+        case 'KeyS': case 'ArrowDown': moveState.backward = true; break;
+        case 'KeyA': case 'ArrowLeft': moveState.left = true; break;
+        case 'KeyD': case 'ArrowRight': moveState.right = true; break;
+      }
+    }
+
+    function onKeyUp(e) {
+      switch (e.code) {
+        case 'KeyW': case 'ArrowUp': moveState.forward = false; break;
+        case 'KeyS': case 'ArrowDown': moveState.backward = false; break;
+        case 'KeyA': case 'ArrowLeft': moveState.left = false; break;
+        case 'KeyD': case 'ArrowRight': moveState.right = false; break;
+      }
+    }
+
+    function onMouseMove(e) {
+      if (!isLocked) return;
+      yaw -= e.movementX * config.lookSpeed;
+      pitch -= e.movementY * config.lookSpeed;
+      pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    document.addEventListener('mousemove', onMouseMove);
+
+    document.addEventListener('pointerlockchange', () => {
+      isLocked = document.pointerLockElement === renderer.domElement;
+      clickToStart.classList.toggle('hidden', isLocked);
+    });
+
+    clickToStart.addEventListener('click', () => {
+      renderer.domElement.requestPointerLock();
+    });
+
+    renderer.domElement.addEventListener('click', () => {
+      if (!isLocked) {
+        renderer.domElement.requestPointerLock();
+      }
+    });
+
+    // Mobile joystick
+    const joystickContainer = document.getElementById('joystick-container');
+    const joystickStick = document.querySelector('.joystick-stick');
+    let joystickActive = false;
+    let joystickStartX = 0, joystickStartY = 0;
+
+    joystickContainer.addEventListener('touchstart', (e) => {
+      joystickActive = true;
+      const touch = e.touches[0];
+      const rect = joystickContainer.getBoundingClientRect();
+      joystickStartX = rect.left + rect.width / 2;
+      joystickStartY = rect.top + rect.height / 2;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!joystickActive) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - joystickStartX;
+      const dy = touch.clientY - joystickStartY;
+      const dist = Math.min(40, Math.sqrt(dx * dx + dy * dy));
+      const angle = Math.atan2(dy, dx);
+      const x = Math.cos(angle) * dist;
+      const y = Math.sin(angle) * dist;
+      joystickStick.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+
+      moveState.forward = dy < -10;
+      moveState.backward = dy > 10;
+      moveState.left = dx < -10;
+      moveState.right = dx > 10;
+    });
+
+    document.addEventListener('touchend', () => {
+      joystickActive = false;
+      joystickStick.style.transform = 'translate(-50%, -50%)';
+      moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+    });
+
+    // ============ ANIMATION LOOP ============
+    loadingStatus.textContent = 'Starting engine...';
+
+    let lastTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+      worldTime += delta;
+      const time = worldTime;
+
+      // Update camera
+      if (isLocked) {
+        direction.z = Number(moveState.forward) - Number(moveState.backward);
+        direction.x = Number(moveState.right) - Number(moveState.left);
+        direction.normalize();
+
+        const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+        camera.quaternion.setFromEuler(euler);
+
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        forward.y = 0;
+        right.y = 0;
+        forward.normalize();
+        right.normalize();
+
+        velocity.x = (forward.x * direction.z + right.x * direction.x) * config.moveSpeed;
+        velocity.z = (forward.z * direction.z + right.z * direction.x) * config.moveSpeed;
+
+        camera.position.x += velocity.x;
+        camera.position.z += velocity.z;
+        camera.position.y = 2;
+      }
+
+      // Animate central crystal
+      if (centralCrystal) {
+        centralCrystal.rotation.y += delta * 0.5;
+        centralCrystal.rotation.x = Math.sin(time * 0.5) * 0.1;
+        centralCrystal.position.y = 6 + Math.sin(time * 1.5) * 0.3;
+      }
+
+      // Animate orb rings
+      orbRings.forEach((ring, i) => {
+        ring.rotation.x += delta * (0.3 + i * 0.1);
+        ring.rotation.y += delta * (0.5 - i * 0.1);
+      });
+
+      // Animate glow lights
+      glowLights.forEach((light, i) => {
+        light.intensity = 1 + Math.sin(time * 2 + i * 0.5) * 0.4;
+      });
+
+      // Animate crystals
+      crystals.forEach(crystal => {
+        crystal.mesh.rotation.y += delta * 0.2;
+        crystal.light.intensity = crystal.baseIntensity + Math.sin(time * 2 + crystal.phase) * 0.5;
+      });
+
+      // Animate floating islands
+      floatingIslands.forEach(island => {
+        island.group.position.y = island.baseY + Math.sin(time * 0.5 + island.phase) * 1;
+        island.group.rotation.y += delta * 0.02;
+      });
+
+      // Animate butterflies
+      butterflies.forEach(butterfly => {
+        butterfly.angle += delta * butterfly.speed;
+        butterfly.wingPhase += delta * 15;
+        butterfly.mesh.position.x = butterfly.center.x + Math.cos(butterfly.angle) * butterfly.radius;
+        butterfly.mesh.position.z = butterfly.center.z + Math.sin(butterfly.angle) * butterfly.radius;
+        butterfly.mesh.position.y = butterfly.height + Math.sin(time * 2) * 0.5;
+
+        const wings = butterfly.mesh.children;
+        if (wings[1] && wings[2]) {
+          const flapAngle = Math.sin(butterfly.wingPhase) * 0.5;
+          wings[1].rotation.x = Math.PI / 4 + flapAngle;
+          wings[2].rotation.x = -Math.PI / 4 - flapAngle;
+        }
+        butterfly.mesh.rotation.y = butterfly.angle + Math.PI / 2;
+      });
+
+      // Animate clouds
+      clouds.forEach((cloud, i) => {
+        cloud.position.x += delta * (0.5 + i * 0.1);
+        if (cloud.position.x > 150) cloud.position.x = -150;
+      });
+
+      // Animate NPCs
+      npcs.forEach(npc => {
+        npc.walkCycle += delta * 3;
+
+        switch (npc.pattern) {
+          case 'circle':
+            npc.angle += delta * npc.speed;
+            npc.mesh.position.x = npc.center.x + Math.cos(npc.angle) * npc.radius;
+            npc.mesh.position.z = npc.center.z + Math.sin(npc.angle) * npc.radius;
+            npc.mesh.rotation.y = npc.angle + Math.PI / 2;
+            break;
+          case 'line':
+            npc.angle += delta * npc.speed;
+            const lineOffset = Math.sin(npc.angle) * npc.radius;
+            npc.mesh.position.x = npc.center.x + lineOffset;
+            npc.mesh.rotation.y = lineOffset > 0 ? 0 : Math.PI;
+            break;
+          case 'wander':
+            if (!npc.targetPos || npc.mesh.position.distanceTo(npc.targetPos) < 1) {
+              npc.targetPos = new THREE.Vector3(
+                npc.center.x + (Math.random() - 0.5) * npc.radius * 2,
+                0,
+                npc.center.z + (Math.random() - 0.5) * npc.radius * 2
+              );
+            }
+            const dir = new THREE.Vector3().subVectors(npc.targetPos, npc.mesh.position).normalize();
+            npc.mesh.position.add(dir.multiplyScalar(delta * npc.speed * 2));
+            npc.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+            break;
+          case 'stationary':
+            npc.mesh.position.y = Math.sin(time + npc.angle) * 0.1;
+            break;
+        }
+
+        const orb = npc.mesh.children[2];
+        if (orb) orb.position.y = 2 + Math.sin(time * 3 + npc.angle) * 0.1;
+      });
+
+      // Animate agent crystals
+      agentCrystals.forEach((crystal, i) => {
+        crystal.rotation.y += delta * 0.5;
+        crystal.rotation.x = Math.sin(time + i) * 0.2;
+        crystal.position.y = 5 + Math.sin(time * 1.5 + i * 0.8) * 0.3;
+      });
+
+      // Animate fireflies
+      if (fireflies) {
+        const positions = fireflies.geometry.attributes.position.array;
+        for (let i = 0; i < positions.length / 3; i++) {
+          positions[i * 3] += Math.sin(time * 2 + i) * 0.02;
+          positions[i * 3 + 1] += Math.sin(time * 3 + i * 0.5) * 0.01;
+          positions[i * 3 + 2] += Math.cos(time * 2 + i) * 0.02;
+        }
+        fireflies.geometry.attributes.position.needsUpdate = true;
+      }
+
+      // Rotate starfield
+      if (starfield) starfield.rotation.y += delta * 0.01;
+
+      // Animate portals
+      portals.forEach(portal => {
+        portal.ring.rotation.z += delta * 0.5;
+        portal.surface.material.opacity = 0.4 + Math.sin(time * 2) * 0.1;
+      });
+
+      // Check portal proximity
+      let nearPortal = null;
+      portals.forEach(portal => {
+        const dist = camera.position.distanceTo(portal.group.position);
+        if (dist < 5) {
+          nearPortal = portal.def;
+        }
+      });
+
+      if (nearPortal) {
+        portalInfo.classList.add('visible');
+        portalInfo.querySelector('.portal-icon').textContent = nearPortal.icon;
+        portalInfo.querySelector('.portal-name').textContent = nearPortal.name;
+        portalInfo.querySelector('.portal-desc').textContent = nearPortal.desc;
+      } else {
+        portalInfo.classList.remove('visible');
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start
+    loadingStatus.textContent = 'Ready!';
+    setTimeout(() => {
+      loading.classList.add('hidden');
+      clickToStart.classList.remove('hidden');
+      animate();
+    }, 500);
+  </script>
+</body>
+</html>
