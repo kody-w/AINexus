@@ -393,8 +393,58 @@
       lookSpeed: 0.002,
     };
 
-    // Base URL for worlds
-    const BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    // GitHub Configuration (same pattern as v1)
+    const REPO_OWNER = 'kody-w';
+    const REPO_NAME = 'AINexus';
+    const BRANCH = 'main';
+    const GITHUB_PAGES_BASE = `https://${REPO_OWNER}.github.io/${REPO_NAME}/`;
+
+    // World emoji mapping based on filename
+    function getWorldEmoji(path) {
+      const name = path.toLowerCase();
+      if (name.includes('crystal')) return '💎';
+      if (name.includes('garden') || name.includes('floating')) return '🌸';
+      if (name.includes('galaxy') || name.includes('space') || name.includes('cosmos')) return '🌌';
+      if (name.includes('dojo') || name.includes('train')) return '🥋';
+      if (name.includes('hacker') || name.includes('cyber') || name.includes('neural')) return '💻';
+      if (name.includes('hobbit') || name.includes('shire') || name.includes('vale')) return '🏡';
+      if (name.includes('ocean') || name.includes('sea') || name.includes('underwater')) return '🌊';
+      if (name.includes('forest') || name.includes('woods')) return '🌲';
+      if (name.includes('desert') || name.includes('sand')) return '🏜️';
+      if (name.includes('mountain') || name.includes('peak')) return '🏔️';
+      if (name.includes('castle') || name.includes('kingdom')) return '🏰';
+      if (name.includes('city') || name.includes('urban')) return '🏙️';
+      if (name.includes('library') || name.includes('book')) return '📚';
+      if (name.includes('music') || name.includes('sound')) return '🎵';
+      if (name.includes('art') || name.includes('gallery')) return '🎨';
+      if (name.includes('game') || name.includes('arcade')) return '🎮';
+      if (name.includes('lab') || name.includes('science')) return '🔬';
+      if (name.includes('zen') || name.includes('meditation')) return '☯️';
+      if (name.includes('fire') || name.includes('volcano')) return '🔥';
+      if (name.includes('ice') || name.includes('snow') || name.includes('winter')) return '❄️';
+      return '🌀'; // Default portal emoji
+    }
+
+    // Format world name from filename
+    function formatWorldName(path) {
+      return path
+        .replace(/\.html$/, '')
+        .replace(/[-_]/g, ' ')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
+    // Generate color from filename
+    function getWorldColors(path) {
+      const hash = path.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+      const hue1 = Math.abs(hash % 360);
+      const hue2 = (hue1 + 40) % 360;
+      return {
+        c1: new THREE.Color().setHSL(hue1 / 360, 0.8, 0.5).getHex(),
+        c2: new THREE.Color().setHSL(hue2 / 360, 0.7, 0.5).getHex()
+      };
+    }
 
     // Scene setup
     loadingStatus.textContent = 'Creating scene...';
@@ -441,19 +491,78 @@
     let centralCrystal, starfield, fireflies;
     let worldTime = 0;
 
-    // Portal definitions with actual world files
+    // Portal storage - populated dynamically from GitHub
     const portals = [];
-    const portalDefs = [
-      { id: 'crystal-caves', name: 'Crystal Caves', icon: '💎', desc: 'Explore glowing crystalline caverns', pos: [25, 0, 0], c1: 0x00ffff, c2: 0x0088ff, file: 'crystal-caves-world.html' },
-      { id: 'floating-gardens', name: 'Floating Gardens', icon: '🌸', desc: 'Serene floating islands in the sky', pos: [0, 0, 25], c1: 0x06ffa5, c2: 0x00ff88, file: 'floating-gardens.html' },
-      { id: 'galaxy-zoo', name: 'Galaxy Zoo', icon: '🌌', desc: 'Journey through the cosmos', pos: [-25, 0, 0], c1: 0x8338ec, c2: 0x3a86ff, file: 'galaxy-zoo-world.html' },
-      { id: 'ai-dojo', name: 'AI Dojo', icon: '🥋', desc: 'Train with AI companions', pos: [0, 0, -25], c1: 0xffd700, c2: 0xff6b35, file: 'interactive_dojo_world.html' },
-      { id: 'hacker-den', name: 'Hacker Den', icon: '💻', desc: 'Neural network visualization', pos: [17.7, 0, 17.7], c1: 0x00ff00, c2: 0x00ffff, file: 'hacker_den.html' },
-      { id: 'hobbiton', name: 'Hobbiton Vale', icon: '🏡', desc: 'A peaceful hobbit settlement', pos: [-17.7, 0, 17.7], c1: 0x228b22, c2: 0xffd700, file: 'hobbiton-fixed.html' },
-    ];
-
-    // Track if we're transitioning
+    let loadedWorlds = [];
     let isTransitioning = false;
+
+    // Load worlds from GitHub API (same pattern as v1)
+    async function loadWorldsFromGitHub() {
+      loadingStatus.textContent = 'Loading worlds from GitHub...';
+
+      try {
+        const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+        const response = await fetch(apiUrl);
+
+        if (!response.ok) {
+          console.warn('GitHub API failed, using fallback worlds');
+          return getFallbackWorlds();
+        }
+
+        const data = await response.json();
+
+        // Filter for HTML world files (exclude index.html, v3.html, etc.)
+        const worlds = data.tree
+          .filter(item =>
+            item.type === 'blob' &&
+            item.path.endsWith('.html') &&
+            !item.path.includes('/') && // Root level only
+            item.path !== 'index.html' &&
+            item.path !== 'v3.html' &&
+            item.path !== 'test.html' &&
+            !item.path.startsWith('_')
+          )
+          .map(item => ({
+            path: item.path,
+            name: formatWorldName(item.path),
+            icon: getWorldEmoji(item.path),
+            desc: `Enter the ${formatWorldName(item.path)} world`,
+            // Use pages_url for iframes (raw.githubusercontent won't render HTML properly)
+            pages_url: `${GITHUB_PAGES_BASE}${item.path}`,
+            raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
+            ...getWorldColors(item.path)
+          }));
+
+        console.log(`Loaded ${worlds.length} worlds from GitHub:`, worlds.map(w => w.name));
+        return worlds;
+
+      } catch (error) {
+        console.warn('Error loading from GitHub:', error);
+        return getFallbackWorlds();
+      }
+    }
+
+    // Fallback worlds if GitHub API fails
+    function getFallbackWorlds() {
+      const fallbacks = [
+        'crystal-caves-world.html',
+        'floating-gardens.html',
+        'galaxy-zoo-world.html',
+        'interactive_dojo_world.html',
+        'hacker_den.html',
+        'hobbiton-fixed.html'
+      ];
+
+      return fallbacks.map(path => ({
+        path,
+        name: formatWorldName(path),
+        icon: getWorldEmoji(path),
+        desc: `Enter the ${formatWorldName(path)} world`,
+        pages_url: `${GITHUB_PAGES_BASE}${path}`,
+        raw_url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${path}`,
+        ...getWorldColors(path)
+      }));
+    }
 
     // ============ CREATE WORLD ============
     loadingStatus.textContent = 'Building world...';
@@ -816,44 +925,61 @@
     scene.add(new THREE.Points(particleGeo, new THREE.PointsMaterial({ color: 0x6366f1, size: 0.1, transparent: true, opacity: 0.6, sizeAttenuation: true })));
 
     // ============ PORTALS WITH IFRAMES ============
-    loadingStatus.textContent = 'Opening portals...';
 
-    function createPortalWithIframe(def) {
+    function hexToRgba(hex, alpha) {
+      const r = (hex >> 16) & 255;
+      const g = (hex >> 8) & 255;
+      const b = hex & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    // Calculate portal position in a circle around the hub
+    function getPortalPosition(index, total) {
+      const radius = 25; // Distance from center
+      const angle = (index / total) * Math.PI * 2;
+      return {
+        x: Math.cos(angle) * radius,
+        z: Math.sin(angle) * radius
+      };
+    }
+
+    function createPortalWithIframe(world, index, totalWorlds) {
       const portalGroup = new THREE.Group();
+      const pos = getPortalPosition(index, totalWorlds);
 
       // Outer ring (WebGL)
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(2.5, 0.2, 16, 32),
-        new THREE.MeshStandardMaterial({ color: def.c1, emissive: def.c1, emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.2 })
+        new THREE.MeshStandardMaterial({ color: world.c1, emissive: world.c1, emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.2 })
       );
       portalGroup.add(ring);
 
       // Inner glow ring
       const innerGlow = new THREE.Mesh(
         new THREE.TorusGeometry(2.2, 0.1, 16, 32),
-        new THREE.MeshBasicMaterial({ color: def.c2, transparent: true, opacity: 0.8 })
+        new THREE.MeshBasicMaterial({ color: world.c2, transparent: true, opacity: 0.8 })
       );
       portalGroup.add(innerGlow);
 
       // Portal surface (semi-transparent)
       const surface = new THREE.Mesh(
         new THREE.CircleGeometry(2, 32),
-        new THREE.MeshBasicMaterial({ color: def.c2, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+        new THREE.MeshBasicMaterial({ color: world.c2, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
       );
       surface.position.z = 0.01;
       portalGroup.add(surface);
 
       // Glow light
-      const glow = new THREE.PointLight(def.c1, 2, 15);
+      const glow = new THREE.PointLight(world.c1, 2, 15);
       portalGroup.add(glow);
 
-      // Position portal
-      portalGroup.position.set(def.pos[0], 2.5, def.pos[2]);
+      // Position portal facing center
+      portalGroup.position.set(pos.x, 2.5, pos.z);
       portalGroup.lookAt(0, 2.5, 0);
 
       scene.add(portalGroup);
 
-      // Create iframe element for portal preview
+      // Create iframe element for portal preview using pages_url
       const iframeContainer = document.createElement('div');
       iframeContainer.className = 'portal-iframe-container';
       iframeContainer.style.cssText = `
@@ -861,16 +987,16 @@
         height: 280px;
         border-radius: 50%;
         overflow: hidden;
-        background: linear-gradient(135deg, ${hexToRgba(def.c1, 0.3)}, ${hexToRgba(def.c2, 0.3)});
+        background: linear-gradient(135deg, ${hexToRgba(world.c1, 0.3)}, ${hexToRgba(world.c2, 0.3)});
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
       `;
 
-      // Create iframe
+      // Create iframe using GitHub Pages URL (not raw URL)
       const iframe = document.createElement('iframe');
-      iframe.src = BASE_URL + def.file;
+      iframe.src = world.pages_url; // Uses https://kody-w.github.io/AINexus/{path}
       iframe.style.cssText = `
         width: 560px;
         height: 560px;
@@ -880,9 +1006,11 @@
         transform-origin: center center;
         pointer-events: none;
       `;
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+      iframe.setAttribute('loading', 'lazy');
       iframeContainer.appendChild(iframe);
 
-      // Add loading overlay
+      // Add loading overlay with world info
       const loadingOverlay = document.createElement('div');
       loadingOverlay.style.cssText = `
         position: absolute;
@@ -890,7 +1018,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: linear-gradient(135deg, ${hexToRgba(def.c1, 0.8)}, ${hexToRgba(def.c2, 0.8)});
+        background: linear-gradient(135deg, ${hexToRgba(world.c1, 0.8)}, ${hexToRgba(world.c2, 0.8)});
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -899,12 +1027,12 @@
         transition: opacity 0.5s;
       `;
       loadingOverlay.innerHTML = `
-        <div style="font-size: 48px; margin-bottom: 10px;">${def.icon}</div>
-        <div style="font-size: 14px; color: white; font-weight: 600;">${def.name}</div>
+        <div style="font-size: 48px; margin-bottom: 10px;">${world.icon}</div>
+        <div style="font-size: 14px; color: white; font-weight: 600;">${world.name}</div>
       `;
       iframeContainer.appendChild(loadingOverlay);
 
-      // Hide overlay when iframe loads
+      // Hide overlay when iframe loads successfully
       iframe.onload = () => {
         setTimeout(() => {
           loadingOverlay.style.opacity = '0';
@@ -912,43 +1040,61 @@
         }, 1000);
       };
 
-      // Create CSS3D object
+      // Handle iframe errors (keep overlay visible)
+      iframe.onerror = () => {
+        console.warn(`Failed to load portal preview for ${world.name}`);
+      };
+
+      // Create CSS3D object for the iframe
       const cssObject = new CSS3DObject(iframeContainer);
       cssObject.position.copy(portalGroup.position);
-      cssObject.position.z += 0.1; // Slightly in front
       cssObject.lookAt(0, 2.5, 0);
-      cssObject.scale.set(0.01, 0.01, 0.01); // Scale down to fit
+      cssObject.scale.set(0.01, 0.01, 0.01);
       scene.add(cssObject);
 
-      return { group: portalGroup, def, ring, surface, innerGlow, cssObject };
+      // Return portal data with world info for navigation
+      return {
+        group: portalGroup,
+        world: world,
+        ring,
+        surface,
+        innerGlow,
+        cssObject,
+        // Navigation uses pages_url
+        url: world.pages_url
+      };
     }
 
-    function hexToRgba(hex, alpha) {
-      const r = (hex >> 16) & 255;
-      const g = (hex >> 8) & 255;
-      const b = hex & 255;
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
+    // Create portals from loaded worlds
+    async function createPortalsFromWorlds() {
+      loadingStatus.textContent = 'Opening portals...';
+      loadedWorlds = await loadWorldsFromGitHub();
 
-    // Create all portals
-    portalDefs.forEach(def => {
-      portals.push(createPortalWithIframe(def));
-    });
+      console.log(`Creating ${loadedWorlds.length} portals`);
+
+      loadedWorlds.forEach((world, index) => {
+        const portal = createPortalWithIframe(world, index, loadedWorlds.length);
+        portals.push(portal);
+      });
+
+      loadingStatus.textContent = `${loadedWorlds.length} portals ready!`;
+    }
 
     // ============ PORTAL TRANSITION ============
-    function enterPortal(def) {
+    function enterPortal(portal) {
       if (isTransitioning) return;
       isTransitioning = true;
 
+      const world = portal.world;
       transitionText.innerHTML = `
-        <div style="font-size: 64px; margin-bottom: 20px;">${def.icon}</div>
-        <div>Entering ${def.name}...</div>
+        <div style="font-size: 64px; margin-bottom: 20px;">${world.icon}</div>
+        <div>Entering ${world.name}...</div>
       `;
       transitionOverlay.classList.add('active');
 
-      // Navigate after transition animation
+      // Navigate to the world using pages_url
       setTimeout(() => {
-        window.location.href = BASE_URL + def.file;
+        window.location.href = portal.url;
       }, 800);
     }
 
@@ -1186,21 +1332,21 @@
         const dist = camera.position.distanceTo(portal.group.position);
 
         if (dist < 5) {
-          nearPortal = portal.def;
+          nearPortal = portal;
         }
 
         // Check if walked through portal (distance < 2)
         if (dist < 2 && !isTransitioning) {
-          enteredPortal = portal.def;
+          enteredPortal = portal;
         }
       });
 
       // Show portal info
       if (nearPortal && !enteredPortal) {
         portalInfo.classList.add('visible');
-        portalInfo.querySelector('.portal-icon').textContent = nearPortal.icon;
-        portalInfo.querySelector('.portal-name').textContent = nearPortal.name;
-        portalInfo.querySelector('.portal-desc').textContent = nearPortal.desc;
+        portalInfo.querySelector('.portal-icon').textContent = nearPortal.world.icon;
+        portalInfo.querySelector('.portal-name').textContent = nearPortal.world.name;
+        portalInfo.querySelector('.portal-desc').textContent = nearPortal.world.desc;
       } else {
         portalInfo.classList.remove('visible');
       }
@@ -1223,13 +1369,20 @@
       cssRenderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Start
-    loadingStatus.textContent = 'Ready!';
-    setTimeout(() => {
-      loading.classList.add('hidden');
-      clickToStart.classList.remove('hidden');
-      animate();
-    }, 500);
+    // Start - load worlds from GitHub then initialize
+    async function init() {
+      // Create portals from GitHub worlds
+      await createPortalsFromWorlds();
+
+      loadingStatus.textContent = 'Ready!';
+      setTimeout(() => {
+        loading.classList.add('hidden');
+        clickToStart.classList.remove('hidden');
+        animate();
+      }, 500);
+    }
+
+    init();
   </script>
 </body>
 </html>
