@@ -1527,6 +1527,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="ai/ai_player.js"></script>
     <script>
         // Configuration - Update these with your GitHub details
         const REPO_OWNER = 'kody-w'; // Replace with your GitHub username
@@ -2699,10 +2700,23 @@
             }
             
             initializePeer() {
-                // Generate or get peer ID
+                // Generate or get peer ID. Also accepts a secure invite fragment
+                // (#join=<hostId>.<token>), same scheme as the hub, so an AI player's
+                // mind survives portal travel between world pages.
+                this.joinToken = null;
+                let inviteHost = null;
+                const rawHash = window.location.hash || '';
+                const frag = rawHash.match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
+                const aiFlag = rawHash.match(/[#&]ai=([a-z]+)/);
+                if (aiFlag) window.NEXUS_AI_MODE = aiFlag[1];
+                if (frag) {
+                    inviteHost = frag[1];
+                    this.joinToken = frag[2];
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
                 const urlParams = new URLSearchParams(window.location.search);
-                const hostId = urlParams.get('host');
-                
+                const hostId = inviteHost || urlParams.get('host');
+
                 if (hostId) {
                     // Joining someone's world
                     this.roomId = hostId;
@@ -2744,6 +2758,7 @@
                     reliable: true,
                     metadata: {
                         username: this.generateUsername(),
+                        token: this.joinToken,
                         worldData: this.world.getCurrentWorldData()
                     }
                 });
@@ -4024,6 +4039,7 @@
                 const time = this.clock.getElapsedTime();
                 
                 this.updateMovement();
+                this.aiPlayer?.update(); // AI player, if this tab was invited as a mind
                 this.updateHover();
                 
                 // Update multiplayer

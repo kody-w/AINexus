@@ -2176,6 +2176,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="ai/ai_player.js"></script>
     <script>
         // Add FontLoader to THREE namespace
         THREE.FontLoader = class FontLoader extends THREE.Loader {
@@ -4613,9 +4614,22 @@
             }
 
             initializePeer() {
-                // Generate or get peer ID
+                // Generate or get peer ID. Also accepts a secure invite fragment
+                // (#join=<hostId>.<token>), same scheme as the hub, so an AI player's
+                // mind survives portal travel between world pages.
+                this.joinToken = null;
+                let inviteHost = null;
+                const rawHash = window.location.hash || '';
+                const frag = rawHash.match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
+                const aiFlag = rawHash.match(/[#&]ai=([a-z]+)/);
+                if (aiFlag) window.NEXUS_AI_MODE = aiFlag[1];
+                if (frag) {
+                    inviteHost = frag[1];
+                    this.joinToken = frag[2];
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
                 const urlParams = new URLSearchParams(window.location.search);
-                const hostId = urlParams.get('host');
+                const hostId = inviteHost || urlParams.get('host');
 
                 try {
                     if (hostId) {
@@ -4698,6 +4712,7 @@
                         serialization: 'json',
                         metadata: {
                             username: this.generateUsername(),
+                            token: this.joinToken,
                             worldData: this.world.getCurrentWorldData()
                         }
                     });
@@ -6118,6 +6133,7 @@
                 this.updateGamepadInput();
 
                 this.updateMovement();
+                this.aiPlayer?.update(); // AI player, if this tab was invited as a mind
                 this.updateHover();
 
                 // Update multiplayer
