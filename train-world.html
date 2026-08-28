@@ -511,12 +511,14 @@
             }
             
             getPointAt(distance) {
-                const normalizedDistance = (distance % this.getTotalLength()) / this.getTotalLength();
+                const totalLength = this.getTotalLength();
+                const normalizedDistance = (((distance % totalLength) + totalLength) % totalLength) / totalLength;
                 return this.curve.getPointAt(normalizedDistance);
             }
-            
+
             getTangentAt(distance) {
-                const normalizedDistance = (distance % this.getTotalLength()) / this.getTotalLength();
+                const totalLength = this.getTotalLength();
+                const normalizedDistance = (((distance % totalLength) + totalLength) % totalLength) / totalLength;
                 return this.curve.getTangentAt(normalizedDistance);
             }
             
