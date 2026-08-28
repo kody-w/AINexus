@@ -434,7 +434,10 @@
                 this.scene.fog = new THREE.Fog(CURRENT_WORLD.fogColor, CURRENT_WORLD.fogNear, CURRENT_WORLD.fogFar);
                 
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 10);
+                // Spawn on the shore, outside the portal ring (radius 15) and clear of the
+                // longship hull structure at (0,0,-8), so the first frame shows the ship and
+                // shore instead of the camera starting flush against the hull wall.
+                this.camera.position.set(0, CURRENT_WORLD.cameraHeight, 24);
                 
                 this.renderer = new THREE.WebGLRenderer({ 
                     antialias: true, 
