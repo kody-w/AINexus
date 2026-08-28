@@ -33,6 +33,8 @@
     { file: 'manage_memory_agent.py', className: 'ManageMemoryAgent' },
     { file: 'context_memory_agent.py', className: 'ContextMemoryAgent' },
   ];
+  // The world itself, as an agent — same contract, loaded from here rather than from the grail.
+  const LOCAL_AGENTS = [{ url: 'vb/nexus_world_agent.py', className: 'NexusWorldAgent' }];
   const MAX_ROUNDS = 5;                        // a turn is a few calls, not an afternoon
 
   // ── the world's verbs, described so a model can call them ────────────────
@@ -143,6 +145,10 @@
             pyAgents[name] = { instance: inst, metadata };
           } catch (e) { if (log) log('[vbrainstem] agent', cfg.file, 'failed:', e.message); }
         }
+        for (const cfg of LOCAL_AGENTS) {
+          try { await hotload(here(cfg.url), { className: cfg.className, file: cfg.url.split('/').pop() }); }
+          catch (e) { if (log) log('[vbrainstem] world agent failed:', e.message); }
+        }
         const names = Object.keys(pyAgents);
         say(names.length ? 'ready with ' + names.join(', ') : 'ready (verbs only — no python agents loaded)');
         return pyodide;
@@ -154,6 +160,41 @@
       }
     })();
     return loading;
+  }
+
+  // ── hot-loading ──────────────────────────────────────────────────────────
+  // Drop an agent.py in and the player can use it on its very next thought. This is the whole
+  // reason the agents run as Python rather than being reimplemented here: an agent written for
+  // a brainstem on a laptop is the same file, unchanged, and a player picks it up without a
+  // reload, a build, or a deploy.
+  async function hotload(what, opts) {
+    const o = opts || {};
+    await initPyodide(o.log);
+    if (!pyodide) throw new Error('no python: cannot hot-load agents');
+    let source = what, file = o.file;
+    if (/^https?:|^\.|^\//.test(String(what)) && !/\n/.test(String(what))) {
+      const r = await fetch(what, { cache: 'no-cache' });
+      if (!r.ok) throw new Error('could not fetch ' + what + ' (' + r.status + ')');
+      source = await r.text();
+      file = file || String(what).split('/').pop();
+    }
+    file = file || ('hot_' + Date.now() + '_agent.py');
+    if (!/\.py$/.test(file)) file += '.py';
+    // find the class the file defines, so the caller does not have to name it
+    const cls = o.className || (String(source).match(/^class\s+([A-Za-z_]\w*)\s*\(/m) || [])[1];
+    if (!cls) throw new Error('no agent class found in ' + file);
+    pyodide.FS.writeFile('/agents/' + file, source);
+    const mod = file.replace(/\.py$/, ''), slot = '_vb_hot_' + cls;
+    await pyodide.runPythonAsync(`import importlib, sys\nsys.modules.pop('agents.${mod}', None)\n` +
+                                 `from agents.${mod} import ${cls} as _C\n${slot} = _C()\n`);
+    const inst = pyodide.globals.get(slot);
+    if (!inst) throw new Error('could not instantiate ' + cls);
+    const md = inst.metadata;
+    const metadata = md && md.toJs ? md.toJs({ dict_converter: Object.fromEntries }) : md;
+    const name = (inst.name && String(inst.name)) || cls.replace(/Agent$/, '');
+    pyAgents[name] = { instance: inst, metadata };
+    if (o.log) o.log('[vbrainstem] hot-loaded', name, 'from', file);
+    return { name, metadata, file };
   }
 
   function agentToolDefs() {
@@ -173,8 +214,15 @@
     try {
       pyodide.globals.set('_vb_args', proxy);
       pyodide.globals.set('_vb_target', info.instance);
-      const out = await pyodide.runPythonAsync('str(_vb_target.perform(**dict(_vb_args)))');
-      return String(out);
+      // NOT str() around the call. An agent that drives the world hands back the promise for
+      // the thing it started, and stringifying a promise reports that we asked rather than
+      // what happened — the exact lie the verb dispatch was just fixed for.
+      let out = await pyodide.runPythonAsync('_vb_target.perform(**dict(_vb_args))');
+      if (out && typeof out.then === 'function') out = await out;
+      if (out && typeof out.toJs === 'function') { const j = out.toJs({ dict_converter: Object.fromEntries }); try { out.destroy(); } catch (e) {} out = j; }
+      if (out === false || out === null || out === undefined) return 'failed: the world did not do that';
+      if (out === true) return 'ok';
+      return typeof out === 'object' ? JSON.stringify(out).slice(0, 1200) : String(out).slice(0, 1200);
     } finally {
       try { proxy.destroy(); } catch (e) {}
       try { pyodide.globals.delete('_vb_args'); pyodide.globals.delete('_vb_target'); } catch (e) {}
@@ -408,7 +456,7 @@
     };
   }
 
-  root.NexusBrainstem = { turn, lines, live, initPyodide, verbToolDefs, agentToolDefs, callAgent,
+  root.NexusBrainstem = { turn, lines, live, hotload, initPyodide, verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
                           VERBS, MAX_ROUNDS };
 })(typeof window !== 'undefined' ? window : globalThis);
