@@ -298,6 +298,25 @@
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
       if (!secret && !viaCopilot) { log('no mind granted (no brainstem, not signed in) — running on the program alone'); return null; }
+      // THE BEST MIND AVAILABLE, IN ORDER. A vbrainstem here in the page means the model can
+      // call the verbs directly instead of describing them for us to parse — so prefer it
+      // whenever it is loaded and there is a Copilot seat to run it on.
+      if (viaCopilot && window.NexusBrainstem && o.brainstem !== false) {
+        try {
+          const percepts0 = o.vision ? api.sense({ width: 320, send: true }) : api.snapshot();
+          const r = await window.NexusBrainstem.turn({
+            percepts: { me: percepts0.me, world: percepts0.world, portals: percepts0.portals,
+                        players: percepts0.players, room: percepts0.room,
+                        chat: (percepts0.chat || []).slice(-4), carrying: api._carry || null,
+                        picture: percepts0.vision ? (percepts0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
+            persona: 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + '.',
+            log: log,
+          });
+          if (r.words) await api.say(r.words.slice(0, 240));
+          return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
+        } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
+      }
+
       const percepts = o.vision ? api.sense({ width: 384, send: true }) : api.snapshot();
       const shot = percepts.vision;
       const prompt = 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + ', an AI playing in a 3D world with the same '

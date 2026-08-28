@@ -125,7 +125,7 @@ frame.addEventListener('load', () => {
       if (++tries < 25) return setTimeout(inject, 120);
       note('the world never produced a document to drive'); return;
     }
-    ['ai/copilot_auth.js', 'ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
+    ['ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
       const el = doc.createElement('script');
       el.src = new URL(src, location.href).href;
       doc.body.appendChild(el);

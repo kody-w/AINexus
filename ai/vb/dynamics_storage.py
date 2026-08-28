@@ -1,0 +1,2 @@
+from utils.local_storage import AzureFileStorageManager
+DynamicsStorageManager = AzureFileStorageManager

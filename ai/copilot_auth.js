@@ -108,20 +108,26 @@
   const chatUrl = () => AUTH_WORKER_URL + '/api/copilot/chat?endpoint=' +
     encodeURIComponent(loadSettings().copilotEndpoint || COPILOT_DEFAULT_API);
 
-  // one turn of thought: messages in, the assistant's text out
+  // One turn of thought: messages in, the assistant's reply out. Pass `tools` and the model can
+  // CALL something instead of describing it; pass `raw` to get the whole message back, because a
+  // tool call lives in message.tool_calls and would be thrown away by returning only the text.
   async function chat(messages, opts) {
     const o = opts || {};
     const tok = await ensureToken();
+    const body = { model: o.model || loadSettings().model || DEFAULT_MODEL, messages,
+                   temperature: o.temperature === undefined ? 0.7 : o.temperature,
+                   max_tokens: o.max_tokens || 600, stream: false };
+    if (o.tools && o.tools.length) { body.tools = o.tools; body.tool_choice = o.tool_choice || 'auto'; }
     const r = await fetch(chatUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-      body: JSON.stringify({ model: o.model || loadSettings().model || DEFAULT_MODEL,
-                             messages, temperature: o.temperature === undefined ? 0.7 : o.temperature,
-                             max_tokens: o.max_tokens || 600, stream: false }),
+      body: JSON.stringify(body),
     });
+    if (r.status === 401 || r.status === 403) { signOut(); throw new Error('sign-in expired — grant a mind again'); }
     if (!r.ok) throw new Error('copilot chat ' + r.status + ': ' + (await r.text()).slice(0, 200));
     const d = await r.json();
-    return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+    const msg = (d.choices && d.choices[0] && d.choices[0].message) || {};
+    return o.raw ? msg : (msg.content || '');
   }
 
   // the true answer: can this credential actually buy a thought right now?
