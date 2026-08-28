@@ -202,7 +202,7 @@ function inject(frame) {
   s.src = new URL('ai/autodrive.js', location.href).href;
   // the same two doors a person has: the shared dialogue grammar, and the Copilot sign-in
   // that lets this player think without a brainstem installed anywhere
-  ['ai/frames.js', 'ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js'].forEach(src => {
+  ['ai/frames.js', 'ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/herd.js', 'ai/dialogue.js'].forEach(src => {
     try { const e = doc.createElement('script'); e.src = new URL(src, location.href).href; doc.body.appendChild(e); } catch (err) {}
   });
   s.setAttribute('data-autodrive', '1');

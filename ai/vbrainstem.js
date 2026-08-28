@@ -35,6 +35,42 @@
   ];
   // The world itself, as an agent — same contract, loaded from here rather than from the grail.
   const LOCAL_AGENTS = [{ url: 'vb/nexus_world_agent.py', className: 'NexusWorldAgent' }];
+  const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld'];
+
+  // ── the ceiling ──────────────────────────────────────────────────────────
+  // A herd of players thinking every few seconds, several model round trips each, on somebody
+  // else's Copilot seat, with no upper bound — that is a tab left open overnight quietly
+  // spending a stranger's money. A default of "unlimited" is not a default, it is an accident
+  // waiting for the first person who walks away from the keyboard.
+  //
+  // So the session has a hard ceiling on model calls and on wall-clock, both raisable on
+  // purpose and neither raisable by a player. When it is reached, thinking stops and says so.
+  const budget = { calls: 0, limit: 400, since: Date.now(), minutes: 90, stopped: null };
+  function spend() {
+    if (budget.stopped) throw new Error(budget.stopped);
+    if (budget.calls >= budget.limit)
+      throw new Error(budget.stopped = 'session budget reached (' + budget.limit + ' model calls) — nothing more will be spent');
+    if ((Date.now() - budget.since) / 60000 >= budget.minutes)
+      throw new Error(budget.stopped = 'session time limit reached (' + budget.minutes + ' minutes) — nothing more will be spent');
+    budget.calls++;
+  }
+
+  // ── the single lane ──────────────────────────────────────────────────────
+  // There is ONE runtime and ONE `__autodrive` binding, and a turn holds that binding across
+  // several awaits while it talks to a model. Two turns overlapping is not a slow path, it is a
+  // wrong one: the second swap replaces the first player's hands mid-thought, and player A
+  // finishes its turn by moving player B's body.
+  //
+  // So turns queue. Every turn takes the next SLOT on the way in, and the slot number goes into
+  // the tick frame — which means the interleaving is not merely correct, it is written down: a
+  // chain with a repeated or missing slot is a chain that raced, and anyone can see it.
+  let lane = Promise.resolve(), nextSlot = 0;
+  function inLane(fn) {
+    const slot = nextSlot++;
+    const run = lane.then(() => fn(slot), () => fn(slot));
+    lane = run.then(() => {}, () => {});
+    return run;
+  }
   const MAX_ROUNDS = 5;                        // a turn is a few calls, not an afternoon
 
   // ── the world's verbs, described so a model can call them ────────────────
@@ -93,6 +129,8 @@
 
   // ── Pyodide: the agents, as Python ───────────────────────────────────────
   let pyodide = null, pyAgents = {}, loading = null, loadNote = 'not started';
+  const agentSource = {};             // name -> where it came from, so it can be made resident again
+  const summonedNames = new Set();    // written by a model rather than fetched — never confused for the rest
 
   async function initPyodide(log) {
     if (pyodide && Object.keys(pyAgents).length) return pyodide;
@@ -193,12 +231,118 @@
     const metadata = md && md.toJs ? md.toJs({ dict_converter: Object.fromEntries }) : md;
     const name = (inst.name && String(inst.name)) || cls.replace(/Agent$/, '');
     pyAgents[name] = { instance: inst, metadata };
+    agentSource[name] = { what, file, className: cls };
     if (o.log) o.log('[vbrainstem] hot-loaded', name, 'from', file);
     return { name, metadata, file };
   }
 
-  function agentToolDefs() {
-    return Object.entries(pyAgents).filter(([, i]) => i && i.metadata).map(([name, info]) => ({
+  // `only` limits the set to this player's own agents plus the shared core. Everything stays
+  // loaded in the one runtime; what changes per call is which of it this player can see.
+  // ── residency ────────────────────────────────────────────────────────────
+  // Loading an agent at join time is not the same as it being THERE when the call goes out. A
+  // runtime shared by a herd can lose one — a load that failed quietly, a name replaced by a
+  // later player, a page that woke up with a half-built world. So the set is checked at the
+  // instant of the call, from inside the lane, where nothing else can interleave: anything
+  // missing is written to the virtual filesystem and imported right then, and the turn only
+  // proceeds once every name it needs is answering. What the model is offered is exactly what
+  // is in memory, not what was in memory earlier.
+  async function ensureResident(names, log) {
+    const want = (names || []).filter(Boolean);
+    const resident = [], missing = [];
+    for (const n of want) {
+      if (pyAgents[n]) { resident.push(n); continue; }
+      const src = agentSource[n];
+      if (!src) { missing.push(n); continue; }
+      try { await hotload(src.what, { file: src.file, className: src.className, log });
+            if (pyAgents[n]) resident.push(n); else missing.push(n); }
+      catch (e) { missing.push(n); if (log) log('[vbrainstem] could not make ' + n + ' resident: ' + e.message); }
+    }
+    return { resident, missing };
+  }
+
+  // ── summoning ────────────────────────────────────────────────────────────
+  // A player reaches for something it does not have. The ordinary answer is "no such tool",
+  // which ends the thought. There are two better ones, and they are the qqdrill idea applied to
+  // capability rather than to history.
+  //
+  //   FROM A UNIVERSE WHERE IT MATCHED. Every tick in this herd is a frame that records which
+  //   agents were resident and whether the call worked. So before inventing anything, look for a
+  //   line where this capability already existed AND the call did not fail — a fixed point. If
+  //   another player has stood in that universe, the agent is fetched from where that line says
+  //   it came from, and it is not a guess: it is a thing that has demonstrably worked here.
+  //
+  //   OTHERWISE, MADE. No line has it, so it is written now, hot-loaded into the running
+  //   runtime, and used in the same turn that needed it. Generated capability is marked as such
+  //   in the frame — a tool that was invented a second ago and a tool that has worked in six
+  //   universes should never look alike to anyone auditing the line.
+  const AGENT_SHAPE = {
+    type: 'function',
+    function: {
+      name: 'write_agent',
+      description: 'Write one RAPP agent.py that provides the missing capability.',
+      parameters: { type: 'object', required: ['class_name', 'source'], properties: {
+        class_name: { type: 'string', description: 'the class name, ending in Agent' },
+        source: { type: 'string', description:
+          'the complete python file: `from agents.basic_agent import BasicAgent`, one class extending it, ' +
+          '__init__ setting self.name and self.metadata (name, description, parameters as a JSON schema) ' +
+          'then calling super().__init__(name=self.name, metadata=self.metadata), and perform(self, **kwargs) ' +
+          'returning a string. Standard library only — no network, no file system, no imports that need installing.' },
+      } },
+    },
+  };
+
+  async function summon(need, opts) {
+    const o = opts || {}, log = o.log || function () {};
+    // 1 — a universe where it already matched
+    const herd = root.NexusHerd;
+    if (herd && herd.provenSource) {
+      const found = herd.provenSource(need);
+      if (found && found.what) {
+        try { const a = await hotload(found.what, { file: found.file, className: found.className, log });
+              log('[summon] ' + a.name + ' came from a line where it already worked (' + found.player + ')');
+              return { name: a.name, via: 'universe', from: found.player }; }
+        catch (e) { log('[summon] that universe would not load here: ' + e.message); }
+      }
+    }
+    // 2 — no universe has it, so make one
+    const auth = root.NexusAuth;
+    if (!auth || !auth.signedIn()) return null;
+    spend();
+    const msg = await auth.chat([
+      { role: 'system', content: 'You write small, correct RAPP agents. Call write_agent and nothing else.' },
+      { role: 'user', content: 'A player in a 3D world needs a capability it does not have: ' + String(need).slice(0, 400)
+        + '\nWrite the smallest agent that provides it.' },
+    ], { tools: [AGENT_SHAPE], tool_choice: { type: 'function', function: { name: 'write_agent' } },
+         raw: true, temperature: 0.3, max_tokens: 900 });
+    const tc = msg && msg.tool_calls && msg.tool_calls[0];
+    if (!tc) return null;
+    let got; try { got = JSON.parse(tc.function.arguments || '{}'); } catch (e) { return null; }
+    if (!got.source || !/class\s+\w+\s*\(/.test(got.source)) return null;
+    // WRITTEN A SECOND AGO BY A MODEL, AND ABOUT TO BE IMPORTED. Pyodide keeps it away from the
+    // operating system, but not from this PAGE: `from js import window` would hand fresh, unread
+    // code the credential in localStorage and the player's hands. A summoned agent is allowed to
+    // compute and to answer; it is not allowed to reach out of the interpreter.
+    const forbidden = [
+      [/^\s*(?:import\s+js\b|from\s+js\s+import)/m, 'reaching into the page (js)'],
+      [/\bpyodide\b|\bpyfetch\b|\bjs\.\w+/, 'reaching into the page'],
+      [/\b(?:eval|exec|compile|__import__|globals|locals|breakpoint)\s*\(/, 'evaluating code at runtime'],
+      [/\bopen\s*\(|\bos\.|\bsubprocess\b|\bsocket\b|\bshutil\b/, 'touching files, processes or the network'],
+      [/__(?:subclasses|bases|mro|class)__/, 'walking the object graph to escape'],
+    ];
+    for (const [re, why] of forbidden) {
+      if (re.test(got.source)) { log('[summon] refused a written agent: ' + why); return null; }
+    }
+    try {
+      const a = await hotload(got.source, { className: got.class_name, file: 'summoned_' + Date.now() + '_agent.py', log });
+      summonedNames.add(a.name);
+      log('[summon] wrote ' + a.name + ' from nothing and loaded it');
+      return { name: a.name, via: 'generated' };
+    } catch (e) { log('[summon] the written agent would not load: ' + e.message); return null; }
+  }
+
+  function agentToolDefs(only) {
+    const allow = only && only.length ? new Set(only.concat(CORE_AGENTS)) : null;
+    return Object.entries(pyAgents).filter(([n, i]) => i && i.metadata && (!allow || allow.has(n))).map(([name, info]) => ({
       type: 'function',
       function: { name, description: info.metadata.description || ('Run ' + name),
                   parameters: info.metadata.parameters || { type: 'object', properties: {}, required: [] } },
@@ -234,13 +378,28 @@
   // every result is returned, so an operator can read exactly what the player did and why.
   async function turn(opts) {
     const o = opts || {};
-    const auth = root.NexusAuth, drive = root.__autodrive;
+    const auth = root.NexusAuth, drive = o.drive || root.__autodrive;
     if (!auth || !auth.signedIn()) throw new Error('no mind: not signed in');
     if (!drive) throw new Error('no hands: the driver is not loaded here');
+    // ONE BRAINSTEM CAN SERVE MANY PLAYERS, but only one at a time, and the Python side reads
+    // the page's driver by name. Binding it for the duration of the call — and restoring it
+    // after — is what lets a shared runtime move a different player's hands each turn without
+    // any of them noticing. The swap is a pointer, not a load.
+    return inLane(async (slot) => {
+      const held = root.__autodrive;
+      if (o.drive) root.__autodrive = o.drive;
+      try { const r = await think(); r.slot = slot; return r; }
+      finally { if (o.drive) root.__autodrive = held; }
+    });
+
+    async function think() {
     const log = o.log || function () {};
 
     if (o.python !== false) { try { await initPyodide(log); } catch (e) {} }
-    const tools = verbToolDefs().concat(agentToolDefs());
+    // checked here, inside the lane, immediately before the model is asked anything
+    const residency = o.python === false ? { resident: [], missing: [] }
+                                         : await ensureResident((o.agents || []).concat(CORE_AGENTS), log);
+    const tools = verbToolDefs().concat(agentToolDefs(o.agents));
 
     const system = (o.persona || 'You are a visitor in a shared 3D world.') + '\n'
       + 'You are PLAYING, through exactly the controls a person has. Act by CALLING the world_* '
@@ -252,18 +411,20 @@
     const messages = [{ role: 'system', content: system },
                       { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
     const calls = [];
+    const summoned = [];
     // A MODEL USUALLY NARRATES AND ACTS IN THE SAME BREATH. Reading the spoken line only from a
     // round with no tool calls throws away everything said on every acting round — and a player
     // that acts on every round then never speaks at all.
     let lastWords = '';
 
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
+      spend();
       const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: 500 });
       messages.push(msg);
       const said = String((msg && msg.content) || '').trim();
       if (said) lastWords = said;
       const tcs = msg && msg.tool_calls;
-      if (!tcs || !tcs.length) return { words: lastWords, calls, rounds: round + 1 };
+      if (!tcs || !tcs.length) return { words: lastWords, calls, rounds: round + 1, residency, summoned };
       for (const tc of tcs) {
         const fname = tc.function && tc.function.name;
         let args = {};
@@ -277,7 +438,21 @@
             // invent world_jump and be told it jumped.
             if (!CALL[verb]) result = 'no such verb: ' + verb + ' — the hands cannot do that';
             else result = describe(verb, await CALL[verb](drive, args));
+          } else if (!pyAgents[fname] && o.summon !== false) {
+            // reached for something nobody has: find a universe where it worked, or write it
+            const got = await summon('a tool called "' + fname + '" called with ' + JSON.stringify(args).slice(0, 200), { log });
+            if (got && pyAgents[got.name]) {
+              summoned.push({ asked: fname, got: got.name, via: got.via });
+              if (o.guid && /user_guid/.test(JSON.stringify((pyAgents[got.name] || {}).metadata || {}))) args.user_guid = o.guid;
+              const r2 = await callAgent(got.name, args);
+              result = (r2 === null ? 'no such tool: ' + fname : r2);
+            } else result = 'no such tool: ' + fname + ' — and none could be summoned';
           } else {
+            // The identity is IMPOSED, never requested. An agent that stores or recalls memory
+            // is given this player's guid whether the model thought to pass one or not —
+            // otherwise one player's recollection is another player's, which in a shared
+            // runtime is the only way this can go badly wrong.
+            if (o.guid && /user_guid/.test(JSON.stringify((pyAgents[fname] || {}).metadata || {}))) args.user_guid = o.guid;
             const r = await callAgent(fname, args);
             result = r === null ? ('no such tool: ' + fname) : r;
           }
@@ -287,7 +462,8 @@
         messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result).slice(0, 2000) });
       }
     }
-    return { words: lastWords, calls, rounds: o.rounds || MAX_ROUNDS, note: 'ran out of rounds still acting' };
+    return { words: lastWords, calls, rounds: o.rounds || MAX_ROUNDS, residency, summoned, note: 'ran out of rounds still acting' };
+    }
   }
 
   // ── things to say, in character ──────────────────────────────────────────
@@ -324,6 +500,7 @@
     const who = o.who || {};
     const recent = (o.chat || []).slice(-4).map(c => (c.from === String(who.id).slice(0, 6) ? 'them: ' : 'you: ') + c.text);
     const near = (o.portals || []).slice().sort((a, b) => (a.distance || 0) - (b.distance || 0))[0];
+    spend();
     const msg = await auth.chat([
       { role: 'system', content: (o.persona || 'You are a visitor in a shared 3D world of portals.')
         + ' Offer things to say that fit THIS moment — not greetings if you are already talking, not '
@@ -409,7 +586,7 @@
 
     (async () => {
       while (state.running && (!o.maxTicks || state.ticks < o.maxTicks)) {
-        const drive = root.__autodrive;
+        const drive = o.drive || root.__autodrive;
         if (!drive) { state.stopped = 'the hands went away'; break; }
         state.ticks++;
         const started = Date.now();
@@ -421,6 +598,7 @@
                         room: s0.room, chat: (s0.chat || []).slice(-4),
                         picture: s0.vision ? (s0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
             persona: o.persona, python: o.python, log: o.log, rounds: o.rounds,
+            drive: o.drive, guid: o.guid,
           });
           state.acts += (r.calls || []).length;
           if (r.words) state.words++;
@@ -456,7 +634,12 @@
     };
   }
 
-  root.NexusBrainstem = { turn, lines, live, hotload, initPyodide, verbToolDefs, agentToolDefs, callAgent,
+  root.NexusBrainstem = { turn, lines, live, hotload, summon, ensureResident, initPyodide, slots: () => nextSlot,
+                          budget: (patch) => { if (patch) Object.assign(budget, patch); return Object.assign({}, budget); },
+                          halt: (why) => { budget.stopped = why || 'stopped by the operator'; },
+                          wasSummoned: (n) => summonedNames.has(n),
+                          resident: () => Object.keys(pyAgents),
+                          sourceOf: (name) => agentSource[name] || null, verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
                           VERBS, MAX_ROUNDS };
 })(typeof window !== 'undefined' ? window : globalThis);
