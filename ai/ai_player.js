@@ -235,6 +235,8 @@
         if (ready) {
             clearInterval(waitForWorld);
             window.worldNavigator.aiPlayer = new AIPlayerManager(window.worldNavigator);
+            // movement is the drop-in's job: step the body every frame, whatever the page's loop does
+            (function step() { try { window.worldNavigator.aiPlayer.update(); } catch (e) {} requestAnimationFrame(step); })();
         } else if (tries >= maxTries) {
             clearInterval(waitForWorld);
         }
