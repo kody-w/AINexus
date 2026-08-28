@@ -43,20 +43,18 @@
     if (!p || p.kind === 'none') return null;
     const dx = p.x - 0.5, dy = p.y - 0.5;
 
-    // a pinch that just closed is a click — the same gesture the VUI uses to press a key
-    if (p.pinched && !(prev && prev.pinched)) return { do: 'click' };
+    // THE HAND IS A CURSOR. The fingertip designates a point on screen and the pinch presses
+    // whatever is under it — a button, an input, a portal. This is a mouse made of a hand,
+    // not a gamepad, so pointing does NOT steer: the pointer goes where the finger goes.
+    if (p.pinched && !(prev && prev.pinched)) return { do: 'pick', x: p.px, y: p.py };
 
-    // an open palm held forward walks; the further from centre, the more you turn as you go
+    // An open palm is the one posture that moves the body: push forward to walk, and lean
+    // the palm off-centre to turn as you go. Nothing else drives the camera.
     if (p.kind === 'palm') {
       if (Math.abs(dx) > DEAD) return { do: 'look', dx: Math.round(-dx * LOOK_GAIN), dy: 0 };
       return { do: 'walk', dir: 'forward', ms: 260 };
     }
-
-    // pointing steers: only outside the dead-zone, so a resting hand does nothing
-    if (Math.abs(dx) > DEAD || Math.abs(dy) > DEAD) {
-      return { do: 'look', dx: Math.round(-dx * LOOK_GAIN), dy: Math.round(dy * LOOK_GAIN * 0.4) };
-    }
-    return null;
+    return null;                                  // a pointing hand only moves the cursor
   }
 
   // speech -> a verb. "go to crystal" travels; anything else is said aloud to the room.

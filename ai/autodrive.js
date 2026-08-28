@@ -398,6 +398,50 @@
       return true;
     },
 
+    // ── the pointer: what is under that point, and pressing it ──────────────
+    // A hand in the VUI is a CURSOR, not a gamepad: the fingertip designates and the pinch
+    // presses whatever it is over. Two kinds of thing can be under it, so there are two
+    // honest answers:
+    //   · a DOM control (a button, an input) — press it exactly where the finger is
+    //   · the 3D canvas — this world hit-tests from the CROSSHAIR, not the mouse, so a
+    //     pointer cannot click a portal it is merely hovering. The driver turns to face
+    //     what the finger picked and then clicks, which is what a person does too.
+    hover(px, py) {
+      const el = document.elementFromPoint(px, py);
+      const cvs = (() => { const w = W(); return (w && w.renderer && w.renderer.domElement) || document.querySelector('canvas'); })();
+      if (el && el !== cvs && (el.closest('button, a, input, [onclick], [role=button]'))) {
+        const c = el.closest('button, a, input, [onclick], [role=button]');
+        return { kind: 'control', label: (c.textContent || c.value || c.id || 'control').trim().slice(0, 40), el: c };
+      }
+      const w = W();
+      if (!w || !w.raycaster || !w.portals || !window.THREE) return { kind: 'nothing' };
+      const r = (cvs || document.body).getBoundingClientRect();
+      const ndc = new window.THREE.Vector2(((px - r.left) / r.width) * 2 - 1, -((py - r.top) / r.height) * 2 + 1);
+      w.raycaster.setFromCamera(ndc, w.camera);
+      const hit = w.raycaster.intersectObjects(w.portals, true)[0];
+      if (hit) {
+        let o = hit.object; while (o && !(o.userData && o.userData.url) && o.parent) o = o.parent;
+        const ud = (o && o.userData) || {};
+        if (ud.url) return { kind: 'portal', label: ud.name || 'portal', name: ud.name, distance: Math.round(hit.distance) };
+      }
+      return { kind: 'world' };
+    },
+
+    // the pinch: press what the finger is over
+    async pick(px, py) {
+      const what = api.hover(px, py);
+      if (what.kind === 'control') { what.el.click(); log('pressed', what.label); return what; }
+      if (what.kind === 'portal') {
+        log('picked portal', what.label, '— turning to it');
+        const ok = await api.aim(what.name);
+        if (!ok) { log('could not line up on', what.label); return { kind: 'portal', label: what.label, aimed: false }; }
+        await api.click();                       // the world's own crosshair test now hits it
+        return { kind: 'portal', label: what.label, aimed: true };
+      }
+      await api.click(px, py);                   // an honest click on empty world
+      return what;
+    },
+
     async press(selector) { const el = document.querySelector(selector); if (!el) return false; el.click(); await sleep(80); return true; },
     async wait(ms) { await sleep(ms | 0); return true; },
 
@@ -426,6 +470,8 @@
               : verb === 'mind' ? await api.mind(s)
               : verb === 'camera' ? await api.camera(s)
               : verb === 'cut' ? api.cut()
+              : verb === 'pick' ? await api.pick(s.x, s.y)
+              : verb === 'hover' ? api.hover(s.x, s.y)
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
