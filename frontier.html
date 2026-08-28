@@ -14,6 +14,11 @@ iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000
 #orbs{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:8}
 #orbs circle{fill:none;stroke:rgba(125,227,255,.32);stroke-width:2}
 #orbs circle.hot{stroke:#7dffb0;stroke-width:3.5}
+#orbs circle.person{stroke:rgba(255,170,90,.55)}
+#orbs circle.person.hot{stroke:#ffca7a}
+#orbs circle.opt{stroke:rgba(216,180,255,.6);fill:rgba(30,16,52,.72)}
+#orbs circle.opt.hot{stroke:#e2c4ff;fill:rgba(58,30,96,.85)}
+#orbs text.opt{fill:#efe3ff;font-size:12px}
 #orbs text{fill:rgba(233,233,242,.85);font:11px ui-monospace,Menlo,monospace;text-anchor:middle}
 #orbs text.hot{fill:#7dffb0;font-weight:700}#cursor.over{background:radial-gradient(circle,rgba(125,255,190,.95) 0 32%,rgba(125,255,190,.3) 58%,transparent 72%)}
 #cursor.pinch{width:64px;height:64px;margin:-32px 0 0 -32px;background:radial-gradient(circle,#fff 0 40%,rgba(255,0,230,.4) 62%,transparent 74%)}
@@ -42,6 +47,7 @@ button.on{background:#12442c;border-color:#1d6b45}
   <p class="k">
     <b>point</b> — move the cursor (your hand is the mouse)<br>
     <b>rest on an orb</b> — the ring fills in 2½s and snaps (hands-free)<br>
+    <b>rest on a person</b> — open a ring of things to say; the same for a human or an AI<br>
     <b>pinch</b> — select it now, without waiting<br>
     <b>open palm</b> — walk forward; lean it to turn as you go<br>
     <b>speak</b> — “go to Crystal Caverns”, “turn left”, “ask, what is this place”, or just talk to the room
@@ -150,23 +156,92 @@ $('stop').onclick = () => {
 // never dwells — a click is already a decision. Hover is STICKY for 450ms so a jittery hand
 // (or a jittery hand model) does not drop the target you are clearly aiming at.
 const DWELL_MS = 2500, STICKY_MS = 450;
+// ── conversation orbs ────────────────────────────────────────────────────
+// Selecting a person opens a ring of things you could say. Every party in the room is the
+// same kind of target, so this one mechanic covers person→person, person→AI, AI→person and
+// AI→AI: an AI reads the identical option list through drive.people() and drive.tell().
+let talkingTo = null, lines = [], hotLine = -1, optAt = [];
+const OPENERS = [
+  { short: 'greet', text: 'hey — good to see someone else here' },
+  { short: 'ask', text: 'what are you doing over here?' },
+  { short: 'invite', text: 'want to go through a portal together?' },
+  { short: 'who', text: 'are you a person or an AI?' },
+  { short: 'leave', text: 'catch you later' },
+];
+function openTalk(what) {
+  talkingTo = { id: what.id, name: (what.isAI ? '🤖 ' : '🧑 ') + what.label.replace(/^🤖\s*/, ''), at: what.person };
+  lines = OPENERS.slice(); hotLine = -1; optAt = [];
+  note('talking to ' + what.label + (what.isAI ? ' (an AI)' : ''));
+}
+function closeTalk() { talkingTo = null; lines = []; hotLine = -1; note('conversation closed'); }
+function sayLine(i) {
+  const ln = lines[i]; if (!ln || !drive) return;
+  drive.tell(talkingTo.id, ln.text);
+  note('you: ' + ln.text);
+  if (ln.short === 'leave') { closeTalk(); return; }
+  // the reply comes back through the room's chat, from a person or from an AI's mind
+  setTimeout(() => {
+    try {
+      const chat = drive.snapshot().chat || [];
+      const last = chat[chat.length - 1];
+      if (last && last.text !== ln.text) note(talkingTo.name + ': ' + last.text);
+    } catch (e) {}
+  }, 2200);
+}
 let hot = null, hotSince = 0, lastSeenHot = 0, dwellFired = false, cursorAt = { x: -1, y: -1 }, deskMode = false;
 
 function paintOrbs() {
   if (!drive) return requestAnimationFrame(paintOrbs);
   let list = [];
   try { list = drive.orbs(); } catch (e) {}
+  let folk = [];
+  try { folk = drive.people(); } catch (e) {}
   const svg = $('orbs');
-  svg.innerHTML = list.map(o => {
-    const on = hot && hot.name === o.name;
-    return `<circle cx="${o.x}" cy="${o.y}" r="${o.radius}" class="${on ? 'hot' : ''}"/>` +
-           `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${o.name}</text>`;
-  }).join('');
+  let html = '';
+  if (!talkingTo) {
+    html += list.map(o => {
+      const on = hot && hot.kind === 'portal' && hot.label === o.name;
+      return `<circle cx="${o.x}" cy="${o.y}" r="${o.radius}" class="${on ? 'hot' : ''}"/>` +
+             `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${o.name}</text>`;
+    }).join('');
+    html += folk.map(w2 => {
+      const on = hot && hot.kind === 'person' && hot.id === w2.id;
+      return `<circle cx="${w2.x}" cy="${w2.y}" r="${w2.radius}" class="person ${on ? 'hot' : ''}"/>` +
+             `<text x="${w2.x}" y="${w2.y + w2.radius + 15}" class="${on ? 'hot' : ''}">${w2.isAI ? '🤖 ' : '🧑 '}${w2.name.replace(/^🤖\s*/, '')}</text>`;
+    }).join('');
+  } else {
+    // a conversation is a ring of option orbs around the person you are talking to,
+    // the way a dialogue wheel fans its choices — pick one the same way you pick anything
+    const who = folk.find(f => f.id === talkingTo.id) || talkingTo.at;
+    const cx = who.x, cy = who.y, R = Math.min(230, Math.max(150, innerHeight * 0.26));
+    html += `<circle cx="${cx}" cy="${cy}" r="${(who.radius || 40)}" class="person hot"/>` +
+            `<text x="${cx}" y="${cy - (who.radius || 40) - 12}" class="hot">${talkingTo.name}</text>`;
+    lines.forEach((ln, i) => {
+      const a = -Math.PI / 2 + (i - (lines.length - 1) / 2) * 0.52;
+      const x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
+      const on = hotLine === i;
+      html += `<circle cx="${x}" cy="${y}" r="46" class="opt ${on ? 'hot' : ''}"/>` +
+              `<text x="${x}" y="${y + 4}" class="opt ${on ? 'hot' : ''}">${i + 1}</text>` +
+              `<text x="${x}" y="${y + 66}" class="opt ${on ? 'hot' : ''}">${ln.short}</text>`;
+      optAt[i] = { x, y };
+    });
+  }
+  svg.innerHTML = html;
   requestAnimationFrame(paintOrbs);
 }
 
 function trackHover(x, y) {
   cursorAt = { x, y };
+  if (talkingTo) {                       // in a conversation, the options are the only targets
+    hotLine = -1;
+    optAt.forEach((o, i) => { if (o && Math.hypot(x - o.x, y - o.y) <= 52) hotLine = i; });
+    const stillHot = hotLine >= 0;
+    if (stillHot) { lastSeenHot = performance.now();
+      if (!hot || hot.line !== hotLine) { hot = { kind: 'line', line: hotLine, label: lines[hotLine].short }; hotSince = performance.now(); dwellFired = false; } }
+    else if (hot && performance.now() - lastSeenHot > STICKY_MS) { hot = null; dwellFired = false; }
+    $('target').textContent = hotLine >= 0 ? '💬 ' + lines[hotLine].text : '💬 talking to ' + talkingTo.name;
+    return;
+  }
   let what = null;
   try { what = drive && drive.hover(x, y); } catch (e) {}
   const isOrb = what && (what.kind === 'portal' || what.kind === 'control');
@@ -176,7 +251,9 @@ function trackHover(x, y) {
   } else if (hot && performance.now() - lastSeenHot > STICKY_MS) {
     hot = null; dwellFired = false;
   }
-  $('target').textContent = hot ? (hot.kind === 'portal' ? '⭕ ' + hot.label : '🔘 ' + hot.label) : '';
+  $('target').textContent = hot ? (hot.kind === 'portal' ? '⭕ ' + hot.label
+    : hot.kind === 'person' ? (hot.isAI ? '🤖 ' : '🧑 ') + hot.label + ' — select to talk'
+    : '🔘 ' + hot.label) : '';
 }
 
 setInterval(() => {                       // the dwell ring: hold to select, hands-free
@@ -192,8 +269,10 @@ setInterval(() => {                       // the dwell ring: hold to select, han
 function fire(x, y) {
   if (!drive) return;
   dwellFired = true;
+  if (talkingTo) { if (hotLine >= 0) sayLine(hotLine); else closeTalk(); return; }
   let what = null;
   try { what = drive.hover(x, y); } catch (e) {}
+  if (what && what.kind === 'person') { openTalk(what); return; }
   if (what && what.kind === 'portal' && what.url) {
     // Selecting an orb is a decision to GO there, and this page is the thing holding the
     // world — so it navigates, exactly as following a link does. (A synthetic click on the

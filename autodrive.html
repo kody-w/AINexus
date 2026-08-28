@@ -188,7 +188,8 @@ async function boot() {
     // iframe fires no load event, and waiting for one that never comes hangs the whole tower.
     const invite = (i === 0 || !room) ? '#ai=autodrive'
                                       : '#join=' + room.id + '.' + room.secret + '&ai=autodrive';
-    frame.src = world + '?player=' + (i + 1) + invite;
+    const asName = encodeURIComponent('🤖 ' + persona + ' (AI)');
+    frame.src = world + '?player=' + (i + 1) + invite + (invite.includes('#') ? '&' : '#') + 'as=' + asName;
     await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('frame never loaded')), 45000);
       frame.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });

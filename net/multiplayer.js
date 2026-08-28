@@ -152,7 +152,7 @@
                     reliable: true,
                     serialization: 'json',
                     metadata: {
-                        username: this.generateUsername(),
+                        username: (this.username = this.username || this.generateUsername()),
                         token: this.joinToken,
                         worldData: (typeof this.world.getCurrentWorldData === 'function')
                             ? this.world.getCurrentWorldData()
@@ -251,6 +251,18 @@
         handlePeerData(peerId, data) {
             switch (data.type) {
                 case 'playerUpdate':
+                    if (data.username) {
+                        const known = this.players.get(peerId);
+                        if (known && known.username !== data.username) {
+                            known.username = data.username;
+                            try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
+                                const old = known.avatar.getObjectByName('nametag');
+                                if (old) known.avatar.remove(old);
+                                const tag = this.createNameTag(peerId, { username: data.username });
+                                if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
+                            } } catch (e) {}
+                        }
+                    }
                     this.updatePlayerPosition(peerId, data.position, data.rotation);
                     break;
 
@@ -390,6 +402,11 @@
         sendPlayerData(conn) {
             const data = {
                 type: 'playerUpdate',
+                // Carry the name on every update. A HOST never calls connect(), so its
+                // metadata never reaches a joiner — without this, an AI host appears to
+                // everyone else under a random human-looking name, and "every AI is
+                // labelled" is true only in its own window.
+                username: this.username || this.generateUsername(),
                 position: {
                     x: this.world.camera.position.x,
                     y: this.world.camera.position.y,
@@ -502,6 +519,14 @@
         }
 
         generateUsername() {
+            // The name other people see comes from the metadata sent at connect time, so an AI's
+            // label has to exist BEFORE the handshake — relabelling afterwards only renames it in
+            // its own window, and everyone else keeps seeing a human-looking name. That is the
+            // difference between "labelled as an AI" and merely believing you labelled it.
+            const declared = (typeof window !== 'undefined' && window.NEXUS_USERNAME)
+                || ((location.hash.match(/[#&]as=([^&]+)/) || [])[1] && decodeURIComponent((location.hash.match(/[#&]as=([^&]+)/) || [])[1]));
+            if (declared) return String(declared).slice(0, 40);
+
             const adjectives = ['Swift', 'Neon', 'Cyber', 'Quantum', 'Digital'];
             const nouns = ['Explorer', 'Wanderer', 'Voyager', 'Pilot', 'Navigator'];
             const adj = adjectives[Math.floor(Math.random() * adjectives.length)];

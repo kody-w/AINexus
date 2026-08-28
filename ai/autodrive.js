@@ -419,9 +419,49 @@
         if (x < r.left - 80 || x > r.right + 80 || y < r.top - 80 || y > r.bottom + 80) continue;
         const dist = w.camera.position.distanceTo(world);
         out.push({ name: ud.name || 'portal', url: ud.url, x: Math.round(x), y: Math.round(y),
-                   radius: Math.max(26, Math.round(2600 / Math.max(6, dist))), distance: Math.round(dist) });
+                   radius: Math.min(150, Math.max(26, Math.round(2600 / Math.max(6, dist)))), distance: Math.round(dist) });
       }
       return out.sort((a, b) => a.distance - b.distance);
+    },
+
+    // ── people: the other orbs, the ones that talk back ─────────────────────
+    // A player is an orb too. Everyone in the room — person or AI — projects to a point on
+    // screen you can rest on and speak to, which is what makes a conversation possible at all
+    // between a human and a robot: the same target, the same gesture, the same channel.
+    people() {
+      const w = W(); if (!w || !w.multiplayer || !window.THREE) return [];
+      const cvs = (w.renderer && w.renderer.domElement) || document.querySelector('canvas');
+      const r = (cvs || document.body).getBoundingClientRect();
+      const out = [];
+      try {
+        w.multiplayer.players.forEach((pl, id) => {
+          const a = pl.avatar; if (!a) return;
+          const v = new window.THREE.Vector3(); a.getWorldPosition(v);
+          const world = v.clone(); v.project(w.camera);
+          if (v.z > 1) return;
+          const x = r.left + (v.x * 0.5 + 0.5) * r.width, y = r.top + (-v.y * 0.5 + 0.5) * r.height;
+          // only people you can actually see are targets — an off-screen projection is a
+          // point behind you, and resting "on" it would select whatever is really there
+          if (x < r.left - 40 || x > r.right + 40 || y < r.top - 40 || y > r.bottom + 40) return;
+          const dist = w.camera.position.distanceTo(world);
+          const name = pl.username || (pl.metadata && pl.metadata.username) || String(id).slice(0, 6);
+          out.push({ id: String(id), name, isAI: /🤖|\(AI\)/.test(name), x: Math.round(x), y: Math.round(y - 40),
+                     radius: Math.min(90, Math.max(30, Math.round(1400 / Math.max(4, dist)))), distance: Math.round(dist) });
+        });
+      } catch (e) {}
+      return out.sort((a, b) => a.distance - b.distance);
+    },
+
+    // say something TO someone: the room hears it, and it is addressed
+    async tell(peerId, text) {
+      const w = W(); const mp = w && w.multiplayer; if (!mp) return false;
+      const who = (mp.players.get(peerId) || {});
+      const line = String(text).slice(0, 240);
+      let sent = 0;
+      mp.connections.forEach((c, id) => { try { c.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} });
+      try { mp.displayChat(mp.peer && mp.peer.id || 'me', line); } catch (e) {}
+      log('to', (who.username || peerId).slice(0, 20) + ':', line);
+      return sent;
     },
 
     // ── the pointer: what is under that point, and pressing it ──────────────
@@ -444,7 +484,12 @@
       // contains the point" hands every click to whichever orb happens to be nearest the
       // camera. Score by how centred the pointer is within each orb instead: the one you
       // are most obviously pointing at wins.
-      let best = null, bestScore = Infinity;
+      let best = null, bestScore = Infinity, bestKind = 'portal';
+      for (const who of api.people()) {
+        const score = Math.hypot(px - who.x, py - who.y) / who.radius;
+        if (score <= 1 && score < bestScore) { bestScore = score; best = who; bestKind = 'person'; }
+      }
+      if (best) return { kind: 'person', label: best.name, id: best.id, isAI: best.isAI, distance: best.distance, person: best, centred: +bestScore.toFixed(2) };
       for (const orb of api.orbs()) {
         const score = Math.hypot(px - orb.x, py - orb.y) / orb.radius;
         if (score <= 1 && score < bestScore) { bestScore = score; best = orb; }
@@ -511,6 +556,8 @@
               : verb === 'pick' ? await api.pick(s.x, s.y)
               : verb === 'hover' ? api.hover(s.x, s.y)
               : verb === 'orbs' ? api.orbs()
+              : verb === 'people' ? api.people()
+              : verb === 'tell' ? await api.tell(s.to, s.text)
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
