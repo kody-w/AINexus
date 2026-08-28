@@ -477,10 +477,16 @@
       let sent = 0;
       const direct = mp.connections.get(peerId);
       if (direct) { try { direct.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} }
-      else {
+      else if (!mp.isHost) {
         // a joiner holds one connection — to the host — so a message for another joiner goes
         // to the host addressed, and the host passes it along to that peer alone
         mp.connections.forEach((c) => { try { c.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} });
+      } else {
+        // the host is connected to EVERYONE, so a peer it cannot find is simply not here.
+        // Falling through to a broadcast would send a private line to the whole room and
+        // then report success for a message that never reached its addressee.
+        log('no such peer to tell:', String(peerId).slice(0, 12));
+        return false;
       }
       try { mp.displayChat(mp.peer && mp.peer.id || 'me', line); } catch (e) {}
       log('to', (who.username || peerId).slice(0, 20) + ':', line);
@@ -593,7 +599,9 @@
             // program that throws on every verb run forever inside a budget meant to stop it —
             // the kill switch would be watching a number that never moves.
             log('step failed', verb, e.message);
-            onStep && onStep(verb, null, e);
+            // journalled as a failure, not as an ordinary result — a log that renders a thrown
+            // step the same as a successful one hides exactly what an operator is watching for
+            onStep && onStep(verb, { error: String(e && e.message || e) }, e);
           }
         }
       } while (api._running && program && program.loop);

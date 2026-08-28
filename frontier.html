@@ -144,7 +144,7 @@ $('hands').onclick = async () => {
     hands = await vision.HandLandmarker.createFromOptions(fs2, {
       baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
       numHands: 1, runningMode: 'VIDEO' });
-  } catch (e) { note('hand model would not load: ' + e.message); return; }
+  } catch (e) { note('hand model would not load: ' + e.message); $('hands').classList.remove('on'); return; }
   running = true; cursor.classList.add('on'); note('hands live — point, palm, pinch');
   const loop = () => {
     if (!running) return;
@@ -213,6 +213,7 @@ $('eyes').onclick = async () => {
     try { res = window.__NEXUS_FACE_TEST ? window.__NEXUS_FACE_TEST() : face.detectForVideo(v, performance.now()); } catch (e) {}
     gaze = NexusFace.readFace(res, gaze, { recenter: recenterNext });
     recenterNext = false;
+    if (gaze.recentred) note('gaze was stuck against an edge — origin re-learned');
     if (gaze.ok) {
       // mirror x for a selfie view, exactly as the hand cursor does
       const gx = (1 - gaze.x) * innerWidth, gy = gaze.y * innerHeight;

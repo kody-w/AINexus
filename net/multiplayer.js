@@ -118,7 +118,7 @@
                 // Handle incoming connections
                 this.peer.on('connection', (conn) => {
                     console.log('Incoming connection from:', conn.peer);
-                    this.handleNewConnection(conn);
+                    this.handleNewConnection(conn, false);   // inbound: somebody dialled us
                 });
 
                 // Handle errors
@@ -189,15 +189,25 @@
                     this.updateStatus('Connected', true);
                 });
 
-                this.handleNewConnection(conn);
+                this.handleNewConnection(conn, true);    // outbound: we dialled the host
             } catch (error) {
                 console.error('Failed to connect to host:', error);
                 this.showError('Failed to connect to host');
             }
         }
 
-        handleNewConnection(conn) {
+        handleNewConnection(conn, outbound) {
             const peerId = conn.peer;
+
+            // A JOINER MUST ONLY EVER TALK TO THE HOST IT WAS INVITED TO. Anyone who learns a
+            // joiner's peer id can dial it, and until this check existed that stranger was
+            // handed the room's invite token in the hello — the joiner would have leaked the
+            // very secret the handshake exists to protect, and admitted them besides.
+            if (!this.isHost && (!outbound || peerId !== this.roomId)) {
+                console.warn('Refusing a connection that is not the host of this room:', peerId);
+                try { conn.close(); } catch (e) {}
+                return;
+            }
 
             conn.on('open', () => {
                 if (this.isHost) {
@@ -245,7 +255,16 @@
             });
 
             conn.on('error', (err) => {
+                // An error does not always arrive with a 'close' behind it, and a connection
+                // left in the map is a player who is still standing there to everyone else.
                 console.error('Connection error with peer', peerId, ':', err);
+                if (conn.__authTimer) clearTimeout(conn.__authTimer);
+                this.pending.delete(peerId);
+                if (this.connections.get(peerId) === conn) {
+                    this.connections.delete(peerId);
+                    this.removePlayer(peerId);
+                    this.updatePlayerCount();
+                }
             });
         }
 
@@ -327,7 +346,11 @@
                 case 'chat': {
                     // A message may be addressed. Show it if it is for the room or for me...
                     const mine = this.peer && this.peer.id;
-                    const from = data.from || peerId;
+                    // `from` is a claim. The host knows better: the connection a message
+                    // arrived on IS its author, so a joiner cannot dress a line up as someone
+                    // else's. Only a joiner, which hears everything second-hand through the
+                    // host, has to take the relayed attribution on trust.
+                    const from = this.isHost ? peerId : (data.from || peerId);
                     if (!data.to || data.to === mine) this.displayChat(from, data.message);
                     // ...and if I am the host, pass it on: joiners are connected only to me, so
                     // without this relay two joiners can never hear each other at all.

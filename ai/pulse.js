@@ -130,7 +130,11 @@
     return { bpm: hz * 60, hz, snr: bandAvg > 0 ? p(peak) / bandAvg : 0, share: total > 0 ? sig2 / total : 0 };
   }
 
-  function median(a) { const s = a.slice().sort((x, y) => x - y); return s.length ? s[(s.length - 1) >> 1] : 0; }
+  function median(a) {
+    const s = a.slice().sort((x, y) => x - y), n = s.length;
+    if (!n) return 0;
+    return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;   // an even count has two middles
+  }
 
   function create(opts) {
     const o = Object.assign({ fs: FS, window: WINDOW_SECONDS, minSnr: MIN_SNR, minShare: MIN_SHARE }, opts || {});

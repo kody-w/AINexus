@@ -120,5 +120,61 @@ console.log('face — gaze, brow and blink');
   ok('no face is not a crash', g.ok === false && g.kind === 'none');
 }
 
+// ── regressions from the adversarial review of this very file's subjects ──
+console.log('regressions');
+{
+  const P2 = globalThis.NexusPulse;
+  // median() is only used through create(), so exercise the statistic by its behaviour:
+  // an even-length window must sit BETWEEN its two middles, not on the lower one.
+  const mid = (arr) => { const s = arr.slice().sort((a, b) => a - b), n = s.length;
+    return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  ok('an even-length median averages the two middles', mid([70, 72]) === 71 && mid([60, 70, 72, 80]) === 71);
+}
+{
+  // RECENTRING SAYS NOTHING ABOUT YOUR EYEBROWS. Pressing 'c' mid-raise used to poison the
+  // brow floor with a raised value and silently eat that press and the rest of the raise.
+  let g = null, t = 0;
+  const step = (o, opts) => { t += 33; g = F.readFace({ faceLandmarks: [fakeLandmarks(o)] }, g, { now: t, ...(opts || {}) }); return g; };
+  for (let i = 0; i < 40; i++) step({});                      // settle at rest
+  step({ browUp: 1 });                                        // brows go up...
+  step({ browUp: 1 }, { recenter: true });                    // ...and 'c' is pressed mid-raise
+  let presses = 0;
+  for (let i = 0; i < 40; i++) if (step({ browUp: 1 }).pressed) presses++;
+  for (let i = 0; i < 20; i++) step({});
+  for (let i = 0; i < 20; i++) if (step({ browUp: 1 }).pressed) presses++;
+  ok('recentring mid-raise does not swallow the brow button', presses >= 1, 'never fired again');
+}
+{
+  const g = F.readFace({ faceLandmarks: [fakeLandmarks({})] }, null, {});
+  ok('looksAt refuses a gaze with no screen point rather than comparing NaN',
+     F.looksAt({ ...g, pressed: true }, { x: 10, y: 10, radius: 5 }) === false
+     && F.looksAt(g, { x: 10, y: 10, radius: 5 }, 200, { x: 12, y: 12 }) === true);
+  ok('faceToAction takes the screen point explicitly',
+     F.faceToAction({ ok: true, pressed: true }, { x: 5, y: 7 }).x === 5
+     && F.faceToAction({ ok: true, pressed: true }) === null);
+}
+
+{
+  // A BAD START MUST NOT BE A PERMANENT ONE. Learn the origin from a face that is way off to
+  // one side, then look normally: the reading saturates against the far edge, and because the
+  // deadzone freezes the baseline while you are off-centre it could never recover on its own.
+  let g = null, t = 0;
+  const step = o => { t += 33; g = F.readFace({ faceLandmarks: [fakeLandmarks(o)] }, g, { now: t }); return g; };
+  for (let i = 0; i < 40; i++) step({ irisDX: 0.02, noseDX: 0.06 });   // a rotten origin
+  for (let i = 0; i < 20; i++) step({});     // smoothing catches up: the point is now hard against the edge
+  const stuck = g.x;
+  for (let i = 0; i < 120; i++) step({});    // ~4s of ordinary looking
+  ok(`a pointer pinned by a bad origin unsticks itself (${stuck.toFixed(3)} -> ${g.x.toFixed(2)})`,
+     stuck < 0.02 && g.x > 0.35 && g.x < 0.65, 'still pinned');
+}
+{
+  let g = null, t = 0;
+  const step = o => { t += 33; g = F.readFace({ faceLandmarks: [fakeLandmarks(o)] }, g, { now: t }); return g; };
+  for (let i = 0; i < 6; i++) step({});
+  ok('the origin is still settling in the first frames', g.settling === true);
+  for (let i = 0; i < 30; i++) step({});
+  ok('and locks once the face has been there a moment', g.settling === false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
