@@ -1,0 +1,310 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autodrive — the control tower</title>
+<meta name="description" content="AI players in iframes, driving the real UI as people do: clicks, mouse-look, chat, portals — with vision, budgets, receipts and a kill switch.">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#08080f;color:#e9e9f2;font:14px/1.5 -apple-system,system-ui,sans-serif}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid #24243f;background:#0d0d1c;position:sticky;top:0;z-index:5}
+h1{font-size:15px;margin:0 14px 0 0;letter-spacing:.02em}
+button{background:#1b1b38;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{background:#26264d}
+button.go{background:#12442c;border-color:#1d6b45}
+button.stop{background:#4a1620;border-color:#7a2233}
+select,input{background:#0d0d1c;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:6px 9px;font:inherit}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:14px;padding:14px}
+.tab{background:#101024;border:1px solid #24243f;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.tab h2{font-size:13px;margin:0;padding:9px 12px;background:#161632;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.who{display:flex;gap:8px;align-items:center;min-width:0}
+.badge{background:#2a1140;border:1px solid #6b3fa0;color:#d9b8ff;border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:.05em;white-space:nowrap}
+.state{font-size:10px;color:#8a8aa8;white-space:nowrap}
+iframe{width:100%;height:250px;border:0;background:#000;display:block}
+.eye{display:flex;gap:6px;padding:6px 8px;background:#0b0b1a;align-items:center;overflow-x:auto}
+.eye img{height:56px;border-radius:4px;border:1px solid #24243f}
+.eye .none{font-size:11px;color:#6a6a88}
+.con{height:118px;overflow:auto;margin:0;padding:8px 10px;background:#07070f;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #1c1c33}
+.con .e{color:#ff8f8f}.con .w{color:#ffd98a}.con .d{color:#7de3ff}
+.cli{display:flex;gap:6px;padding:8px;border-top:1px solid #1c1c33;background:#0b0b18}
+.cli input{flex:1;font:12px ui-monospace,Menlo,monospace}
+.meta{padding:6px 10px;font:10px ui-monospace,Menlo,monospace;color:#7a7a99;border-top:1px solid #1c1c33;background:#0a0a16;word-break:break-all}
+.note{padding:10px 16px;color:#8a8aa8;font-size:12px;border-top:1px solid #24243f}
+a{color:#7de3ff}
+</style></head><body>
+<header>
+  <h1>Autodrive · control tower</h1>
+  <label>players <input id="n" type="number" min="1" max="6" value="3" style="width:56px"></label>
+  <label>program <select id="prog"></select></label>
+  <label>world <select id="world"><option value="index.html">Nexus Hub</option><option value="crystal-caverns.html">Crystal Caverns</option><option value="floating-gardens.html">Floating Gardens</option><option value="neon-arcade-world.html">Neon Arcade</option><option value="ancient-library-world.html">Ancient Library</option><option value="galaxy-zoo-world.html">Galaxy Zoo</option></select></label>
+  <label>turns <input id="budget" type="number" min="1" max="500" value="40" style="width:64px"></label>
+  <label>tick <input id="tick" type="number" min="0" max="60" value="0" step="1" style="width:56px" title="seconds between turns — 0 runs as fast as the program allows"></label>
+  <button class="go" id="start">Open the room</button>
+  <button class="stop" id="killall">Stop everything</button>
+  <button id="dump">Download receipts</button>
+  <button id="me" title="watch from the sky in another tab, then drop in">👁 ME view</button>
+</header>
+<div class="grid" id="grid"></div>
+<p class="note">
+Each tab is a <b>person</b>: the driver only ever sends real UI events — keydown to walk, mousemove to look, a click to enter a portal, the page's own chat input to speak. Every AI player is labelled as an AI to everyone in the room. Programs are declarative (a fixed verb set — never fetched JavaScript) and are <b>verified against an append-only chain this repo owns</b>: the tower recomputes every frame hash and refuses bytecode whose bytes do not match its sealed publication. Budgets stop a runaway; the journal is the receipt.
+<br>Origin note: injection works because the frames are same-origin. A cross-origin world cannot be driven, and this tower will say so rather than pretend.
+</p>
+<script>
+const RAW = 'https://raw.githubusercontent.com/kody-w/AINexus/main/';
+const PROGRAMS = ['wanderer', 'greeter', 'pilgrim', 'minded'];
+const tabs = [];
+let room = null;
+
+const $ = id => document.getElementById(id);
+PROGRAMS.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; $('prog').appendChild(o); });
+
+async function sha256(text) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── rapp/1 frame verification, in the browser ──────────────────────────────
+// The bytecode is published on a chain we own (ai/programs/PROGRAMS.chain.jsonl). The tower
+// walks that chain here — every payload_hash and frame_hash recomputed, every prev checked —
+// and then refuses any program whose bytes do not match the newest frame for its name.
+// Trust the chain, not the file. (JCS per RFC 8785 over the I-JSON domain; H = sha256(space + 0x0a + JCS).)
+function canonical(v) {
+  if (v === null || typeof v === 'boolean') return JSON.stringify(v);
+  if (typeof v === 'number') { if (!Number.isInteger(v)) throw new Error('float in frame'); return JSON.stringify(v); }
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
+  if (typeof v === 'object') {
+    const keys = Object.keys(v).sort((a, b) => {
+      const A = new TextEncoder().encode(a), B = new TextEncoder().encode(b);   // UTF-16 order ≈ code-unit order for BMP keys
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}';
+  }
+  throw new Error('non-I-JSON value');
+}
+async function H(space, v) {
+  const bytes = new Uint8Array([...new TextEncoder().encode(space), 0x0a, ...new TextEncoder().encode(canonical(v))]);
+  const h = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function verifyChain(text) {
+  const frames = text.split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+  let prev = null; const latest = {};
+  for (const f of frames) {
+    if (await H('rapp/1:particle', f.payload) !== f.payload_hash) throw new Error(`frame ${f.seq}: payload_hash mismatch`);
+    const pre = {}; for (const k of Object.keys(f)) if (k !== 'frame_hash' && k !== 'sig') pre[k] = f[k];
+    if (await H('rapp/1:wave', pre) !== f.frame_hash) throw new Error(`frame ${f.seq}: frame_hash mismatch`);
+    if (prev === null) { if (f.prev !== null) throw new Error('genesis prev must be null'); }
+    else if (f.prev !== prev.payload_hash) throw new Error(`frame ${f.seq}: broken link`);
+    prev = f;
+    if (f.payload && f.payload.program) latest[f.payload.program] = f.payload;
+  }
+  return { frames: frames.length, latest, head: prev && prev.frame_hash };
+}
+
+// Programs are DATA fetched from committed static files (Article XXIV) — never code.
+// Any verb the driver does not know is refused, so a tampered file cannot execute anything.
+const VERBS = new Set(['look','walk','click','aim','travel','ask','say','press','wait','see','scan','sense','carry','mind']);
+async function fetchEither(rel) {
+  try { const r = await fetch(RAW + rel, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return { text: await r.text(), via: 'raw' }; }
+  catch (e) { const r = await fetch(rel); return { text: await r.text(), via: 'local' }; }
+}
+async function loadProgram(name) {
+  const chainSrc = await fetchEither('ai/programs/PROGRAMS.chain.jsonl');
+  const chain = await verifyChain(chainSrc.text);            // throws if the chain itself is broken
+  const src = await fetchEither('ai/programs/' + name + '.json');
+  const digest = await sha256(src.text);
+  const sealed = chain.latest[name];
+  if (!sealed) throw new Error(`"${name}" is not published on the chain — refusing to run unsealed bytecode`);
+  if (sealed.sha256 !== digest) throw new Error(`"${name}" does not match its sealed hash (chain ${sealed.sha256.slice(0, 12)}… vs file ${digest.slice(0, 12)}…) — refused`);
+  const prog = JSON.parse(src.text);
+  const bad = (prog.steps || []).map(s => s.do).filter(v => !VERBS.has(v));
+  if (bad.length) throw new Error('refused: unknown verbs ' + [...new Set(bad)].join(','));
+  return { prog, digest, via: src.via, bytes: src.text.length, chain: { frames: chain.frames, head: chain.head } };
+}
+
+function tabEl(i, persona) {
+  const el = document.createElement('section'); el.className = 'tab';
+  el.innerHTML = `
+    <h2><span class="who"><span class="badge">AI PLAYER</span> <b>${persona}</b></span><span class="state" id="st${i}">opening…</span></h2>
+    <iframe id="f${i}" title="${persona}"></iframe>
+    <div class="eye" id="eye${i}"><span class="none">no vision yet</span></div>
+    <pre class="con" id="c${i}"></pre>
+    <div class="cli"><input id="cli${i}" placeholder="drive.sense() · drive.say('hi') · drive.travel('Crystal')"><button data-i="${i}" class="run">run</button></div>
+    <div class="meta" id="m${i}">program not loaded</div>`;
+  return el;
+}
+
+function say(i, text, cls) {
+  const c = $('c' + i); if (!c) return;
+  const line = document.createElement('span');
+  line.className = cls || ''; line.textContent = text + '\n';
+  c.appendChild(line); c.scrollTop = c.scrollHeight;
+  const t = tabs[i]; t && t.journal.push({ at: Date.now(), kind: cls === 'e' ? 'error' : 'log', text });
+}
+
+window.addEventListener('message', ev => {
+  // only our own frames, only shapes we know — this handler NEVER evaluates anything
+  const d = ev.data; if (!d || !d.__autodrive) return;
+  const i = tabs.findIndex(t => t && t.frame && t.frame.contentWindow === ev.source);
+  if (i < 0) return;
+  if (d.__autodrive === 'console') say(i, d.text, d.level === 'error' ? 'e' : d.level === 'warn' ? 'w' : '');
+  if (d.__autodrive === 'ready') { $('st' + i).textContent = 'hands ready'; }
+  if (d.__autodrive === 'vision' && d.shot) {
+    const eye = $('eye' + i); const first = eye.querySelector('.none'); first && first.remove();
+    const img = new Image(); img.src = d.shot.uri; img.title = d.shot.at + (d.shot.blank ? ' — BLANK' : '');
+    if (d.shot.blank) { img.style.outline = '2px solid #ff8f8f'; say(i, 'vision came back blank — nothing rendered in that tick', 'w'); }
+    eye.appendChild(img); while (eye.children.length > 6) eye.removeChild(eye.firstChild);
+    tabs[i].journal.push({ at: Date.now(), kind: 'vision', bytes: d.shot.bytes, blank: d.shot.blank });
+  }
+});
+
+function inject(frame) {
+  // same-origin only; a cross-origin frame throws here and we report it honestly
+  const doc = frame.contentDocument;
+  if (!doc) throw new Error('cross-origin frame: cannot drive it');
+  if (doc.querySelector('script[data-autodrive]')) return;
+  const s = doc.createElement('script');
+  s.src = new URL('ai/autodrive.js', location.href).href;
+  s.setAttribute('data-autodrive', '1');
+  doc.body.appendChild(s);
+}
+
+async function boot() {
+  document.querySelectorAll('.tab').forEach(e => e.remove());
+  tabs.length = 0; room = null;
+  const n = Math.max(1, Math.min(6, +$('n').value || 1));
+  const world = $('world').value, progName = $('prog').value, budget = +$('budget').value || 40;
+  let loaded;
+  try { loaded = await loadProgram(progName); }
+  catch (e) { alert('program refused: ' + e.message); return; }
+
+  for (let i = 0; i < n; i++) {
+    const persona = loaded.prog.name + '-' + (i + 1);
+    $('grid').appendChild(tabEl(i, persona));
+    const frame = $('f' + i);
+    tabs.push({ frame, persona, journal: [], turns: 0, budget, program: loaded, stopped: false, tick: +$('tick').value || 0 });
+    $('m' + i).textContent = `program ${progName} · ${loaded.bytes}B · sha256 ${loaded.digest.slice(0, 16)}… · SEALED on a ${loaded.chain.frames}-frame chain (head ${loaded.chain.head.slice(0, 12)}…) · via ${loaded.via} · budget ${budget} turns`;
+    // The first player hosts the room; the rest are invited into it, exactly as people are.
+    // Each frame loads EXACTLY ONCE with its final URL — changing only a fragment on a loaded
+    // iframe fires no load event, and waiting for one that never comes hangs the whole tower.
+    const invite = (i === 0 || !room) ? '#ai=autodrive'
+                                      : '#join=' + room.id + '.' + room.secret + '&ai=autodrive';
+    frame.src = world + '?player=' + (i + 1) + invite;
+    await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('frame never loaded')), 45000);
+      frame.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
+    }).catch(e => say(i, e.message, 'e'));
+    try { inject(frame); } catch (e) { say(i, e.message, 'e'); $('st' + i).textContent = 'cannot drive'; continue; }
+    // the injected script loads asynchronously — calling into hands that do not exist yet
+    // is how a player looks "ready" and never moves
+    const armed = await waitFor(() => frame.contentWindow.__autodrive, 15000);
+    if (!armed) { say(i, 'driver never armed', 'e'); $('st' + i).textContent = 'no hands'; continue; }
+    try { frame.contentWindow.NEXUS_PERSONA = persona; } catch (e) {}
+    if (i === 0) {
+      room = await waitForRoom(frame, i);
+      if (room) {
+        say(i, 'hosting room ' + room.id.slice(0, 8) + '…', 'd');
+        publishRoom(room, world);            // so the ME view in another tab can find it
+      }
+    }
+    await label(frame, i, persona);
+    runProgram(i);
+  }
+}
+
+// The room is announced to this origin's other tabs (same-origin only, never the network)
+// so the ME view can join what is already happening without anyone pasting a link.
+function publishRoom(room, world) {
+  const rec = { id: room.id, secret: room.secret, world, at: Date.now() };
+  try { localStorage.setItem('nexus:room', JSON.stringify(rec)); } catch (e) {}
+  try { new BroadcastChannel('nexus-room').postMessage(rec); } catch (e) {}
+}
+
+function waitFor(test, ms) {
+  return new Promise(res => {
+    const t0 = Date.now();
+    const t = setInterval(() => {
+      let v = null; try { v = test(); } catch (e) {}
+      if (v) { clearInterval(t); res(v); }
+      else if (Date.now() - t0 > ms) { clearInterval(t); res(null); }
+    }, 200);
+  });
+}
+
+function waitForRoom(frame, i) {
+  return new Promise(res => {
+    const t0 = Date.now();
+    const t = setInterval(() => {
+      const mp = frame.contentWindow.worldNavigator && frame.contentWindow.worldNavigator.multiplayer;
+      if (mp && mp.roomId && mp.roomSecret) { clearInterval(t); res({ id: mp.roomId, secret: mp.roomSecret }); }
+      else if (Date.now() - t0 > 30000) { clearInterval(t); say(i, 'no room after 30s — playing alone', 'w'); res(null); }
+    }, 400);
+  });
+}
+
+// Honesty: everyone in the room can see this is an AI. Name, metadata and first words.
+async function label(frame, i, persona) {
+  const w = frame.contentWindow;
+  try {
+    const mp = w.worldNavigator && w.worldNavigator.multiplayer;
+    if (mp) {
+      mp.username = '🤖 ' + persona + ' (AI)';
+      if (mp.peer) mp.peer.__isAI = true;
+    }
+    w.NEXUS_IS_AI = true;
+    const d = w.__autodrive || w.drive;
+    d && d.say('🤖 ' + persona + ' here — I am an AI playing with the same controls you have.');
+    $('st' + i).textContent = 'playing';
+  } catch (e) { say(i, 'could not label: ' + e.message, 'w'); }
+}
+
+async function runProgram(i) {
+  const t = tabs[i]; if (!t) return;
+  const d = t.frame.contentWindow.__autodrive;
+  if (!d) { say(i, 'driver missing', 'e'); return; }
+  const started = Date.now();
+  // a local mind (the brainstem can drive the Copilot CLI on this machine) costs no API call,
+  // so the operator sets the pace: 0 = as fast as the program allows, frame after frame
+  const paced = t.tick ? Object.assign({}, t.program.prog, {
+    steps: t.program.prog.steps.flatMap(s => [s, { do: 'wait', ms: t.tick * 1000 }]) }) : t.program.prog;
+  await d.run(paced, (verb, out) => {
+    t.turns++;
+    t.journal.push({ at: Date.now(), kind: 'step', verb, out: typeof out === 'object' ? '[obj]' : String(out).slice(0, 60) });
+    $('st' + i).textContent = `turn ${t.turns}/${t.budget}`;
+    // budgets: a loop that never ends is a bill that never ends
+    if (t.turns >= t.budget || Date.now() - started > 20 * 60 * 1000) {
+      d.stop(); t.stopped = true;
+      say(i, `budget reached (${t.turns} turns) — stopped on purpose`, 'd');
+      $('st' + i).textContent = 'budget reached';
+    }
+  });
+}
+
+$('me').onclick = () => window.open('spectate.html', '_blank');
+$('start').onclick = boot;
+$('killall').onclick = () => {
+  tabs.forEach((t, i) => { try { t.frame.contentWindow.__autodrive.stop(); } catch (e) {} say(i, 'stopped by the operator', 'd'); $('st' + i).textContent = 'stopped'; });
+};
+$('dump').onclick = () => {
+  const blob = new Blob([JSON.stringify({ schema: 'nexus-autodrive-journal/1', at: new Date().toISOString(),
+    room: room && room.id, players: tabs.map(t => ({ persona: t.persona, turns: t.turns,
+      program: { name: t.program.prog.name, sha256: t.program.digest }, journal: t.journal })) }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'autodrive-receipts.json'; a.click();
+};
+// the CLI is the operator's, and only the operator's: it is never fed by a message handler
+document.addEventListener('click', e => {
+  if (!e.target.classList.contains('run')) return;
+  const i = +e.target.dataset.i, inp = $('cli' + i), cmd = inp.value.trim(); if (!cmd) return;
+  say(i, '> ' + cmd, 'd');
+  try {
+    const r = tabs[i].frame.contentWindow.eval(cmd);
+    Promise.resolve(r).then(v => say(i, typeof v === 'object' ? JSON.stringify(v).slice(0, 800) : String(v)))
+      .catch(err => say(i, String(err), 'e'));
+  } catch (err) { say(i, String(err), 'e'); }
+  inp.value = '';
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.id.startsWith('cli')) return;
+  const i = e.target.id.replace('cli', '');
+  document.querySelector('.run[data-i="' + i + '"]').click();
+});
+</script></body></html>

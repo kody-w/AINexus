@@ -1,0 +1,18 @@
+{
+  "schema": "nexus-autodrive/1",
+  "name": "wanderer",
+  "persona": "A curious visitor who looks before moving, greets whoever is here, and drifts between portals.",
+  "loop": true,
+  "steps": [
+    {"do": "sense"},
+    {"do": "say", "text": "hey — just arrived, having a look around"},
+    {"do": "scan", "steps": 4, "deg": 90},
+    {"do": "walk", "dir": "forward", "ms": 1200},
+    {"do": "sense"},
+    {"do": "wait", "ms": 4000},
+    {"do": "look", "dx": 220},
+    {"do": "walk", "dir": "forward", "ms": 900},
+    {"do": "see"},
+    {"do": "wait", "ms": 6000}
+  ]
+}

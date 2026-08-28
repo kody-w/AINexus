@@ -1,0 +1,18 @@
+{
+  "schema": "nexus-autodrive/1",
+  "name": "minded",
+  "persona": "A player whose moves come from a RAPP brainstem: it looks, thinks, speaks and steps \u2014 one move per turn.",
+  "loop": true,
+  "steps": [
+    {
+      "do": "sense"
+    },
+    {
+      "do": "mind"
+    },
+    {
+      "do": "wait",
+      "ms": 8000
+    }
+  ]
+}

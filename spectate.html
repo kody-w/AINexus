@@ -1,0 +1,153 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ME view — the sky camera</title>
+<meta name="description" content="Watch the nexus from above while the AI players move, then fall out of the sky and become a player yourself.">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:#05050c;color:#e9e9f2;font:14px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+#stage{position:absolute;inset:0}
+iframe{width:100%;height:100%;border:0;display:block;background:#000}
+.hud{position:fixed;left:14px;top:14px;background:rgba(10,10,24,.82);border:1px solid #2b2b52;border-radius:12px;padding:12px 14px;max-width:330px;backdrop-filter:blur(8px)}
+.hud h1{font-size:14px;margin:0 0 4px;letter-spacing:.03em}
+.hud .sub{color:#8f8fb0;font-size:11px;margin:0 0 10px}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+button{background:#1b1b38;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer}
+button:hover{background:#26264d}
+button.drop{background:#2a4a16;border-color:#4b7d27;font-weight:700}
+input{background:#0d0d1c;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:6px 8px;font:12px ui-monospace,Menlo,monospace;width:100%}
+.who{font:11px/1.7 ui-monospace,Menlo,monospace;color:#b9b9d6;max-height:130px;overflow:auto;margin:0}
+.badge{display:inline-block;background:#123a2a;border:1px solid #1f6b48;color:#8ef0bd;border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:.05em}
+.badge.live{background:#3a1220;border-color:#7d2740;color:#ffb3c4}
+.tip{color:#7a7a99;font-size:11px;margin:8px 0 0}
+</style></head><body>
+<div id="stage"><iframe id="f" title="the world"></iframe></div>
+<div class="hud">
+  <h1>👁 ME view <span class="badge" id="mode">sky camera</span></h1>
+  <p class="sub">Floating above the nexus, watching it happen. Nothing here touches the world — until you drop in.</p>
+  <div class="row">
+    <button id="orbit">orbit: on</button>
+    <button id="higher">higher</button>
+    <button id="lower">lower</button>
+    <button class="drop" id="drop">⤓ DROP IN</button>
+  </div>
+  <pre class="who" id="who">looking for a room…</pre>
+  <div class="row" style="margin-top:8px"><input id="link" placeholder="or paste an invite link / #join=room.secret"></div>
+  <p class="tip">Drag to swing the camera. Drop-in falls from the sky and hands you the controls — you become a real player in the same room.</p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const frame = $('f');
+let room = null, spectating = true, orbit = true, height = 70, angle = 0, saved = null, W = null;
+
+// find the room the tower is already hosting (same origin, never the network)
+try { const rec = JSON.parse(localStorage.getItem('nexus:room') || 'null'); if (rec && Date.now() - rec.at < 6 * 3600e3) room = rec; } catch (e) {}
+try { new BroadcastChannel('nexus-room').onmessage = e => { if (!room) { room = e.data; join(); } }; } catch (e) {}
+
+$('link').addEventListener('change', e => {
+  const m = e.target.value.match(/#join=([^.\s]+)\.([A-Za-z0-9_-]+)/);
+  if (!m) { $('who').textContent = 'that link carries no #join=room.secret'; return; }
+  room = { id: m[1], secret: m[2], world: (e.target.value.match(/\/([a-zA-Z0-9._-]+\.html)/) || [, 'index.html'])[1] };
+  join();
+});
+
+function join() {
+  if (!room) { $('who').textContent = 'no room yet — start the tower, or paste an invite link'; return; }
+  $('who').textContent = 'joining ' + room.id.slice(0, 8) + '…';
+  // A spectator joins as a peer so it can SEE the players, and says so plainly.
+  frame.src = (room.world || 'index.html') + '?spectator=1#join=' + room.id + '.' + room.secret;
+  frame.addEventListener('load', () => setTimeout(arm, 1200), { once: true });
+}
+
+function arm() {
+  W = frame.contentWindow.worldNavigator;
+  if (!W || !W.camera) { $('who').textContent = 'the world has no camera to borrow'; return; }
+  try {
+    const mp = frame.contentWindow.worldNavigator.multiplayer;
+    if (mp) mp.username = '👁 spectator (watching)';
+  } catch (e) {}
+  // Take the camera without touching the world: park its own movement, restore it on drop-in.
+  saved = { updateMovement: W.updateMovement, hover: W.updateHover };
+  W.updateMovement = () => {};
+  if (W.updateHover) W.updateHover = () => {};
+  spectating = true; $('mode').textContent = 'sky camera'; $('mode').className = 'badge';
+  requestAnimationFrame(fly);
+  setInterval(census, 1200);
+}
+
+function centroid() {
+  const pts = [];
+  try { W.multiplayer && W.multiplayer.players.forEach(p => { const q = p.avatar && p.avatar.position; if (q) pts.push(q); }); } catch (e) {}
+  if (!pts.length) return { x: 0, z: 0 };
+  return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, z: pts.reduce((a, p) => a + p.z, 0) / pts.length };
+}
+
+function fly() {
+  if (!spectating || !W) return;
+  const c = centroid();
+  if (orbit) angle += 0.0016;
+  const r = 46;
+  W.camera.position.set(c.x + Math.cos(angle) * r, height, c.z + Math.sin(angle) * r);
+  W.camera.lookAt(c.x, 2, c.z);
+  requestAnimationFrame(fly);
+}
+
+function census() {
+  if (!W) return;
+  const lines = [];
+  try {
+    const mp = W.multiplayer;
+    lines.push('room ' + (room ? room.id.slice(0, 8) : '?') + ' · ' + (mp && mp.connections ? mp.connections.size : 0) + ' connected');
+    mp && mp.players.forEach((p, id) => {
+      const q = (p.avatar && p.avatar.position) || {};
+      lines.push('  ' + ((p.username || String(id)).slice(0, 26)).padEnd(28) + ' (' + Math.round(q.x || 0) + ',' + Math.round(q.z || 0) + ')');
+    });
+    const chat = (mp && mp.chatLog) || [];
+    if (chat.length) { lines.push(''); chat.slice(-3).forEach(c => lines.push('  “' + String(c.text).slice(0, 40) + '”')); }
+  } catch (e) { lines.push('(cannot read the room)'); }
+  $('who').textContent = lines.join('\n') || 'nobody down there yet';
+}
+
+// swing the camera by dragging — the watcher still gets to look where they want
+let dragging = false, lastX = 0;
+addEventListener('mousedown', e => { if (e.target.closest('.hud')) return; dragging = true; lastX = e.clientX; });
+addEventListener('mouseup', () => dragging = false);
+addEventListener('mousemove', e => { if (dragging) { angle -= (e.clientX - lastX) * 0.006; lastX = e.clientX; } });
+
+$('orbit').onclick = e => { orbit = !orbit; e.target.textContent = 'orbit: ' + (orbit ? 'on' : 'off'); };
+$('higher').onclick = () => height = Math.min(160, height + 14);
+$('lower').onclick = () => height = Math.max(14, height - 14);
+
+// ⤓ the drop: fall out of the sky, land, and become a player
+$('drop').onclick = async () => {
+  if (!W || !spectating) return;
+  const c = centroid();
+  const ground = (W.camera && W.CURRENT_WORLD && W.CURRENT_WORLD.cameraHeight) || 5;
+  $('mode').textContent = 'falling…'; $('mode').className = 'badge live';
+  const from = { x: W.camera.position.x, y: W.camera.position.y, z: W.camera.position.z };
+  const to = { x: c.x + 6, y: ground, z: c.z + 6 };
+  spectating = false;                       // stop the orbit loop; the fall owns the camera now
+  const t0 = performance.now(), dur = 1700;
+  await new Promise(res => {
+    (function fall(now) {
+      const k = Math.min(1, ((now || performance.now()) - t0) / dur);
+      const e = 1 - Math.pow(1 - k, 3);      // ease out — heavy at the end, like landing
+      W.camera.position.set(from.x + (to.x - from.x) * e, from.y + (to.y - from.y) * e, from.z + (to.z - from.z) * e);
+      W.camera.lookAt(c.x, 2, c.z);
+      if (k < 1) requestAnimationFrame(fall); else res();
+    })();
+  });
+  // hand the controls back: the world moves itself again, and you are in it
+  if (saved) { W.updateMovement = saved.updateMovement; if (saved.hover && W.updateHover) W.updateHover = saved.hover; }
+  try {
+    if (W.rotation) { W.rotation.y = Math.atan2(c.x - to.x, c.z - to.z); }
+    const mp = W.multiplayer;
+    if (mp) { mp.username = 'Kody'; mp.connections && mp.connections.forEach(cn => { try { cn.send({ type: 'chat', message: 'dropping in — hello' }); } catch (e) {} }); }
+  } catch (e) {}
+  $('mode').textContent = 'you are playing'; $('mode').className = 'badge live';
+  $('drop').disabled = true; $('drop').textContent = '⤓ landed';
+  frame.contentWindow.focus();
+};
+
+join();
+</script></body></html>

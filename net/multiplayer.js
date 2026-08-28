@@ -278,13 +278,18 @@
             // Send current world state to new player. worlds/portals are hub-only
             // concepts (the plaza's own portal registry); a plain world page has
             // neither, so this degrades to an empty world state rather than throwing.
+            // Keep this SMALL. Every page already loads the world list itself from committed
+            // static data (Article XXIV), so shipping all ~50 worlds peer-to-peer was both
+            // redundant and over PeerJS's message limit — joiners were greeted with
+            // {"type":"message-too-big"}. Send names and positions; the bytes stay put.
             const worldState = {
                 type: 'worldSync',
                 worldState: {
-                    worlds: this.world.worlds || {},
-                    portals: (this.world.portals || []).map(portal => ({
-                        position: portal.position,
-                        userData: portal.userData
+                    worldCount: Object.keys(this.world.worlds || {}).length,
+                    portals: (this.world.portals || []).slice(0, 24).map(portal => ({
+                        position: portal.parent ? portal.parent.position : portal.position,
+                        name: (portal.userData && portal.userData.name) || '',
+                        url: (portal.userData && portal.userData.url) || ''
                     }))
                 }
             };

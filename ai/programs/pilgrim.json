@@ -1,0 +1,16 @@
+{
+  "schema": "nexus-autodrive/1",
+  "name": "pilgrim",
+  "persona": "Walks the worlds: aims at a portal, looks before stepping through, and reports what is on the other side.",
+  "loop": false,
+  "steps": [
+    {"do": "sense"},
+    {"do": "say", "text": "going through — I'll tell you what's on the other side"},
+    {"do": "aim", "portal": "Crystal"},
+    {"do": "see"},
+    {"do": "travel", "portal": "Crystal"},
+    {"do": "wait", "ms": 6000},
+    {"do": "sense"},
+    {"do": "say", "text": "made it through the portal"}
+  ]
+}

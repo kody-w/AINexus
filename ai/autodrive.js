@@ -1,0 +1,312 @@
+/* autodrive.js — the hands.
+ *
+ * An AI plays as a PERSON: everything below is a real UI event on the real page —
+ * keydown/keyup to walk, mousemove with movementX to look, a click to enter a portal
+ * (the world's own raycaster decides what was clicked), the real chat input to speak.
+ * There is no privileged back door: if a human cannot do it with a mouse and a keyboard,
+ * the driver cannot do it either.
+ *
+ * Injected into an iframe by autodrive.html (same origin), or included directly.
+ * Exposes window.__autodrive. Console output is mirrored to the parent tower.
+ */
+(function () {
+  'use strict';
+  if (window.__autodrive) return;
+
+  const W = () => window.worldNavigator;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const log = (...a) => { try { console.log('[drive]', ...a); } catch (e) {} };
+
+  // ── mirror this frame's console to the tower ──────────────────────────────
+  ['log', 'warn', 'error'].forEach(level => {
+    const orig = console[level].bind(console);
+    console[level] = (...args) => {
+      orig(...args);
+      try {
+        parent.postMessage({ __autodrive: 'console', level,
+          text: args.map(a => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch (e) { return String(a); } }).join(' ') }, '*');
+      } catch (e) {}
+    };
+  });
+  window.addEventListener('error', e => {
+    try { parent.postMessage({ __autodrive: 'console', level: 'error', text: 'uncaught: ' + e.message }, '*'); } catch (_) {}
+  });
+
+  // ── real events ───────────────────────────────────────────────────────────
+  function key(code, down) {
+    const map = { w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD', ' ': 'Space' };
+    const ev = new KeyboardEvent(down ? 'keydown' : 'keyup', {
+      key: code, code: map[code] || code, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev); document.dispatchEvent(ev);
+  }
+
+  function mouse(type, opts) {
+    const ev = new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, view: window,
+      clientX: innerWidth / 2, clientY: innerHeight / 2, button: 0 }, opts || {}));
+    if (opts && opts.movementX !== undefined) {
+      try { Object.defineProperty(ev, 'movementX', { value: opts.movementX }); } catch (e) {}
+      try { Object.defineProperty(ev, 'movementY', { value: opts.movementY || 0 }); } catch (e) {}
+    }
+    document.dispatchEvent(ev);
+    return ev;
+  }
+
+  // ── slosh: what a traveller carries through a portal ─────────────────────
+  // State that rides WITH the person is the point of a portal. State that leaks between
+  // people who merely share a browser is slush. So carrying is explicit, bounded, and
+  // guarded: a small declared payload travels in the fragment; credentials never do, and
+  // one persona never reads another's — every key is namespaced by who is carrying it.
+  const CARRY_MAX = 512;
+  const SECRET_SHAPES = /(sk-[A-Za-z0-9_-]{16})|(gh[pos]_[A-Za-z0-9]{20})|(AKIA[0-9A-Z]{12})|(AccountKey=)|(-----BEGIN)|(Bearer\s+[A-Za-z0-9._-]{16})/i;
+  const me = () => (window.NEXUS_PERSONA || 'anon');
+  const nskey = k => 'nexus:' + me() + ':' + k;
+
+  function sloshGuard(payload) {
+    const text = JSON.stringify(payload || {});
+    if (text.length > CARRY_MAX) throw new Error('carry refused: ' + text.length + 'B over the ' + CARRY_MAX + 'B limit');
+    if (SECRET_SHAPES.test(text)) throw new Error('carry refused: that looks like a credential — secrets never slosh');
+    return text;
+  }
+
+  function readCarry() {
+    const m = (location.hash || '').match(/[#&]carry=([A-Za-z0-9_-]+)/);
+    if (!m) return null;
+    try {
+      const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
+      if (json.length > CARRY_MAX || SECRET_SHAPES.test(json)) { log('arriving carry refused (too big or credential-shaped)'); return null; }
+      return JSON.parse(json);
+    } catch (e) { return null; }
+  }
+  const ARRIVED_WITH = readCarry();
+
+  const api = {
+    // where am I, what can I see — the same things a person reads off the screen
+    snapshot() {
+      const w = W(); if (!w) return { ready: false };
+      const c = w.camera ? w.camera.position : {};
+      const players = [];
+      try { w.multiplayer && w.multiplayer.players && w.multiplayer.players.forEach((p, id) =>
+        players.push({ id: String(id).slice(0, 6), name: (p.username || p.metadata && p.metadata.username) || null })); } catch (e) {}
+      return {
+        ready: true,
+        me: { x: Math.round(c.x || 0), y: Math.round(c.y || 0), z: Math.round(c.z || 0),
+              yaw: +(w.rotation ? w.rotation.y : (w.camera && w.camera.rotation.y) || 0).toFixed(2) },
+        world: document.title,
+        portals: (w.portalIndex || []).map(p => ({ name: p.name, x: Math.round(p.x), z: Math.round(p.z) })),
+        players,
+        room: w.multiplayer ? { id: w.multiplayer.roomId, host: !!w.multiplayer.isHost, peers: w.multiplayer.connections ? w.multiplayer.connections.size : 0 } : null,
+        chat: (w.multiplayer && w.multiplayer.chatLog) || [],
+      };
+    },
+
+    // what I am taking with me through the next portal (bounded, guarded, visible)
+    carry(payload) {
+      const text = sloshGuard(payload);
+      api._carry = JSON.parse(text);
+      try { sessionStorage.setItem(nskey('carry'), text); } catch (e) {}
+      log('carrying', text.length + 'B through the next portal');
+      return api._carry;
+    },
+    // what the traveller arrived holding — set by whoever sent them, never by this page
+    carried() { return ARRIVED_WITH; },
+    // namespaced memory: my notes are mine, not the tab's
+    remember(k, v) { try { sessionStorage.setItem(nskey(k), JSON.stringify(v)); } catch (e) {} return v; },
+    recall(k) { try { return JSON.parse(sessionStorage.getItem(nskey(k))); } catch (e) { return null; } },
+
+    // one perception: what I know AND what I see. This is the turn an AI actually takes —
+    // acting on state alone is how a driver walks into a wall that the map did not mention.
+    sense(opts) {
+      const snap = api.snapshot();
+      snap.vision = api.see(Object.assign({ send: true }, opts || {}));
+      return snap;
+    },
+
+    async look(dx, dy) { mouse('mousemove', { movementX: dx | 0, movementY: dy | 0 }); await sleep(30); return api.snapshot().me; },
+
+    async walk(dir, ms) {
+      const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
+      key(k, true); await sleep(Math.max(50, ms | 0)); key(k, false); await sleep(40);
+      return api.snapshot().me;
+    },
+
+    async click(x, y) {
+      const o = { clientX: x === undefined ? innerWidth / 2 : x, clientY: y === undefined ? innerHeight / 2 : y };
+      mouse('mousedown', o); mouse('mouseup', o); mouse('click', o); await sleep(60); return true;
+    },
+
+    // aim at a named portal by turning, the way a person lines up a doorway
+    async aim(name) {
+      const w = W(); if (!w) return false;
+      const p = (w.portalIndex || []).find(p => p.name.toLowerCase().includes(String(name).toLowerCase()));
+      if (!p) { log('no portal called', name); return false; }
+      for (let i = 0; i < 60; i++) {
+        const c = w.camera.position;
+        const want = Math.atan2(p.x - c.x, p.z - c.z);
+        const have = w.rotation ? w.rotation.y : w.camera.rotation.y;
+        let d = ((want - have + Math.PI) % (2 * Math.PI)) - Math.PI;
+        if (Math.abs(d) < 0.05) return true;
+        await api.look(-Math.sign(d) * Math.min(120, Math.abs(d) * 260), 0);
+      }
+      return false;
+    },
+
+    // walk into it and click — the world's own raycaster decides, exactly as for a person
+    async travel(name) {
+      if (!(await api.aim(name))) return false;
+      // the slosh: hand the destination what this traveller is carrying, before the step
+      if (api._carry) {
+        try {
+          const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(api._carry)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          window.__NEXUS_CARRY_FRAGMENT = '&carry=' + b64;
+        } catch (e) {}
+      }
+      await api.walk('forward', 900);
+      await api.click();
+      log('entered', name, api._carry ? '(carrying ' + Object.keys(api._carry).join(',') + ')' : '');
+      return true;
+    },
+
+    // the in-world AI chat: type in the real input, press Enter on it
+    async ask(text) {
+      const el = document.getElementById('ai-chat-input');
+      if (!el) { log('no ai chat on this page'); return false; }
+      const box = document.getElementById('ai-chat-interface');
+      if (box && getComputedStyle(box).display === 'none') { const b = document.querySelector('[onclick*="aiManager"],.ai-chat-toggle'); b && b.click(); await sleep(200); }
+      el.focus(); el.value = String(text);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', bubbles: true, cancelable: true }));
+      await sleep(120);
+      return true;
+    },
+
+    // speak to the other people in the room
+    async say(text) {
+      const w = W(); const mp = w && w.multiplayer; if (!mp) { log('not in a room'); return false; }
+      let sent = 0;
+      mp.connections && mp.connections.forEach(c => { try { c.send({ type: 'chat', message: String(text) }); sent++; } catch (e) {} });
+      try { mp.displayChat(mp.peer && mp.peer.id || 'me', String(text)); } catch (e) {}
+      log('said to', sent, 'peer(s):', text);
+      return sent;
+    },
+
+    // ── vision: what this player actually sees on screen ────────────────────
+    // A WebGL canvas is usually created without preserveDrawingBuffer, so its pixels are
+    // gone by the time you ask. The fix is to render once and read in the SAME tick —
+    // that is what a screenshot of this player's eyes is.
+    see(opts) {
+      const o = Object.assign({ width: 512, format: 'image/webp', quality: 0.8, send: false }, opts || {});
+      const w = W();
+      const cvs = (w && w.renderer && w.renderer.domElement) || document.querySelector('canvas');
+      if (!cvs) { log('nothing to see: no canvas'); return null; }
+      try { w && w.renderer && w.scene && w.camera && w.renderer.render(w.scene, w.camera); } catch (e) {}
+      let uri;
+      try {
+        if (o.width && cvs.width > o.width) {
+          const h = Math.round(cvs.height * (o.width / cvs.width));
+          const off = document.createElement('canvas'); off.width = o.width; off.height = h;
+          off.getContext('2d').drawImage(cvs, 0, 0, o.width, h);
+          uri = off.toDataURL(o.format, o.quality);
+        } else {
+          uri = cvs.toDataURL(o.format, o.quality);
+        }
+      } catch (e) { log('vision failed:', e.message); return null; }
+      const blank = uri.length < 900;                    // an all-black frame compresses to nothing
+      const shot = { uri, bytes: uri.length, w: o.width, blank, at: new Date().toISOString(), world: document.title };
+      if (o.send !== false) { try { parent.postMessage({ __autodrive: 'vision', shot }, '*'); } catch (e) {} }
+      log('saw', Math.round(uri.length / 1024) + 'KB' + (blank ? ' (looks blank — is anything rendered?)' : ''));
+      return shot;
+    },
+
+    // look around and bring back several frames — a turn of the head, not one glance
+    async scan(steps, degPerStep) {
+      const n = Math.max(1, steps | 0 || 4), d = degPerStep || 90;
+      const shots = [];
+      for (let i = 0; i < n; i++) { shots.push(api.see({ send: true })); await api.look(d * 2.2, 0); await sleep(120); }
+      return shots.map(s => s && s.bytes);
+    },
+
+    // ── the mind: percepts in, one move out ─────────────────────────────────
+    // The player's mind is a RAPP brainstem. Perception (state + a picture) goes in; the
+    // reply comes back on two channels — words for the room, and the NEXUS sense's JSON
+    // block for the hands (ai/senses/nexus_sense.py). Words are said, the move is made.
+    // Without a grant it does nothing and says so: a mindless player is honest, not fake.
+    async mind(opts) {
+      const o = Object.assign({ url: 'http://localhost:7071/chat', vision: true, act: true }, opts || {});
+      const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
+      if (!secret) { log('no mind granted (no brainstem secret) — running on the program alone'); return null; }
+      const percepts = o.vision ? api.sense({ width: 384, send: true }) : api.snapshot();
+      const shot = percepts.vision;
+      const prompt = 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + ', an AI playing in a 3D world with the same '
+        + 'controls a person has. Speak one short line a person would say, then emit your NEXUS block.\n'
+        + 'PERCEPTS: ' + JSON.stringify({ me: percepts.me, world: percepts.world, portals: percepts.portals,
+            players: percepts.players, room: percepts.room, chat: (percepts.chat || []).slice(-4),
+            carrying: api._carry || null, arrived_with: api.carried(),
+            picture: shot ? (shot.blank ? 'BLANK — you cannot see right now' : shot.bytes + ' bytes, ' + shot.w + 'px wide') : 'none' });
+      let reply = '';
+      try {
+        const r = await fetch(o.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Brainstem-Secret': secret },
+          body: JSON.stringify({ user_input: prompt, user_guid: 'nexus-' + (window.NEXUS_PERSONA || 'player'), senses: ['nexus'] }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        reply = j.response || '';
+        // the sense may arrive parsed by the brainstem, or inline in the reply
+        var block = j.nexus_response || (reply.split('|||NEXUS|||')[1] || '');
+      } catch (e) { log('mind unreachable:', e.message); return null; }
+      const words = reply.split('|||NEXUS|||')[0].trim();
+      if (words) await api.say(words.slice(0, 240));
+      let move = null;
+      try { const m = String(block).match(/\{[\s\S]*\}/); if (m) move = JSON.parse(m[0]); } catch (e) {}
+      if (!move || !move.do) { log('mind spoke but named no move'); return { words, move: null }; }
+      if (!['look','walk','click','aim','travel','say','ask','press','wait','see','scan','sense','carry'].includes(move.do)) {
+        log('refused a move the hands do not have:', move.do); return { words, move: null };
+      }
+      if (o.act) await api.run({ steps: [move] });
+      return { words, move };
+    },
+
+    async press(selector) { const el = document.querySelector(selector); if (!el) return false; el.click(); await sleep(80); return true; },
+    async wait(ms) { await sleep(ms | 0); return true; },
+
+    // run a program: a list of steps, each a verb above
+    async run(program, onStep) {
+      const steps = (program && program.steps) || [];
+      api.stop();
+      api._running = true;
+      do {
+        for (const s of steps) {
+          if (!api._running) return 'stopped';
+          const verb = s.do;
+          try {
+            const out = verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
+              : verb === 'walk' ? await api.walk(s.dir || 'forward', s.ms || 600)
+              : verb === 'click' ? await api.click(s.x, s.y)
+              : verb === 'aim' ? await api.aim(s.portal)
+              : verb === 'travel' ? await api.travel(s.portal)
+              : verb === 'ask' ? await api.ask(s.text)
+              : verb === 'say' ? await api.say(s.text)
+              : verb === 'press' ? await api.press(s.selector)
+              : verb === 'wait' ? await api.wait(s.ms || 1000)
+              : verb === 'see' ? api.see(s)
+              : verb === 'sense' ? api.sense(s)
+              : verb === 'carry' ? api.carry(s.payload || {})
+              : verb === 'mind' ? await api.mind(s)
+              : verb === 'scan' ? await api.scan(s.steps, s.deg)
+              : (log('unknown step', verb), null);
+            onStep && onStep(verb, out);
+          } catch (e) { log('step failed', verb, e.message); }
+        }
+      } while (api._running && program && program.loop);
+      api._running = false;
+      return 'done';
+    },
+
+    stop() { api._running = false; return true; },
+    _running: false,
+  };
+
+  window.__autodrive = api;
+  // the console IS the CLI: `drive.say("hi")`, `drive.travel("Crystal")`, `drive.snapshot()`
+  window.drive = api;
+  log('hands ready — window.drive' + (ARRIVED_WITH ? ' · arrived carrying ' + Object.keys(ARRIVED_WITH).join(',') : ''));
+  try { parent.postMessage({ __autodrive: 'ready', title: document.title }, '*'); } catch (e) {}
+})();

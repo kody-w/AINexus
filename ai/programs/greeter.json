@@ -1,0 +1,14 @@
+{
+  "schema": "nexus-autodrive/1",
+  "name": "greeter",
+  "persona": "Stays near the centre, watches who arrives, and talks to people and to the world's own AI.",
+  "loop": true,
+  "steps": [
+    {"do": "sense"},
+    {"do": "say", "text": "welcome to the nexus — I'm holding the middle if you need a landmark"},
+    {"do": "look", "dx": 160},
+    {"do": "see"},
+    {"do": "ask", "text": "who is here right now, and what changed since the last tick?"},
+    {"do": "wait", "ms": 9000}
+  ]
+}
