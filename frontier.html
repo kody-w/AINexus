@@ -7,7 +7,15 @@ body{margin:0;background:#05050c;color:#e9e9f2;font:14px/1.5 -apple-system,syste
 iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
 #cursor{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;z-index:9;
   background:radial-gradient(circle,rgba(255,255,255,.9) 0 30%,rgba(125,227,255,.35) 55%,transparent 70%);transition:width .12s,height .12s;opacity:0}
-#cursor.on{opacity:1}#cursor.over{background:radial-gradient(circle,rgba(125,255,190,.95) 0 32%,rgba(125,255,190,.3) 58%,transparent 72%)}
+#cursor.on{opacity:1}
+#dwell{position:absolute;inset:-9px;width:52px;height:52px;pointer-events:none}
+#dwell circle{fill:none;stroke:#7dffb0;stroke-width:5;stroke-dasharray:126;stroke-dashoffset:126;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .08s linear}
+#cursor.dwelling{width:52px;height:52px;margin:-26px 0 0 -26px}
+#orbs{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:8}
+#orbs circle{fill:none;stroke:rgba(125,227,255,.32);stroke-width:2}
+#orbs circle.hot{stroke:#7dffb0;stroke-width:3.5}
+#orbs text{fill:rgba(233,233,242,.85);font:11px ui-monospace,Menlo,monospace;text-anchor:middle}
+#orbs text.hot{fill:#7dffb0;font-weight:700}#cursor.over{background:radial-gradient(circle,rgba(125,255,190,.95) 0 32%,rgba(125,255,190,.3) 58%,transparent 72%)}
 #cursor.pinch{width:64px;height:64px;margin:-32px 0 0 -32px;background:radial-gradient(circle,#fff 0 40%,rgba(255,0,230,.4) 62%,transparent 74%)}
 .hud{position:fixed;left:14px;top:14px;z-index:10;background:rgba(10,10,24,.84);border:1px solid #2b2b52;border-radius:12px;padding:12px 14px;max-width:330px;backdrop-filter:blur(8px)}
 h1{font-size:14px;margin:0 0 3px}.sub{color:#8f8fb0;font-size:11px;margin:0 0 10px}
@@ -20,7 +28,8 @@ button.on{background:#12442c;border-color:#1d6b45}
 .badge{display:inline-block;border-radius:999px;padding:1px 8px;font-size:10px;background:#2a1140;border:1px solid #6b3fa0;color:#d9b8ff}
 </style></head><body>
 <iframe id="f" title="the world" allow="camera"></iframe>
-<div id="cursor"></div>
+<svg id="orbs" aria-hidden="true"></svg>
+<div id="cursor"><svg id="dwell" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20"/></svg></div>
 <video id="cam" autoplay playsinline muted></video>
 <div class="hud">
   <h1>🖐 Frontier <span class="badge" id="mode">out there mode</span></h1>
@@ -32,7 +41,8 @@ button.on{background:#12442c;border-color:#1d6b45}
   </div>
   <p class="k">
     <b>point</b> — move the cursor (your hand is the mouse)<br>
-    <b>pinch</b> — press whatever the cursor is over: a portal, a button, a field<br>
+    <b>rest on an orb</b> — the ring fills in 2½s and snaps (hands-free)<br>
+    <b>pinch</b> — select it now, without waiting<br>
     <b>open palm</b> — walk forward; lean it to turn as you go<br>
     <b>speak</b> — “go to Crystal Caverns”, “turn left”, “ask, what is this place”, or just talk to the room
   </p>
@@ -93,17 +103,17 @@ $('hands').onclick = async () => {
       // tell the person what they are about to press, before they press it
       if (drive && performance.now() - lastHover > 140) {
         lastHover = performance.now();
-        try {
-          const what = drive.hover(sx, sy);
-          cursor.classList.toggle('over', what.kind === 'portal' || what.kind === 'control');
-          $('target').textContent = what.kind === 'portal' ? '⭕ ' + what.label
-            : what.kind === 'control' ? '🔘 ' + what.label : '';
-        } catch (e) {}
+        deskMode = false;
+        trackHover(sx, sy);
+        cursor.classList.toggle('over', !!hot);
       }
       const cur = { ...p, x: 1 - p.x, px: sx, py: sy };
       const was = prev && { ...prev, x: 1 - prev.x, px: (1 - prev.x) * innerWidth, py: prev.y * innerHeight };
       const act = NexusGestures.toAction(cur, was);
-      if (act && drive && performance.now() - lastAct > 90) { lastAct = performance.now(); apply(act); }
+      if (act && drive && performance.now() - lastAct > 90) {
+        lastAct = performance.now();
+        if (act.do === 'pick') { fire(sx, sy); } else { apply(act); }
+      }
     } else { cursor.classList.remove('on'); $('target').textContent = ''; }
     prev = p;
     requestAnimationFrame(loop);
@@ -134,6 +144,100 @@ $('stop').onclick = () => {
   const v = $('cam'); if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; v.style.display = 'none'; }
   note('stopped — camera released');
 };
+
+// ── orbs, sticky hover and dwell ─────────────────────────────────────────
+// The VUI's rule: rest on an orb and it fills, then snaps. Pinching fires at once. A mouse
+// never dwells — a click is already a decision. Hover is STICKY for 450ms so a jittery hand
+// (or a jittery hand model) does not drop the target you are clearly aiming at.
+const DWELL_MS = 2500, STICKY_MS = 450;
+let hot = null, hotSince = 0, lastSeenHot = 0, dwellFired = false, cursorAt = { x: -1, y: -1 }, deskMode = false;
+
+function paintOrbs() {
+  if (!drive) return requestAnimationFrame(paintOrbs);
+  let list = [];
+  try { list = drive.orbs(); } catch (e) {}
+  const svg = $('orbs');
+  svg.innerHTML = list.map(o => {
+    const on = hot && hot.name === o.name;
+    return `<circle cx="${o.x}" cy="${o.y}" r="${o.radius}" class="${on ? 'hot' : ''}"/>` +
+           `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${o.name}</text>`;
+  }).join('');
+  requestAnimationFrame(paintOrbs);
+}
+
+function trackHover(x, y) {
+  cursorAt = { x, y };
+  let what = null;
+  try { what = drive && drive.hover(x, y); } catch (e) {}
+  const isOrb = what && (what.kind === 'portal' || what.kind === 'control');
+  if (isOrb) {
+    lastSeenHot = performance.now();
+    if (!hot || hot.label !== what.label) { hot = what; hotSince = performance.now(); dwellFired = false; }
+  } else if (hot && performance.now() - lastSeenHot > STICKY_MS) {
+    hot = null; dwellFired = false;
+  }
+  $('target').textContent = hot ? (hot.kind === 'portal' ? '⭕ ' + hot.label : '🔘 ' + hot.label) : '';
+}
+
+setInterval(() => {                       // the dwell ring: hold to select, hands-free
+  const ring = document.querySelector('#dwell circle');
+  if (!ring) return;
+  if (deskMode || !hot || dwellFired || !running) { ring.style.strokeDashoffset = 126; cursor.classList.remove('dwelling'); return; }
+  cursor.classList.add('dwelling');
+  const t = (performance.now() - hotSince) / DWELL_MS;
+  ring.style.strokeDashoffset = Math.max(0, 126 * (1 - t));
+  if (t >= 1) { dwellFired = true; ring.style.strokeDashoffset = 126; note('dwell → ' + hot.label); fire(cursorAt.x, cursorAt.y); }
+}, 60);
+
+function fire(x, y) {
+  if (!drive) return;
+  dwellFired = true;
+  let what = null;
+  try { what = drive.hover(x, y); } catch (e) {}
+  if (what && what.kind === 'portal' && what.url) {
+    // Selecting an orb is a decision to GO there, and this page is the thing holding the
+    // world — so it navigates, exactly as following a link does. (A synthetic click on the
+    // world's own crosshair handler enters reliably when the page is top-level, but not from
+    // inside a frame; the container doing the navigation is honest and works either way.)
+    note('→ ' + what.label);
+    const room = (location.hash && location.hash.includes('#join=')) ? location.hash : (() => {
+      try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
+        return r && Date.now() - r.at < 6 * 3600e3 ? '#join=' + r.id + '.' + r.secret : ''; } catch (e) { return ''; } })();
+    frame.src = what.url + (what.url.includes('?') ? '&' : '?') + 'from=frontier' + room;
+    hot = null; drive = null;
+    return;
+  }
+  drive.pick(x, y).then(r => note('selected ' + (r && r.label ? r.label : 'nothing'))).catch(e => note('select failed: ' + e.message));
+}
+
+// Desk mode: the mouse is a cursor too, and a click is a decision — no dwell.
+// The pointer spends most of its life OVER THE IFRAME, and events inside a frame never
+// bubble out to the parent — so the same listeners are attached on both documents, or
+// hovering an orb would work everywhere except where the orbs actually are.
+function deskListeners(doc, offset) {
+  if (!doc || doc.__nexusDesk) return; doc.__nexusDesk = true;
+  doc.addEventListener('mousemove', e => {
+    if (running) return;                                   // hands win when hands are live
+    deskMode = true; cursor.classList.add('on');
+    const x = e.clientX + (offset ? offset.x : 0), y = e.clientY + (offset ? offset.y : 0);
+    cursor.style.left = x + 'px'; cursor.style.top = y + 'px';
+    trackHover(x, y);
+  }, true);
+  doc.addEventListener('click', e => {
+    if (!deskMode || !hot) return;
+    if (e.target && e.target.closest && e.target.closest('.hud')) return;
+    const x = e.clientX + (offset ? offset.x : 0), y = e.clientY + (offset ? offset.y : 0);
+    // stop the world's own crosshair click from firing as well — the orb decides
+    e.preventDefault(); e.stopPropagation();
+    fire(x, y);
+  }, true);
+}
+deskListeners(document, null);
+frame.addEventListener('load', () => {
+  try { const r = frame.getBoundingClientRect(); deskListeners(frame.contentDocument, { x: r.left, y: r.top }); }
+  catch (e) { note('desk mode limited: ' + e.message); }
+});
+requestAnimationFrame(paintOrbs);
 
 // one action -> the driver's own verbs; the human and the AI share this exact surface
 function apply(act) {

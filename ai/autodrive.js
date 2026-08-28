@@ -398,6 +398,32 @@
       return true;
     },
 
+    // ── the orbs: every selectable thing, where it is on screen ─────────────
+    // The VUI's model is a ring of option orbs you select by resting on them. This world
+    // already IS that ring — the portals are the orbs. Both a person's cursor and an AI's
+    // attention read the same list, so "look at an orb and select it" means one thing here.
+    orbs() {
+      const w = W(); if (!w || !w.portals || !window.THREE) return [];
+      const cvs = (w.renderer && w.renderer.domElement) || document.querySelector('canvas');
+      const r = (cvs || document.body).getBoundingClientRect();
+      const out = [];
+      for (const pt of w.portals) {
+        let n = pt; while (n && !(n.userData && n.userData.url) && n.parent) n = n.parent;
+        const ud = (n && n.userData) || {}; if (!ud.url) continue;
+        const o = pt.parent || pt;
+        const v = new window.THREE.Vector3(); o.getWorldPosition(v);
+        const world = v.clone();
+        v.project(w.camera);
+        if (v.z > 1) continue;                                  // behind the camera
+        const x = r.left + (v.x * 0.5 + 0.5) * r.width, y = r.top + (-v.y * 0.5 + 0.5) * r.height;
+        if (x < r.left - 80 || x > r.right + 80 || y < r.top - 80 || y > r.bottom + 80) continue;
+        const dist = w.camera.position.distanceTo(world);
+        out.push({ name: ud.name || 'portal', url: ud.url, x: Math.round(x), y: Math.round(y),
+                   radius: Math.max(26, Math.round(2600 / Math.max(6, dist))), distance: Math.round(dist) });
+      }
+      return out.sort((a, b) => a.distance - b.distance);
+    },
+
     // ── the pointer: what is under that point, and pressing it ──────────────
     // A hand in the VUI is a CURSOR, not a gamepad: the fingertip designates and the pinch
     // presses whatever it is over. Two kinds of thing can be under it, so there are two
@@ -413,6 +439,17 @@
         const c = el.closest('button, a, input, [onclick], [role=button]');
         return { kind: 'control', label: (c.textContent || c.value || c.id || 'control').trim().slice(0, 40), el: c };
       }
+      // An orb is selectable if the pointer is inside its circle — the forgiving target a
+      // person expects from a button. Circles OVERLAP, though, so "the first one that
+      // contains the point" hands every click to whichever orb happens to be nearest the
+      // camera. Score by how centred the pointer is within each orb instead: the one you
+      // are most obviously pointing at wins.
+      let best = null, bestScore = Infinity;
+      for (const orb of api.orbs()) {
+        const score = Math.hypot(px - orb.x, py - orb.y) / orb.radius;
+        if (score <= 1 && score < bestScore) { bestScore = score; best = orb; }
+      }
+      if (best) return { kind: 'portal', label: best.name, name: best.name, url: best.url, distance: best.distance, orb: best, centred: +bestScore.toFixed(2) };
       const w = W();
       if (!w || !w.raycaster || !w.portals || !window.THREE) return { kind: 'nothing' };
       const r = (cvs || document.body).getBoundingClientRect();
@@ -432,11 +469,12 @@
       const what = api.hover(px, py);
       if (what.kind === 'control') { what.el.click(); log('pressed', what.label); return what; }
       if (what.kind === 'portal') {
-        log('picked portal', what.label, '— turning to it');
-        const ok = await api.aim(what.name);
-        if (!ok) { log('could not line up on', what.label); return { kind: 'portal', label: what.label, aimed: false }; }
-        await api.click();                       // the world's own crosshair test now hits it
-        return { kind: 'portal', label: what.label, aimed: true };
+        // Selecting an orb means GOING to it: turn, walk up, then click — the same sequence
+        // travel() uses and the same thing a person does at a doorway. (Aiming and clicking
+        // from across the plaza does not open it; the approach is part of the gesture.)
+        log('picked portal', what.label, '— walking to it');
+        const entered = await api.travel(what.name);
+        return { kind: 'portal', label: what.label, entered };
       }
       await api.click(px, py);                   // an honest click on empty world
       return what;
@@ -472,6 +510,7 @@
               : verb === 'cut' ? api.cut()
               : verb === 'pick' ? await api.pick(s.x, s.y)
               : verb === 'hover' ? api.hover(s.x, s.y)
+              : verb === 'orbs' ? api.orbs()
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
