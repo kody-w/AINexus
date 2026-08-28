@@ -359,6 +359,9 @@
     <div class="controls-hint">Use WASD to move, Mouse to look around, Click on galaxy images to see their data</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="net/multiplayer.js"></script>
+    <script src="ai/ai_player.js"></script>
     <script>
         // Sample Galaxy Zoo data with real SDSS image URLs
         const SAMPLE_GALAXIES = [
@@ -436,6 +439,13 @@
                 this.setupEventListeners();
 
                 document.getElementById('loading').style.display = 'none';
+
+                // Expose this world instance for the multiplayer/AI drop-ins.
+                window.worldNavigator = this;
+                if (window.nexusJoin && window.location.hash.includes('#join=')) {
+                    window.nexusJoin(window.worldNavigator);
+                }
+
                 this.animate();
             }
 

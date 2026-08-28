@@ -519,6 +519,9 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="net/multiplayer.js"></script>
+    <script src="ai/ai_player.js"></script>
     <script>
         // Configuration
         const REPO_OWNER = 'kody-w';
@@ -2243,6 +2246,12 @@
                     if (instruction) {
                         instruction.textContent = 'Tap to enter world';
                     }
+                }
+
+                // Expose this world instance for the multiplayer/AI drop-ins.
+                window.worldNavigator = this;
+                if (window.nexusJoin && window.location.hash.includes('#join=')) {
+                    window.nexusJoin(window.worldNavigator);
                 }
 
                 this.animate();
