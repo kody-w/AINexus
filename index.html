@@ -4578,7 +4578,7 @@
                 this.speed = 4.5;
                 this.thought = '';
                 this.mindUrl = localStorage.getItem('nexus-mind-url') || 'http://localhost:7071/chat';
-                this.secret = localStorage.getItem('brainstem-secret') || '';
+                this.secret = sessionStorage.getItem('brainstem-secret') || ''; // tab-scoped: every kody-w.github.io page shares ONE origin, so localStorage would expose the brainstem grant to all of them
                 this.mindOk = null;
                 this.tickMs = 6000;
                 this.history = [];
@@ -4593,11 +4593,11 @@
                 el.innerHTML = '<div><b style="color:#ff2fd0">🤖 AI player</b> <span id="ai-status">booting…</span></div>' +
                     '<div id="ai-agents" style="color:#8ff"></div>' +
                     '<div id="ai-thought" style="color:#ccc;white-space:pre-wrap"></div>' +
-                    '<div id="ai-secret-row" style="display:none;margin-top:6px"><input id="ai-secret-in" type="password" placeholder="brainstem secret" style="width:170px"> <button id="ai-secret-go">grant mind</button></div>';
+                    '<div id="ai-secret-row" style="display:none;margin-top:6px"><input id="ai-secret-in" type="password" placeholder="brainstem secret (this tab only)" style="width:170px"> <button id="ai-secret-go">grant mind</button></div>';
                 document.body.appendChild(el);
                 el.querySelector('#ai-secret-go')?.addEventListener('click', () => {
                     this.secret = el.querySelector('#ai-secret-in').value.trim();
-                    localStorage.setItem('brainstem-secret', this.secret);
+                    sessionStorage.setItem('brainstem-secret', this.secret); // dies with this tab by design
                     document.getElementById('ai-secret-row').style.display = 'none';
                     this.mindOk = null;
                 });
