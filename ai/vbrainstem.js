@@ -53,6 +53,33 @@
     ['wait',   'Do nothing for a moment.', { ms: ['number', 'milliseconds'] }, []],
   ];
 
+  // Call the verb ITSELF and keep what it returns. Going through run() threw the answer away:
+  // run() reports 'done' whether a step worked or not, so tell()-ing a peer who left, or aiming
+  // at a portal that does not exist, both came back as success. A mind told 'ok' about something
+  // that did not happen will spend the rest of the turn reasoning from it.
+  const CALL = {
+    look:     (d, a) => d.look(a.dx | 0, a.dy | 0),
+    walk:     (d, a) => d.walk(String(a.dir || 'forward'), Math.max(80, Math.min(3000, a.ms || 600))),
+    aim:      (d, a) => d.aim(a.portal),
+    travel:   (d, a) => d.travel(a.portal),
+    say:      (d, a) => d.say(a.text),
+    tell:     (d, a) => d.tell(a.to, a.text),
+    see:      (d) => d.see({}),
+    scan:     (d, a) => d.scan(a.steps, a.deg),
+    people:   (d) => d.people(),
+    orbs:     (d) => d.orbs().map(o => ({ name: o.name, distance: o.distance })),
+    dialogue: (d, a) => d.dialogue(a.to),
+    wait:     (d, a) => d.wait(Math.max(50, Math.min(4000, a.ms || 800))),
+  };
+
+  // what the model is told came back — an honest sentence, never a cheerful constant
+  function describe(verb, value) {
+    if (value === false || value === null || value === undefined) return 'failed: ' + verb + ' did not happen';
+    if (value === true) return 'ok';
+    if (typeof value === 'object') { try { return JSON.stringify(value).slice(0, 1200); } catch (e) { return 'ok'; } }
+    return String(value).slice(0, 400);
+  }
+
   function verbToolDefs() {
     return VERBS.map(([name, description, props, required]) => {
       const properties = {};
@@ -122,6 +149,7 @@
       } catch (e) {
         say('python unavailable: ' + e.message + ' — running on verbs alone');
         pyodide = null;
+        loading = null;              // a bad moment is not a life sentence: let it be retried
         return null;
       }
     })();
@@ -139,10 +167,18 @@
   async function callAgent(name, args) {
     const info = pyAgents[name];
     if (!info) return null;
-    pyodide.globals.set('_vb_args', pyodide.toPy(args || {}));
-    pyodide.globals.set('_vb_target', info.instance);
-    const out = await pyodide.runPythonAsync('str(_vb_target.perform(**dict(_vb_args)))');
-    return String(out);
+    // Every toPy() hands back a proxy that owns memory on the Python side; dropping the
+    // reference does not free it. Over a long session of tool calls that is a slow leak.
+    const proxy = pyodide.toPy(args || {});
+    try {
+      pyodide.globals.set('_vb_args', proxy);
+      pyodide.globals.set('_vb_target', info.instance);
+      const out = await pyodide.runPythonAsync('str(_vb_target.perform(**dict(_vb_args)))');
+      return String(out);
+    } finally {
+      try { proxy.destroy(); } catch (e) {}
+      try { pyodide.globals.delete('_vb_args'); pyodide.globals.delete('_vb_target'); } catch (e) {}
+    }
   }
 
   // ── one turn of thought ──────────────────────────────────────────────────
@@ -168,15 +204,18 @@
     const messages = [{ role: 'system', content: system },
                       { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
     const calls = [];
+    // A MODEL USUALLY NARRATES AND ACTS IN THE SAME BREATH. Reading the spoken line only from a
+    // round with no tool calls throws away everything said on every acting round — and a player
+    // that acts on every round then never speaks at all.
+    let lastWords = '';
 
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
       const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: 500 });
       messages.push(msg);
+      const said = String((msg && msg.content) || '').trim();
+      if (said) lastWords = said;
       const tcs = msg && msg.tool_calls;
-      if (!tcs || !tcs.length) {
-        const words = String((msg && msg.content) || '').trim();
-        return { words, calls, rounds: round + 1 };
-      }
+      if (!tcs || !tcs.length) return { words: lastWords, calls, rounds: round + 1 };
       for (const tc of tcs) {
         const fname = tc.function && tc.function.name;
         let args = {};
@@ -185,13 +224,11 @@
         try {
           if (fname && fname.indexOf('world_') === 0) {
             const verb = fname.slice(6);
-            result = await drive.run({ steps: [Object.assign({ do: verb }, args)] }, null);
-            // the step's own return is more useful to a mind than "done"
-            if (verb === 'people') result = JSON.stringify(drive.people());
-            else if (verb === 'orbs') result = JSON.stringify(drive.orbs().map(x => ({ name: x.name, distance: x.distance })));
-            else if (verb === 'dialogue') result = JSON.stringify(drive.dialogue(args.to));
-            else if (verb === 'see' || verb === 'scan') { const s = drive.snapshot(); result = JSON.stringify({ me: s.me, portals: s.portals, players: s.players }); }
-            else result = 'ok';
+            // A NAME THE HANDS DO NOT HAVE IS NOT AN ACTION. Dispatching an unrecognised verb
+            // used to reach a silent no-op and still be reported as success, so a model could
+            // invent world_jump and be told it jumped.
+            if (!CALL[verb]) result = 'no such verb: ' + verb + ' — the hands cannot do that';
+            else result = describe(verb, await CALL[verb](drive, args));
           } else {
             const r = await callAgent(fname, args);
             result = r === null ? ('no such tool: ' + fname) : r;
@@ -202,7 +239,7 @@
         messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result).slice(0, 2000) });
       }
     }
-    return { words: '', calls, rounds: o.rounds || MAX_ROUNDS, note: 'ran out of rounds still acting' };
+    return { words: lastWords, calls, rounds: o.rounds || MAX_ROUNDS, note: 'ran out of rounds still acting' };
   }
 
   // ── things to say, in character ──────────────────────────────────────────
@@ -265,7 +302,113 @@
     return out;
   }
 
-  root.NexusBrainstem = { turn, lines, initPyodide, verbToolDefs, agentToolDefs, callAgent,
+  // ── the tick ─────────────────────────────────────────────────────────────
+  // A turn is one thought. THIS is the thing that makes a player a player: perceive, think,
+  // act, wait, again — the rapplication loop, running in the world rather than beside it.
+  //
+  // Nobody drives it from outside. Earlier an AI player only moved because a test harness
+  // stepped it, which meant the player was a puppet and the harness was the intelligence. With
+  // a mind in the page that inverts: the loop lives here, ticks on its own clock, and the only
+  // thing anyone outside does is start it, watch it, and stop it.
+  //
+  // Every tick is journalled — what it said, what it called, what came back — because a player
+  // you cannot audit is a player you cannot trust, and because the journal IS the evidence that
+  // it played rather than idled.
+  function live(opts) {
+    const o = Object.assign({ everyMs: 6000, maxTicks: 0, vision: true }, opts || {});
+    // A SESSION IS A LINE, NOT A LOG. Every tick is a rapp/1 frame carrying what the player
+    // asserts it did and what that tick required to be true — the openrappter qqdrill shape.
+    // That buys three things a log cannot: the line can be verified by anyone with the spec, two
+    // runs of the same player can be matched tick for tick (one match is coincidence, six are
+    // evidence), and a later frame that contradicts something an earlier tick REQUIRED can be
+    // refused rather than quietly absorbed.
+    //
+    // The identity is minted once, from randomness. Never from the persona's name — a name-hash
+    // would make two players called "greeter" the same being, which is the one mistake this
+    // estate does not make twice.
+    const streamId = o.streamId || ('rappid:@kody-w/ainexus/player:' +
+      (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)));
+    const state = { ticks: 0, acts: 0, words: 0, running: true, done: false, journal: [],
+                    stopped: null, streamId, chain: [], prev: null };
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // what this tick claims, and what it leaned on
+    async function seal(entry, percepts) {
+      const F = root.NexusFrames;
+      if (!F) return null;
+      const named = (entry.calls || []).map(c => c.name).filter(Boolean);
+      const asserts = {
+        tick: entry.tick,
+        at: (percepts && percepts.me) || {},
+        said: entry.words || '',
+        called: (entry.calls || []).map(c => c.tool + (c.failed ? ' ✗' : '')),
+        saw_people: ((percepts && percepts.players) || []).map(p => p.name || p.id).slice(0, 8),
+      };
+      if (entry.error) asserts.error = String(entry.error).slice(0, 200);
+      // the facts this tick acted on: naming a portal or a peer is depending on it being there
+      const requires = {};
+      const portals = ((percepts && percepts.portals) || []).map(x => x.name || x).filter(Boolean);
+      if (named.length) requires.named = named.slice(0, 8);
+      if (portals.length) requires.portals_in_view = portals.slice(0, 12);
+      try {
+        const f = await F.buildFrame({ kind: 'nexus.tick', streamId, seq: state.chain.length,
+                                       payload: { asserts, requires }, prev: state.prev });
+        state.chain.push(f); state.prev = f.payload_hash;
+        if (state.chain.length > 500) state.chain.shift();     // a long session is still bounded
+        return f;
+      } catch (e) { return null; }
+    }
+
+    (async () => {
+      while (state.running && (!o.maxTicks || state.ticks < o.maxTicks)) {
+        const drive = root.__autodrive;
+        if (!drive) { state.stopped = 'the hands went away'; break; }
+        state.ticks++;
+        const started = Date.now();
+        let entry, s0 = null;
+        try {
+          s0 = o.vision && drive.sense ? drive.sense({ width: 320, send: true }) : drive.snapshot();
+          const r = await turn({
+            percepts: { me: s0.me, world: s0.world, portals: s0.portals, players: s0.players,
+                        room: s0.room, chat: (s0.chat || []).slice(-4),
+                        picture: s0.vision ? (s0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
+            persona: o.persona, python: o.python, log: o.log, rounds: o.rounds,
+          });
+          state.acts += (r.calls || []).length;
+          if (r.words) state.words++;
+          entry = { tick: state.ticks, ms: Date.now() - started, words: r.words,
+                    calls: (r.calls || []).map(c => ({ tool: c.tool, name: c.args && (c.args.portal || c.args.to),
+                                                       failed: /failed|no such/.test(c.result) })) };
+          entry.frame = await seal(entry, s0);
+        } catch (e) {
+          entry = { tick: state.ticks, ms: Date.now() - started, error: e.message };
+          entry.frame = await seal(entry, null);
+          // A dead credential will not heal by being asked again in six seconds. Stop, and say why.
+          if (/sign-in expired|not signed in|no mind/i.test(e.message)) {
+            state.stopped = e.message; state.running = false;
+          }
+        }
+        state.journal.push(entry);
+        if (state.journal.length > 200) state.journal.shift();
+        if (o.onTick) { try { o.onTick(entry, state); } catch (e) {} }
+        if (!state.running) break;
+        await sleep(o.everyMs);
+      }
+      state.running = false; state.done = true;
+      if (!state.stopped) state.stopped = 'asked to stop';
+      if (o.onStop) { try { o.onStop(state); } catch (e) {} }
+    })();
+
+    return {
+      stop: (why) => { state.running = false; state.stopped = why || 'asked to stop'; },
+      state: () => state,
+      // the line itself, as a file anybody can check against the spec
+      chain: () => state.chain.map(f => JSON.stringify(f)).join('\n') + (state.chain.length ? '\n' : ''),
+      verify: () => (root.NexusFrames ? root.NexusFrames.verifyChain(state.chain) : Promise.reject(new Error('no frames module'))),
+    };
+  }
+
+  root.NexusBrainstem = { turn, lines, live, initPyodide, verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
                           VERBS, MAX_ROUNDS };
 })(typeof window !== 'undefined' ? window : globalThis);

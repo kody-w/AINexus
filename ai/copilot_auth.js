@@ -139,7 +139,13 @@
 
   function signOut() { saveSettings({ ghuToken: null, copilotToken: null, copilotExpiresAt: 0 }); pending = null; }
 
+  // `getToken` is deliberately NOT exported. Every world page on this origin shares this
+  // storage, and several of them pull third-party scripts from a CDN, so the honest statement
+  // is this: the credential lives in localStorage and anything running on kody-w.github.io can
+  // read it — that is inherent to the pattern, not fixed here. What IS fixed is that this
+  // module stops HANDING it out: nothing has to hold the raw token to use the seat, so nothing
+  // is offered it. Callers ask for a thought (`chat`) rather than for a credential.
   root.NexusAuth = { startDeviceLogin, pollDeviceLogin, exchange, ensureToken, chat, chatUrl,
-                     signOut, signedIn, hasToken, verify, getToken, loadSettings, saveSettings,
+                     signOut, signedIn, hasToken, verify, loadSettings, saveSettings,
                      AUTH_WORKER_URL, COPILOT_CLIENT_ID, COPILOT_DEFAULT_API, STORAGE_KEY, DEFAULT_MODEL };
 })(typeof window !== 'undefined' ? window : globalThis);

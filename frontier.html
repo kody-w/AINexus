@@ -94,6 +94,7 @@ button.on{background:#12442c;border-color:#1d6b45}
 <script src="ai/gestures.js"></script>
 <script src="ai/face.js"></script>
 <script src="ai/dialogue.js"></script>
+<script src="ai/frames.js"></script>
 <script src="ai/copilot_auth.js"></script>
 <script src="ai/vbrainstem.js"></script>
 <script src="ai/pulse.js"></script>
@@ -126,7 +127,7 @@ frame.addEventListener('load', () => {
       if (++tries < 25) return setTimeout(inject, 120);
       note('the world never produced a document to drive'); return;
     }
-    ['ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
+    ['ai/frames.js', 'ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
       const el = doc.createElement('script');
       el.src = new URL(src, location.href).href;
       doc.body.appendChild(el);

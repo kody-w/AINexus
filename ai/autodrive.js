@@ -104,7 +104,10 @@
       const c = w.camera ? w.camera.position : {};
       const players = [];
       try { w.multiplayer && w.multiplayer.players && w.multiplayer.players.forEach((p, id) =>
-        players.push({ id: String(id).slice(0, 6), name: (p.username || p.metadata && p.metadata.username) || null })); } catch (e) {}
+        // THE WHOLE ID. It was truncated to six characters for readability, but this list is
+        // what a mind reads before calling tell({to}) — and a six-character stub matches no
+        // peer, so every directed message a player sent was addressed to nobody.
+        players.push({ id: String(id), name: (p.username || p.metadata && p.metadata.username) || null })); } catch (e) {}
       return {
         ready: true,
         me: { x: Math.round(c.x || 0), y: Math.round(c.y || 0), z: Math.round(c.z || 0),
@@ -298,9 +301,10 @@
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
       if (!secret && !viaCopilot) { log('no mind granted (no brainstem, not signed in) — running on the program alone'); return null; }
-      // THE BEST MIND AVAILABLE, IN ORDER. A vbrainstem here in the page means the model can
-      // call the verbs directly instead of describing them for us to parse — so prefer it
-      // whenever it is loaded and there is a Copilot seat to run it on.
+      // THE BEST MIND AVAILABLE, IN ORDER — and the order is: a local brainstem first, because
+      // it is the operator's own with its real senses and memory; otherwise the vbrainstem,
+      // where the model calls the verbs directly instead of describing them for us to parse.
+      // So this runs only when there is NO brainstem secret and there IS a Copilot seat.
       if (viaCopilot && window.NexusBrainstem && o.brainstem !== false) {
         try {
           const percepts0 = o.vision ? api.sense({ width: 320, send: true }) : api.snapshot();
@@ -312,7 +316,10 @@
             persona: 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + '.',
             log: log,
           });
-          if (r.words) await api.say(r.words.slice(0, 240));
+          // If it already spoke through a tool, saying the same thing again is the player
+          // repeating itself to the room.
+          const spokeAlready = (r.calls || []).some(c => c.tool === 'world_say' || c.tool === 'world_tell');
+          if (r.words && !spokeAlready) await api.say(r.words.slice(0, 240));
           return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
         } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
       }

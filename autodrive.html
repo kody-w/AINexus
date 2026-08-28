@@ -25,6 +25,8 @@ iframe{width:100%;height:250px;border:0;background:#000;display:block}
 .con{height:118px;overflow:auto;margin:0;padding:8px 10px;background:#07070f;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #1c1c33}
 .con .e{color:#ff8f8f}.con .w{color:#ffd98a}.con .d{color:#7de3ff}
 .cli{display:flex;gap:6px;padding:8px;border-top:1px solid #1c1c33;background:#0b0b18}
+button.loop{background:#1b1b38;border:1px solid #33335c;color:#c9c9e6;border-radius:8px;padding:5px 10px;margin-left:6px;cursor:pointer;font:inherit}
+button.loop.on{background:#12442c;border-color:#1d6b45;color:#8ff0bd}
 .cli input{flex:1;font:12px ui-monospace,Menlo,monospace}
 .meta{padding:6px 10px;font:10px ui-monospace,Menlo,monospace;color:#7a7a99;border-top:1px solid #1c1c33;background:#0a0a16;word-break:break-all}
 .note{padding:10px 16px;color:#8a8aa8;font-size:12px;border-top:1px solid #24243f}
@@ -128,10 +130,44 @@ function tabEl(i, persona) {
     <iframe id="f${i}" title="${persona}"></iframe>
     <div class="eye" id="eye${i}"><span class="none">no vision yet</span></div>
     <pre class="con" id="c${i}"></pre>
-    <div class="cli"><input id="cli${i}" placeholder="drive.sense() · drive.say('hi') · drive.travel('Crystal')"><button data-i="${i}" class="run">run</button></div>
+    <div class="cli"><input id="cli${i}" placeholder="drive.sense() · drive.say('hi') · drive.travel('Crystal')"><button data-i="${i}" class="run">run</button><button data-i="${i}" class="loop" id="lp${i}">◦ Loop</button></div>
+    <div class="meta" id="tk${i}"></div>
     <div class="meta" id="m${i}">program not loaded</div>`;
   return el;
 }
+
+// ── the rapplication loop, per player ────────────────────────────────────
+// Press it and the player runs itself: perceive, think, act, wait, again. Nothing out here
+// steps it — this button only starts and stops the clock. Each tick seals a rapp/1 frame, so
+// what comes out is a LINE you can verify, not a log you have to believe.
+const loops = {};
+function toggleLoop(i) {
+  const t = tabs[i]; if (!t) return;
+  const btn = $('lp' + i), meta = $('tk' + i);
+  if (loops[i]) { loops[i].stop('operator'); loops[i] = null; btn.textContent = '◦ Loop'; btn.classList.remove('on'); say(i, 'loop stopped', 'd'); return; }
+  const w = t.frame.contentWindow;
+  if (!w.NexusBrainstem) { say(i, 'no brainstem in this world — cannot loop', 'e'); return; }
+  if (!(w.NexusAuth && w.NexusAuth.signedIn())) { say(i, 'no mind granted — sign in on the frontier page first', 'e'); return; }
+  btn.textContent = '● Looping'; btn.classList.add('on');
+  say(i, 'loop started — the player is running itself now', 'd');
+  loops[i] = w.NexusBrainstem.live({
+    everyMs: 7000, persona: 'You are ' + t.persona + ', an AI player in a shared 3D world.',
+    onTick: (e, st) => {
+      meta.textContent = `tick ${st.ticks} · ${st.acts} actions · ${st.chain.length} frames sealed`
+        + (e.frame ? ` · head ${String(e.frame.frame_hash).slice(0, 10)}…` : '');
+      say(i, `tick ${e.tick}: ` + (e.error ? 'error — ' + e.error
+        : (e.words ? '"' + e.words.slice(0, 70) + '" ' : '') + (e.calls || []).map(c => c.tool + (c.failed ? '✗' : '')).join(' ')),
+        e.error ? 'e' : '');
+    },
+    onStop: (st) => { $('lp' + i).textContent = '◦ Loop'; $('lp' + i).classList.remove('on');
+                      say(i, 'loop ended after ' + st.ticks + ' ticks — ' + st.stopped, 'd'); loops[i] = null; },
+  });
+}
+
+document.addEventListener('click', ev => {
+  const lp = ev.target.closest && ev.target.closest('button.loop');
+  if (lp) toggleLoop(+lp.dataset.i);
+});
 
 function say(i, text, cls) {
   const c = $('c' + i); if (!c) return;
@@ -166,7 +202,7 @@ function inject(frame) {
   s.src = new URL('ai/autodrive.js', location.href).href;
   // the same two doors a person has: the shared dialogue grammar, and the Copilot sign-in
   // that lets this player think without a brainstem installed anywhere
-  ['ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js'].forEach(src => {
+  ['ai/frames.js', 'ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js'].forEach(src => {
     try { const e = doc.createElement('script'); e.src = new URL(src, location.href).href; doc.body.appendChild(e); } catch (err) {}
   });
   s.setAttribute('data-autodrive', '1');
@@ -202,7 +238,12 @@ async function boot() {
     try { inject(frame); } catch (e) { say(i, e.message, 'e'); $('st' + i).textContent = 'cannot drive'; continue; }
     // the injected script loads asynchronously — calling into hands that do not exist yet
     // is how a player looks "ready" and never moves
-    const armed = await waitFor(() => frame.contentWindow.__autodrive, 15000);
+    // Hands AND the doors to a mind. Arming on the driver alone let a player's first turn run
+    // before copilot_auth.js and vbrainstem.js had finished loading, so its opening move was
+    // taken by the program while its mind was still on the way — and it looked like the mind
+    // simply had nothing to say.
+    const armed = await waitFor(() => frame.contentWindow.__autodrive
+      && frame.contentWindow.NexusAuth && frame.contentWindow.NexusBrainstem, 20000);
     if (!armed) { say(i, 'driver never armed', 'e'); $('st' + i).textContent = 'no hands'; continue; }
     try { frame.contentWindow.NEXUS_PERSONA = persona; } catch (e) {}
     if (i === 0) {
@@ -288,7 +329,9 @@ async function runProgram(i) {
 $('me').onclick = () => window.open('spectate.html', '_blank');
 $('start').onclick = boot;
 $('killall').onclick = () => {
-  tabs.forEach((t, i) => { try { t.frame.contentWindow.__autodrive.stop(); } catch (e) {} say(i, 'stopped by the operator', 'd'); $('st' + i).textContent = 'stopped'; });
+  tabs.forEach((t, i) => { try { t.frame.contentWindow.__autodrive.stop(); } catch (e) {}
+    if (loops[i]) { loops[i].stop('kill switch'); loops[i] = null; const b = $('lp' + i); if (b) { b.textContent = '◦ Loop'; b.classList.remove('on'); } }
+    say(i, 'stopped by the operator', 'd'); $('st' + i).textContent = 'stopped'; });
 };
 $('dump').onclick = () => {
   const blob = new Blob([JSON.stringify({ schema: 'nexus-autodrive-journal/1', at: new Date().toISOString(),
