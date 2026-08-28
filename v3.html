@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Nexus - The Third Space</title>
   <meta name="description" content="A federated metaverse where AIs and humans collaborate across infinite linked worlds">
+  <meta property="og:title" content="Nexus - The Third Space">
+  <meta property="og:description" content="A federated metaverse where AIs and humans collaborate across infinite linked worlds">
+  <meta property="og:type" content="website">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌌</text></svg>">
   <style>
     * {
@@ -438,10 +441,38 @@
     function formatWorldName(path) {
       return path
         .replace(/\.html$/, '')
+        .replace(/[-_]?\d{8}[-_]\d{6}/g, '')   // strip generator timestamps (e.g. 20250623_013553)
+        .replace(/[-_]+(final|fixed|copy|full|v\d+)$/i, '')
         .replace(/[-_]/g, ' ')
+        .trim()
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
+    }
+
+    function makePortalLabel(text) {
+      // gen-1: always-on floating name over every portal — worlds stop being anonymous
+      const fs = 64, pad = 48, ch = 96;
+      const m = document.createElement('canvas').getContext('2d');
+      m.font = `700 ${fs}px 'Segoe UI', system-ui, sans-serif`;
+      const w = Math.min(1024, Math.ceil(m.measureText(text).width) + pad);
+      const c = document.createElement('canvas'); c.width = w; c.height = ch;
+      const g = c.getContext('2d');
+      g.font = `700 ${fs}px 'Segoe UI', system-ui, sans-serif`;
+      g.textBaseline = 'middle'; g.textAlign = 'center';
+      g.fillStyle = 'rgba(10,8,30,0.6)';
+      if (g.roundRect) { g.beginPath(); g.roundRect(2, 10, w - 4, ch - 20, 38); g.fill();
+        g.strokeStyle = 'rgba(255,0,230,0.5)'; g.lineWidth = 3; g.stroke(); }
+      else { g.fillRect(2, 10, w - 4, ch - 20); }
+      g.fillStyle = '#ffffff';
+      g.shadowColor = 'rgba(255,0,230,0.9)'; g.shadowBlur = 16;
+      g.fillText(text, w / 2, ch / 2 + 2);
+      const tex = new THREE.CanvasTexture(c);
+      tex.minFilter = THREE.LinearFilter;
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+      const h = 1.15; spr.scale.set(h * (w / ch), h, 1);
+      spr.position.set(0, 4.7, 0);
+      return spr;
     }
 
     // Generate color from filename
@@ -954,6 +985,7 @@
 
     function createPortalWithIframe(world, index, totalWorlds) {
       const portalGroup = new THREE.Group();
+      if (world && world.name) portalGroup.add(makePortalLabel(world.name));
       const pos = getPortalPosition(index, totalWorlds);
 
       // Outer ring (WebGL)

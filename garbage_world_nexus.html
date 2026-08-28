@@ -6,6 +6,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Garbage World</title>
+    <meta name="description" content="Garbage World — an AINexus portal hub built from junk and salvage, with glowing portals to every other connected world.">
+    <meta property="og:title" content="Garbage World - AINexus">
+    <meta property="og:description" content="A salvage-yard portal hub in AINexus, with glowing portals to every other connected world.">
+    <meta property="og:type" content="website">
     <style>
         * {
             margin: 0;
@@ -653,7 +657,10 @@
             formatWorldName(filename) {
                 return filename
                     .replace('.html', '')
+                    .replace(/[-_]?\d{8}[-_]\d{6}/g, '')   // strip generator timestamps (e.g. 20250623_013553)
+                    .replace(/[-_]+(final|fixed|copy|full|v\d+)$/i, '')
                     .replace(/[-_]/g, ' ')
+                    .trim()
                     .replace(/\b\w/g, l => l.toUpperCase());
             }
             
@@ -960,15 +967,41 @@
                 this.scene.add(sparksGroup);
             }
             
+            makePortalLabel(text) {
+                // gen-1: always-on floating name over every portal — worlds stop being anonymous
+                const fs = 64, pad = 48, ch = 96;
+                const m = document.createElement('canvas').getContext('2d');
+                m.font = `700 ${fs}px 'Segoe UI', system-ui, sans-serif`;
+                const w = Math.min(1024, Math.ceil(m.measureText(text).width) + pad);
+                const c = document.createElement('canvas'); c.width = w; c.height = ch;
+                const g = c.getContext('2d');
+                g.font = `700 ${fs}px 'Segoe UI', system-ui, sans-serif`;
+                g.textBaseline = 'middle'; g.textAlign = 'center';
+                g.fillStyle = 'rgba(10,8,30,0.6)';
+                if (g.roundRect) { g.beginPath(); g.roundRect(2, 10, w - 4, ch - 20, 38); g.fill();
+                    g.strokeStyle = 'rgba(255,0,230,0.5)'; g.lineWidth = 3; g.stroke(); }
+                else { g.fillRect(2, 10, w - 4, ch - 20); }
+                g.fillStyle = '#ffffff';
+                g.shadowColor = 'rgba(255,0,230,0.9)'; g.shadowBlur = 16;
+                g.fillText(text, w / 2, ch / 2 + 2);
+                const tex = new THREE.CanvasTexture(c);
+                tex.minFilter = THREE.LinearFilter;
+                const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+                const h = 1.15; spr.scale.set(h * (w / ch), h, 1);
+                spr.position.set(0, 4.7, 0);
+                return spr;
+            }
+
             createPortals() {
                 const numPortals = Math.min(this.worlds.length, 8);
-                
+
                 for (let i = 0; i < numPortals; i++) {
                     const world = this.worlds[i];
                     const angle = (i / numPortals) * Math.PI * 2;
-                    
+
                     const portalGroup = new THREE.Group();
-                    
+                    if (world && world.name) portalGroup.add(this.makePortalLabel(world.name));
+
                     // Portal frame - rusty ring
                     const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
                     const frameMaterial = new THREE.MeshStandardMaterial({

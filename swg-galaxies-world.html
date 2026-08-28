@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Wars Galaxies - Tatooine</title>
+    <meta name="description" content="Star Wars Galaxies: Tatooine — a 3D AINexus world recreating the sandy streets of Mos Eisley, with vendors, missions, crafting, and a cantina to explore.">
+    <meta property="og:title" content="Star Wars Galaxies - Tatooine">
+    <meta property="og:description" content="A 3D recreation of Tatooine: vendors, missions, crafting, and Chalmun's Cantina.">
+    <meta property="og:type" content="website">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -2762,7 +2766,7 @@
         function createNPCMarker(x, z, name, color) {
             const group = new THREE.Group();
 
-            const bodyGeometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
+            const bodyGeometry = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 8); // r128 has no CapsuleGeometry
             const bodyMaterial = new THREE.MeshStandardMaterial({ color: color });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
             body.position.y = 1.2;
