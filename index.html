@@ -4584,9 +4584,22 @@
             }
 
             initializePeer() {
-                // Generate or get peer ID
+                // Secure invite: #join=<hostId>.<token>. The fragment never leaves the
+                // browser (not sent to servers, not logged), so the room secret exists
+                // only in the link the host chose to share — the data slosh, secured.
+                this.joinToken = null;
+                let inviteHost = null;
+                const frag = (window.location.hash || '').match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
+                if (frag) {
+                    inviteHost = frag[1];
+                    this.joinToken = frag[2];
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
                 const urlParams = new URLSearchParams(window.location.search);
-                const hostId = urlParams.get('host');
+                if (!inviteHost && urlParams.get('host')) {
+                    this.showError('This invite link is from an older version. Ask the host for a fresh link — invites now carry a secret handshake.');
+                }
+                const hostId = inviteHost;
 
                 try {
                     if (hostId) {
@@ -4606,8 +4619,12 @@
                             this.updateStatus('Connecting...', false);
                         });
                     } else {
-                        // Creating a new room
+                        // Creating a new room — mint the room secret (host is whoever
+                        // entered first; the room lives exactly as long as this tab)
                         this.isHost = true;
+                        const rnd = new Uint8Array(16);
+                        crypto.getRandomValues(rnd);
+                        this.roomSecret = btoa(String.fromCharCode(...rnd)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
                         this.peer = new Peer();
 
                         this.peer.on('open', (id) => {
@@ -4669,6 +4686,7 @@
                         serialization: 'json',
                         metadata: {
                             username: this.generateUsername(),
+                            token: this.joinToken,
                             worldData: this.world.getCurrentWorldData()
                         }
                     });
@@ -4699,6 +4717,15 @@
                 const peerId = conn.peer;
 
                 conn.on('open', () => {
+                    if (this.isHost) {
+                        const offered = conn.metadata && conn.metadata.token;
+                        if (!offered || offered !== this.roomSecret) {
+                            console.warn('Rejected join without a valid invite token:', peerId);
+                            this.showNotification('Rejected a join attempt without a valid invite');
+                            try { conn.close(); } catch (e) {}
+                            return;
+                        }
+                    }
                     console.log('Connection opened with peer:', peerId);
                     this.connections.set(peerId, conn);
 
@@ -4733,6 +4760,11 @@
                     this.removePlayer(peerId);
                     this.connections.delete(peerId);
                     this.updatePlayerCount();
+                    if (!this.isHost && peerId === this.roomId) {
+                        // the host's tab is the room — when it closes, the room is gone
+                        this.updateStatus('Host left — room closed', false);
+                        this.showError('The host closed their tab, so this room no longer exists. Ask for a new invite link.');
+                    }
                 });
 
                 conn.on('error', (err) => {
@@ -4924,10 +4956,7 @@
             updateShareUrl() {
                 // Update QR code to include host parameter
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
-                const params = new URLSearchParams({
-                    host: this.roomId
-                });
-                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
+                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}#join=${this.roomId}.${this.roomSecret}`;
 
                 // Update QR code
                 const qrUrlElement = document.getElementById('qr-url');
