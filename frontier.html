@@ -95,6 +95,7 @@ button.on{background:#12442c;border-color:#1d6b45}
 <script src="ai/face.js"></script>
 <script src="ai/dialogue.js"></script>
 <script src="ai/copilot_auth.js"></script>
+<script src="ai/vbrainstem.js"></script>
 <script src="ai/pulse.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -407,6 +408,23 @@ function openTalk(what) {
   lines = ringFor(talkingTo); hotLine = -1; optAt = [];
   try { seenChat = ((D() && D().snapshot().chat) || []).length; } catch (e) { seenChat = 0; }
   note('talking to ' + what.label + (what.isAI ? ' (an AI)' : ''));
+  inCharacter(talkingTo);
+}
+
+// The ring you can already use appears instantly, because it is computed from the room. If a
+// mind is available it is asked for better lines in the background and they REPLACE the ring
+// when they arrive — never a spinner, never a wait, and if the request fails or the answer is
+// thin you keep the ring you already had and are none the wiser.
+async function inCharacter(who) {
+  if (!window.NexusBrainstem || !window.NexusAuth || !NexusAuth.signedIn()) return;
+  const d = D(); if (!d) return;
+  let chat = [], portals = [];
+  try { chat = d.snapshot().chat || []; portals = d.orbs() || []; } catch (e) {}
+  let better = null;
+  try { better = await NexusBrainstem.lines({ who, chat, portals }); } catch (e) { return; }
+  if (!better || talkingTo !== who) return;          // they moved on; the answer is stale
+  lines = better; hotLine = -1; optAt = [];
+  note('in character');
 }
 
 // While a conversation is open, watch the room for their answer. When it arrives, show it and
@@ -424,6 +442,7 @@ setInterval(() => {
   if (!theirs.length) return;
   theirs.forEach(c => note(talkingTo.name + ': ' + c.text));
   lines = ringFor(talkingTo); hotLine = -1; optAt = [];
+  inCharacter(talkingTo);                            // and answer them in character if we can
 }, 600);
 function closeTalk(why) { if (!talkingTo) return; talkingTo = null; lines = []; hotLine = -1; optAt = [];
   hot = null; dwellFired = false; note('conversation closed' + (why ? ' — ' + why : '')); }

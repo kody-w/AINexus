@@ -205,7 +205,67 @@
     return { words: '', calls, rounds: o.rounds || MAX_ROUNDS, note: 'ran out of rounds still acting' };
   }
 
-  root.NexusBrainstem = { turn, initPyodide, verbToolDefs, agentToolDefs, callAgent,
+  // ── things to say, in character ──────────────────────────────────────────
+  // ai/dialogue.js builds a ring from what is TRUE — who spoke, which portal is nearest. That
+  // ring is the floor: it needs no network, no seat and no model, and it is what everybody gets.
+  // This is the ceiling: the same situation handed to a mind, which answers with lines this
+  // particular character would actually say.
+  //
+  // It asks through a TOOL with a fixed schema rather than asking for JSON in prose, for the
+  // same reason the verbs are tools: a shape you are handed cannot be a shape you had to guess.
+  const LINES_TOOL = {
+    type: 'function',
+    function: {
+      name: 'propose_lines',
+      description: 'Offer the player 3 to 4 things they could say right now.',
+      parameters: {
+        type: 'object',
+        properties: {
+          lines: {
+            type: 'array', minItems: 3, maxItems: 4,
+            items: { type: 'object', required: ['short', 'text'], properties: {
+              short: { type: 'string', description: 'one lowercase word for the orb label, at most 8 letters' },
+              text: { type: 'string', description: 'the line itself, one natural sentence under 90 characters' } } },
+          },
+        },
+        required: ['lines'],
+      },
+    },
+  };
+
+  async function lines(opts) {
+    const o = opts || {}, auth = root.NexusAuth;
+    if (!auth || !auth.signedIn()) return null;
+    const who = o.who || {};
+    const recent = (o.chat || []).slice(-4).map(c => (c.from === String(who.id).slice(0, 6) ? 'them: ' : 'you: ') + c.text);
+    const near = (o.portals || []).slice().sort((a, b) => (a.distance || 0) - (b.distance || 0))[0];
+    const msg = await auth.chat([
+      { role: 'system', content: (o.persona || 'You are a visitor in a shared 3D world of portals.')
+        + ' Offer things to say that fit THIS moment — not greetings if you are already talking, not '
+        + 'questions already answered. Speak plainly, the way a person actually talks. Call propose_lines and nothing else.' },
+      { role: 'user', content: 'You are talking to ' + (who.name || 'someone')
+        + (who.isAI ? ' (an AI player)' : ' (a person)') + '.'
+        + (near ? ' The nearest portal is ' + near.name + '.' : '')
+        + (recent.length ? '\nRecently said:\n' + recent.join('\n') : '\nNothing has been said yet.') },
+    ], { tools: [LINES_TOOL], tool_choice: { type: 'function', function: { name: 'propose_lines' } },
+         raw: true, temperature: 0.9, max_tokens: 300 });
+    const tc = msg && msg.tool_calls && msg.tool_calls[0];
+    if (!tc) return null;
+    let got;
+    try { got = JSON.parse(tc.function.arguments || '{}'); } catch (e) { return null; }
+    const out = [];
+    for (const l of (got.lines || [])) {
+      const short = String(l && l.short || '').trim().toLowerCase().slice(0, 8);
+      const text = String(l && l.text || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (short && text && !out.some(x => x.text === text)) out.push({ short, text });
+      if (out.length >= 4) break;
+    }
+    if (out.length < 2) return null;                 // too thin to be worth replacing the floor
+    out.push({ short: 'leave', text: 'catch you later' });
+    return out;
+  }
+
+  root.NexusBrainstem = { turn, lines, initPyodide, verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
                           VERBS, MAX_ROUNDS };
 })(typeof window !== 'undefined' ? window : globalThis);
