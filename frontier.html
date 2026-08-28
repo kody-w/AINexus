@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frontier — out there mode</title>
+<meta name="description" content="Play the nexus with your hands and your voice: point to look, open palm to walk, pinch to enter a portal, speak to the room.">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:#05050c;color:#e9e9f2;font:14px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+#cursor{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;z-index:9;
+  background:radial-gradient(circle,rgba(255,255,255,.9) 0 30%,rgba(125,227,255,.35) 55%,transparent 70%);transition:width .12s,height .12s;opacity:0}
+#cursor.on{opacity:1}#cursor.pinch{width:64px;height:64px;margin:-32px 0 0 -32px;background:radial-gradient(circle,#fff 0 40%,rgba(255,0,230,.4) 62%,transparent 74%)}
+.hud{position:fixed;left:14px;top:14px;z-index:10;background:rgba(10,10,24,.84);border:1px solid #2b2b52;border-radius:12px;padding:12px 14px;max-width:330px;backdrop-filter:blur(8px)}
+h1{font-size:14px;margin:0 0 3px}.sub{color:#8f8fb0;font-size:11px;margin:0 0 10px}
+button{background:#1b1b38;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer;margin:0 4px 4px 0}
+button.on{background:#12442c;border-color:#1d6b45}
+.k{font:11px/1.8 ui-monospace,Menlo,monospace;color:#b9b9d6;margin:8px 0 0}
+.k b{color:#7de3ff;font-weight:600}
+#state{font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;margin-top:8px;white-space:pre-wrap;max-height:96px;overflow:auto}
+#cam{position:fixed;right:12px;bottom:12px;width:180px;border-radius:10px;border:1px solid #2b2b52;transform:scaleX(-1);z-index:10;display:none}
+.badge{display:inline-block;border-radius:999px;padding:1px 8px;font-size:10px;background:#2a1140;border:1px solid #6b3fa0;color:#d9b8ff}
+</style></head><body>
+<iframe id="f" title="the world" allow="camera"></iframe>
+<div id="cursor"></div>
+<video id="cam" autoplay playsinline muted></video>
+<div class="hud">
+  <h1>🖐 Frontier <span class="badge" id="mode">out there mode</span></h1>
+  <p class="sub">Your hands and your voice are the controller. Nothing is simulated — the same verbs an AI player uses.</p>
+  <div>
+    <button id="hands">start hands</button>
+    <button id="voice">start voice</button>
+    <button id="stop">stop</button>
+  </div>
+  <p class="k">
+    <b>point</b> — look where you point<br>
+    <b>open palm</b> — walk forward<br>
+    <b>pinch</b> — click (enter a portal you're facing)<br>
+    <b>speak</b> — “go to Crystal Caverns”, “turn left”, “ask, what is this place”, or just talk to the room
+  </p>
+  <div id="state">idle — press start hands (your camera never leaves this machine)</div>
+</div>
+<script src="ai/gestures.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const frame = $('f'), cursor = $('cursor');
+let drive = null, hands = null, running = false, prev = null, lastAct = 0, rec = null;
+
+const params = new URLSearchParams(location.search);
+const world = params.get('world') || 'index.html';
+let joinFrag = location.hash && location.hash.includes('#join=') ? location.hash : '';
+if (!joinFrag) { try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
+  if (r && Date.now() - r.at < 6 * 3600e3) joinFrag = '#join=' + r.id + '.' + r.secret; } catch (e) {} }
+frame.src = world + joinFrag;
+
+frame.addEventListener('load', () => {
+  try {
+    const d = frame.contentDocument.createElement('script');
+    d.src = new URL('ai/autodrive.js', location.href).href;
+    frame.contentDocument.body.appendChild(d);
+  } catch (e) { note('cannot drive this world (cross-origin): ' + e.message); return; }
+  const t = setInterval(() => { if (frame.contentWindow.__autodrive) { clearInterval(t); drive = frame.contentWindow.__autodrive; note('hands connected to the world'); } }, 200);
+});
+
+function note(t) { $('state').textContent = (t + '\n' + $('state').textContent).slice(0, 600); }
+
+// ── hands ────────────────────────────────────────────────────────────────
+$('hands').onclick = async () => {
+  if (running) return;
+  $('hands').classList.add('on'); note('asking for the camera…');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } }); }
+  catch (e) { note('no camera: ' + e.message + ' — voice and keyboard still work'); $('hands').classList.remove('on'); return; }
+  const v = $('cam'); v.srcObject = stream; v.style.display = 'block';
+  try {
+    const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+    const files = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    hands = await vision.HandLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
+      numHands: 1, runningMode: 'VIDEO' });
+  } catch (e) { note('hand model would not load: ' + e.message); return; }
+  running = true; cursor.classList.add('on'); note('hands live — point, palm, pinch');
+  const loop = () => {
+    if (!running) return;
+    const res = hands.detectForVideo(v, performance.now());
+    const lm = res && res.landmarks && res.landmarks[0];
+    const p = NexusGestures.posture(lm, prev);
+    if (p.kind !== 'none') {
+      // mirror x for a selfie view, so pointing right moves right
+      const sx = (1 - p.x) * innerWidth, sy = p.y * innerHeight;
+      cursor.style.left = sx + 'px'; cursor.style.top = sy + 'px';
+      cursor.classList.toggle('pinch', !!p.pinched);
+      const act = NexusGestures.toAction({ ...p, x: 1 - p.x }, prev && { ...prev, x: 1 - prev.x });
+      if (act && drive && performance.now() - lastAct > 90) { lastAct = performance.now(); apply(act); }
+    } else cursor.classList.remove('on');
+    prev = p;
+    requestAnimationFrame(loop);
+  };
+  loop();
+};
+
+// ── voice ────────────────────────────────────────────────────────────────
+$('voice').onclick = () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { note('this browser has no speech recognition'); return; }
+  if (rec) { rec.stop(); rec = null; $('voice').classList.remove('on'); note('voice off'); return; }
+  rec = new SR(); rec.continuous = true; rec.interimResults = false; rec.lang = 'en-US';
+  rec.onresult = ev => {
+    const text = Array.from(ev.results).slice(-1)[0][0].transcript.trim();
+    const act = NexusGestures.speechToAction(text);
+    note('heard “' + text + '” → ' + (act ? act.do : 'nothing'));
+    if (act && drive) apply(act);
+  };
+  rec.onerror = e => note('voice error: ' + e.error);
+  rec.onend = () => { if (rec) try { rec.start(); } catch (e) {} };   // keep listening
+  rec.start(); $('voice').classList.add('on'); note('voice on — say “go to Crystal Caverns”');
+};
+
+$('stop').onclick = () => {
+  running = false; cursor.classList.remove('on'); $('hands').classList.remove('on');
+  if (rec) { const r = rec; rec = null; r.stop(); $('voice').classList.remove('on'); }
+  const v = $('cam'); if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; v.style.display = 'none'; }
+  note('stopped — camera released');
+};
+
+// one action -> the driver's own verbs; the human and the AI share this exact surface
+function apply(act) {
+  if (!drive) return;
+  try { drive.run({ steps: [act] }); } catch (e) { note('action failed: ' + e.message); }
+  if (act.do !== 'look') note('→ ' + JSON.stringify(act).slice(0, 70));
+}
+window.__frontier = { apply, get drive() { return drive; } };   // for tests
+</script></body></html>

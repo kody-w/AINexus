@@ -47,7 +47,12 @@
       try { Object.defineProperty(ev, 'movementX', { value: opts.movementX }); } catch (e) {}
       try { Object.defineProperty(ev, 'movementY', { value: opts.movementY || 0 }); } catch (e) {}
     }
-    document.dispatchEvent(ev);
+    // A real click lands on the CANVAS — that is where the world listens for portal entry.
+    // Dispatching on document only looks right: events bubble up, never down, so the canvas
+    // handler never ran and travel() quietly did nothing.
+    const target = (() => { const w = W(); return (w && w.renderer && w.renderer.domElement) || document.querySelector('canvas') || document; })();
+    target.dispatchEvent(ev);
+    if (target !== document) document.dispatchEvent(ev);
     return ev;
   }
 
@@ -121,7 +126,20 @@
       return snap;
     },
 
-    async look(dx, dy) { mouse('mousemove', { movementX: dx | 0, movementY: dy | 0 }); await sleep(30); return api.snapshot().me; },
+    // A page that only turns under pointer lock ignores a synthetic mousemove — which made
+    // look(), and therefore aim() and travel(), silently do nothing. The driver IS holding
+    // the pointer while it plays, so it declares that once and then sends the real event;
+    // every line of rotation maths stays the page's own.
+    async look(dx, dy) {
+      const w = W();
+      if (w && w.isPointerLocked === false) {
+        w.isPointerLocked = true;
+        if (!api._tookPointer) { api._tookPointer = true; log('holding the pointer (the page turns only when the mouse is captured)'); }
+      }
+      mouse('mousemove', { movementX: dx | 0, movementY: dy | 0 });
+      await sleep(30);
+      return api.snapshot().me;
+    },
 
     async walk(dir, ms) {
       const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
@@ -130,28 +148,53 @@
     },
 
     async click(x, y) {
+      if (api._filming) { log('refused: a camera does not click — it would step through a portal mid-shot'); return false; }
       const o = { clientX: x === undefined ? innerWidth / 2 : x, clientY: y === undefined ? innerHeight / 2 : y };
       mouse('mousedown', o); mouse('mouseup', o); mouse('click', o); await sleep(60); return true;
     },
 
-    // aim at a named portal by turning, the way a person lines up a doorway
+    // Aim at a named portal by turning, the way a person lines up a doorway.
+    //
+    // Do NOT trust the world's own rotation field: in this engine camera facing is
+    // rotation.y + π, so aiming at `atan2(dx,dz)` pointed every player exactly backwards and
+    // the centre-screen raycast hit nothing — travel silently failed. So read the camera's
+    // REAL world direction, and calibrate how much a look actually turns it before closing
+    // the loop. That works whatever a given world's sign or look-speed happens to be.
+    facing() {
+      const w = W(); if (!w || !w.camera) return 0;
+      const T = window.THREE;
+      const d = T ? new T.Vector3() : null;
+      if (!d) return 0;
+      w.camera.getWorldDirection(d);
+      return Math.atan2(d.x, d.z);
+    },
+
     async aim(name) {
       const w = W(); if (!w) return false;
       const p = (w.portalIndex || []).find(p => p.name.toLowerCase().includes(String(name).toLowerCase()));
       if (!p) { log('no portal called', name); return false; }
-      for (let i = 0; i < 60; i++) {
-        const c = w.camera.position;
-        const want = Math.atan2(p.x - c.x, p.z - c.z);
-        const have = w.rotation ? w.rotation.y : w.camera.rotation.y;
-        let d = ((want - have + Math.PI) % (2 * Math.PI)) - Math.PI;
-        if (Math.abs(d) < 0.05) return true;
-        await api.look(-Math.sign(d) * Math.min(120, Math.abs(d) * 260), 0);
+      const wrap = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      const want = () => { const c = w.camera.position; return Math.atan2(p.x - c.x, p.z - c.z); };
+
+      // calibrate: how many radians of facing does one unit of look(dx) actually buy?
+      const before = api.facing();
+      await api.look(60, 0);
+      const perUnit = wrap(api.facing() - before) / 60;
+      if (!isFinite(perUnit) || Math.abs(perUnit) < 1e-6) { log('this world does not turn on a mouse look'); return false; }
+
+      for (let i = 0; i < 40; i++) {
+        const err = wrap(want() - api.facing());
+        if (Math.abs(err) < 0.045) { log('aimed at', p.name); return true; }
+        const dx = Math.max(-260, Math.min(260, err / perUnit));
+        await api.look(dx, 0);
       }
+      log('could not settle on', p.name, '— off by', wrap(want() - api.facing()).toFixed(2), 'rad');
       return false;
     },
 
     // walk into it and click — the world's own raycaster decides, exactly as for a person
     async travel(name) {
+      if (api._filming) { log('refused: cut first — a camera never travels while filming'); return false; }
       if (!(await api.aim(name))) return false;
       // the slosh: hand the destination what this traveller is carrying, before the step
       if (api._carry) {
@@ -264,6 +307,97 @@
       return { words, move };
     },
 
+    // ── camera operator: holds good views, and cannot fall into a portal ─────
+    // A camera is not a player. It parks the world's own movement, stands OUTSIDE the
+    // portal ring, and frames the action. Travel and click are refused for as long as it
+    // is filming — the safety is structural, not a promise: a camera that cannot click
+    // cannot wander through a doorway mid-shot.
+    async camera(opts) {
+      const o = Object.assign({ radius: 30, height: 10, hold: 7000, shots: 0, film: true }, opts || {});
+      const w = W(); if (!w || !w.camera) { log('no camera to operate'); return false; }
+      if (api._filming) return true;
+      api._filming = true;
+      api._saved = { updateMovement: w.updateMovement, updateHover: w.updateHover };
+      w.updateMovement = () => {};
+      if (w.updateHover) w.updateHover = () => {};
+
+      // the ring the portals stand on — stay well outside it, whatever this world's radius is
+      const portalR = (w.portalIndex || []).reduce((m, p) => Math.max(m, Math.hypot(p.x, p.z)), 0) || 15;
+      const standoff = Math.max(o.radius, portalR + 12);
+      log(`filming from ${Math.round(standoff)} units — the ring is ${Math.round(portalR)}, so the lens never crosses it`);
+
+      // a few honest compositions, not a jitter: wide on the ring, over-the-shoulder of the
+      // crowd, and a low three-quarter. Each is held long enough to be watchable.
+      // Framing is arithmetic, not luck: to hold a ring of radius R in a 75° lens you need
+      // roughly 2.2R of distance, and the camera must sit low enough that the ring lands in
+      // the middle of frame rather than along the bottom edge. Each shot states its own
+      // subject height so the horizon falls where a person would put it.
+      const fit = portalR * 2.2;
+      const shots = [
+        { name: 'wide on the ring',    r: Math.max(standoff, fit),      h: portalR * 0.55, at: () => ({ x: 0, z: 0 }), look: 3.2 },
+        { name: 'the crowd',           r: Math.max(standoff, fit * 0.9), h: portalR * 0.42, at: () => api._crowd(),    look: 2.6 },
+        { name: 'low three-quarter',   r: Math.max(standoff, fit * 0.8), h: Math.max(4, portalR * 0.22), at: () => api._crowd(), look: 2.2 },
+        { name: 'drift past the ring', r: Math.max(standoff, fit * 1.1), h: portalR * 0.7,  at: () => ({ x: 0, z: 0 }), look: 3.5, drift: 0.00030 },
+      ];
+      let i = 0, angle = Math.random() * Math.PI * 2, until = 0, taken = 0, fresh = false;
+
+      const step = () => {
+        if (!api._filming) return;
+        const now = performance.now();
+        if (now > until) {
+          const sh = shots[i % shots.length]; i++; until = now + o.hold;
+          api._shot = sh.name;
+          angle += 1.7 + Math.random();                 // cut to a genuinely different angle
+          fresh = true;                                 // SNAP on a cut — never swoop through bad framing
+          log('shot:', sh.name);
+          if (o.shots && taken >= o.shots) { api.cut(); return; }
+        }
+        const sh = shots[(i - 1) % shots.length];
+        angle += sh.drift || 0.00012;                    // a slow push, never a shake
+        const c = sh.at();
+        const cam = w.camera;
+        const want = { x: c.x + Math.cos(angle) * sh.r, y: sh.h, z: c.z + Math.sin(angle) * sh.r };
+        if (fresh) {                                    // the cut lands instantly, then the shot breathes
+          cam.position.set(want.x, want.y, want.z);
+          fresh = false;
+          if (o.film) { setTimeout(() => { if (api._filming) { api.see({ width: 640, send: true }); taken++; } }, 260); }
+        } else if (cam.position.lerp) {
+          cam.position.lerp(want, 0.06);
+        } else {
+          cam.position.set(want.x, want.y, want.z);
+        }
+        // never let the lens drift inside the ring, whatever the easing does
+        const d = Math.hypot(cam.position.x - c.x, cam.position.z - c.z);
+        if (d < portalR + 6) {
+          const k = (portalR + 6) / (d || 1);
+          cam.position.x = c.x + (cam.position.x - c.x) * k;
+          cam.position.z = c.z + (cam.position.z - c.z) * k;
+        }
+        cam.lookAt(c.x, sh.look, c.z);
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      return true;
+    },
+
+    _crowd() {
+      const w = W(); const pts = [];
+      try { w.multiplayer && w.multiplayer.players.forEach(p => { const q = p.avatar && p.avatar.position; if (q) pts.push(q); }); } catch (e) {}
+      if (!pts.length) return { x: 0, z: 0 };
+      return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, z: pts.reduce((a, p) => a + p.z, 0) / pts.length };
+    },
+
+    // put the camera down and give the world its legs back
+    cut() {
+      if (!api._filming) return false;
+      api._filming = false;
+      const w = W();
+      if (w && api._saved) { w.updateMovement = api._saved.updateMovement; if (api._saved.updateHover && w.updateHover) w.updateHover = api._saved.updateHover; }
+      if (api._tookPointer && w) { w.isPointerLocked = false; api._tookPointer = false; }
+      log('cut — camera down, movement and the pointer restored');
+      return true;
+    },
+
     async press(selector) { const el = document.querySelector(selector); if (!el) return false; el.click(); await sleep(80); return true; },
     async wait(ms) { await sleep(ms | 0); return true; },
 
@@ -290,6 +424,8 @@
               : verb === 'sense' ? api.sense(s)
               : verb === 'carry' ? api.carry(s.payload || {})
               : verb === 'mind' ? await api.mind(s)
+              : verb === 'camera' ? await api.camera(s)
+              : verb === 'cut' ? api.cut()
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
@@ -301,7 +437,7 @@
     },
 
     stop() { api._running = false; return true; },
-    _running: false,
+    _running: false, _filming: false, _shot: null,
   };
 
   window.__autodrive = api;

@@ -49,7 +49,7 @@ Each tab is a <b>person</b>: the driver only ever sends real UI events — keydo
 </p>
 <script>
 const RAW = 'https://raw.githubusercontent.com/kody-w/AINexus/main/';
-const PROGRAMS = ['wanderer', 'greeter', 'pilgrim', 'minded'];
+const PROGRAMS = ['wanderer', 'greeter', 'pilgrim', 'minded', 'camera'];
 const tabs = [];
 let room = null;
 
@@ -102,7 +102,7 @@ async function verifyChain(text) {
 
 // Programs are DATA fetched from committed static files (Article XXIV) — never code.
 // Any verb the driver does not know is refused, so a tampered file cannot execute anything.
-const VERBS = new Set(['look','walk','click','aim','travel','ask','say','press','wait','see','scan','sense','carry','mind']);
+const VERBS = new Set(['look','walk','click','aim','travel','ask','say','press','wait','see','scan','sense','carry','mind','camera','cut']);
 async function fetchEither(rel) {
   try { const r = await fetch(RAW + rel, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return { text: await r.text(), via: 'raw' }; }
   catch (e) { const r = await fetch(rel); return { text: await r.text(), via: 'local' }; }

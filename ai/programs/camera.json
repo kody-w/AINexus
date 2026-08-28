@@ -1,0 +1,10 @@
+{
+  "schema": "nexus-autodrive/1",
+  "name": "camera",
+  "persona": "A camera operator, not a player. It stands outside the portal ring, holds a shot long enough to watch, cuts between four compositions, and never clicks — so it cannot fall through a doorway mid-take.",
+  "loop": false,
+  "steps": [
+    {"do": "say", "text": "🎥 camera up — filming from outside the ring, I won't be walking through anything"},
+    {"do": "camera", "radius": 30, "height": 10, "hold": 7000, "film": true}
+  ]
+}
