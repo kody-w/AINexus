@@ -40,6 +40,8 @@ a{color:#7de3ff}
   <button class="go" id="start">Open the room</button>
   <button class="stop" id="killall">Stop everything</button>
   <button id="dump">Download receipts</button>
+  <button id="signin" title="one Copilot seat, shared by every player in the room">Grant a mind</button>
+  <span id="mind" style="font:12px ui-monospace,monospace;color:#8a8aa8"></span>
   <button id="me" title="watch from the sky in another tab, then drop in">👁 ME view</button>
 </header>
 <div class="grid" id="grid"></div>
@@ -47,6 +49,8 @@ a{color:#7de3ff}
 Each tab is a <b>person</b>: the driver only ever sends real UI events — keydown to walk, mousemove to look, a click to enter a portal, the page's own chat input to speak. Every AI player is labelled as an AI to everyone in the room. Programs are declarative (a fixed verb set — never fetched JavaScript) and are <b>verified against an append-only chain this repo owns</b>: the tower recomputes every frame hash and refuses bytecode whose bytes do not match its sealed publication. Budgets stop a runaway; the journal is the receipt.
 <br>Origin note: injection works because the frames are same-origin. A cross-origin world cannot be driven, and this tower will say so rather than pretend.
 </p>
+<!-- the tower needs the same door its players use: one seat, one shared key -->
+<script src="ai/copilot_auth.js"></script>
 <script>
 const RAW = 'https://raw.githubusercontent.com/kody-w/AINexus/main/';
 const PROGRAMS = ['wanderer', 'greeter', 'pilgrim', 'minded', 'camera'];
@@ -191,8 +195,16 @@ async function boot() {
     // The first player hosts the room; the rest are invited into it, exactly as people are.
     // Each frame loads EXACTLY ONCE with its final URL — changing only a fragment on a loaded
     // iframe fires no load event, and waiting for one that never comes hangs the whole tower.
-    const invite = (i === 0 || !room) ? '#ai=autodrive'
-                                      : '#join=' + room.id + '.' + room.secret + '&ai=autodrive';
+    // The first player hosts; the rest are invited in. If the host never got a
+    // room, STOP — opening the others anyway silently turns one broken host into
+    // N solo worlds, which is exactly what "3 players, 1 player each" was.
+    if (i > 0 && !room) {
+      say(i, 'no room to join — the host never reached the broker. Not opening a solo world.', 'e');
+      $('st' + i).textContent = 'no room';
+      break;
+    }
+    const invite = (i === 0) ? '#ai=autodrive'
+                             : '#join=' + room.id + '.' + room.secret + '&ai=autodrive';
     const asName = encodeURIComponent('🤖 ' + persona + ' (AI)');
     frame.src = world + '?player=' + (i + 1) + invite + (invite.includes('#') ? '&' : '#') + 'as=' + asName;
     await new Promise((res, rej) => {
@@ -210,6 +222,10 @@ async function boot() {
       if (room) {
         say(i, 'hosting room ' + room.id.slice(0, 8) + '…', 'd');
         publishRoom(room, world);            // so the ME view in another tab can find it
+      } else {
+        say(i, 'the host never got a room from the broker — nobody can join. '
+             + 'Everything below this line would have been a separate world.', 'e');
+        $('st' + i).textContent = 'no room';
       }
     }
     await label(frame, i, persona);
@@ -284,6 +300,39 @@ async function runProgram(i) {
     }
   });
 }
+
+// One Copilot seat covers every player. The token lives under `rapp_settings`,
+// the estate-wide key, so a sign-in at Heimdall or any other front door on this
+// origin already counts here — and a sign-in here counts there.
+function paintMind() {
+  const A = window.NexusAuth, el = $('mind'), btn = $('signin');
+  if (!A) { el.textContent = 'auth module missing'; btn.disabled = true; return; }
+  const inn = A.signedIn();
+  el.textContent = inn ? 'mind: granted — every player can think'
+                       : 'mind: none — players will move but not think';
+  btn.textContent = inn ? 'Revoke the mind' : 'Grant a mind';
+}
+$('signin').onclick = async () => {
+  const A = window.NexusAuth, btn = $('signin');
+  if (!A) return;
+  if (A.signedIn()) { A.signOut(); paintMind(); return; }
+  try {
+    btn.disabled = true;
+    const d = await A.startDeviceLogin();
+    $('mind').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
+      '" target="_blank" rel="noopener">github.com/login/device</a> — waiting…';
+    const tick = setInterval(async () => {
+      try {
+        if (!(await A.pollDeviceLogin())) return;
+        clearInterval(tick); btn.disabled = false; paintMind();
+      } catch (e) {
+        clearInterval(tick); btn.disabled = false;
+        $('mind').textContent = 'sign-in failed: ' + e.message;
+      }
+    }, 5000);
+  } catch (e) { btn.disabled = false; $('mind').textContent = 'could not start sign-in: ' + e.message; }
+};
+paintMind();
 
 $('me').onclick = () => window.open('spectate.html', '_blank');
 $('start').onclick = boot;

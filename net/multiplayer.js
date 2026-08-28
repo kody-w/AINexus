@@ -125,6 +125,31 @@
                 this.peer.on('error', (err) => {
                     console.error('Peer error:', err);
 
+                    // A busy free broker answers `server-error` before it ever
+                    // emits `open`, so roomId is never assigned and this tab is
+                    // silently alone — the failure that makes a room of four
+                    // read as four rooms of one. It is transient, so retry it a
+                    // few times with backoff instead of giving up on the first.
+                    if ((err.type === 'server-error' || err.type === 'network') && !this.roomId) {
+                        this.brokerTries = (this.brokerTries || 0) + 1;
+                        if (this.brokerTries <= 3) {
+                            const wait = 400 * this.brokerTries;
+                            this.updateStatus('Broker busy — retry ' + this.brokerTries + '/3', false);
+                            console.warn('[nexus] broker ' + err.type + '; retrying in ' + wait + 'ms');
+                            setTimeout(() => {
+                                try { if (this.peer && !this.peer.destroyed) this.peer.destroy(); } catch (e) {}
+                                try { this.initializePeer(); } catch (e) {
+                                    console.warn('[nexus] retry failed', e);
+                                }
+                            }, wait);
+                            return;
+                        }
+                        this.showError('The peer broker refused us ' + this.brokerTries +
+                                       ' times — this tab is alone. Nothing else is wrong.');
+                        this.updateStatus('Alone (broker refused)', false);
+                        return;
+                    }
+
                     // Handle specific error types
                     if (err.type === 'peer-unavailable') {
                         this.showError('Host not found. Make sure the host is online.');
