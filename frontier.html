@@ -316,19 +316,28 @@ $('more').onclick = () => { $('hud').classList.toggle('min'); };
 // an AI standing in this world can think without anybody installing a brainstem — and because
 // every one of these doors stores its settings under the same key on the same origin, signing
 // in at Heimdall (or the brainstem UI) already counts here.
-function mindState() {
-  const inN = window.NexusAuth && NexusAuth.signedIn();
-  $('mind').textContent = inN ? 'mind granted ✓' : 'grant a mind';
-  $('mind').classList.toggle('on', !!inN);
-  return inN;
+// The button must say what is TRUE, not what is stored. A stale ghu_ looks identical to a
+// live one, so a token in storage earns "checking…" and nothing more until it has actually
+// bought a chat token. Claiming a mind that 401s is the same lie as claiming a verified build.
+async function mindState() {
+  const el = $('mind');
+  if (!window.NexusAuth) { el.textContent = 'grant a mind'; return false; }
+  if (!NexusAuth.hasToken()) { el.textContent = 'grant a mind'; el.classList.remove('on'); return false; }
+  el.textContent = 'checking sign-in…';
+  const ok = await NexusAuth.verify();
+  el.textContent = ok ? 'mind granted ✓' : 'sign in again';
+  el.classList.toggle('on', ok);
+  if (!ok) note('the saved sign-in has expired — press sign in again to grant a mind');
+  return ok;
 }
 mindState();
 $('mind').onclick = async () => {
   if (!window.NexusAuth) return note('auth module did not load');
-  if (NexusAuth.signedIn()) {
+  if ($('mind').classList.contains('on')) {
     NexusAuth.signOut(); mindState(); $('signin').classList.remove('on');
     return note('signed out — players fall back to their programs');
   }
+  NexusAuth.signOut();               // clear any dead credential before asking for a fresh one
   try {
     const { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
     $('code').textContent = user_code;

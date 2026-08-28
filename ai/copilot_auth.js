@@ -45,7 +45,12 @@
     } catch (e) { return loadSettings(); }
   }
   const getToken = () => loadSettings().ghuToken || null;
-  const signedIn = () => !!getToken();
+  // HOLDING A TOKEN IS NOT BEING SIGNED IN. A ghu_ that has expired or been revoked still sits
+  // in storage looking exactly like a good one, so a check for "is a string present" will
+  // happily report a mind that does not exist. This is the cheap, honest answer — there IS a
+  // credential here — and `verify()` below is the true one.
+  const hasToken = () => !!getToken();
+  const signedIn = hasToken;
 
   let pending = null;
 
@@ -80,6 +85,11 @@
     const ghu = getToken();
     if (!ghu) throw new Error('not signed in');
     const r = await fetch(AUTH_WORKER_URL + '/api/copilot/token', { headers: { Authorization: 'Bearer ' + ghu } });
+    if (r.status === 401 || r.status === 403) {
+      // the credential is dead, so stop presenting it as a mind
+      signOut();
+      throw new Error('sign-in expired — grant a mind again');
+    }
     if (!r.ok) throw new Error('copilot exchange ' + r.status + ': ' + (await r.text()).slice(0, 200));
     const d = await r.json();
     if (!d.token) throw new Error('Copilot returned no token');
@@ -114,9 +124,16 @@
     return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
   }
 
+  // the true answer: can this credential actually buy a thought right now?
+  async function verify() {
+    if (!hasToken()) return false;
+    try { await ensureToken(); return true; }
+    catch (e) { return false; }
+  }
+
   function signOut() { saveSettings({ ghuToken: null, copilotToken: null, copilotExpiresAt: 0 }); pending = null; }
 
   root.NexusAuth = { startDeviceLogin, pollDeviceLogin, exchange, ensureToken, chat, chatUrl,
-                     signOut, signedIn, getToken, loadSettings, saveSettings,
+                     signOut, signedIn, hasToken, verify, getToken, loadSettings, saveSettings,
                      AUTH_WORKER_URL, COPILOT_CLIENT_ID, COPILOT_DEFAULT_API, STORAGE_KEY, DEFAULT_MODEL };
 })(typeof window !== 'undefined' ? window : globalThis);

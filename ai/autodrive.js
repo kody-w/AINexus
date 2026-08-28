@@ -324,7 +324,12 @@
           // the sense may arrive parsed by the brainstem, or inline in the reply
           block = j.nexus_response || (reply.split('|||NEXUS|||')[1] || '');
         }
-      } catch (e) { log('mind unreachable:', e.message); return null; }
+      } catch (e) {
+        // a dead credential has already cleared itself in copilot_auth; say so plainly rather
+        // than leaving a player looking like it chose to be silent
+        log('mind unreachable:', e.message);
+        return null;
+      }
       const words = reply.split('|||NEXUS|||')[0].trim();
       if (words) await api.say(words.slice(0, 240));
       let move = null;
