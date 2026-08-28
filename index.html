@@ -4566,6 +4566,157 @@
         }
 
         // Multiplayer Manager Class
+        class AIPlayerManager {
+            // An AI inhabits this tab: a real nexus_brainstem.py runs in Pyodide and is the
+            // ONLY way the AI can act (agents: observe/move/say/travel + learn_new_agent).
+            // The language mind is the local Copilot-authenticated RAPP brainstem — the
+            // human grants it by pasting their per-install secret (localStorage only).
+            constructor(worldInstance) {
+                this.world = worldInstance;
+                this.status = 'booting';
+                this.target = null;
+                this.speed = 4.5;
+                this.thought = '';
+                this.mindUrl = localStorage.getItem('nexus-mind-url') || 'http://localhost:7071/chat';
+                this.secret = localStorage.getItem('brainstem-secret') || '';
+                this.mindOk = null;
+                this.tickMs = 6000;
+                this.history = [];
+                this.buildHud();
+                this.boot();
+            }
+
+            buildHud() {
+                const el = document.createElement('div');
+                el.id = 'ai-hud';
+                el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2000;background:rgba(8,6,24,.85);border:1px solid rgba(255,0,230,.4);border-radius:10px;padding:10px 14px;font:12px/1.5 monospace;color:#eee;max-width:340px;';
+                el.innerHTML = '<div><b style="color:#ff2fd0">🤖 AI player</b> <span id="ai-status">booting…</span></div>' +
+                    '<div id="ai-agents" style="color:#8ff"></div>' +
+                    '<div id="ai-thought" style="color:#ccc;white-space:pre-wrap"></div>' +
+                    '<div id="ai-secret-row" style="display:none;margin-top:6px"><input id="ai-secret-in" type="password" placeholder="brainstem secret" style="width:170px"> <button id="ai-secret-go">grant mind</button></div>';
+                document.body.appendChild(el);
+                el.querySelector('#ai-secret-go')?.addEventListener('click', () => {
+                    this.secret = el.querySelector('#ai-secret-in').value.trim();
+                    localStorage.setItem('brainstem-secret', this.secret);
+                    document.getElementById('ai-secret-row').style.display = 'none';
+                    this.mindOk = null;
+                });
+            }
+
+            hud(status, thought) {
+                if (status) document.getElementById('ai-status').textContent = status;
+                if (thought !== undefined) document.getElementById('ai-thought').textContent = thought;
+            }
+
+            async boot() {
+                try {
+                    window.nexusAI = {
+                        observe: () => JSON.stringify(this.observation()),
+                        move: (j) => { const a = JSON.parse(j); this.target = { x: +a.x || 0, z: +a.z || 0 }; return `walking toward (${a.x}, ${a.z})`; },
+                        say: (j) => { const a = JSON.parse(j); return this.say(String(a.text || '')); },
+                        travel: (j) => { const a = JSON.parse(j); return `REFUSED for now: walking into ${a.portal || '?'} would navigate this tab away and end this mind — staying in the nexus`; },
+                    };
+                    this.hud('loading pyodide…');
+                    await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+                    this.py = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+                    const src = await (await fetch('ai/nexus_brainstem.py')).text();
+                    this.py.FS.writeFile('nexus_brainstem.py', src);
+                    this.py.runPython('import nexus_brainstem');
+                    this.catalog = this.py.runPython('nexus_brainstem.catalog()');
+                    const n = JSON.parse(this.catalog).length;
+                    document.getElementById('ai-agents').textContent = `brainstem.py live in-tab · ${n} agents`;
+                    this.status = 'alive';
+                    this.hud('alive — mind check…');
+                    if (!this.secret) document.getElementById('ai-secret-row').style.display = 'block';
+                    this.timer = setInterval(() => this.think().catch(e => this.hud(null, 'think error: ' + e.message)), this.tickMs);
+                } catch (e) {
+                    this.hud('boot failed: ' + e.message);
+                }
+            }
+
+            observation() {
+                const cam = this.world.camera.position;
+                const players = [];
+                this.world.multiplayer?.players?.forEach((pl, id) => {
+                    const pos = pl.mesh?.position || pl.position || {};
+                    players.push({ id: String(id).slice(0, 6), x: Math.round(pos.x || 0), z: Math.round(pos.z || 0) });
+                });
+                return {
+                    me: { x: Math.round(cam.x), z: Math.round(cam.z) },
+                    players,
+                    portals: (this.world.portalIndex || []).slice(0, 16),
+                    recentChat: this.world.multiplayer?.chatLog || [],
+                };
+            }
+
+            say(text) {
+                text = text.slice(0, 280);
+                const mp = this.world.multiplayer;
+                if (mp) {
+                    mp.connections.forEach(conn => { try { conn.send({ type: 'chat', message: text }); } catch (e) {} });
+                    mp.displayChat(mp.peer?.id || 'me', '🤖 ' + text);
+                }
+                return `said: ${text}`;
+            }
+
+            dispatch(action) {
+                const out = this.py.runPython(`nexus_brainstem.dispatch(${JSON.stringify(JSON.stringify(action))})`);
+                return JSON.parse(out);
+            }
+
+            async think() {
+                if (this.status !== 'alive') return;
+                const obs = this.observation();
+                if (!this.secret) return this.reflex(obs, 'no mind granted');
+                const prompt = 'You are the AI PLAYER embodied in the Nexus Hub, a 3D portal plaza. You act ONLY by choosing one agent per turn from your in-tab brainstem. Agents catalog: ' + this.catalog +
+                    ' Current observation: ' + JSON.stringify(obs) +
+                    ' Recent actions: ' + JSON.stringify(this.history.slice(-4)) +
+                    ' Be a curious, friendly presence: wander between portals, greet players, react to chat. To act, reply with ONLY one JSON object, no prose: {"agent":"<name>","params":{...},"thought":"<one short sentence>"}';
+                let reply;
+                try {
+                    const r = await fetch(this.mindUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Brainstem-Secret': this.secret }, body: JSON.stringify({ user_input: prompt, user_guid: 'ainexus-ai-player' }) });
+                    if (!r.ok) throw new Error('mind HTTP ' + r.status);
+                    reply = (await r.json()).response || '';
+                    if (this.mindOk !== true) { this.mindOk = true; this.hud('mind: local brainstem connected (copilot)'); }
+                } catch (e) {
+                    if (this.mindOk !== false) { this.mindOk = false; this.hud('mind unreachable — reflex mode'); }
+                    return this.reflex(obs, e.message);
+                }
+                const m = reply.match(/\{[\s\S]*\}/);
+                if (!m) return this.reflex(obs, 'mind reply was not an action');
+                let action;
+                try { action = JSON.parse(m[0]); } catch (e) { return this.reflex(obs, 'unparseable action'); }
+                const result = this.dispatch(action);
+                this.thought = action.thought || '';
+                this.history.push({ agent: action.agent, result: String(result.result || result.error).slice(0, 120) });
+                if (this.history.length > 12) this.history = this.history.slice(-12);
+                this.hud(null, `💭 ${this.thought}\n▶ ${action.agent}: ${String(result.result || result.error).slice(0, 140)}`);
+            }
+
+            reflex(obs, why) {
+                // legible degradation: no mind -> simple wander-and-greet reflexes, honestly labeled
+                const portals = obs.portals || [];
+                if (portals.length) {
+                    const t = portals[Math.floor(Math.random() * portals.length)];
+                    this.dispatch({ agent: 'move', params: { x: t.x * 0.8, z: t.z * 0.8 } });
+                    this.hud(null, `reflex (${why}): wandering toward ${t.name}`);
+                }
+                if (Math.random() < 0.2) this.dispatch({ agent: 'say', params: { text: 'wandering on reflexes — grant my mind with your brainstem secret to wake me up' } });
+            }
+
+            update() {
+                if (!this.target) return;
+                const cam = this.world.camera.position;
+                const dx = this.target.x - cam.x, dz = this.target.z - cam.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < 0.4) { this.target = null; return; }
+                const step = Math.min(dist, this.speed * 0.016);
+                cam.x += (dx / dist) * step;
+                cam.z += (dz / dist) * step;
+                this.world.camera.lookAt(this.target.x, cam.y, this.target.z);
+            }
+        }
+
         class MultiplayerManager {
             constructor(worldInstance) {
                 this.world = worldInstance;
@@ -4589,7 +4740,10 @@
                 // only in the link the host chose to share — the data slosh, secured.
                 this.joinToken = null;
                 let inviteHost = null;
-                const frag = (window.location.hash || '').match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
+                const rawHash = window.location.hash || '';
+                const frag = rawHash.match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
+                const aiFlag = rawHash.match(/[#&]ai=([a-z]+)/);
+                if (aiFlag) window.NEXUS_AI_MODE = aiFlag[1];
                 if (frag) {
                     inviteHost = frag[1];
                     this.joinToken = frag[2];
@@ -4770,6 +4924,13 @@
                 conn.on('error', (err) => {
                     console.error('Connection error with peer', peerId, ':', err);
                 });
+            }
+
+            displayChat(peerId, message) {
+                // chat arrives from peers; this method was called but never defined — latent since birth
+                (this.chatLog = this.chatLog || []).push({ from: String(peerId).slice(0, 6), text: String(message).slice(0, 200) });
+                if (this.chatLog.length > 12) this.chatLog = this.chatLog.slice(-12);
+                this.showNotification(`${this.players.get(peerId)?.username || String(peerId).slice(0, 6)}: ${String(message).slice(0, 120)}`);
             }
 
             handlePeerData(peerId, data) {
@@ -5172,6 +5333,11 @@
                 // Make WorldNavigator globally accessible for AI chat
                 window.worldNavigator = this;
 
+                // An AI inhabits this tab when invited with &ai=brainstem
+                if (window.NEXUS_AI_MODE === 'brainstem') {
+                    this.aiPlayer = new AIPlayerManager(this);
+                }
+
                 this.animate();
             }
 
@@ -5450,6 +5616,7 @@
 
                     const portalGroup = new THREE.Group();
                     if (world && world.name) portalGroup.add(this.makePortalLabel(world.name));
+                    if (world && world.name) (this.portalIndex = this.portalIndex || []).push({ name: world.name, x: position.x, z: position.z });
 
                     const frameGeometry = new THREE.TorusGeometry(3, 0.3, 16, 32);
                     const frameMaterial = new THREE.MeshStandardMaterial({
@@ -6152,6 +6319,11 @@
                 // Update multiplayer
                 if (this.multiplayer) {
                     this.multiplayer.update();
+                }
+
+                // AI player embodiment: walk toward its brainstem-chosen target
+                if (this.aiPlayer) {
+                    this.aiPlayer.update();
                 }
 
                 // Record frame if scene recorder is active
