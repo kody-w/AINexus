@@ -457,6 +457,17 @@
       return out.sort((a, b) => a.distance - b.distance);
     },
 
+    // the same ring of things to say that a person is shown — one surface, both kinds of
+    // player. An AI that answers by picking an option is using the identical mechanic.
+    dialogue(peerId) {
+      const who = api.people().find(p => p.id === String(peerId));
+      if (!who) return [];
+      const G = (typeof window !== 'undefined' && window.NexusDialogue);
+      if (!G) { log('dialogue.js not loaded in this world'); return []; }
+      return G.options({ who: { id: who.id, name: who.name, isAI: who.isAI },
+                         chat: api.snapshot().chat || [], portals: api.orbs() });
+    },
+
     // say something TO someone — and to nobody else. Sending to every connection and merely
     // labelling it `to` is not addressing a message, it is broadcasting one with a note on it.
     async tell(peerId, text) {
@@ -573,6 +584,7 @@
               : verb === 'orbs' ? api.orbs()
               : verb === 'people' ? api.people()
               : verb === 'tell' ? await api.tell(s.to, s.text)
+              : verb === 'dialogue' ? api.dialogue(s.to)
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);

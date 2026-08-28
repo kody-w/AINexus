@@ -71,6 +71,7 @@ button.on{background:#12442c;border-color:#1d6b45}
 </div>
 <script src="ai/gestures.js"></script>
 <script src="ai/face.js"></script>
+<script src="ai/dialogue.js"></script>
 <script src="ai/pulse.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -101,9 +102,11 @@ frame.addEventListener('load', () => {
       if (++tries < 25) return setTimeout(inject, 120);
       note('the world never produced a document to drive'); return;
     }
-    const d = doc.createElement('script');
-    d.src = new URL('ai/autodrive.js', location.href).href;
-    doc.body.appendChild(d);
+    ['ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
+      const el = doc.createElement('script');
+      el.src = new URL(src, location.href).href;
+      doc.body.appendChild(el);
+    });
   };
   inject();
   const t = setInterval(() => { if (frame.contentWindow.__autodrive) { clearInterval(t); drive = frame.contentWindow.__autodrive; note('hands connected to the world'); } }, 200);
@@ -311,18 +314,42 @@ const esc = t => String(t == null ? '' : t)
 // One seam so the orb layer can be exercised without a live room in front of it.
 const D = () => (typeof window !== 'undefined' && window.__NEXUS_DRIVE_TEST) || drive;
 let talkingTo = null, lines = [], hotLine = -1, optAt = [];
-const OPENERS = [
-  { short: 'greet', text: 'hey — good to see someone else here' },
-  { short: 'ask', text: 'what are you doing over here?' },
-  { short: 'invite', text: 'want to go through a portal together?' },
-  { short: 'who', text: 'are you a person or an AI?' },
-  { short: 'leave', text: 'catch you later' },
-];
+// What you could say is not a fixed menu — it is generated from the room (ai/dialogue.js):
+// whether they just spoke, whether it was a question, which portal you are both next to,
+// whether they are a person or an AI. Regenerated every time the conversation moves.
+let seenChat = 0;
+function ringFor(who) {
+  const d = D();
+  let chat = [], portals = [];
+  try { chat = (d && d.snapshot().chat) || []; } catch (e) {}
+  try { portals = (d && d.orbs()) || []; } catch (e) {}
+  try { return NexusDialogue.options({ who, chat, portals }); }
+  catch (e) { return [{ short: 'greet', text: 'hello' }, { short: 'leave', text: 'catch you later' }]; }
+}
 function openTalk(what) {
-  talkingTo = { id: what.id, name: (what.isAI ? '🤖 ' : '🧑 ') + what.label.replace(/^🤖\s*/, ''), at: what.person };
-  lines = OPENERS.slice(); hotLine = -1; optAt = [];
+  talkingTo = { id: what.id, isAI: !!what.isAI,
+                name: (what.isAI ? '🤖 ' : '🧑 ') + what.label.replace(/^🤖\s*/, ''), at: what.person };
+  lines = ringFor(talkingTo); hotLine = -1; optAt = [];
+  try { seenChat = ((D() && D().snapshot().chat) || []).length; } catch (e) { seenChat = 0; }
   note('talking to ' + what.label + (what.isAI ? ' (an AI)' : ''));
 }
+
+// While a conversation is open, watch the room for their answer. When it arrives, show it and
+// build the next ring from it — which is what makes this a conversation rather than a menu.
+setInterval(() => {
+  if (!talkingTo) return;
+  const d = D(); if (!d) return;
+  let chat = [];
+  try { chat = d.snapshot().chat || []; } catch (e) { return; }
+  if (chat.length <= seenChat) return;
+  const fresh = chat.slice(seenChat);
+  seenChat = chat.length;
+  const key = String(talkingTo.id).slice(0, 6);
+  const theirs = fresh.filter(c => c && String(c.from) === key);
+  if (!theirs.length) return;
+  theirs.forEach(c => note(talkingTo.name + ': ' + c.text));
+  lines = ringFor(talkingTo); hotLine = -1; optAt = [];
+}, 600);
 function closeTalk(why) { if (!talkingTo) return; talkingTo = null; lines = []; hotLine = -1; optAt = [];
   hot = null; dwellFired = false; note('conversation closed' + (why ? ' — ' + why : '')); }
 function sayLine(i) {
@@ -331,14 +358,10 @@ function sayLine(i) {
   d.tell(who.id, ln.text);
   note('you: ' + ln.text);
   if (ln.short === 'leave') { closeTalk(); return; }
-  // the reply comes back through the room's chat, from a person or from an AI's mind
-  setTimeout(() => {
-    try {
-      const chat = d.snapshot().chat || [];
-      const last = chat[chat.length - 1];
-      if (last && last.text !== ln.text) note(who.name + ': ' + last.text);
-    } catch (e) {}
-  }, 2200);
+  // Once you have answered, their last line is no longer the open question — so the ring is
+  // rebuilt for the state you are actually in: waiting. Their reply rebuilds it again.
+  try { seenChat = ((D() && D().snapshot().chat) || []).length; } catch (e) {}
+  lines = ringFor(talkingTo); hotLine = -1; optAt = [];
 }
 let hot = null, hotSince = 0, lastSeenHot = 0, dwellFired = false, cursorAt = { x: -1, y: -1 }, deskMode = false;
 let lastDesk = -1e9, gazeDrives = false;     // who is holding the pointer right now
