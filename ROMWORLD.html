@@ -1,9 +1,18 @@
-<!-- ROM Loader -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gameboy World</title>
 <meta name="description" content="Gameboy World — a retro gaming sanctuary in AINexus where classic Game Boy games come alive in 3D space; load a ROM and play.">
 <meta property="og:title" content="Gameboy World">
 <meta property="og:description" content="A retro gaming sanctuary where classic games come alive in 3D space.">
 <meta property="og:type" content="website">
+</head>
+<body>
+<!-- ROM Loader -->
+<div id="three-container"></div>
+<canvas id="gameboy-screen" style="display:none;"></canvas>
 <div class="rom-loader" id="rom-loader">
     <button class="close-loader" id="close-loader">&times;</button>
     <h2>🎮 Load Gameboy ROM</h2>
@@ -1050,3 +1059,5 @@
         window.gameboyWorld = world;
     });
 </script>
+</body>
+</html>
