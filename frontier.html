@@ -30,32 +30,48 @@ button.on{background:#12442c;border-color:#1d6b45}
 .k b{color:#7de3ff;font-weight:600}
 #state{font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;margin-top:8px;white-space:pre-wrap;max-height:96px;overflow:auto}
 #cam{position:fixed;right:12px;bottom:12px;width:180px;border-radius:10px;border:1px solid #2b2b52;transform:scaleX(-1);z-index:10;display:none}
+#gaze{position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;pointer-events:none;z-index:9;opacity:0;
+  border:2px solid rgba(255,120,200,.75);box-shadow:0 0 18px rgba(255,120,200,.45);transition:opacity .2s}
+#gaze.on{opacity:1}#gaze.brow{border-color:#fff;box-shadow:0 0 26px #fff}
+#orbs circle.person.unseen{stroke:rgba(255,170,90,.10);stroke-dasharray:3 6}
+#vitals{display:none;align-items:center;gap:7px;margin-top:7px;font:11px ui-monospace,Menlo,monospace;color:#ff9ecb}
+#vitals.on{display:flex}
+#beat{width:9px;height:9px;border-radius:50%;background:#ff5ea8;box-shadow:0 0 10px #ff5ea8;animation:thump 1s infinite ease-out}
+@keyframes thump{0%{transform:scale(.65);opacity:.55}18%{transform:scale(1.25);opacity:1}100%{transform:scale(.65);opacity:.55}}
+#roi{display:none}
 .badge{display:inline-block;border-radius:999px;padding:1px 8px;font-size:10px;background:#2a1140;border:1px solid #6b3fa0;color:#d9b8ff}
 </style></head><body>
 <iframe id="f" title="the world" allow="camera"></iframe>
 <svg id="orbs" aria-hidden="true"></svg>
 <div id="cursor"><svg id="dwell" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20"/></svg></div>
+<div id="gaze"></div><canvas id="roi" width="64" height="32"></canvas>
 <video id="cam" autoplay playsinline muted></video>
 <div class="hud">
   <h1>🖐 Frontier <span class="badge" id="mode">out there mode</span></h1>
   <p class="sub">Your hands and your voice are the controller. Nothing is simulated — the same verbs an AI player uses.</p>
   <div>
     <button id="hands">start hands</button>
+    <button id="eyes">start eyes</button>
     <button id="voice">start voice</button>
     <button id="stop">stop</button>
   </div>
   <p class="k">
     <b>point</b> — move the cursor (your hand is the mouse)<br>
     <b>rest on an orb</b> — the ring fills in 2½s and snaps (hands-free)<br>
+    <b>look at a person</b> — they only light up when your eyes are actually on them<br>
     <b>rest on a person</b> — open a ring of things to say; the same for a human or an AI<br>
+    <b>raise your eyebrows</b> — that is the click: eyes aim, brow presses<br>
     <b>pinch</b> — select it now, without waiting<br>
     <b>open palm</b> — walk forward; lean it to turn as you go<br>
     <b>speak</b> — “go to Crystal Caverns”, “turn left”, “ask, what is this place”, or just talk to the room
   </p>
+  <div id="vitals"><span id="beat"></span><span id="bpm">reading your pulse…</span></div>
   <div id="target" style="font:12px ui-monospace,Menlo,monospace;color:#7de3ff;min-height:18px;margin-top:6px"></div>
-  <div id="state">idle — press start hands (your camera never leaves this machine)</div>
+  <div id="state">idle — press start hands or start eyes (your camera never leaves this machine, and your pulse is never sent to the room)</div>
 </div>
 <script src="ai/gestures.js"></script>
+<script src="ai/face.js"></script>
+<script src="ai/pulse.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const frame = $('f'), cursor = $('cursor');
@@ -69,28 +85,60 @@ if (!joinFrag) { try { const r = JSON.parse(localStorage.getItem('nexus:room') |
 frame.src = world + joinFrag;
 
 frame.addEventListener('load', () => {
-  try {
-    const d = frame.contentDocument.createElement('script');
+  // A load event can arrive before the frame's document exists, and a null contentDocument is
+  // NOT the same failure as a cross-origin one — reporting it as cross-origin sends anyone
+  // debugging this in exactly the wrong direction. So: retry briefly, then say which it was.
+  // A new world is a new room with new people in it: whatever conversation was open belonged
+  // to the last one. Voice travel ("go to Crystal Caverns") navigates the frame from inside,
+  // never passing through fire(), so this is the only place that catches every arrival.
+  closeTalk('you went somewhere else');
+  let tries = 0;
+  const inject = () => {
+    let doc = null;
+    try { doc = frame.contentDocument; }
+    catch (e) { note('cannot drive this world — it is on another origin: ' + e.message); return; }
+    if (!doc || !doc.body) {
+      if (++tries < 25) return setTimeout(inject, 120);
+      note('the world never produced a document to drive'); return;
+    }
+    const d = doc.createElement('script');
     d.src = new URL('ai/autodrive.js', location.href).href;
-    frame.contentDocument.body.appendChild(d);
-  } catch (e) { note('cannot drive this world (cross-origin): ' + e.message); return; }
+    doc.body.appendChild(d);
+  };
+  inject();
   const t = setInterval(() => { if (frame.contentWindow.__autodrive) { clearInterval(t); drive = frame.contentWindow.__autodrive; note('hands connected to the world'); } }, 200);
 });
 
 function note(t) { $('state').textContent = (t + '\n' + $('state').textContent).slice(0, 600); }
 
+// ── the camera, shared ───────────────────────────────────────────────────
+// Hands and eyes are two readings of ONE camera frame. Asking for the webcam twice would
+// give two streams, two permission prompts and two copies of the same pixels.
+let camStream = null, visionLib = null, files = null;
+async function ensureCamera() {
+  if (camStream) return camStream;
+  note('asking for the camera…');
+  camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+  const v = $('cam'); v.srcObject = camStream; v.style.display = 'block';
+  return camStream;
+}
+async function ensureVision() {
+  if (visionLib) return { vision: visionLib, files };
+  visionLib = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+  files = await visionLib.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  return { vision: visionLib, files };
+}
+
 // ── hands ────────────────────────────────────────────────────────────────
 $('hands').onclick = async () => {
   if (running) return;
-  $('hands').classList.add('on'); note('asking for the camera…');
-  let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } }); }
+  $('hands').classList.add('on');
+  try { await ensureCamera(); }
   catch (e) { note('no camera: ' + e.message + ' — voice and keyboard still work'); $('hands').classList.remove('on'); return; }
-  const v = $('cam'); v.srcObject = stream; v.style.display = 'block';
+  const v = $('cam');
   try {
-    const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
-    const files = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    hands = await vision.HandLandmarker.createFromOptions(files, {
+    const { vision, files: fs2 } = await ensureVision();
+    hands = await vision.HandLandmarker.createFromOptions(fs2, {
       baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
       numHands: 1, runningMode: 'VIDEO' });
   } catch (e) { note('hand model would not load: ' + e.message); return; }
@@ -127,6 +175,96 @@ $('hands').onclick = async () => {
   loop();
 };
 
+
+// ── eyes, brow and pulse ─────────────────────────────────────────────────
+// Looking at something is already how a person says "that one", so gaze is the aim and the
+// BROW is the button — the one facial muscle you only move on purpose. A blink is involuntary
+// and a stare is ambiguous; raising your eyebrows is a decision.
+//
+// The same frame that carries your eyes also carries your heartbeat. Your face reddens very
+// slightly with each beat, and averaging a patch of forehead over ten seconds is enough to
+// recover the rate (ai/pulse.js). It is a body measurement, so it stays on this machine: the
+// number is displayed here and is never put on the wire to the room.
+let face = null, faceOn = false, gaze = null, gazePt = null, pulse = null, roiCtx = null, lastBeatRead = 0;
+$('eyes').onclick = async () => {
+  if (faceOn) return;
+  $('eyes').classList.add('on');
+  try { await ensureCamera(); }
+  catch (e) { note('no camera: ' + e.message); $('eyes').classList.remove('on'); return; }
+  const v = $('cam');
+  try {
+    const { vision, files: fs2 } = await ensureVision();
+    face = await vision.FaceLandmarker.createFromOptions(fs2, {
+      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'GPU' },
+      numFaces: 1, runningMode: 'VIDEO',
+      outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+  } catch (e) { note('face model would not load: ' + e.message); $('eyes').classList.remove('on'); return; }
+  pulse = NexusPulse.create(); roiCtx = $('roi').getContext('2d', { willReadFrequently: true });
+  faceOn = true; $('vitals').classList.add('on');
+  note('eyes live — look to aim, raise your brows to select. press c to recentre.');
+  const loop = () => {
+    if (!faceOn) return;
+    let res = null;
+    // A test seam: a harness can feed synthetic landmarks so the gating, the brow press and
+    // the pulse path are exercised end to end without a real face in front of the lens.
+    try { res = window.__NEXUS_FACE_TEST ? window.__NEXUS_FACE_TEST() : face.detectForVideo(v, performance.now()); } catch (e) {}
+    gaze = NexusFace.readFace(res, gaze, { recenter: recenterNext });
+    recenterNext = false;
+    if (gaze.ok) {
+      // mirror x for a selfie view, exactly as the hand cursor does
+      const gx = (1 - gaze.x) * innerWidth, gy = gaze.y * innerHeight;
+      gazePt = { x: gx, y: gy };
+      gaze.px = gx; gaze.py = gy;
+      const dot = $('gaze');
+      dot.style.left = gx + 'px'; dot.style.top = gy + 'px';
+      dot.classList.add('on'); dot.classList.toggle('brow', !!gaze.browRaised);
+      // With no hand in the air, the eyes ARE the pointer: they drive hover and the dwell ring.
+      // THE LAST INPUT YOU MOVED OWNS THE POINTER. Letting gaze claim the cursor on every
+      // frame silently kills the mouse the moment eye tracking starts — the click handler
+      // below only fires in desk mode. A person using both should never notice a handover.
+      if (!running && D() && performance.now() - lastDesk > 1200 && performance.now() - lastHover > 140) {
+        lastHover = performance.now(); deskMode = false; gazeDrives = true; trackHover(gx, gy);
+      }
+      if (gaze.pressed) { note('brow → select'); fire(gx, gy); }
+      readPulse(v, res);
+    } else { gazePt = null; $('gaze').classList.remove('on'); }
+    requestAnimationFrame(loop);
+  };
+  loop();
+};
+let recenterNext = false;
+addEventListener('keydown', e => { if (e.key === 'c' || e.key === 'C') { recenterNext = true; note('recentred — where you are looking now is the middle'); } });
+
+function readPulse(v, res) {
+  if (!pulse || !roiCtx || !v.videoWidth) return;
+  const lm = res && res.faceLandmarks && res.faceLandmarks[0];
+  const roi = NexusPulse.foreheadROI(lm, v.videoWidth, v.videoHeight);
+  if (!roi) return;
+  try {
+    roiCtx.drawImage(v, roi.x, roi.y, roi.w, roi.h, 0, 0, 64, 32);
+    const d = roiCtx.getImageData(0, 0, 64, 32).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+    const n = d.length / 4;
+    pulse.push({ r: r / n, g: g / n, b: b / n }, performance.now());
+  } catch (e) { return; }                    // a tainted canvas is not worth a crash
+  if (performance.now() - lastBeatRead < 500) return;
+  lastBeatRead = performance.now();
+  const beat = pulse.read();
+  window.__NEXUS_VITALS = beat;              // local only — nothing sends this to the room
+  const el = $('bpm'), dot = $('beat');
+  if (beat.ok) {
+    el.textContent = beat.bpm + ' bpm — your pulse, read from light on your forehead';
+    dot.style.animationDuration = (60 / Math.max(40, beat.bpm)).toFixed(2) + 's';
+    dot.style.opacity = 1;
+  } else {
+    el.textContent = beat.seconds < 6
+      ? 'reading your pulse… ' + beat.seconds.toFixed(0) + 's of ' + 6
+      : beat.why;
+    dot.style.opacity = 0.25;
+  }
+}
+
 // ── voice ────────────────────────────────────────────────────────────────
 $('voice').onclick = () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -146,9 +284,12 @@ $('voice').onclick = () => {
 
 $('stop').onclick = () => {
   running = false; cursor.classList.remove('on'); $('hands').classList.remove('on');
+  faceOn = false; gaze = null; gazePt = null; pulse = null;
+  $('eyes').classList.remove('on'); $('gaze').classList.remove('on'); $('vitals').classList.remove('on');
   if (rec) { const r = rec; rec = null; r.stop(); $('voice').classList.remove('on'); }
   const v = $('cam'); if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; v.style.display = 'none'; }
-  note('stopped — camera released');
+  camStream = null;
+  note('stopped — camera released, pulse buffer discarded');
 };
 
 // ── orbs, sticky hover and dwell ─────────────────────────────────────────
@@ -156,10 +297,19 @@ $('stop').onclick = () => {
 // never dwells — a click is already a decision. Hover is STICKY for 450ms so a jittery hand
 // (or a jittery hand model) does not drop the target you are clearly aiming at.
 const DWELL_MS = 2500, STICKY_MS = 450;
+const LOOK_R = 170;                          // how near your gaze must land to count as looking
 // ── conversation orbs ────────────────────────────────────────────────────
 // Selecting a person opens a ring of things you could say. Every party in the room is the
 // same kind of target, so this one mechanic covers person→person, person→AI, AI→person and
 // AI→AI: an AI reads the identical option list through drive.people() and drive.tell().
+// EVERY NAME IN THIS ROOM IS A STRING A STRANGER TYPED. It arrives over a peer connection and
+// goes into an SVG built by string concatenation, so it is escaped on the way in — otherwise
+// a chosen username is markup that runs inside this page.
+const esc = t => String(t == null ? '' : t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// One seam so the orb layer can be exercised without a live room in front of it.
+const D = () => (typeof window !== 'undefined' && window.__NEXUS_DRIVE_TEST) || drive;
 let talkingTo = null, lines = [], hotLine = -1, optAt = [];
 const OPENERS = [
   { short: 'greet', text: 'hey — good to see someone else here' },
@@ -173,56 +323,69 @@ function openTalk(what) {
   lines = OPENERS.slice(); hotLine = -1; optAt = [];
   note('talking to ' + what.label + (what.isAI ? ' (an AI)' : ''));
 }
-function closeTalk() { talkingTo = null; lines = []; hotLine = -1; note('conversation closed'); }
+function closeTalk(why) { if (!talkingTo) return; talkingTo = null; lines = []; hotLine = -1; optAt = [];
+  hot = null; dwellFired = false; note('conversation closed' + (why ? ' — ' + why : '')); }
 function sayLine(i) {
-  const ln = lines[i]; if (!ln || !drive) return;
-  drive.tell(talkingTo.id, ln.text);
+  const ln = lines[i]; const d = D(); if (!ln || !d || !talkingTo) return;
+  const who = talkingTo;                       // captured NOW: in two seconds this may be someone else
+  d.tell(who.id, ln.text);
   note('you: ' + ln.text);
   if (ln.short === 'leave') { closeTalk(); return; }
   // the reply comes back through the room's chat, from a person or from an AI's mind
   setTimeout(() => {
     try {
-      const chat = drive.snapshot().chat || [];
+      const chat = d.snapshot().chat || [];
       const last = chat[chat.length - 1];
-      if (last && last.text !== ln.text) note(talkingTo.name + ': ' + last.text);
+      if (last && last.text !== ln.text) note(who.name + ': ' + last.text);
     } catch (e) {}
   }, 2200);
 }
 let hot = null, hotSince = 0, lastSeenHot = 0, dwellFired = false, cursorAt = { x: -1, y: -1 }, deskMode = false;
+let lastDesk = -1e9, gazeDrives = false;     // who is holding the pointer right now
 
 function paintOrbs() {
-  if (!drive) return requestAnimationFrame(paintOrbs);
+  const d = D();
+  if (!d) return requestAnimationFrame(paintOrbs);
   let list = [];
-  try { list = drive.orbs(); } catch (e) {}
+  try { list = d.orbs(); } catch (e) {}
   let folk = [];
-  try { folk = drive.people(); } catch (e) {}
+  try { folk = d.people(); } catch (e) {}
   const svg = $('orbs');
   let html = '';
   if (!talkingTo) {
     html += list.map(o => {
       const on = hot && hot.kind === 'portal' && hot.label === o.name;
       return `<circle cx="${o.x}" cy="${o.y}" r="${o.radius}" class="${on ? 'hot' : ''}"/>` +
-             `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${o.name}</text>`;
+             `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${esc(o.name)}</text>`;
     }).join('');
+    // WITH EYES ON, A PERSON IS ONLY THERE IF YOU ARE LOOKING AT THEM. Attention is the gate:
+    // the ring of things to say exists because you turned to someone, not because a cursor
+    // drifted over them. Without eye tracking nothing is hidden — the gate needs eyes to exist.
     html += folk.map(w2 => {
       const on = hot && hot.kind === 'person' && hot.id === w2.id;
+      const seen = !faceOn || !gaze || NexusFace.looksAt(gaze, w2, LOOK_R);
+      if (!seen) return `<circle cx="${w2.x}" cy="${w2.y}" r="${w2.radius}" class="person unseen"/>`;
       return `<circle cx="${w2.x}" cy="${w2.y}" r="${w2.radius}" class="person ${on ? 'hot' : ''}"/>` +
-             `<text x="${w2.x}" y="${w2.y + w2.radius + 15}" class="${on ? 'hot' : ''}">${w2.isAI ? '🤖 ' : '🧑 '}${w2.name.replace(/^🤖\s*/, '')}</text>`;
+             `<text x="${w2.x}" y="${w2.y + w2.radius + 15}" class="${on ? 'hot' : ''}">${w2.isAI ? '🤖 ' : '🧑 '}${esc(w2.name.replace(/^🤖\s*/, ''))}</text>`;
     }).join('');
   } else {
     // a conversation is a ring of option orbs around the person you are talking to,
     // the way a dialogue wheel fans its choices — pick one the same way you pick anything
-    const who = folk.find(f => f.id === talkingTo.id) || talkingTo.at;
+    // If they are gone, the conversation is over. Falling back to the position they stood in
+    // when it opened paints a dialogue ring around an empty patch of world forever, and while
+    // it is open nothing else on screen can be hovered.
+    const who = folk.find(f => f.id === talkingTo.id);
+    if (!who) { closeTalk('they left'); svg.innerHTML = ''; return requestAnimationFrame(paintOrbs); }
     const cx = who.x, cy = who.y, R = Math.min(230, Math.max(150, innerHeight * 0.26));
     html += `<circle cx="${cx}" cy="${cy}" r="${(who.radius || 40)}" class="person hot"/>` +
-            `<text x="${cx}" y="${cy - (who.radius || 40) - 12}" class="hot">${talkingTo.name}</text>`;
+            `<text x="${cx}" y="${cy - (who.radius || 40) - 12}" class="hot">${esc(talkingTo.name)}</text>`;
     lines.forEach((ln, i) => {
       const a = -Math.PI / 2 + (i - (lines.length - 1) / 2) * 0.52;
       const x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
       const on = hotLine === i;
       html += `<circle cx="${x}" cy="${y}" r="46" class="opt ${on ? 'hot' : ''}"/>` +
               `<text x="${x}" y="${y + 4}" class="opt ${on ? 'hot' : ''}">${i + 1}</text>` +
-              `<text x="${x}" y="${y + 66}" class="opt ${on ? 'hot' : ''}">${ln.short}</text>`;
+              `<text x="${x}" y="${y + 66}" class="opt ${on ? 'hot' : ''}">${esc(ln.short)}</text>`;
       optAt[i] = { x, y };
     });
   }
@@ -243,11 +406,15 @@ function trackHover(x, y) {
     return;
   }
   let what = null;
-  try { what = drive && drive.hover(x, y); } catch (e) {}
-  const isOrb = what && (what.kind === 'portal' || what.kind === 'control');
+  try { const d = D(); what = d && d.hover(x, y); } catch (e) {}
+  // A PERSON IS A TARGET LIKE ANY OTHER. Leaving people out of this set means `hot` is never
+  // a person, and every guard that asks "is something hot?" — the click handler, the dwell
+  // ring — silently refuses to open a conversation. The whole mechanic is one word wide.
+  const isOrb = what && (what.kind === 'portal' || what.kind === 'control' || what.kind === 'person');
   if (isOrb) {
     lastSeenHot = performance.now();
-    if (!hot || hot.label !== what.label) { hot = what; hotSince = performance.now(); dwellFired = false; }
+    const same = hot && hot.kind === what.kind && (hot.id ? hot.id === what.id : hot.label === what.label);
+    if (!same) { hot = what; hotSince = performance.now(); dwellFired = false; }
   } else if (hot && performance.now() - lastSeenHot > STICKY_MS) {
     hot = null; dwellFired = false;
   }
@@ -259,20 +426,32 @@ function trackHover(x, y) {
 setInterval(() => {                       // the dwell ring: hold to select, hands-free
   const ring = document.querySelector('#dwell circle');
   if (!ring) return;
-  if (deskMode || !hot || dwellFired || !running) { ring.style.strokeDashoffset = 126; cursor.classList.remove('dwelling'); return; }
+  // A mouse never dwells — a click is already a decision. Eyes DO dwell: resting your gaze is
+  // the whole point, so the ring fills for a hand or for a look, never for a mouse.
+  if (!hot || dwellFired || (deskMode && !gazeDrives) || !(running || gazeDrives)) {
+    ring.style.strokeDashoffset = 126; cursor.classList.remove('dwelling'); return; }
   cursor.classList.add('dwelling');
   const t = (performance.now() - hotSince) / DWELL_MS;
   ring.style.strokeDashoffset = Math.max(0, 126 * (1 - t));
   if (t >= 1) { dwellFired = true; ring.style.strokeDashoffset = 126; note('dwell → ' + hot.label); fire(cursorAt.x, cursorAt.y); }
 }, 60);
 
+let firing = false;
 function fire(x, y) {
-  if (!drive) return;
+  const d = D();
+  if (!d || firing) return;                    // a dwell completing at the same moment as a
+  firing = true;                               // pinch must not select the same thing twice
+  setTimeout(() => { firing = false; }, 350);
   dwellFired = true;
   if (talkingTo) { if (hotLine >= 0) sayLine(hotLine); else closeTalk(); return; }
   let what = null;
-  try { what = drive.hover(x, y); } catch (e) {}
-  if (what && what.kind === 'person') { openTalk(what); return; }
+  try { what = d.hover(x, y); } catch (e) {}
+  if (what && what.kind === 'person') {
+    if (faceOn && gaze && !NexusFace.looksAt(gaze, what.person || what, LOOK_R)) {
+      note('look at them first'); return;
+    }
+    openTalk(what); return;
+  }
   if (what && what.kind === 'portal' && what.url) {
     // Selecting an orb is a decision to GO there, and this page is the thing holding the
     // world — so it navigates, exactly as following a link does. (A synthetic click on the
@@ -297,7 +476,7 @@ function deskListeners(doc, offset) {
   if (!doc || doc.__nexusDesk) return; doc.__nexusDesk = true;
   doc.addEventListener('mousemove', e => {
     if (running) return;                                   // hands win when hands are live
-    deskMode = true; cursor.classList.add('on');
+    deskMode = true; gazeDrives = false; lastDesk = performance.now(); cursor.classList.add('on');
     const x = e.clientX + (offset ? offset.x : 0), y = e.clientY + (offset ? offset.y : 0);
     cursor.style.left = x + 'px'; cursor.style.top = y + 'px';
     trackHover(x, y);

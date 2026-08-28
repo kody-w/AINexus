@@ -36,6 +36,7 @@
             this.peer = null;
             this.connections = new Map();
             this.players = new Map();
+            this.pending = new Map();   // channels open but not yet proven to hold an invite
             this.isHost = false;
             this.roomId = null;
 
@@ -48,15 +49,27 @@
         }
 
         initializePeer() {
-            // Secure invite: #join=<hostId>.<token>. The fragment never leaves the
-            // browser (not sent to servers, not logged), so the room secret exists
-            // only in the link the host chose to share — the data slosh, secured.
+            // Secure invite: #join=<hostId>.<token>. A URL fragment is never sent to a web
+            // server by the browser — but that alone does not keep the secret off the network:
+            // it used to ride in the PeerJS connection METADATA, which passes through the
+            // public signaling server in clear. It no longer does. The joiner now proves the
+            // invite in its first message over the encrypted data channel, after the peer
+            // connection is up (see handleNewConnection / the 'hello' case).
             this.joinToken = null;
+            this.declaredUsername = null;
             let inviteHost = null;
             const rawHash = window.location.hash || '';
             const frag = rawHash.match(/[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/);
             const aiFlag = rawHash.match(/[#&]ai=([a-z]+)/);
             if (aiFlag) window.NEXUS_AI_MODE = aiFlag[1];
+            // Read the declared identity BEFORE the fragment is stripped below. Missing this
+            // is why a JOINING AI silently lost its label while a HOSTING one kept it: the host
+            // has no #join= fragment, so nothing wiped its #as=.
+            const asFlag = rawHash.match(/[#&]as=([^&]+)/);
+            if (asFlag) {
+                try { this.declaredUsername = decodeURIComponent(asFlag[1]).slice(0, 40); }
+                catch (e) { this.declaredUsername = String(asFlag[1]).slice(0, 40); }
+            }
             if (frag) {
                 inviteHost = frag[1];
                 this.joinToken = frag[2];
@@ -153,7 +166,8 @@
                     serialization: 'json',
                     metadata: {
                         username: (this.username = this.username || this.generateUsername()),
-                        token: this.joinToken,
+                        // NO token here: connection metadata travels through the public
+                        // signaling server. The invite is proven over the data channel instead.
                         worldData: (typeof this.world.getCurrentWorldData === 'function')
                             ? this.world.getCurrentWorldData()
                             : undefined
@@ -187,38 +201,30 @@
 
             conn.on('open', () => {
                 if (this.isHost) {
-                    const offered = conn.metadata && conn.metadata.token;
-                    if (!offered || offered !== this.roomSecret) {
-                        console.warn('Rejected join without a valid invite token:', peerId);
-                        this.showNotification('Rejected a join attempt without a valid invite');
-                        try { conn.close(); } catch (e) {}
-                        return;
-                    }
+                    // Hold it. An open channel is not yet a member: the joiner has to present
+                    // the invite over this encrypted channel first, and gets a few seconds to
+                    // do it before the door shuts.
+                    this.pending.set(peerId, conn);
+                    conn.__authTimer = setTimeout(() => {
+                        if (this.pending.get(peerId) === conn) {
+                            console.warn('Join timed out without presenting an invite:', peerId);
+                            this.pending.delete(peerId);
+                            try { conn.close(); } catch (e) {}
+                        }
+                    }, 8000);
+                    return;
                 }
-                console.log('Connection opened with peer:', peerId);
-                this.connections.set(peerId, conn);
-
-                // Send initial player data
-                this.sendPlayerData(conn);
-
-                // Create player avatar
-                this.createPlayerAvatar(peerId, conn.metadata);
-
-                // Show notification
-                this.showNotification(`Player joined: ${conn.metadata?.username || 'Anonymous'}`);
-
-                // Update player count
-                this.updatePlayerCount();
-
-                // If we're the host, send world state to new player
-                if (this.isHost) {
-                    this.sendWorldState(conn);
-                }
+                // A joiner presents the invite as its very first message, then behaves normally.
+                try {
+                    conn.send({ type: 'hello', token: this.joinToken,
+                                username: (this.username = this.username || this.generateUsername()) });
+                } catch (e) {}
+                this.acceptConnection(conn, conn.metadata);
             });
 
             conn.on('data', (data) => {
                 try {
-                    this.handlePeerData(peerId, data);
+                    this.handlePeerData(peerId, data, conn);
                 } catch (error) {
                     console.error('Error handling peer data:', error);
                 }
@@ -226,6 +232,8 @@
 
             conn.on('close', () => {
                 console.log('Peer disconnected:', peerId);
+                if (conn.__authTimer) clearTimeout(conn.__authTimer);
+                this.pending.delete(peerId);
                 this.removePlayer(peerId);
                 this.connections.delete(peerId);
                 this.updatePlayerCount();
@@ -241,6 +249,35 @@
             });
         }
 
+        // A connection becomes a member here, and only here.
+        acceptConnection(conn, meta) {
+            const peerId = conn.peer;
+            if (this.connections.has(peerId)) return;
+            console.log('Connection opened with peer:', peerId);
+            this.connections.set(peerId, conn);
+            this.sendPlayerData(conn);
+            this.createPlayerAvatar(peerId, meta);
+            this.showNotification(`Player joined: ${(meta && meta.username) || 'Anonymous'}`);
+            this.updatePlayerCount();
+            if (this.isHost) this.sendWorldState(conn);
+        }
+
+        // Nobody in a peer-to-peer room can PROVE who they are — every name is a claim its
+        // owner types. What the host can do is refuse to let two claims be identical, so a
+        // newcomer cannot quietly wear the name of someone already standing there (including
+        // by copying an "(AI)" label, or by copying yours).
+        uniqueName(peerId, name) {
+            const want = String(name || 'Anonymous').slice(0, 40);
+            const taken = (n) => {
+                if (this.username === n) return true;
+                for (const [pid, pl] of this.players) if (pid !== peerId && pl.username === n) return true;
+                return false;
+            };
+            if (!taken(want)) return want;
+            for (let i = 2; i < 60; i++) if (!taken(`${want} (${i})`)) return `${want} (${i})`;
+            return `${want} (?)`;
+        }
+
         displayChat(peerId, message) {
             // chat arrives from peers; this method was called but never defined — latent since birth
             (this.chatLog = this.chatLog || []).push({ from: String(peerId).slice(0, 6), text: String(message).slice(0, 200) });
@@ -248,17 +285,38 @@
             this.showNotification(`${this.players.get(peerId)?.username || String(peerId).slice(0, 6)}: ${String(message).slice(0, 120)}`);
         }
 
-        handlePeerData(peerId, data) {
+        handlePeerData(peerId, data, conn) {
+            // THE DOOR. Until a peer has presented the invite over this channel it is not in
+            // the room, and the only sentence it is allowed to say is the one that lets it in.
+            if (this.isHost && !this.connections.has(peerId)) {
+                const held = this.pending.get(peerId);
+                if (!held) return;
+                if (data.type !== 'hello') return;
+                if (!data.token || data.token !== this.roomSecret) {
+                    console.warn('Rejected join without a valid invite token:', peerId);
+                    this.showNotification('Rejected a join attempt without a valid invite');
+                    this.pending.delete(peerId);
+                    if (held.__authTimer) clearTimeout(held.__authTimer);
+                    try { held.close(); } catch (e) {}
+                    return;
+                }
+                if (held.__authTimer) clearTimeout(held.__authTimer);
+                this.pending.delete(peerId);
+                this.acceptConnection(held, { username: data.username });
+                return;
+            }
+            if (data.type === 'hello') return;      // a joiner never needs to admit anybody
             switch (data.type) {
                 case 'playerUpdate':
                     if (data.username) {
                         const known = this.players.get(peerId);
-                        if (known && known.username !== data.username) {
-                            known.username = data.username;
+                        const claimed = this.uniqueName(peerId, data.username);
+                        if (known && known.username !== claimed) {
+                            known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
                                 if (old) known.avatar.remove(old);
-                                const tag = this.createNameTag(peerId, { username: data.username });
+                                const tag = this.createNameTag(peerId, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
                         }
@@ -266,9 +324,22 @@
                     this.updatePlayerPosition(peerId, data.position, data.rotation);
                     break;
 
-                case 'chat':
-                    this.displayChat(peerId, data.message);
+                case 'chat': {
+                    // A message may be addressed. Show it if it is for the room or for me...
+                    const mine = this.peer && this.peer.id;
+                    const from = data.from || peerId;
+                    if (!data.to || data.to === mine) this.displayChat(from, data.message);
+                    // ...and if I am the host, pass it on: joiners are connected only to me, so
+                    // without this relay two joiners can never hear each other at all.
+                    if (this.isHost) {
+                        this.connections.forEach((c, id) => {
+                            if (id === peerId) return;
+                            if (data.to && data.to !== id) return;
+                            try { c.send({ type: 'chat', message: data.message, from, to: data.to }); } catch (e) {}
+                        });
+                    }
                     break;
+                }
 
                 case 'interaction':
                     this.showPlayerInteraction(peerId, data.target);
@@ -324,6 +395,8 @@
         }
 
         createPlayerAvatar(peerId, metadata) {
+            // a claimed name, made unambiguous before anyone sees it
+            metadata = Object.assign({}, metadata, { username: this.uniqueName(peerId, metadata && metadata.username) });
             // Create a simple avatar for the player
             const avatarGroup = new THREE.Group();
 
@@ -523,8 +596,8 @@
             // label has to exist BEFORE the handshake — relabelling afterwards only renames it in
             // its own window, and everyone else keeps seeing a human-looking name. That is the
             // difference between "labelled as an AI" and merely believing you labelled it.
-            const declared = (typeof window !== 'undefined' && window.NEXUS_USERNAME)
-                || ((location.hash.match(/[#&]as=([^&]+)/) || [])[1] && decodeURIComponent((location.hash.match(/[#&]as=([^&]+)/) || [])[1]));
+            const declared = this.declaredUsername
+                || (typeof window !== 'undefined' && window.NEXUS_USERNAME);
             if (declared) return String(declared).slice(0, 40);
 
             const adjectives = ['Swift', 'Neon', 'Cyber', 'Quantum', 'Digital'];

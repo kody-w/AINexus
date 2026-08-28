@@ -439,26 +439,38 @@
           const v = new window.THREE.Vector3(); a.getWorldPosition(v);
           const world = v.clone(); v.project(w.camera);
           if (v.z > 1) return;
-          const x = r.left + (v.x * 0.5 + 0.5) * r.width, y = r.top + (-v.y * 0.5 + 0.5) * r.height;
+          const x = r.left + (v.x * 0.5 + 0.5) * r.width;
+          // aim at the head, not the feet — and CULL THE POINT WE ACTUALLY RETURN. Testing the
+          // pre-offset point against the viewport while handing back a point 40px higher means
+          // someone standing near the top edge is culled while still visible, or kept while
+          // their target has slid off it.
+          const y = r.top + (-v.y * 0.5 + 0.5) * r.height - 40;
           // only people you can actually see are targets — an off-screen projection is a
           // point behind you, and resting "on" it would select whatever is really there
           if (x < r.left - 40 || x > r.right + 40 || y < r.top - 40 || y > r.bottom + 40) return;
           const dist = w.camera.position.distanceTo(world);
           const name = pl.username || (pl.metadata && pl.metadata.username) || String(id).slice(0, 6);
-          out.push({ id: String(id), name, isAI: /🤖|\(AI\)/.test(name), x: Math.round(x), y: Math.round(y - 40),
+          out.push({ id: String(id), name, isAI: /🤖|\(AI\)/.test(name), x: Math.round(x), y: Math.round(y),
                      radius: Math.min(90, Math.max(30, Math.round(1400 / Math.max(4, dist)))), distance: Math.round(dist) });
         });
       } catch (e) {}
       return out.sort((a, b) => a.distance - b.distance);
     },
 
-    // say something TO someone: the room hears it, and it is addressed
+    // say something TO someone — and to nobody else. Sending to every connection and merely
+    // labelling it `to` is not addressing a message, it is broadcasting one with a note on it.
     async tell(peerId, text) {
       const w = W(); const mp = w && w.multiplayer; if (!mp) return false;
       const who = (mp.players.get(peerId) || {});
       const line = String(text).slice(0, 240);
       let sent = 0;
-      mp.connections.forEach((c, id) => { try { c.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} });
+      const direct = mp.connections.get(peerId);
+      if (direct) { try { direct.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} }
+      else {
+        // a joiner holds one connection — to the host — so a message for another joiner goes
+        // to the host addressed, and the host passes it along to that peer alone
+        mp.connections.forEach((c) => { try { c.send({ type: 'chat', message: line, to: peerId }); sent++; } catch (e) {} });
+      }
       try { mp.displayChat(mp.peer && mp.peer.id || 'me', line); } catch (e) {}
       log('to', (who.username || peerId).slice(0, 20) + ':', line);
       return sent;
@@ -484,17 +496,20 @@
       // contains the point" hands every click to whichever orb happens to be nearest the
       // camera. Score by how centred the pointer is within each orb instead: the one you
       // are most obviously pointing at wins.
-      let best = null, bestScore = Infinity, bestKind = 'portal';
+      // ONE pass over everything selectable. Returning the first person who merely contains
+      // the pointer would re-introduce exactly the bug the score was written to kill: a person
+      // clipping the edge of the cursor would win over the portal it is dead centre of.
+      let best = null, bestScore = Infinity, bestKind = null;
       for (const who of api.people()) {
         const score = Math.hypot(px - who.x, py - who.y) / who.radius;
         if (score <= 1 && score < bestScore) { bestScore = score; best = who; bestKind = 'person'; }
       }
-      if (best) return { kind: 'person', label: best.name, id: best.id, isAI: best.isAI, distance: best.distance, person: best, centred: +bestScore.toFixed(2) };
       for (const orb of api.orbs()) {
         const score = Math.hypot(px - orb.x, py - orb.y) / orb.radius;
-        if (score <= 1 && score < bestScore) { bestScore = score; best = orb; }
+        if (score <= 1 && score < bestScore) { bestScore = score; best = orb; bestKind = 'portal'; }
       }
-      if (best) return { kind: 'portal', label: best.name, name: best.name, url: best.url, distance: best.distance, orb: best, centred: +bestScore.toFixed(2) };
+      if (bestKind === 'person') return { kind: 'person', label: best.name, id: best.id, isAI: best.isAI, distance: best.distance, person: best, centred: +bestScore.toFixed(2) };
+      if (bestKind === 'portal') return { kind: 'portal', label: best.name, name: best.name, url: best.url, distance: best.distance, orb: best, centred: +bestScore.toFixed(2) };
       const w = W();
       if (!w || !w.raycaster || !w.portals || !window.THREE) return { kind: 'nothing' };
       const r = (cvs || document.body).getBoundingClientRect();
@@ -561,7 +576,13 @@
               : verb === 'scan' ? await api.scan(s.steps, s.deg)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
-          } catch (e) { log('step failed', verb, e.message); }
+          } catch (e) {
+            // A FAILING STEP STILL COSTS A TURN. Counting only the steps that succeed lets a
+            // program that throws on every verb run forever inside a budget meant to stop it —
+            // the kill switch would be watching a number that never moves.
+            log('step failed', verb, e.message);
+            onStep && onStep(verb, null, e);
+          }
         }
       } while (api._running && program && program.loop);
       api._running = false;
