@@ -14,6 +14,19 @@
   if (window.__autodrive) return;
 
   const W = () => window.worldNavigator;
+
+  // The NEXUS sense, written out for a mind that has no brainstem to install senses into —
+  // the same contract as ai/senses/nexus_sense.py, so both doors produce the same shape.
+  const NEXUS_CONTRACT =
+    'You are playing in a 3D world through the same controls a person uses. Reply with ONE short '
+    + 'line a person would actually say out loud, then the delimiter |||NEXUS||| followed by ONE '
+    + 'JSON object and nothing else — your next move. Use only these verbs: look {dx,dy}, '
+    + 'walk {dir:forward|back|left|right, ms}, click {}, aim {portal}, travel {portal}, say {text}, '
+    + 'ask {text}, press {selector}, wait {ms}, see {}, scan {steps,deg}, carry {payload}. Choose '
+    + 'from what the percepts actually show you: never invent a portal or a person that is not '
+    + 'there. Prefer see or scan when your picture is stale or blank, say when someone spoke to '
+    + 'you, and wait when nothing has changed. {"do":"see"} is always legal. Exactly one object, '
+    + 'never a list, never prose inside the block.';
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const log = (...a) => { try { console.log('[drive]', ...a); } catch (e) {} };
 
@@ -275,8 +288,16 @@
     // Without a grant it does nothing and says so: a mindless player is honest, not fake.
     async mind(opts) {
       const o = Object.assign({ url: 'http://localhost:7071/chat', vision: true, act: true }, opts || {});
+      // TWO DOORS TO A MIND, and a player will take whichever is open.
+      //   · a brainstem on this machine — the real thing, with its senses and its memory
+      //   · the visitor's own GitHub Copilot seat, through the device-code flow Heimdall's
+      //     doorman uses (ai/copilot_auth.js). No install, no separate meter: it spends the
+      //     Copilot seat the person already has, and only while they are here.
+      // Neither present means the player runs on its program alone, and says so.
       const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
-      if (!secret) { log('no mind granted (no brainstem secret) — running on the program alone'); return null; }
+      const auth = (typeof window !== 'undefined' && window.NexusAuth);
+      const viaCopilot = !secret && auth && auth.signedIn();
+      if (!secret && !viaCopilot) { log('no mind granted (no brainstem, not signed in) — running on the program alone'); return null; }
       const percepts = o.vision ? api.sense({ width: 384, send: true }) : api.snapshot();
       const shot = percepts.vision;
       const prompt = 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + ', an AI playing in a 3D world with the same '
@@ -285,15 +306,24 @@
             players: percepts.players, room: percepts.room, chat: (percepts.chat || []).slice(-4),
             carrying: api._carry || null, arrived_with: api.carried(),
             picture: shot ? (shot.blank ? 'BLANK — you cannot see right now' : shot.bytes + ' bytes, ' + shot.w + 'px wide') : 'none' });
-      let reply = '';
+      let reply = '', block = '';
       try {
-        const r = await fetch(o.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Brainstem-Secret': secret },
-          body: JSON.stringify({ user_input: prompt, user_guid: 'nexus-' + (window.NEXUS_PERSONA || 'player'), senses: ['nexus'] }) });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const j = await r.json();
-        reply = j.response || '';
-        // the sense may arrive parsed by the brainstem, or inline in the reply
-        var block = j.nexus_response || (reply.split('|||NEXUS|||')[1] || '');
+        if (viaCopilot) {
+          // The sense is a brainstem's way of shaping a reply; without one, the same contract
+          // is carried in the system message, so the model answers in the identical format and
+          // the parsing below does not care which door the thought came through.
+          reply = await auth.chat([{ role: 'system', content: NEXUS_CONTRACT }, { role: 'user', content: prompt }],
+                                  { temperature: 0.8, max_tokens: 400 });
+          block = reply.split('|||NEXUS|||')[1] || '';
+        } else {
+          const r = await fetch(o.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Brainstem-Secret': secret },
+            body: JSON.stringify({ user_input: prompt, user_guid: 'nexus-' + (window.NEXUS_PERSONA || 'player'), senses: ['nexus'] }) });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const j = await r.json();
+          reply = j.response || '';
+          // the sense may arrive parsed by the brainstem, or inline in the reply
+          block = j.nexus_response || (reply.split('|||NEXUS|||')[1] || '');
+        }
       } catch (e) { log('mind unreachable:', e.message); return null; }
       const words = reply.split('|||NEXUS|||')[0].trim();
       if (words) await api.say(words.slice(0, 240));

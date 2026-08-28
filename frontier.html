@@ -14,31 +14,43 @@ iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000
 #orbs{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:8}
 #orbs circle{fill:none;stroke:rgba(125,227,255,.32);stroke-width:2}
 #orbs circle.hot{stroke:#7dffb0;stroke-width:3.5}
-#orbs circle.person{stroke:rgba(255,170,90,.55)}
-#orbs circle.person.hot{stroke:#ffca7a}
-#orbs circle.opt{stroke:rgba(216,180,255,.6);fill:rgba(30,16,52,.72)}
-#orbs circle.opt.hot{stroke:#e2c4ff;fill:rgba(58,30,96,.85)}
-#orbs text.opt{fill:#efe3ff;font-size:12px}
+#orbs circle.person{stroke:rgba(255,190,120,.75);stroke-width:1.5}
+#orbs circle.person.hot{stroke:#ffca7a;stroke-width:2.5}
+#orbs circle.person.idle{fill:rgba(255,190,120,.5);stroke:none}
+#orbs path.tick{fill:none;stroke:rgba(255,190,120,.85);stroke-width:2.5;stroke-linecap:round}
+#orbs path.tick.hot{stroke:#ffca7a;stroke-width:3.5}
+#orbs text.hint{fill:rgba(255,202,122,.9);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+#orbs circle.opt{stroke:rgba(216,180,255,.75);stroke-width:2;fill:rgba(14,8,26,.94)}
+#orbs circle.opt.hot{stroke:#e2c4ff;stroke-width:3;fill:rgba(58,30,96,.97)}
+#orbs text.opt{fill:#efe3ff;font-size:13px;font-weight:600;paint-order:stroke;stroke:rgba(5,4,12,.85);stroke-width:3px}
 #orbs text{fill:rgba(233,233,242,.85);font:11px ui-monospace,Menlo,monospace;text-anchor:middle}
 #orbs text.hot{fill:#7dffb0;font-weight:700}#cursor.over{background:radial-gradient(circle,rgba(125,255,190,.95) 0 32%,rgba(125,255,190,.3) 58%,transparent 72%)}
 #cursor.pinch{width:64px;height:64px;margin:-32px 0 0 -32px;background:radial-gradient(circle,#fff 0 40%,rgba(255,0,230,.4) 62%,transparent 74%)}
-.hud{position:fixed;left:14px;top:14px;z-index:10;background:rgba(10,10,24,.84);border:1px solid #2b2b52;border-radius:12px;padding:12px 14px;max-width:330px;backdrop-filter:blur(8px)}
-h1{font-size:14px;margin:0 0 3px}.sub{color:#8f8fb0;font-size:11px;margin:0 0 10px}
+.hud{position:fixed;left:14px;top:14px;z-index:10;background:rgba(10,10,24,.72);border:1px solid #2b2b52;border-radius:12px;padding:9px 11px;max-width:300px;backdrop-filter:blur(10px)}
+.hud.min .k,.hud.min #state,.hud.min .sub{display:none}
+#more{float:right;padding:2px 8px;margin:0;font-size:11px;opacity:.75}
+#target:empty{display:none}
+.hud button:last-of-type{margin-bottom:0}
+h1{font-size:13px;margin:0 0 3px}.sub{color:#8f8fb0;font-size:11px;margin:0 0 8px}
+button{font-size:12px;padding:5px 9px}
 button{background:#1b1b38;color:#e9e9f2;border:1px solid #33335c;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer;margin:0 4px 4px 0}
 button.on{background:#12442c;border-color:#1d6b45}
 .k{font:11px/1.8 ui-monospace,Menlo,monospace;color:#b9b9d6;margin:8px 0 0}
 .k b{color:#7de3ff;font-weight:600}
-#state{font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;margin-top:8px;white-space:pre-wrap;max-height:96px;overflow:auto}
+#state{font:10px/1.5 ui-monospace,Menlo,monospace;color:#7d7da0;margin-top:7px;white-space:pre-wrap;max-height:54px;overflow:auto}
 #cam{position:fixed;right:12px;bottom:12px;width:180px;border-radius:10px;border:1px solid #2b2b52;transform:scaleX(-1);z-index:10;display:none}
 #gaze{position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;pointer-events:none;z-index:9;opacity:0;
   border:2px solid rgba(255,120,200,.75);box-shadow:0 0 18px rgba(255,120,200,.45);transition:opacity .2s}
 #gaze.on{opacity:1}#gaze.brow{border-color:#fff;box-shadow:0 0 26px #fff}
-#orbs circle.person.unseen{stroke:rgba(255,170,90,.10);stroke-dasharray:3 6}
 #vitals{display:none;align-items:center;gap:7px;margin-top:7px;font:11px ui-monospace,Menlo,monospace;color:#ff9ecb}
 #vitals.on{display:flex}
 #beat{width:9px;height:9px;border-radius:50%;background:#ff5ea8;box-shadow:0 0 10px #ff5ea8;animation:thump 1s infinite ease-out}
 @keyframes thump{0%{transform:scale(.65);opacity:.55}18%{transform:scale(1.25);opacity:1}100%{transform:scale(.65);opacity:.55}}
 #roi{display:none}
+#code{font:700 22px ui-monospace,Menlo,monospace;letter-spacing:.22em;color:#7dffb0;margin:8px 0 4px;user-select:all}
+#signin{display:none;margin-top:8px;padding:9px;border:1px solid #33335c;border-radius:9px;background:rgba(6,6,16,.7)}
+#signin.on{display:block}#signin a{color:#7de3ff}
+#signin p{margin:4px 0;font-size:11px;color:#9a9ac0}
 .badge{display:inline-block;border-radius:999px;padding:1px 8px;font-size:10px;background:#2a1140;border:1px solid #6b3fa0;color:#d9b8ff}
 </style></head><body>
 <iframe id="f" title="the world" allow="camera"></iframe>
@@ -46,7 +58,8 @@ button.on{background:#12442c;border-color:#1d6b45}
 <div id="cursor"><svg id="dwell" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20"/></svg></div>
 <div id="gaze"></div><canvas id="roi" width="64" height="32"></canvas>
 <video id="cam" autoplay playsinline muted></video>
-<div class="hud">
+<div class="hud min" id="hud">
+  <button id="more" title="show or hide the controls">?</button>
   <h1>🖐 Frontier <span class="badge" id="mode">out there mode</span></h1>
   <p class="sub">Your hands and your voice are the controller. Nothing is simulated — the same verbs an AI player uses.</p>
   <div>
@@ -54,24 +67,34 @@ button.on{background:#12442c;border-color:#1d6b45}
     <button id="eyes">start eyes</button>
     <button id="voice">start voice</button>
     <button id="stop">stop</button>
+    <button id="mind" title="Let the AI players think, using your own GitHub Copilot seat">grant a mind</button>
   </div>
   <p class="k">
     <b>point</b> — move the cursor (your hand is the mouse)<br>
     <b>rest on an orb</b> — the ring fills in 2½s and snaps (hands-free)<br>
-    <b>look at a person</b> — they only light up when your eyes are actually on them<br>
-    <b>rest on a person</b> — open a ring of things to say; the same for a human or an AI<br>
+    <b>face a person</b> — turn toward them and a reticle finds them; that is when there is<br>
+    something to say. Everyone else stays a quiet dot.<br>
+    <b>rest on them</b> — open a ring of things to say; the same for a human or an AI<br>
     <b>raise your eyebrows</b> — that is the click: eyes aim, brow presses<br>
     <b>pinch</b> — select it now, without waiting<br>
     <b>open palm</b> — walk forward; lean it to turn as you go<br>
+    <b>grant a mind</b> — signs in with GitHub so the AI players think on your own<br>
+    Copilot seat; nothing is installed and there is no separate meter<br>
     <b>speak</b> — “go to Crystal Caverns”, “turn left”, “ask, what is this place”, or just talk to the room
   </p>
+  <div id="signin">
+    <p>Type this at <a href="https://github.com/login/device" target="_blank" rel="noopener">github.com/login/device</a>:</p>
+    <div id="code">…</div>
+    <p id="signin-note">waiting for you to authorise…</p>
+  </div>
   <div id="vitals"><span id="beat"></span><span id="bpm">reading your pulse…</span></div>
-  <div id="target" style="font:12px ui-monospace,Menlo,monospace;color:#7de3ff;min-height:18px;margin-top:6px"></div>
+  <div id="target" style="font:12px ui-monospace,Menlo,monospace;color:#7de3ff;margin-top:6px"></div>
   <div id="state">idle — press start hands or start eyes (your camera never leaves this machine, and your pulse is never sent to the room)</div>
 </div>
 <script src="ai/gestures.js"></script>
 <script src="ai/face.js"></script>
 <script src="ai/dialogue.js"></script>
+<script src="ai/copilot_auth.js"></script>
 <script src="ai/pulse.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -102,7 +125,7 @@ frame.addEventListener('load', () => {
       if (++tries < 25) return setTimeout(inject, 120);
       note('the world never produced a document to drive'); return;
     }
-    ['ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
+    ['ai/copilot_auth.js', 'ai/dialogue.js', 'ai/autodrive.js'].forEach(src => {
       const el = doc.createElement('script');
       el.src = new URL(src, location.href).href;
       doc.body.appendChild(el);
@@ -286,6 +309,48 @@ $('voice').onclick = () => {
   rec.start(); $('voice').classList.add('on'); note('voice on — say “go to Crystal Caverns”');
 };
 
+$('more').onclick = () => { $('hud').classList.toggle('min'); };
+
+// ── a mind for the players ───────────────────────────────────────────────
+// The device-code flow Heimdall's doorman uses. It spends the visitor's OWN Copilot seat, so
+// an AI standing in this world can think without anybody installing a brainstem — and because
+// every one of these doors stores its settings under the same key on the same origin, signing
+// in at Heimdall (or the brainstem UI) already counts here.
+function mindState() {
+  const inN = window.NexusAuth && NexusAuth.signedIn();
+  $('mind').textContent = inN ? 'mind granted ✓' : 'grant a mind';
+  $('mind').classList.toggle('on', !!inN);
+  return inN;
+}
+mindState();
+$('mind').onclick = async () => {
+  if (!window.NexusAuth) return note('auth module did not load');
+  if (NexusAuth.signedIn()) {
+    NexusAuth.signOut(); mindState(); $('signin').classList.remove('on');
+    return note('signed out — players fall back to their programs');
+  }
+  try {
+    const { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
+    $('code').textContent = user_code;
+    $('signin').classList.add('on');
+    $('hud').classList.remove('min');
+    note('sign-in started — the code is in the panel');
+    const started = Date.now();
+    const tick = async () => {
+      if (Date.now() - started > 900000) { $('signin-note').textContent = 'that code expired — press grant a mind again'; return; }
+      let tok = null;
+      try { tok = await NexusAuth.pollDeviceLogin(); }
+      catch (e) { $('signin-note').textContent = e.message; return; }
+      if (tok) {
+        $('signin').classList.remove('on'); mindState();
+        note('mind granted — AI players can think on your Copilot seat');
+        return;
+      }
+      setTimeout(tick, (interval || 5) * 1000);
+    };
+    setTimeout(tick, (interval || 5) * 1000);
+  } catch (e) { note('could not start sign-in: ' + e.message); }
+};
 $('stop').onclick = () => {
   running = false; cursor.classList.remove('on'); $('hands').classList.remove('on');
   faceOn = false; gaze = null; gazePt = null; pulse = null;
@@ -367,6 +432,23 @@ function sayLine(i) {
 let hot = null, hotSince = 0, lastSeenHot = 0, dwellFired = false, cursorAt = { x: -1, y: -1 }, deskMode = false;
 let lastDesk = -1e9, gazeDrives = false;     // who is holding the pointer right now
 
+// Are you turned toward them? Two ways to be sure, and either counts: your gaze is on them,
+// or they are near the middle of the screen — which in a world you steer with your head IS
+// facing them. A person off at the edge of vision is someone you have not addressed yet.
+const FACE_R = 190;
+function facing(who) {
+  if (faceOn && gaze && gaze.ok) return NexusFace.looksAt(gaze, who, LOOK_R);
+  return Math.hypot(who.x - innerWidth / 2, who.y - innerHeight / 2) < FACE_R;
+}
+// four corner ticks, the way a reticle brackets a target rather than ringing it
+function reticle(cx, cy, r) {
+  const a = r * 0.72, out = [];
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+    out.push(`M${(cx + sx * r).toFixed(1)} ${(cy + sy * a).toFixed(1)}L${(cx + sx * r).toFixed(1)} ${(cy + sy * r).toFixed(1)}L${(cx + sx * a).toFixed(1)} ${(cy + sy * r).toFixed(1)}`);
+  });
+  return out.join(' ');
+}
+
 function paintOrbs() {
   const d = D();
   if (!d) return requestAnimationFrame(paintOrbs);
@@ -377,20 +459,24 @@ function paintOrbs() {
   const svg = $('orbs');
   let html = '';
   if (!talkingTo) {
-    html += list.map(o => {
-      const on = hot && hot.kind === 'portal' && hot.label === o.name;
-      return `<circle cx="${o.x}" cy="${o.y}" r="${o.radius}" class="${on ? 'hot' : ''}"/>` +
-             `<text x="${o.x}" y="${o.y + o.radius + 15}" class="${on ? 'hot' : ''}">${esc(o.name)}</text>`;
-    }).join('');
-    // WITH EYES ON, A PERSON IS ONLY THERE IF YOU ARE LOOKING AT THEM. Attention is the gate:
-    // the ring of things to say exists because you turned to someone, not because a cursor
-    // drifted over them. Without eye tracking nothing is hidden — the gate needs eyes to exist.
+    // PORTALS ARE NOT ORBS. The world already draws and labels its own doors — ringing every
+    // one of them and printing the name a second time buried the actual scene under our own
+    // furniture. Portals stay selectable exactly as before (hover, dwell, click all still find
+    // them); they simply no longer need a circle from us to say what they already say.
+    //
+    // ORBS BELONG OVER PEOPLE. Like an NPC you have to be facing before the conversation opens:
+    // a reticle finds whoever you are actually turned toward, and only then is there anything
+    // to select. Everyone else in the room stays a quiet marker you can walk past.
     html += folk.map(w2 => {
+      const faced = facing(w2);
       const on = hot && hot.kind === 'person' && hot.id === w2.id;
-      const seen = !faceOn || !gaze || NexusFace.looksAt(gaze, w2, LOOK_R);
-      if (!seen) return `<circle cx="${w2.x}" cy="${w2.y}" r="${w2.radius}" class="person unseen"/>`;
-      return `<circle cx="${w2.x}" cy="${w2.y}" r="${w2.radius}" class="person ${on ? 'hot' : ''}"/>` +
-             `<text x="${w2.x}" y="${w2.y + w2.radius + 15}" class="${on ? 'hot' : ''}">${w2.isAI ? '🤖 ' : '🧑 '}${esc(w2.name.replace(/^🤖\s*/, ''))}</text>`;
+      const label = (w2.isAI ? '🤖 ' : '🧑 ') + esc(w2.name.replace(/^🤖\s*/, ''));
+      if (!faced) return `<circle cx="${w2.x}" cy="${w2.y}" r="4" class="person idle"/>`;
+      const r = Math.max(26, Math.min(64, w2.radius));
+      return `<circle cx="${w2.x}" cy="${w2.y}" r="${r}" class="person ${on ? 'hot' : ''}"/>` +
+             `<path class="tick ${on ? 'hot' : ''}" d="${reticle(w2.x, w2.y, r + 9)}"/>` +
+             `<text x="${w2.x}" y="${w2.y - r - 13}" class="${on ? 'hot' : ''}">${label}</text>` +
+             `<text x="${w2.x}" y="${w2.y + r + 20}" class="hint ${on ? 'hot' : ''}">${on ? 'select to talk' : ''}</text>`;
     }).join('');
   } else {
     // a conversation is a ring of option orbs around the person you are talking to,
@@ -409,7 +495,7 @@ function paintOrbs() {
       const on = hotLine === i;
       html += `<circle cx="${x}" cy="${y}" r="46" class="opt ${on ? 'hot' : ''}"/>` +
               `<text x="${x}" y="${y + 4}" class="opt ${on ? 'hot' : ''}">${i + 1}</text>` +
-              `<text x="${x}" y="${y + 66}" class="opt ${on ? 'hot' : ''}">${esc(ln.short)}</text>`;
+              `<text x="${x}" y="${y + 64}" class="opt ${on ? 'hot' : ''}">${esc(ln.short)}</text>`;
       optAt[i] = { x, y };
     });
   }
@@ -443,7 +529,7 @@ function trackHover(x, y) {
     hot = null; dwellFired = false;
   }
   $('target').textContent = hot ? (hot.kind === 'portal' ? '⭕ ' + hot.label
-    : hot.kind === 'person' ? (hot.isAI ? '🤖 ' : '🧑 ') + hot.label + ' — select to talk'
+    : hot.kind === 'person' ? (/^[🤖🧑]/.test(hot.label) ? '' : hot.isAI ? '🤖 ' : '🧑 ') + hot.label + ' — select to talk'
     : '🔘 ' + hot.label) : '';
 }
 
@@ -471,9 +557,7 @@ function fire(x, y) {
   let what = null;
   try { what = d.hover(x, y); } catch (e) {}
   if (what && what.kind === 'person') {
-    if (faceOn && gaze && !NexusFace.looksAt(gaze, what.person || what, LOOK_R)) {
-      note('look at them first'); return;
-    }
+    if (!facing(what.person || what)) { note('turn to face them first'); return; }
     openTalk(what); return;
   }
   if (what && what.kind === 'portal' && what.url) {
