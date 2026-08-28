@@ -5186,7 +5186,7 @@
 
             async loadWorlds() {
                 try {
-                    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                    const apiUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/state/tree.json` /* Article XXIV: CI snapshot in git-trees shape, never the API */;
                     const response = await fetch(apiUrl);
 
                     if (!response.ok) {

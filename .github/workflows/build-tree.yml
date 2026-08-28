@@ -1,0 +1,47 @@
+name: Build Tree Snapshot
+
+# Article XXIV (the Static Data Covenant, kody-w/RAR CONSTITUTION.md): pages read
+# committed static data, never the GitHub API. Every world page discovers its
+# sibling .html files from state/tree.json — this workflow keeps that snapshot
+# true on every push, in the same JSON shape as the git-trees API response the
+# pages used to fetch (up to one unauthenticated API call per visitor, gone).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'state/tree.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-tree:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate state/tree.json
+        run: |
+          python3 - <<'PY'
+          import subprocess, json, os
+          out = subprocess.run(['git','ls-tree','-r','HEAD'], capture_output=True, text=True, check=True).stdout
+          tree = []
+          for line in out.splitlines():
+              meta, path = line.split('\t', 1)
+              mode, typ, sha = meta.split()
+              tree.append({"path": path, "mode": mode, "type": typ, "sha": sha})
+          head = subprocess.run(['git','rev-parse','HEAD'], capture_output=True, text=True).stdout.strip()
+          os.makedirs('state', exist_ok=True)
+          json.dump({"sha": head, "url": "committed-by-ci", "tree": tree, "truncated": False},
+                    open('state/tree.json','w'), indent=0)
+          print('tree entries:', len(tree))
+          PY
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/tree.json
+          git diff --cached --quiet || { git commit -m "chore: refresh tree snapshot [skip ci]"; git push; }

@@ -492,7 +492,7 @@
 
             async loadWorldData() {
                 try {
-                    const apiUrl = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/git/trees/${this.branch}?recursive=1`;
+                    const apiUrl = `https://raw.githubusercontent.com/${this.repoOwner}/${this.repoName}/${this.branch}/state/tree.json`;
                     const response = await fetch(apiUrl);
 
                     if (!response.ok) {
