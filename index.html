@@ -1587,6 +1587,16 @@
             background: linear-gradient(45deg, #06ffa5, #00ff88);
         }
 
+        .invite-ai-btn {
+            display: block;
+            margin: 12px auto 0;
+            background: linear-gradient(45deg, #3a86ff, #06ffa5);
+        }
+
+        .invite-ai-btn:hover {
+            box-shadow: 0 4px 20px rgba(6, 255, 165, 0.4);
+        }
+
         @keyframes shimmer {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -2176,6 +2186,7 @@
             <div id="qr-code-container"></div>
             <p class="qr-url" id="qr-url"></p>
             <button class="copy-url-btn" id="copy-url-btn">Copy URL</button>
+            <button class="copy-url-btn invite-ai-btn" id="invite-ai-btn">🤖 Invite an AI Player</button>
         </div>
     </div>
 
@@ -5114,10 +5125,17 @@
                 });
             }
 
+            // Builds the same secret-bearing invite link used for the QR/copy flow,
+            // so any caller (e.g. the "Invite an AI player" button) can reuse the
+            // host's current room id + secret without duplicating the format.
+            getShareUrl() {
+                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+                return `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}#join=${this.roomId}.${this.roomSecret}`;
+            }
+
             updateShareUrl() {
                 // Update QR code to include host parameter
-                const currentFile = window.location.pathname.split('/').pop() || 'index.html';
-                const shareUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}#join=${this.roomId}.${this.roomSecret}`;
+                const shareUrl = this.getShareUrl();
 
                 // Update QR code
                 const qrUrlElement = document.getElementById('qr-url');
@@ -5728,6 +5746,7 @@
                 const qrModal = document.getElementById('qr-modal');
                 const qrClose = document.getElementById('qr-close');
                 const copyButton = document.getElementById('copy-url-btn');
+                const inviteAiButton = document.getElementById('invite-ai-btn');
                 const qrUrlElement = document.getElementById('qr-url');
 
                 // Check if we're in multiplayer mode
@@ -5792,6 +5811,17 @@
                         console.error('Failed to copy:', err);
                     }
                 });
+
+                if (inviteAiButton) {
+                    inviteAiButton.addEventListener('click', () => {
+                        if (!this.multiplayer || !this.multiplayer.isHost || !this.multiplayer.roomId) {
+                            console.warn('Invite an AI player: start hosting a multiplayer room first.');
+                            return;
+                        }
+                        const shareUrl = this.multiplayer.getShareUrl();
+                        window.open(shareUrl + '&ai=brainstem', '_blank');
+                    });
+                }
             }
 
             generateQRCode(url) {
