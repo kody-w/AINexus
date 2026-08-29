@@ -5085,41 +5085,25 @@
                 const inviteAiButton = document.getElementById('invite-ai-btn');
                 const qrUrlElement = document.getElementById('qr-url');
 
-                // Check if we're in multiplayer mode
-                const urlParams = new URLSearchParams(window.location.search);
-                const hostId = urlParams.get('host');
                 const currentFile = window.location.pathname.split('/').pop() || 'index.html';
 
-                let worldUrl;
-                if (this.multiplayer && this.multiplayer.isHost) {
-                    // Host URL includes room ID
-                    const params = new URLSearchParams({
-                        host: this.multiplayer.roomId
-                    });
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
-                } else if (hostId) {
-                    // Already in multiplayer session
-                    worldUrl = window.location.href;
-                } else {
-                    // Single player URL
-                    worldUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
-                }
+                // THE INVITE IS THE FRAGMENT THE MANAGER MINTS (#join=<roomId>.<token>).
+                // This panel used to build `?host=<roomId>` itself — the form the join path
+                // now refuses as "from an older version" — so the copy button and the QR code
+                // were handing out links nobody could join. Ask the manager for the real one.
+                const inviteUrl = () => (this.multiplayer && this.multiplayer.isHost && this.multiplayer.roomId)
+                    ? this.multiplayer.getShareUrl()
+                    : `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}`;
 
-                qrUrlElement.textContent = worldUrl;
+                qrUrlElement.textContent = inviteUrl();
 
                 shareButton.addEventListener('click', () => {
                     qrModal.classList.add('show');
-                    // Update URL if multiplayer is active
-                    if (this.multiplayer && this.multiplayer.roomId) {
-                        const params = new URLSearchParams({
-                            host: this.multiplayer.roomId
-                        });
-                        const multiplayerUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${currentFile}?${params}`;
-                        qrUrlElement.textContent = multiplayerUrl;
-                        this.generateQRCode(multiplayerUrl);
-                    } else {
-                        this.generateQRCode(worldUrl);
-                    }
+                    // Re-read on every open: the room id and secret don't exist until the
+                    // peer connection opens, which is long after this handler was installed.
+                    const url = inviteUrl();
+                    qrUrlElement.textContent = url;
+                    this.generateQRCode(url);
                 });
 
                 qrClose.addEventListener('click', () => {

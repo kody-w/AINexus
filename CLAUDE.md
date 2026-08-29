@@ -44,7 +44,7 @@ Each world is a complete, self-contained HTML file with inline CSS and JavaScrip
 - `*-world.html` - Themed 3D worlds (galaxy-zoo-world, crystal-caves-world, etc.)
 - `archive/` - Older versions and experimental worlds
 - `.claude/agents/` - Custom Claude Code agents (quantum-world-generator, local-first-app-builder, etc.)
-- `.github/workflows/ghost-host.yml` - GitHub Action to keep multiplayer rooms alive
+- `.github/workflows/ghost-host.yml` - retired ghost host (rooms can no longer be pinned to a URL); now guards that premise
 
 ## Development
 
@@ -60,7 +60,7 @@ Or simply open any HTML file directly in a browser.
 1. Open the HTML file in browser
 2. Test navigation (WASD/arrow keys, touch controls, gamepad)
 3. Test AI companion (requires API key via URL param or prompt)
-4. Test multiplayer: open multiple tabs with same `?host=room-id` parameter
+4. Test multiplayer: one tab hosts; take its invite from the Share panel or `worldNavigator.multiplayer.getShareUrl()` in the console, then open a second tab with that link's `#join=...` fragment on your own URL - `http://localhost:8000/index.html#join=<roomId>.<token>`. Only the fragment matters; the printed origin is always github.io
 
 ## Common Patterns
 
@@ -90,9 +90,13 @@ POST to `https://azfbusinessbot.azurewebsites.net/api/aidialog`:
 ```
 
 ### Multiplayer
-- Rooms identified by URL parameter `?host=room-id`
-- First visitor becomes host, others become clients
-- Permanent room: `nexus-permanent-world` (kept alive by ghost-host workflow)
+Implemented once in `net/multiplayer.js` (loaded by `index.html` and any world page via `nexusJoin`).
+- Every page opens as its own host: the room id is whatever the PeerJS server assigns, and the host mints a room secret with `crypto.getRandomValues`. Neither can be chosen or preset.
+- The invite is the URL **fragment** `#join=<roomId>.<token>` (a fragment is never sent to a web server). A joiner scrubs it from the address bar on arrival, proves the token over the encrypted data channel in a `hello` message — never in PeerJS connection metadata, which crosses the public signaling server — and refuses any connection that is not the host it was invited to.
+- The host holds an unproven channel in `pending` for 8s; a wrong or missing token is closed, never admitted.
+- The host's tab **is** the room: when it closes, joiners get "Host left — room closed".
+- Legacy `?host=room-id` links are dead — they surface "This invite link is from an older version" and the page just hosts a fresh room of its own.
+- No permanent room exists, and none can: a fixed URL would need a fixed room id and a known secret, and the code allows neither. `.github/workflows/ghost-host.yml` is retired for that reason.
 
 ### Controls
 - **Desktop**: WASD movement, mouse look (pointer lock), Space to jump
