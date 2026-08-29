@@ -40,7 +40,15 @@
   // truncate second: slicing first can cut a token in half and leave the half that still reads
   // as one.
   const CREDENTIAL = /(gh[uposr]_[A-Za-z0-9_]{6,}|tid=[^\s"']+|[Bb]earer\s+[\w.~+/=-]+)/g;
-  const clean = t => String(t == null ? '' : t).replace(CREDENTIAL, '[redacted]').slice(0, 200);
+  // Cut on a character, not a code unit. slice() counts UTF-16 units, so an API body severed
+  // between the halves of an emoji becomes an unpaired surrogate — and these strings reach Error
+  // messages that become HUD lines and, downstream, a rapp/1 frame that would then refuse to build.
+  const clean = t => {
+    const s0 = String(t == null ? '' : t).replace(CREDENTIAL, '[redacted]');
+    if (s0.length <= 200) return s0;
+    const c = s0.charCodeAt(199);
+    return s0.slice(0, (c >= 0xD800 && c <= 0xDBFF) ? 199 : 200);
+  };
 
   // WHERE THE TOKEN IS ALLOWED TO GO. The worker's address is a constant above and nothing can
   // move it. The address the worker PROXIES to is a different matter: it arrives from

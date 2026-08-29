@@ -211,6 +211,19 @@
   }
 
   // ── Pyodide: the agents, as Python ───────────────────────────────────────
+  // NEVER CUT AN ERROR IN HALF. slice() counts UTF-16 units, so a message severed between the two
+  // halves of an emoji is an unpaired surrogate — and rapp/1 refuses that, which means the frame
+  // recording the tick that WENT WRONG cannot be built. The tick with no record is exactly the one
+  // worth having. frames.js has the same helper; this copy exists because this module must not
+  // depend on frames.js loading to write down what went wrong.
+  const clip = (v, max) => {
+    const t = String(v == null ? '' : v);
+    if (!(max > 0)) return '';
+    if (t.length <= max) return t;
+    const c = t.charCodeAt(max - 1);
+    return t.slice(0, (c >= 0xD800 && c <= 0xDBFF) ? max - 1 : max);
+  };
+
   let pyodide = null, pyAgents = {}, loading = null, loadNote = 'not started', building = false;
   const agentSource = {};             // name -> where it came from, so it can be made resident again
   const summonedNames = new Set();    // written by a model rather than fetched — never confused for the rest
@@ -816,7 +829,7 @@
                    failed = (v === false || v === null || v === undefined); }
           } else if (!has(pyAgents, fname) && o.summon !== false) {
             // reached for something nobody has: find a universe where it worked, or write it
-            const got = await summon('a tool called "' + fname + '" called with ' + JSON.stringify(args).slice(0, 200),
+            const got = await summon('a tool called "' + fname + '" called with ' + clip(JSON.stringify(args), 200),
                                      { log, mind: o.mind });
             if (got && has(pyAgents, got.name)) {
               summoned.push({ asked: fname, got: got.name, via: got.via });
@@ -980,7 +993,7 @@
         called: (entry.calls || []).map(c => c.tool + (c.failed ? ' ✗' : '')),
         saw_people: ((percepts && percepts.players) || []).map(p => p.name || p.id).slice(0, 8),
       };
-      if (entry.error) asserts.error = String(entry.error).slice(0, 200);
+      if (entry.error) asserts.error = clip(entry.error, 200);
       // the facts this tick acted on: naming a portal or a peer is depending on it being there
       const requires = {};
       const portals = ((percepts && percepts.portals) || []).map(x => x.name || x).filter(Boolean);
@@ -1008,7 +1021,7 @@
         // which is indistinguishable from a tick that had nothing to seal — so a moment lost to a
         // rejected buildFrame looked exactly like an ordinary quiet one. The journal is the only
         // evidence a player played; a gap in it that announces nothing is the worst kind.
-        state.lastSealError = String((e && e.message) || e).slice(0, 200);
+        state.lastSealError = clip((e && e.message) || e, 200);
         state.sealFailures = (state.sealFailures || 0) + 1;
         return null;
       }

@@ -147,16 +147,46 @@ defended.
 seal and verify; real player names seal; the no-mind default path is byte-identical; and `spend()`
 cannot be fooled, including by a mind whose ANSWER claims to be free.
 
-### D4. The same clip defect is in two more files — NOT yet fixed
+### D4. ~~The same clip defect is in two more files~~ — CLOSED
+Both fixed once the agents holding those files landed. Measured: a message whose 200th UTF-16 unit
+falls inside an emoji leaves an unpaired surrogate under `slice`, and does not under `clip`.
+
+### D4 (original entry)
 `ai/vbrainstem.js:976` (live()'s copy of the error seal) and `ai/copilot_auth.js:43` (`clean()`)
 cut the same way. One defect, three files, one fixed — the fifth time tonight that shape has
 appeared. Deliberately left alone for now because another agent has both files open; fixing them
 while it works is the kind of avoidable mistake this log exists to prevent.
 
-### Still under attack
-Two agents are actively trying to break the remaining calls: the fail-closed behaviours (do they
-RECOVER, or is a capability gone until reload?) and the stricter frames/`wear()` refusals (can a
-real player say a real sentence that now kills their tick?). Anything they find lands above.
+### D5. My fail-closed change had a fail-OPEN hole, and hid a page-lifetime latch
+The agent briefed to break it found three things I got wrong and one older thing that is worse than
+any of them.
+- **A 200 carrying valid JSON of the wrong shape failed OPEN.** `{"schema":…,"count":0}` parsed, so
+  the allowlist became `{}` and `fingerprintsUnavailable` cleared — and every file then loaded
+  UNVERIFIED, cached for the life of the page. An empty allowlist is not "nothing is published", it
+  is "everything loads unverified". My fail-closed change contained the opposite of itself.
+- **A stalled response hung the boot forever** — no timeout on that fetch at all.
+- **A concurrent hot-load was spuriously refused**, because the pessimism raised on the way in was
+  read by another caller as a verdict.
+- **The latch I missed was one level up and is the expensive one.** An agent refused during
+  `initPyodide`'s local-agent loop was gone for the life of the page, because nothing recorded
+  where it came from. Measured: a TWO-SECOND outage lost all eight agents while `status()`
+  cheerfully reported `ready with ManageMemory, ContextMemory`. Now the source is written down
+  before the attempt, and one residency pass brings them back.
+- **`initPyodide` could DEADLOCK** — older, not mine, and the most severe thing here: its own body
+  hot-loads agents, `hotloadNow` asks it for the runtime on the way in, and with `pyAgents` empty
+  the boot awaited its own pending promise. The page says `loading agents…` until the tab closes.
+- `autodrive.html` had **no recovery at all** — a script tag is one attempt — plus a local fallback
+  that never checked `r.ok`, and a missing program file reported as *"does not match its sealed
+  hash — refused"*: someone would hunt a tampering incident over a 404.
+**The allowlist survived.** All four hosts GitHub actually serves from pass, every near-miss is
+refused, and a refusal does not poison the next good endpoint. Its only fault was silence, now a
+warning — worth having, because GitHub served Copilot from another host for years.
+
+### Left for you, deliberately
+`dead(status)` signs the user out on ANY 401/403 — including one from the Cloudflare worker rather
+than from GitHub — and wipes the token from localStorage. A transient proxy 403 permanently costs a
+sign-in and forces the whole device flow again. The agent declined to loosen an auth failure path
+without you, and I agree with that call.
 
 ---
 
