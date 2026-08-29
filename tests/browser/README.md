@@ -22,6 +22,7 @@ fails twice, then it is real.
 | `dialogue_ring.cjs` | options generated from what is true, rebuilt when they answer, and the floor holding when no mind is available |
 | `vbrainstem_python.cjs` | Pyodide really loads and every agent the module declares is resident; every verb offered to a model names a method the hands actually have; a memory written comes back out of Python word for word |
 | `copilot_auth.cjs` | the device flow either starts or says out loud that it could not — never neither — and the sign-in is deliberately NOT completed; a live rate limit is weather, so the code returning is never asserted |
+| `token_path.cjs` | the other half of the auth surface, with the door replaced by a stub so every answer a real one gives can be held still: the visitor's credential leaves in an Authorization header to the ONE address fixed in the file and appears in no URL, body, log, error or attribute; the host the worker is told to forward to is checked rather than believed, so a stranger written into the shared `rapp_settings` key by any other tool on this origin never becomes the address a seat is posted to; a 200 carrying a refusal instead of a code is a refusal; twelve polls in a tight loop knock once and a `slow_down` widens the wait; and a credential revoked mid-session surfaces once, clears itself, and is never re-presented to the live door |
 | `overlay.cjs` | portals draw no overlay, a faced person gets a reticle, a distant one stays a dot |
 | `tiles.cjs` | wearing: the same key wears byte-identical tiles from a record, a word is a key, twelve keys give twelve distinct starting conditions |
 | `slosh.cjs` | pouring in both directions — a world through lenses, an organism through worlds — and the order mattering in each |
@@ -52,7 +53,9 @@ fails twice, then it is real.
 needs no camera or network either, because it drives the two modules as the pure functions they are.
 The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
-`agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker.
+`agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker; `token_path.cjs`
+deliberately does not — it replaces the door inside the page, so it needs no credential and no
+network, and neither of them ever completes a sign-in.
 `absent_and_infinite.cjs` boots the real AI player with Pyodide stubbed at the CDN, so it drives
 the drop-in through its own boot path without pulling the 10MB runtime.
 
