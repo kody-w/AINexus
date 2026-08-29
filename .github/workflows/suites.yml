@@ -1,0 +1,60 @@
+name: Suites
+
+# The browser suites are the estate's real gate — 185 checks that hold the frame
+# rules, the wearing vectors, the overlay, the dialogue ring and the proof page's
+# refusal to believe itself. Until now nothing ran them except a person deciding
+# to, which means a regression was only ever caught if somebody happened to look.
+#
+# This runs the ten that do not download ~10MB of Pyodide apiece. The Pyodide ten
+# are excluded on time, not on importance, and copilot_auth is excluded because it
+# knocks on a live rate-limited endpoint and a third party's throttle must never
+# be able to turn this red. Run everything locally with:
+#
+#     node tools/run_suites.cjs
+#
+# The runner retries a suite once and LABELS any that needed it, so a CDN hiccup
+# does not fail the build while still being visible.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - 'ai/**'
+      - 'net/**'
+      - 'tests/browser/**'
+      - 'tools/run_suites.cjs'
+      - 'proof/latest/**'
+      - '.github/workflows/suites.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: suites-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+
+      - name: install playwright + chromium
+        working-directory: tests
+        run: |
+          npm install --no-audit --no-fund playwright@1.55.1
+          npx playwright install --with-deps chromium
+
+      - name: run the suites that do not need Pyodide
+        env:
+          PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
+        run: |
+          node tools/run_suites.cjs \
+            dialogue_ring dimension_seed holo_calibration orbs_and_gaze overlay \
+            proof_red tick_loop tiles turn views_live
