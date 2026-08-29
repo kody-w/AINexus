@@ -30,10 +30,11 @@
       --cp-accent-soft: rgba(177, 31, 75, 0.08);
       --cp-accent-fg: #ffffff;
       --cp-success: #16a34a;
-      --cp-success-strong: #15803d;
+      --cp-success-strong: #147a38;
       --cp-success-strong-fg: #ffffff;
       --cp-danger: #dc2626;
       --cp-warning: #f59e0b;
+      --cp-warning-strong: #8a5200;
       --cp-link: #0078d4;
       --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
       --cp-overlay: rgba(255, 255, 255, 0.8);
@@ -62,6 +63,7 @@
       --cp-success-strong-fg: #1a1a1a;
       --cp-danger: #f87171;
       --cp-warning: #fbbf24;
+      --cp-warning-strong: #fbbf24;
       --cp-link: #4da6ff;
       --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
       --cp-overlay: rgba(41, 41, 41, 0.88);
@@ -369,7 +371,7 @@
     }
 
     #alarm-value[data-level="watch"] {
-      color: var(--cp-warning);
+      color: var(--cp-warning-strong);
     }
 
     #alarm-value[data-level="danger"],
@@ -378,7 +380,7 @@
     }
 
     #objective-value[data-outcome="won"] {
-      color: var(--cp-success);
+      color: var(--cp-success-strong);
     }
 
     .workspace {
@@ -3571,6 +3573,8 @@
       }
 
       function dismissIntro(shouldPlay) {
+        const wasVisible = !elements.intro.hidden;
+        if (!wasVisible) return false;
         if (introTimer !== null) {
           window.clearTimeout(introTimer);
           introTimer = null;
@@ -3579,6 +3583,7 @@
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
         completeReadiness();
         focusUsefulControlAfterIntro();
+        return true;
       }
 
       function playGame(markCommand = true) {
@@ -4025,6 +4030,12 @@
         if (state.outcome === "won" && (!state.core.acquired || !state.agents.every((agent) => agent.status === "active" && isAtExtraction(state, agent)))) {
           throw new Error(label + " claims a win without complete extraction.");
         }
+        if (state.outcome === "won" && (state.alarm >= 100 || state.tick >= state.maxTicks)) {
+          throw new Error(label + " claims a win after a terminal loss condition.");
+        }
+        if (state.outcome === "active" && (state.alarm >= 100 || state.tick >= state.maxTicks || state.agents.some((agent) => agent.status === "captured"))) {
+          throw new Error(label + " is active despite a terminal loss condition.");
+        }
         if (state.outcome === "lost" && !state.outcomeReason) throw new Error(label + " lost outcome requires a reason.");
       }
 
@@ -4152,6 +4163,14 @@
         if (!verification.valid) throw new Error(verification.reason);
         if (verification.seed !== data.seed) throw new Error("Export seed disagrees with the frame chain.");
         if (data.viewIndex < 0 || data.viewIndex >= data.frames.length) throw new Error("Export timeline cursor is out of range.");
+        const finalFrame = data.frames[data.frames.length - 1];
+        const viewingHistory = data.viewIndex !== data.frames.length - 1;
+        if (data.running && viewingHistory) {
+          throw new Error("Export cannot be running while its timeline cursor is historical.");
+        }
+        if (data.running && finalFrame.state.outcome !== "active") {
+          throw new Error("Export cannot be running after the mission outcome is sealed.");
+        }
         return data;
       }
 
