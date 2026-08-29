@@ -1529,7 +1529,7 @@ async function auditSlowStreamFirstPaint(browser) {
   });
 
   const address = server.address();
-  const context = await browser.newContext({ viewport: { width: 900, height: 620 } });
+  const context = await browser.newContext({ viewport: { width: 900, height: 360 } });
   const page = await context.newPage();
   watchPage(page, 'slow-stream first paint');
   let navigation;
@@ -1541,9 +1541,11 @@ async function auditSlowStreamFirstPaint(browser) {
     await prefixSent;
     await page.locator('.intro-card').waitFor({ state: 'visible', timeout: 3000 });
     const skip = page.locator(
-      '.skip-link, a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
+      '.skip-link, a[href="#game-board"], a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
     ).first();
     requireMeasurement(await skip.count() === 1, 'the streamed skip link');
+    const href = await skip.getAttribute('href');
+    requireMeasurement(href && href.startsWith('#'), 'a same-page streamed skip target');
     const begin = await page.evaluate(() => {
       const card = document.querySelector('.intro-card');
       const controls = card ? [...card.querySelectorAll(
@@ -1589,6 +1591,120 @@ async function auditSlowStreamFirstPaint(browser) {
     }
     requireMeasurement(parserSamples.some(sample => sample.begin),
       'Tab reaching Begin while the final script is delayed');
+    await page.evaluate(() => {
+      const visible = element => {
+        if (!element || element.hidden || element.hasAttribute('inert') ||
+            element.getAttribute('aria-hidden') === 'true') return false;
+        if (typeof element.checkVisibility === 'function') {
+          return element.checkVisibility({
+            checkOpacity: true,
+            checkVisibilityCSS: true
+          });
+        }
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' &&
+          Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+      };
+      const probe = { first: null };
+      const capture = source => {
+        if (probe.first) return;
+        const api = window.__doggHeist;
+        const intro = document.getElementById('intro-overlay') ||
+          document.querySelector('.intro-card');
+        if (api?.ready !== true || visible(intro)) return;
+        const board = document.getElementById('game-board');
+        const rect = board?.getBoundingClientRect();
+        probe.first = {
+          source,
+          hash: location.hash,
+          active: document.activeElement?.id || document.activeElement?.tagName || '',
+          boardFocused: document.activeElement === board ||
+            Boolean(board?.contains(document.activeElement)),
+          boardIntersects: Boolean(rect && rect.right > 0 && rect.left < innerWidth &&
+            rect.bottom > 0 && rect.top < innerHeight),
+          boardRect: rect ? {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom
+          } : null,
+          scroll: {
+            window: scrollY,
+            document: document.scrollingElement?.scrollTop || 0
+          },
+          introVisible: false,
+          ready: true
+        };
+      };
+      const observer = new MutationObserver(() =>
+        queueMicrotask(() => capture('mutation')));
+      observer.observe(document.documentElement, {
+        subtree: true,
+        childList: true,
+        attributes: true
+      });
+      const frame = () => {
+        capture('frame');
+        if (probe.first) observer.disconnect();
+        else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+      window.__doggSkipReleaseProbe = probe;
+    });
+    const queuedSkipBefore = await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const board = document.getElementById('game-board');
+      const rect = board?.getBoundingClientRect();
+      return {
+        hash: location.hash,
+        ready: window.__doggHeist?.ready,
+        active: document.activeElement?.id || document.activeElement?.tagName || '',
+        inside: Boolean(card && card.contains(document.activeElement)),
+        introVisible: Boolean(card && getComputedStyle(card).display !== 'none'),
+        boardFocused: document.activeElement === board,
+        boardIntersects: Boolean(rect && rect.right > 0 && rect.left < innerWidth &&
+          rect.bottom > 0 && rect.top < innerHeight),
+        scroll: {
+          window: scrollY,
+          document: document.scrollingElement?.scrollTop || 0
+        }
+      };
+    });
+    await skip.evaluate(element => element.click());
+    await sleep(60);
+    const queuedSkipImmediate = await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const board = document.getElementById('game-board');
+      const rect = board?.getBoundingClientRect();
+      return {
+        hash: location.hash,
+        ready: window.__doggHeist?.ready,
+        active: document.activeElement?.id || document.activeElement?.tagName || '',
+        inside: Boolean(card && card.contains(document.activeElement)),
+        introVisible: Boolean(card && getComputedStyle(card).display !== 'none'),
+        boardFocused: document.activeElement === board,
+        boardIntersects: Boolean(rect && rect.right > 0 && rect.left < innerWidth &&
+          rect.bottom > 0 && rect.top < innerHeight),
+        scroll: {
+          window: scrollY,
+          document: document.scrollingElement?.scrollTop || 0
+        }
+      };
+    });
+    const preReadySkipHeld =
+      queuedSkipBefore.ready !== true &&
+      queuedSkipBefore.inside &&
+      !queuedSkipBefore.boardIntersects &&
+      queuedSkipImmediate.ready !== true &&
+      queuedSkipImmediate.introVisible &&
+      queuedSkipImmediate.inside &&
+      !queuedSkipImmediate.boardFocused &&
+      queuedSkipImmediate.active === queuedSkipBefore.active &&
+      queuedSkipImmediate.hash === queuedSkipBefore.hash &&
+      queuedSkipImmediate.scroll.window === queuedSkipBefore.scroll.window &&
+      queuedSkipImmediate.scroll.document === queuedSkipBefore.scroll.document;
+    await page.locator('[data-dogg-test-stream-begin="true"]').focus();
     const acknowledgementBefore = await page.evaluate(() => {
       const card = document.querySelector('.intro-card');
       const beginControl = document.querySelector('[data-dogg-test-stream-begin="true"]');
@@ -1722,16 +1838,34 @@ async function auditSlowStreamFirstPaint(browser) {
         const card = document.querySelector('.intro-card');
         const style = card && getComputedStyle(card);
         const rect = card && card.getBoundingClientRect();
+        const board = document.getElementById('game-board');
+        const boardRect = board?.getBoundingClientRect();
         return {
           ready: api?.ready,
           tick: Number(state.tick ?? state.currentTick ?? state.liveTick),
           running: Boolean(state.running ?? state.playing),
           introVisible: Boolean(card && !card.hidden && style.display !== 'none' &&
-            style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0)
+            style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0),
+          release: window.__doggSkipReleaseProbe?.first || null,
+          current: {
+            hash: location.hash,
+            active: document.activeElement?.id || document.activeElement?.tagName || '',
+            boardFocused: document.activeElement === board ||
+              Boolean(board?.contains(document.activeElement)),
+            boardIntersects: Boolean(boardRect && boardRect.right > 0 &&
+              boardRect.left < innerWidth && boardRect.bottom > 0 &&
+              boardRect.top < innerHeight),
+            boardRect: boardRect ? {
+              left: boardRect.left,
+              top: boardRect.top,
+              right: boardRect.right,
+              bottom: boardRect.bottom
+            } : null
+          }
         };
       }),
       value => value.ready === true && !value.introVisible &&
-        Number.isFinite(value.tick),
+        Number.isFinite(value.tick) && Boolean(value.release),
       5000,
       25
     );
@@ -1749,8 +1883,14 @@ async function auditSlowStreamFirstPaint(browser) {
     );
     await page.evaluate(() => window.__doggHeist.pause());
 
-    const href = await skip.getAttribute('href');
-    requireMeasurement(href && href.startsWith('#'), 'a same-page skip target');
+    await page.evaluate(() => {
+      history.replaceState(null, '', location.pathname + location.search);
+      document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
+      document.body.style.setProperty('scroll-behavior', 'auto', 'important');
+      scrollTo(0, 0);
+      if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+      document.getElementById('play-toggle')?.focus();
+    });
     await skip.focus();
     await page.keyboard.press('Enter');
     await poll(
@@ -1776,6 +1916,10 @@ async function auditSlowStreamFirstPaint(browser) {
       acknowledgementAfter,
       queuedReady,
       queuedAdvanced,
+      queuedRelease: queuedReady.release || queuedReady.current,
+      queuedSkipBefore,
+      queuedSkipImmediate,
+      preReadySkipHeld,
       skipBlocked,
       before,
       parserSamples,
@@ -2740,6 +2884,115 @@ async function api(page, method, ...args) {
   return outcome.value;
 }
 
+function mutationSucceeded(value) {
+  if (value === true) return true;
+  return Boolean(value && typeof value === 'object' &&
+    (value.ok === true || value.success === true ||
+      value.accepted === true || value.updated === true));
+}
+
+async function readSpeedSurface(page) {
+  return page.evaluate(async () => {
+    const api = window.__doggHeist;
+    const rawState = await Promise.resolve(api.state());
+    const rawExport = await Promise.resolve(api.exportState());
+    const exported = typeof rawExport === 'string' ? JSON.parse(rawExport) : rawExport;
+    const finite = values => {
+      for (const value of values) {
+        const number = Number(value);
+        if (Number.isFinite(number)) return number;
+      }
+      return undefined;
+    };
+    const select = document.getElementById('speed-select');
+    const rect = select?.getBoundingClientRect();
+    const style = select && getComputedStyle(select);
+    return {
+      stateSpeed: finite([
+        rawState?.speedMs,
+        rawState?.tickIntervalMs,
+        rawState?.intervalMs,
+        rawState?.speed
+      ]),
+      exportSpeed: finite([
+        exported?.data?.speedMs,
+        exported?.data?.tickIntervalMs,
+        exported?.data?.intervalMs,
+        exported?.speedMs
+      ]),
+      select: {
+        value: select?.value ?? '',
+        selectedIndex: select?.selectedIndex ?? -1,
+        selectedText: select?.selectedOptions?.[0]?.textContent?.trim() || '',
+        visible: Boolean(select && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number(style.opacity) > 0 &&
+          rect.width > 0 && rect.height > 0),
+        options: select ? [...select.options].map(option => ({
+          value: option.value,
+          text: option.textContent.trim(),
+          selected: option.selected
+        })) : []
+      }
+    };
+  });
+}
+
+async function measureSpeedPacing(page, expectedMs, changes = 7) {
+  return page.evaluate(async ({ expectedMs, changes }) => {
+    const api = window.__doggHeist;
+    await Promise.resolve(api.pause());
+    const before = await Promise.resolve(api.state());
+    const startTick = Number(before.tick ?? before.currentTick ?? before.liveTick);
+    const started = performance.now();
+    const samples = [];
+    let lastTick = startTick;
+    const deadline = started + Math.max(1600, expectedMs * (changes + 3) * 3);
+    await Promise.resolve(api.play());
+    try {
+      while (samples.length < changes && performance.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 1));
+        const state = await Promise.resolve(api.state());
+        const tick = Number(state.tick ?? state.currentTick ?? state.liveTick);
+        if (Number.isFinite(tick) && tick !== lastTick) {
+          samples.push({ tick, at: performance.now() - started });
+          lastTick = tick;
+        }
+      }
+    } finally {
+      await Promise.resolve(api.pause());
+    }
+    const intervals = [];
+    for (let index = 1; index < samples.length; index++) {
+      const tickDelta = samples[index].tick - samples[index - 1].tick;
+      if (tickDelta > 0) {
+        intervals.push((samples[index].at - samples[index - 1].at) / tickDelta);
+      }
+    }
+    const sorted = [...intervals].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    const measuredMedian = !sorted.length ? null :
+      sorted.length % 2 ? sorted[middle] :
+        (sorted[middle - 1] + sorted[middle]) / 2;
+    return {
+      expectedMs,
+      startTick,
+      endTick: lastTick,
+      samples,
+      intervals,
+      median: measuredMedian
+    };
+  }, { expectedMs, changes });
+}
+
+function pacingMatches(measurement, expectedMs) {
+  const tolerance = Math.max(8, expectedMs * 0.28);
+  return measurement &&
+    measurement.intervals.length >= 4 &&
+    Number.isFinite(measurement.median) &&
+    Math.abs(measurement.median - expectedMs) <= tolerance &&
+    measurement.endTick - measurement.startTick >= 5;
+}
+
 async function rejectedTransactionalImport(
   page,
   mutatedJson,
@@ -3268,6 +3521,276 @@ function canvasSampleDelta(before, after) {
   return {
     changedRatio: changed / before.colors.length,
     meanDistance: distance / before.colors.length
+  };
+}
+
+async function sampleCanvasCellCore(page, dimensions, target) {
+  const sample = await page.evaluate(({ dimensions, target }) => {
+    const board = document.getElementById('game-board');
+    const canvas = board instanceof HTMLCanvasElement ? board : board?.querySelector('canvas');
+    if (!canvas || !canvas.width || !canvas.height) return null;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+    const cellWidth = canvas.width / dimensions.cols;
+    const cellHeight = canvas.height / dimensions.rows;
+    const colors = [];
+    let warningPixels = 0;
+    let hash = 2166136261;
+    for (let row = 0; row < 11; row++) {
+      for (let col = 0; col < 11; col++) {
+        const x = Math.max(0, Math.min(canvas.width - 1,
+          Math.floor((target.x + 0.25 + 0.5 * col / 10) * cellWidth)));
+        const y = Math.max(0, Math.min(canvas.height - 1,
+          Math.floor((target.y + 0.25 + 0.5 * row / 10) * cellHeight)));
+        const pixel = [...context.getImageData(x, y, 1, 1).data];
+        colors.push(pixel);
+        for (const value of pixel) {
+          hash ^= value;
+          hash = Math.imul(hash, 16777619);
+        }
+        const [red, green, blue, alpha] = pixel;
+        if (alpha > 20 && (
+          (red >= 150 && red > green * 1.16 && red > blue * 1.2) ||
+          (red >= 170 && green >= 75 && green < red * 0.92 && blue < green * 0.85)
+        )) warningPixels++;
+      }
+    }
+    return {
+      colors,
+      hash: (hash >>> 0).toString(16),
+      warningRatio: warningPixels / colors.length
+    };
+  }, { dimensions, target });
+  requireMeasurement(sample && sample.colors.length === 121,
+    `readable core canvas pixels at ${target.x},${target.y}`);
+  return sample;
+}
+
+function boardTacticalDisclosure(text) {
+  return boardEnemyDisclosure(text) ||
+    /\bcurrent\s+threat(?:\s+zone)?\b/i.test(text) ||
+    /\bnext(?:-tick)?\s+(?:danger|threat|warning)\b/i.test(text) ||
+    /\bdanger\s+predicted\b/i.test(text);
+}
+
+function boardEnemyDisclosure(text) {
+  return /\b(?:guard|camera|laser)(?:[-\s#]*\d+)?\b/i.test(text) ||
+    /\b(?:enemy|hostile|adversary)\b/i.test(text) ||
+    /\bno\s+known\s+occupant\b/i.test(text) ||
+    /\boccupants?:\s*(?!unknown\b|unseen\b|hidden\b)/i.test(text);
+}
+
+function normalizeFogSemantic(text) {
+  return String(text || '')
+    .replace(/\[\s*-?\d+\s*,\s*-?\d+\s*\]/g, '[x,y]')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function selectedBoardAgentId(page) {
+  return page.evaluate(() => {
+    const selected = document.querySelector(
+      '#agent-list [aria-pressed="true"], #agent-list .agent-button.selected'
+    );
+    return String(
+      selected?.getAttribute('data-agent-id') ||
+      selected?.dataset?.agentId ||
+      selected?.getAttribute('aria-label') ||
+      ''
+    ).trim();
+  });
+}
+
+function povCellSets(state, agentId) {
+  const agents = normalizedAgents(agentsOf(state));
+  const views = collectionEntries(povsOf(state));
+  const entry = views.find(({ key, value }, index) => {
+    const view = value && typeof value === 'object' ? value : {};
+    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ??
+      (key.match(/^\d+$/) ? agents[index]?.id : key) ?? key);
+    return id.toLowerCase() === String(agentId).toLowerCase();
+  });
+  requireMeasurement(entry, `a public POV for selected agent ${agentId}`);
+  const view = entry.value && typeof entry.value === 'object' ? entry.value : {};
+  return {
+    known: new Set(normalizedCells(
+      view.knownCells ?? view.seen ?? view.seenCells ?? view.known ?? view.cells
+    ).cells),
+    visible: new Set(normalizedCells(
+      view.visibleCells ?? view.visible ?? view.currentlyVisible ?? view.inSight
+    ).cells)
+  };
+}
+
+async function auditSemanticFogPrivacy(page) {
+  const seed = 'SEMANTIC-LEAK-01';
+  const unseenGuardCell = { x: 7, y: 9 };
+  const emptyFogCell = { x: 1, y: 1 };
+  const rememberedCell = { x: 6, y: 4 };
+
+  await api(page, 'pause');
+  await api(page, 'restart', seed);
+  await api(page, 'pause');
+  const genesis = await inspect(page);
+  requireMeasurement(genesis.tick === 0, `${seed} tick-0 genesis`);
+  const dimensions = facilityDimensions(genesis);
+  requireMeasurement(dimensions, `${seed} facility dimensions`);
+  const selectedId = await selectedBoardAgentId(page);
+  requireMeasurement(selectedId, `${seed} selected board agent`);
+  const genesisVisibility = povCellSets(genesis.state, selectedId);
+  const rawGenesis = frameState(latestExportFrame(genesis.exported));
+  requireMeasurement(rawGenesis, `${seed} sealed genesis state`);
+  const guards = collectionEntries(rawGenesis.guards).map(({ value }) => value);
+  const hiddenGuard = guards.find(guard =>
+    String(guard?.id).toLowerCase() === 'guard-1' &&
+    coordinateOf(guard)?.x === unseenGuardCell.x &&
+    coordinateOf(guard)?.y === unseenGuardCell.y);
+  requireMeasurement(hiddenGuard, 'sealed guard-1 at [7,9]');
+
+  const occupied = new Set();
+  for (const key of [
+    'agents', 'guards', 'cameras', 'hazards', 'terminals', 'doors',
+    'lures', 'decoyPosts'
+  ]) {
+    for (const { value } of collectionEntries(rawGenesis[key])) {
+      const position = coordinateOf(value);
+      if (position) occupied.add(`${position.x},${position.y}`);
+    }
+  }
+  for (const value of [rawGenesis.core, rawGenesis.extraction]) {
+    const position = coordinateOf(value);
+    if (position) occupied.add(`${position.x},${position.y}`);
+  }
+  const tileAt = cell => rawGenesis.facility?.tiles?.[cell.y]?.[cell.x];
+  const targetKey = `${unseenGuardCell.x},${unseenGuardCell.y}`;
+  const emptyKey = `${emptyFogCell.x},${emptyFogCell.y}`;
+  requireMeasurement(
+    !genesisVisibility.visible.has(targetKey) &&
+      !genesisVisibility.known.has(targetKey),
+    'guard-1 cell absent from the selected public POV at tick 0'
+  );
+  requireMeasurement(
+    !occupied.has(emptyKey) &&
+      !genesisVisibility.visible.has(emptyKey) &&
+      !genesisVisibility.known.has(emptyKey) &&
+      tileAt(emptyFogCell) === tileAt(unseenGuardCell),
+    'an empty unseen same-terrain fog control at [1,1]'
+  );
+
+  const liveThreats = [
+    ...collectionEntries(rawGenesis.guards).map(({ value }) => value),
+    ...collectionEntries(rawGenesis.cameras).map(({ value }) => value),
+    ...collectionEntries(rawGenesis.hazards).map(({ value }) => value)
+  ].filter(value => value && typeof value === 'object' && value.active !== false);
+  const visibleThreat = liveThreats.find(value => {
+    const position = coordinateOf(value);
+    return position && genesisVisibility.visible.has(`${position.x},${position.y}`);
+  });
+  requireMeasurement(visibleThreat && coordinateOf(visibleThreat),
+    'a currently visible enemy/threat control');
+  const visibleThreatCell = coordinateOf(visibleThreat);
+
+  const hiddenPixels = await sampleCanvasCell(page, genesis, unseenGuardCell);
+  const emptyPixels = await sampleCanvasCell(page, genesis, emptyFogCell);
+  const visiblePixels = await sampleCanvasCell(page, genesis, visibleThreatCell);
+  const hiddenVsEmpty = canvasSampleDelta(hiddenPixels, emptyPixels);
+  const visibleVsFog = canvasSampleDelta(emptyPixels, visiblePixels);
+
+  const hiddenCursor = await moveBoardCursorTo(page, unseenGuardCell, dimensions);
+  const emptyCursor = await moveBoardCursorTo(page, emptyFogCell, dimensions);
+  const visibleCursor = await moveBoardCursorTo(page, visibleThreatCell, dimensions);
+  const hiddenText = hiddenCursor.semantic.text;
+  const emptyText = emptyCursor.semantic.text;
+  const visibleText = visibleCursor.semantic.text;
+  const visibleIdentity = String(visibleThreat.id || visibleThreat.name || '')
+    .toLowerCase().replace(/[\s_-]+/g, '');
+  const visibleNormalized = visibleText.toLowerCase().replace(/[\s_-]+/g, '');
+
+  await api(page, 'restart', seed);
+  await api(page, 'pause');
+  await api(page, 'step', 11);
+  const atEleven = await inspect(page, false);
+  const atElevenVisibility = povCellSets(atEleven.state, selectedId);
+  const rememberedKey = `${rememberedCell.x},${rememberedCell.y}`;
+  requireMeasurement(
+    atEleven.tick === 11 &&
+      atElevenVisibility.known.has(rememberedKey) &&
+      atElevenVisibility.visible.has(rememberedKey),
+    '[6,4] known and currently visible at tick 11 before it leaves sight'
+  );
+  await api(page, 'step', 1);
+  await moveBoardCursorTo(page, rememberedCell, dimensions);
+  const rememberedSamples = [];
+  let rememberedSnapshot = await inspect(page, false);
+  let rememberedVisibility = povCellSets(rememberedSnapshot.state, selectedId);
+  while (!rememberedVisibility.visible.has(rememberedKey) &&
+      rememberedSnapshot.tick <= 30) {
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    const semantic = await readBoardSemantic(page);
+    const pixels = await sampleCanvasCellCore(page, dimensions, rememberedCell);
+    rememberedSamples.push({
+      tick: rememberedSnapshot.tick,
+      known: rememberedVisibility.known.has(rememberedKey),
+      visible: rememberedVisibility.visible.has(rememberedKey),
+      semantic: semantic.text,
+      warningRatio: pixels.warningRatio,
+      pixelHash: pixels.hash
+    });
+    await api(page, 'step', 1);
+    rememberedSnapshot = await inspect(page, false);
+    rememberedVisibility = povCellSets(rememberedSnapshot.state, selectedId);
+  }
+
+  return {
+    seed,
+    selectedId,
+    unseenGuardCell,
+    emptyFogCell,
+    hiddenGuardId: hiddenGuard.id,
+    visibleThreat: {
+      id: String(visibleThreat.id || visibleThreat.name || ''),
+      cell: visibleThreatCell
+    },
+    hiddenText,
+    emptyText,
+    visibleText,
+    hiddenUnknown: /\b(unknown|fog|unseen|hidden|obscured)\b/i.test(hiddenText),
+    emptyUnknown: /\b(unknown|fog|unseen|hidden|obscured)\b/i.test(emptyText),
+    hiddenNoDisclosure:
+      !/\bguard[-\s#]*1\b/i.test(hiddenText) &&
+      !boardTacticalDisclosure(hiddenText),
+    emptyNoDisclosure: !boardTacticalDisclosure(emptyText),
+    equivalentFogSemantics:
+      normalizeFogSemantic(hiddenText) === normalizeFogSemantic(emptyText),
+    equivalentFogPixels:
+      hiddenPixels.hash === emptyPixels.hash &&
+      hiddenVsEmpty.changedRatio === 0 &&
+      hiddenVsEmpty.meanDistance === 0,
+    visibleControlExposed:
+      Boolean(visibleIdentity && visibleNormalized.includes(visibleIdentity)) &&
+      /\b(occupants?|threat|danger|warning)\b/i.test(visibleText) &&
+      visibleVsFog.changedRatio >= 0.03 &&
+      visibleVsFog.meanDistance >= 3,
+    hiddenPixels,
+    emptyPixels,
+    visiblePixels,
+    hiddenVsEmpty,
+    visibleVsFog,
+    rememberedSamples,
+    rememberedBecameVisible:
+      rememberedSnapshot.tick > 12 &&
+      rememberedSnapshot.tick <= 30 &&
+      rememberedVisibility.visible.has(rememberedKey),
+    rememberedVisibleTick: rememberedSnapshot.tick,
+    rememberedPrivate: rememberedSamples.length > 0 &&
+      rememberedSamples[0].tick === 12 &&
+      rememberedSamples.every(sample =>
+        sample.known &&
+        !sample.visible &&
+        sample.warningRatio <= 0.005 &&
+        /\b(unknown|fog|unseen|hidden|remembered|last seen|not currently visible)\b/i
+          .test(sample.semantic) &&
+        !boardTacticalDisclosure(sample.semantic))
   };
 }
 
@@ -5205,6 +5728,16 @@ async function runSuite() {
       slowStream.skipAfter.hash === slowStream.href &&
       slowStream.skipAfter.targetExists,
     `parser tabs ${slowStream.parserSamples.map(sample => sample.active).join('→')}; ack ${slowStream.acknowledged}/shield ${slowStream.pendingShield}; queued tick ${slowStream.queuedReady.tick}→${slowStream.queuedAdvanced.tick}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
+  result('pre-ready Skip queues until intro release and lands on the board',
+    slowStream.parserHeld &&
+      slowStream.preReadySkipHeld &&
+      Boolean(slowStream.queuedReady.release) &&
+      slowStream.queuedRelease.ready === true &&
+      slowStream.queuedRelease.introVisible === false &&
+      slowStream.queuedRelease.hash === slowStream.href &&
+      slowStream.queuedRelease.boardFocused &&
+      slowStream.queuedRelease.boardIntersects,
+    `immediate hash "${slowStream.queuedSkipBefore.hash}"→"${slowStream.queuedSkipImmediate.hash}", focus ${slowStream.queuedSkipBefore.active}→${slowStream.queuedSkipImmediate.active}, scroll ${slowStream.queuedSkipBefore.scroll.document}→${slowStream.queuedSkipImmediate.scroll.document}; release ${slowStream.queuedRelease.source || 'current'} ${slowStream.queuedRelease.hash} focus=${slowStream.queuedRelease.active} intersects=${slowStream.queuedRelease.boardIntersects}`);
   const repeatedIntroActivations = [];
   for (const mode of ['double-click', 'double-enter', 'double-touch']) {
     repeatedIntroActivations.push(await auditRepeatedIntroActivation(browser, mode));
@@ -5503,6 +6036,102 @@ async function runSuite() {
       setSpeedAfter.tick - setSpeedBefore.tick === 1 &&
       setSpeedAfter.frameCount - setSpeedBefore.frameCount === 1,
     `${otherSpeed.text} at 4× CPU: +${throttledAfter.tick - throttledBefore.tick}; setSpeed(137): +${setSpeedAfter.tick - setSpeedBefore.tick}`);
+
+  const customSpeedRuns = [];
+  for (const requested of [10, 137]) {
+    await api(page, 'pause');
+    const returned = await api(page, 'setSpeed', requested);
+    const surface = await readSpeedSurface(page);
+    const pacing = await measureSpeedPacing(page, requested);
+    customSpeedRuns.push({ requested, returned, surface, pacing });
+  }
+  const customBeforePreset = await readSpeedSurface(page);
+  const preset = customBeforePreset.select.options
+    .filter(option =>
+      Number.isFinite(Number(option.value)) &&
+      ![10, 137].includes(Number(option.value)) &&
+      !/\bcustom\b/i.test(option.text))
+    .sort((a, b) => Number(a.value) - Number(b.value))[0];
+  requireMeasurement(preset, 'a visible preset speed after setSpeed(137)');
+  await page.locator('#speed-select').selectOption(preset.value);
+  const presetSurface = await poll(
+    () => readSpeedSurface(page),
+    value => value.select.value === preset.value &&
+      value.exportSpeed === Number(preset.value),
+    1500,
+    20
+  );
+  const presetPacing = await measureSpeedPacing(page, Number(preset.value));
+  const staleCustomOptions = presetSurface.select.options.filter(option =>
+    /\bcustom\b/i.test(option.text) || [10, 137].includes(Number(option.value)));
+
+  await api(page, 'pause');
+  const arbitraryReturn = await api(page, 'setSpeed', 137);
+  const arbitrarySource = await readSpeedSurface(page);
+  const arbitraryExport = await api(page, 'exportState');
+  const arbitraryExportText = typeof arbitraryExport === 'string' ?
+    arbitraryExport : JSON.stringify(arbitraryExport);
+  const speedImportContext = await browser.newContext({
+    viewport: { width: 1000, height: 720 }
+  });
+  await serve(speedImportContext);
+  const speedImportPage = await openHeist(speedImportContext, 'custom-speed import page');
+  await api(speedImportPage, 'pause');
+  const arbitraryImport = await api(speedImportPage, 'importState', arbitraryExportText);
+  await api(speedImportPage, 'pause');
+  const arbitraryImported = await readSpeedSurface(speedImportPage);
+  const importedPacing = await measureSpeedPacing(speedImportPage, 137);
+  await speedImportContext.close();
+
+  const customSpeedTruth = customSpeedRuns.every(run =>
+    mutationSucceeded(run.returned) &&
+    run.surface.exportSpeed === run.requested &&
+    (run.surface.stateSpeed == null || run.surface.stateSpeed === run.requested) &&
+    run.surface.select.visible &&
+    run.surface.select.value === String(run.requested) &&
+    /\bcustom\b/i.test(run.surface.select.selectedText) &&
+    new RegExp(`\\b${run.requested}\\s*ms\\b`, 'i')
+      .test(run.surface.select.selectedText) &&
+    pacingMatches(run.pacing, run.requested));
+  const presetTruth =
+    customBeforePreset.select.value === '137' &&
+    /\bcustom\b/i.test(customBeforePreset.select.selectedText) &&
+    /\b137\s*ms\b/i.test(customBeforePreset.select.selectedText) &&
+    presetSurface.select.visible &&
+    presetSurface.select.value === preset.value &&
+    presetSurface.select.selectedText === preset.text &&
+    presetSurface.exportSpeed === Number(preset.value) &&
+    (presetSurface.stateSpeed == null ||
+      presetSurface.stateSpeed === Number(preset.value)) &&
+    staleCustomOptions.every(option => !option.selected) &&
+    pacingMatches(presetPacing, Number(preset.value));
+  const importedSpeedTruth =
+    mutationSucceeded(arbitraryReturn) &&
+    arbitrarySource.exportSpeed === 137 &&
+    mutationSucceeded(arbitraryImport) &&
+    arbitraryImported.exportSpeed === 137 &&
+    (arbitraryImported.stateSpeed == null || arbitraryImported.stateSpeed === 137) &&
+    arbitraryImported.select.visible &&
+    arbitraryImported.select.value === '137' &&
+    /\bcustom\b/i.test(arbitraryImported.select.selectedText) &&
+    /\b137\s*ms\b/i.test(arbitraryImported.select.selectedText) &&
+    pacingMatches(importedPacing, 137);
+  result('setSpeed keeps custom UI, preset, export, and pacing truthful',
+    customSpeedTruth && presetTruth && importedSpeedTruth,
+    `${customSpeedRuns.map(run => `${run.requested}ms ret=${mutationSucceeded(run.returned)} state=${run.surface.exportSpeed} select="${run.surface.select.value}/${run.surface.select.selectedText}" pace=${Number(run.pacing.median).toFixed(1)}`).join(' | ')}; preset ${preset.value} "${presetSurface.select.selectedText}" pace=${Number(presetPacing.median).toFixed(1)} stale=${staleCustomOptions.map(option => `${option.value}:${option.selected}`).join(',') || 'removed'}; import ${arbitraryImported.exportSpeed} "${arbitraryImported.select.value}/${arbitraryImported.select.selectedText}" pace=${Number(importedPacing.median).toFixed(1)}`);
+
+  const fogPrivacy = await auditSemanticFogPrivacy(page);
+  result('SEMANTIC-LEAK-01 keeps unseen and remembered tactics private',
+    fogPrivacy.hiddenUnknown &&
+      fogPrivacy.emptyUnknown &&
+      fogPrivacy.hiddenNoDisclosure &&
+      fogPrivacy.emptyNoDisclosure &&
+      fogPrivacy.equivalentFogSemantics &&
+      fogPrivacy.equivalentFogPixels &&
+      fogPrivacy.visibleControlExposed &&
+      fogPrivacy.rememberedPrivate &&
+      fogPrivacy.rememberedBecameVisible,
+    `hidden "${fogPrivacy.hiddenText.slice(0, 90)}"; empty "${fogPrivacy.emptyText.slice(0, 90)}"; pixels ${fogPrivacy.hiddenPixels.hash}/${fogPrivacy.emptyPixels.hash}, visible ${fogPrivacy.visibleThreat.id}@${fogPrivacy.visibleThreat.cell.x},${fogPrivacy.visibleThreat.cell.y} Δ${(fogPrivacy.visibleVsFog.changedRatio * 100).toFixed(1)}%; remembered ${fogPrivacy.rememberedSamples.map(sample => `${sample.tick}:${sample.known}/${sample.visible}/${sample.warningRatio.toFixed(3)}`).join(',')}→visible@${fogPrivacy.rememberedVisibleTick}`);
 
   const sameA = await deterministicRun(page, 'dogg-heist-repeatable-42');
   const sameB = await deterministicRun(page, 'dogg-heist-repeatable-42');
