@@ -41,11 +41,11 @@ const REQUIRED_API_METHODS = [
   'restart',
   'scrub',
   'fork',
-  'export',
-  'import',
-  'directive',
-  'verify',
-  'speed'
+  'exportState',
+  'importState',
+  'queueDirective',
+  'verifyChain',
+  'setSpeed'
 ];
 
 const results = [];
@@ -148,18 +148,14 @@ function cleanupTemporaryRoots() {
 
 function copyRepository(destinationContainer) {
   const destination = path.join(destinationContainer, 'root');
-  fs.mkdirSync(destination);
-  for (const entry of fs.readdirSync(ROOT)) {
-    if (entry === '.git' || entry.startsWith(TEMP_PREFIX)) continue;
-    fs.cpSync(path.join(ROOT, entry), path.join(destination, entry), {
-      recursive: true,
-      mode: fs.constants.COPYFILE_FICLONE || 0,
-      filter(source) {
-        const parts = path.relative(ROOT, source).split(path.sep);
-        return !parts.some(part => part === '.git' || part.startsWith(TEMP_PREFIX));
-      }
-    });
-  }
+  const copiedBrowserTest = path.join(destination, 'tests', 'browser', 'dogg_heist.cjs');
+  fs.mkdirSync(path.dirname(copiedBrowserTest), { recursive: true });
+  fs.copyFileSync(
+    ARTIFACT,
+    path.join(destination, 'dogg-heist.html'),
+    fs.constants.COPYFILE_FICLONE || 0
+  );
+  fs.copyFileSync(BROWSER_TEST, copiedBrowserTest, fs.constants.COPYFILE_FICLONE || 0);
   return destination;
 }
 
@@ -489,7 +485,7 @@ const mutations = [
     }
   },
   {
-    key: 'verify-disabled',
+    key: 'verify-chain-disabled',
     label: 'chain verification behavior mutation',
     mutate(source) {
       const bodyClose = /<\/body\s*>/gi;
@@ -497,34 +493,34 @@ const mutations = [
       if (
         matches.length !== 1 ||
         !/window\s*\.\s*__doggHeist(?![A-Za-z0-9_$])/.test(source) ||
-        !apiMemberAppears(source, 'verify')
+        !apiMemberAppears(source, 'verifyChain')
       ) {
         return {
           content: source,
           count: 0,
           valid: false,
-          detail: 'exact </body>, window.__doggHeist, and verify targets were not all present'
+          detail: 'exact </body>, window.__doggHeist, and verifyChain targets were not all present'
         };
       }
 
       const injection = `
-<script data-dogg-heist-gate-mutation="verify-disabled">
+<script data-dogg-heist-gate-mutation="verify-chain-disabled">
 (() => {
   'use strict';
-  const disabled = function doggHeistVerifyDisabledByMutation() {
-    throw new Error('DOGG_HEIST_VERIFY_DISABLED_BY_MUTATION');
+  const disabled = function doggHeistVerifyChainDisabledByMutation() {
+    throw new Error('DOGG_HEIST_VERIFY_CHAIN_DISABLED_BY_MUTATION');
   };
-  const disableVerify = api => {
+  const disableVerifyChain = api => {
     if ((typeof api !== 'object' || api === null) && typeof api !== 'function') return api;
     try {
-      Object.defineProperty(api, 'verify', {
+      Object.defineProperty(api, 'verifyChain', {
         configurable: true,
         enumerable: true,
         writable: true,
         value: disabled
       });
     } catch (error) {
-      try { api.verify = disabled; } catch (ignored) {}
+      try { api.verifyChain = disabled; } catch (ignored) {}
     }
     return api;
   };
@@ -534,14 +530,14 @@ const mutations = [
     Object.defineProperty(window, '__doggHeist', {
       configurable: true,
       enumerable: true,
-      get() { return disableVerify(current); },
-      set(value) { current = disableVerify(value); }
+      get() { return disableVerifyChain(current); },
+      set(value) { current = disableVerifyChain(value); }
     });
   } catch (error) {
-    const timer = window.setInterval(() => disableVerify(window.__doggHeist), 0);
+    const timer = window.setInterval(() => disableVerifyChain(window.__doggHeist), 0);
     window.setTimeout(() => window.clearInterval(timer), 30000);
   }
-  disableVerify(current);
+  disableVerifyChain(current);
 })();
 </script>
 `;
@@ -552,8 +548,8 @@ const mutations = [
         count: 1,
         valid:
           content !== source &&
-          content.includes('data-dogg-heist-gate-mutation="verify-disabled"'),
-        detail: 'installed one exact runtime override for window.__doggHeist.verify'
+          content.includes('data-dogg-heist-gate-mutation="verify-chain-disabled"'),
+        detail: 'installed one exact runtime override for window.__doggHeist.verifyChain'
       };
     }
   }
