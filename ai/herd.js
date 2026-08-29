@@ -64,6 +64,11 @@
       id: String(p.id),
       persona: p.persona || ('You are ' + p.id + ', an AI player in a shared 3D world.'),
       drive: p.drive || null,
+      // A PLAYER MAY CARRY ITS OWN MIND. Without one it thinks on whatever mind the page has —
+      // a model on the visitor's Copilot seat. With one, it is an NPC: the same lines and the same
+      // moves every run, costing nothing and asking nobody. Both are players; the herd, the lane,
+      // the frames and the receipts do not care which, and that is deliberate.
+      mind: p.mind || null,
       // AN IDENTITY IS MINTED, NOT SPELLED. Deriving the memory key from the label meant
       // 'greeter/1' and 'greeter-1' sanitised to the same string and shared one memory — two
       // beings with one set of recollections. The label is what you call it; the identity is
@@ -165,6 +170,7 @@
                     room: s0.room, chat: (s0.chat || []).slice(-4),
                     picture: s0.vision ? (s0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
         persona: rec.persona, drive, guid: rec.guid, agents: rec.agents,
+        mind: rec.mind || o.mind || null,
         python: o.python, log: o.log, rounds: o.rounds,
       });
       rec.acts += (r.calls || []).length;
@@ -322,7 +328,9 @@
   // one call, everybody directed, one frame
   async function ensemble(opts) {
     const o = opts || {};
-    const B = root.NexusBrainstem, F = root.NexusFrames, auth = root.NexusAuth;
+    const B = root.NexusBrainstem, F = root.NexusFrames;
+    // the director may be a scripted mind too — a whole cast of NPCs directed by a written scene
+    const auth = o.mind || root.NexusAuth;
     if (!auth || !auth.signedIn()) throw new Error('no mind: not signed in');
     const who = [...players.values()].filter(r => r.drive);
     if (!who.length) return null;

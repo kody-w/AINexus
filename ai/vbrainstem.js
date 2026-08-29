@@ -117,15 +117,35 @@
   // run() reports 'done' whether a step worked or not, so tell()-ing a peer who left, or aiming
   // at a portal that does not exist, both came back as success. A mind told 'ok' about something
   // that did not happen will spend the rest of the turn reasoning from it.
+  // A NUMBER FROM A MIND IS A REQUEST, NOT A FACT. Round it, bound it, and never let a bit-op
+  // silently change its sign or its size. MAX_TURN is generous — several full turns — while still
+  // refusing an int32 wrap or an Infinity.
+  const MAX_TURN = 20000;
+  const swing = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(-MAX_TURN, Math.min(MAX_TURN, Math.round(n)));
+  };
+  const count = (v, cap) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return undefined;   // let the hands use their own default
+    return Math.max(1, Math.min(cap, Math.round(n)));
+  };
+
   const CALL = {
-    look:     (d, a) => d.look(a.dx | 0, a.dy | 0),
+    // `a.dx | 0` truncated to int32, which did two things quietly. A fractional turn became NO
+    // turn — 0.2 | 0 is 0 — so a small adjustment did nothing while still being reported as done.
+    // And it wrapped: 2147483648 | 0 is -2147483648, so a hard right became a hard left. Its
+    // siblings walk and wait already clamp; look did not. Same `| 0` that was truncating a frame's
+    // seq elsewhere in this estate.
+    look:     (d, a) => d.look(swing(a.dx), swing(a.dy)),
     walk:     (d, a) => d.walk(String(a.dir || 'forward'), Math.max(80, Math.min(3000, a.ms || 600))),
     aim:      (d, a) => d.aim(a.portal),
     travel:   (d, a) => d.travel(a.portal),
     say:      (d, a) => d.say(a.text),
     tell:     (d, a) => d.tell(a.to, a.text),
     see:      (d) => d.see({}),
-    scan:     (d, a) => d.scan(a.steps, a.deg),
+    scan:     (d, a) => d.scan(count(a.steps, 16), count(a.deg, 180)),
     people:   (d) => d.people(),
     orbs:     (d) => d.orbs().map(o => ({ name: o.name, distance: o.distance })),
     dialogue: (d, a) => d.dialogue(a.to),
@@ -548,7 +568,12 @@
   // every result is returned, so an operator can read exactly what the player did and why.
   async function turn(opts) {
     const o = opts || {};
-    const auth = root.NexusAuth;
+    // A MIND IS A CONTRACT, NOT A SERVICE: signedIn(), and chat(messages) answering with words and
+    // tool calls. Usually that is a model on the visitor's Copilot seat, found at root.NexusAuth.
+    // A caller may hand one over instead — a scripted mind for an NPC who says the same lines every
+    // time, or for exercising everything downstream of the answer without buying a thought. Nothing
+    // below can tell the difference, which is the point: the machinery under test stays the real one.
+    const auth = o.mind || root.NexusAuth;
     if (!auth || !auth.signedIn()) throw new Error('no mind: not signed in');
     // ONE BRAINSTEM CAN SERVE MANY PLAYERS, but only one at a time, and the Python side reads
     // the page's driver by name. Binding it for the duration of the call — and restoring it

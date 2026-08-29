@@ -34,6 +34,11 @@ which helped — but a broker intermittently erroring is a better explanation of
 latency, and I should not have settled on latency without checking this.
 
 ### 2. No model call has ever run in this estate
+**Narrowed, not closed.** A scripted mind (`ai/scripted_mind.js`) now drives everything downstream
+of the answer — real verbs, real refusals, real rapp/1 frames, real receipts — so the machinery is
+exercised end to end and the paths past the mind are no longer dark. What remains unproven is the
+mind itself: nothing has bought a thought, and the suite asserts that by aborting any request to a
+model endpoint. Still needs a granted seat.
 Every one of the 378 local checks uses a scripted mind. `provenSource()` threw on every call since
 gen-21 and nobody noticed, precisely because nothing exercised that path for real. Needs a granted
 mind; the device flow is currently rate-limited (`device start 429`) after repeated attempts.
@@ -47,6 +52,18 @@ Left opt-in (`{kinds:true}`). Turning it on by default is a canon decision, not 
 ---
 
 ## CLOSED
+
+### C3. A look smaller than one unit was no look at all, and a large one turned the other way
+`CALL.look` passed the mind's request through `a.dx | 0`. Bitwise-or truncates to int32, so a
+fractional turn became zero — the hands did nothing while the tick still reported a look — and a
+value past 2^31 wrapped its sign, turning a hard right into a hard left. Its siblings `walk` and
+`wait` already clamped; `look` and `scan` did not. This is the third `| 0` in this estate to
+silently change a number, after a frame's `seq` and a drive's coordinates.
+**Found by:** driving the machinery with a scripted mind — the first thing that ever asked the
+hands for a small turn.
+**Closed by:** rounding and bounding both, and refusing a non-number rather than passing NaN on.
+**Retested by:** `tests/browser/scripted_mind.cjs` — 0.6 arrives as 1, 12 as 12, 2147483648 clamps
+to 20000 with its sign intact, and 'over there' becomes 0.
 
 ### C1. A peer error told the visitor nothing — "Connection error:" and an empty string
 `net/multiplayer.js` fell through to `'Connection error: ' + err.message`, and peerjs leaves
