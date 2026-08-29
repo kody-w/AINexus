@@ -70,12 +70,22 @@
   async function pollDeviceLogin() {
     if (!pending) return null;
     if (Date.now() > pending.expires_at) { pending = null; throw new Error('that code expired — start again'); }
-    const r = await fetch(AUTH_WORKER_URL + '/api/auth/device/poll', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_code: pending.device_code, client_id: COPILOT_CLIENT_ID }),
-    });
+    // The !r.ok guard below only catches a blip that arrives AS a Response. The worker
+    // supplies its own CORS headers, so an edge error (1101/522) or a two-second wifi
+    // switch produces no usable Response at all and the fetch REJECTS instead. That
+    // rejection used to escape to the caller, which ended the sign-in — throwing away an
+    // authorization the visitor may already have completed and forcing a fresh code.
+    // Every one of these is "no answer yet", which is exactly what null means here.
+    let r;
+    try {
+      r = await fetch(AUTH_WORKER_URL + '/api/auth/device/poll', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_code: pending.device_code, client_id: COPILOT_CLIENT_ID }),
+      });
+    } catch (e) { return null; }
     if (!r.ok) return null;          // a transient blip must not kill a valid 15-minute sign-in
-    const d = await r.json();
+    let d;
+    try { d = await r.json(); } catch (e) { return null; }   // a 200 carrying a non-JSON body is the same blip
     if (d.access_token) { saveSettings({ ghuToken: d.access_token }); pending = null; return d.access_token; }
     // RFC 8628 3.5: slow_down means LENGTHEN the interval by at least 5s. Folding
     // it in with authorization_pending told the caller "keep waiting" while

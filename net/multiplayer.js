@@ -312,7 +312,11 @@
                     conn.send({ type: 'hello', token: this.joinToken,
                                 username: (this.username = this.username || this.generateUsername()) });
                 } catch (e) {}
-                this.acceptConnection(conn, conn.metadata);
+                // conn.metadata on THIS side is what I sent, not what the host sent, so
+                // passing it here dressed the host's avatar in my own name — an AI joiner
+                // made the host's nametag read "…(AI) (2)". The host's real name arrives
+                // on its first playerUpdate, which re-tags the body.
+                this.acceptConnection(conn, {});
             });
 
             conn.on('data', (data) => {
