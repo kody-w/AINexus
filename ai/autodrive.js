@@ -396,8 +396,16 @@
       // Neither present means the player runs on its program alone, and says so.
       const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
+      // A THIRD DOOR: A WRITTEN MIND. A mind is a contract — signedIn(), and chat() answering with
+      // words and tool calls — so a script satisfies it as well as a model does. That is what an
+      // NPC is: a character who says the written line and makes the written move, every run,
+      // costing nothing and asking nobody. It is also the only way the steps that need a mind
+      // (this one, and greeter's `ask`) can run at all when nobody has lent a seat.
+      // Explicitly passed wins; otherwise the page may leave one lying around for its NPCs.
+      const written = o.mind || (typeof window !== 'undefined' && window.__nexus_scripted_mind) || null;
       const viaCopilot = !secret && auth && auth.signedIn();
-      if (!secret && !viaCopilot) { log('no mind granted (no brainstem, not signed in) — running on the program alone'); return null; }
+      const viaWritten = !!written && !secret && !viaCopilot;
+      if (!secret && !viaCopilot && !viaWritten) { log('no mind granted (no brainstem, not signed in, no script) — running on the program alone'); return null; }
       // A mind is asked WHERE it lives by whatever ran this step, and the brainstem secret rides
       // on that request — so the address is not a free argument. The brainstem is a thing on
       // this machine; anywhere else is not a mind, it is somewhere to post a key to.
@@ -412,7 +420,7 @@
       // it is the operator's own with its real senses and memory; otherwise the vbrainstem,
       // where the model calls the verbs directly instead of describing them for us to parse.
       // So this runs only when there is NO brainstem secret and there IS a Copilot seat.
-      if (viaCopilot && window.NexusBrainstem && o.brainstem !== false) {
+      if ((viaCopilot || viaWritten) && window.NexusBrainstem && o.brainstem !== false) {
         try {
           const percepts0 = o.vision ? api.sense({ width: 320, send: true }) : api.snapshot();
           const r = await window.NexusBrainstem.turn({
@@ -421,14 +429,18 @@
                         chat: (percepts0.chat || []).slice(-4), carrying: api._carry || null,
                         picture: percepts0.vision ? (percepts0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
             persona: 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + '.',
+            mind: viaWritten ? written : undefined,
             log: log,
           });
           // If it already spoke through a tool, saying the same thing again is the player
           // repeating itself to the room.
           const spokeAlready = (r.calls || []).some(c => c.tool === 'world_say' || c.tool === 'world_tell');
-          if (api._gen !== gen) { log('the mind answered after a stop — nothing said, nothing done'); return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem', dropped: true }; }
+          // SAY WHICH DOOR IT CAME THROUGH. A written answer and a bought one must never look
+          // the same on a receipt — the whole value of the receipt is that it distinguishes them.
+          const door = viaWritten ? 'scripted' : 'vbrainstem';
+          if (api._gen !== gen) { log('the mind answered after a stop — nothing said, nothing done'); return { words: r.words, move: null, calls: r.calls, via: door, dropped: true }; }
           if (r.words && !spokeAlready) await api.say(r.words.slice(0, 240));
-          return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
+          return { words: r.words, move: null, calls: r.calls, via: door };
         } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
       }
 
