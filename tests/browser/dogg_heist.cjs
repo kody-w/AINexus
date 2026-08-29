@@ -3467,9 +3467,16 @@ async function readBoardAccessibilitySnapshot(page) {
       activeId: document.activeElement?.id || ''
     };
   });
+  const topLevelTick = Number(state.state?.tick);
+  const currentFrameTick = Number(state.state?.currentFrame?.tick);
+  const displayedTick = Number.isFinite(topLevelTick) ?
+    topLevelTick : currentFrameTick;
+  const liveTick = Number(state.state?.liveTick);
   const currentFrameIndex = Number(state.state?.currentFrame?.index);
   return Object.assign({
-    tick: state.tick,
+    tick: Number.isFinite(displayedTick) ? displayedTick : undefined,
+    currentFrameTick: Number.isFinite(currentFrameTick) ? currentFrameTick : undefined,
+    liveTick: Number.isFinite(liveTick) ? liveTick : undefined,
     head: state.head,
     frameCount: state.frameCount,
     currentFrameIndex: Number.isFinite(currentFrameIndex) ? currentFrameIndex : undefined
@@ -5015,25 +5022,38 @@ async function runSuite() {
     'i'
   );
   result('board accessible description follows tick, agent, and scrub renders',
-    describedInitial.focusOnBoard && boardAccessibilityConsistent(describedInitial) &&
-      describedAfterStep.focusOnBoard && boardAccessibilityConsistent(describedAfterStep) &&
+    describedInitial.focusOnBoard &&
+      describedInitial.currentFrameTick === describedInitial.tick &&
+      boardAccessibilityConsistent(describedInitial) &&
+      describedAfterStep.focusOnBoard &&
+      describedAfterStep.currentFrameTick === describedAfterStep.tick &&
+      boardAccessibilityConsistent(describedAfterStep) &&
       describedAfterStep.tick - describedInitial.tick === 1 &&
       !staleTick(describedAfterStep.description, describedInitial.tick) &&
-      describedAfterAgent.focusOnBoard && boardAccessibilityConsistent(describedAfterAgent) &&
+      describedAfterAgent.focusOnBoard &&
+      describedAfterAgent.currentFrameTick === describedAfterAgent.tick &&
+      boardAccessibilityConsistent(describedAfterAgent) &&
       describedAfterAgent.selectedName !== describedInitial.selectedName &&
       !staleName.test(describedAfterAgent.description) &&
-      describedAfterScrub.focusOnBoard && boardAccessibilityConsistent(describedAfterScrub) &&
+      describedAfterScrub.focusOnBoard &&
+      describedAfterScrub.currentFrameTick === describedAfterScrub.tick &&
+      boardAccessibilityConsistent(describedAfterScrub) &&
       describedAfterScrub.currentFrameIndex === describedPriorFrame.index &&
       describedAfterScrub.tick === describedPriorFrame.tick &&
+      describedAfterScrub.liveTick === describedAfterAgent.liveTick &&
+      describedAfterScrub.liveTick !== describedAfterScrub.tick &&
       describedAfterScrub.selectedName === describedAfterAgent.selectedName &&
       !staleTick(describedAfterScrub.description, describedAfterAgent.tick) &&
       !staleName.test(describedAfterScrub.description),
-    `tick ${describedInitial.tick}→${describedAfterStep.tick}; agent ${describedInitial.selectedName}→${describedAfterAgent.selectedName}; scrub frame ${describedLiveIndex}→${describedPriorFrame.index}, tick ${describedAfterAgent.tick}→${describedAfterScrub.tick}`);
+    `tick ${describedInitial.tick}→${describedAfterStep.tick}; agent ${describedInitial.selectedName}→${describedAfterAgent.selectedName}; scrub frame ${describedLiveIndex}→${describedPriorFrame.index}, displayed ${describedAfterAgent.tick}→${describedAfterScrub.tick}, live ${describedAfterAgent.liveTick}→${describedAfterScrub.liveTick}`);
   await api(page, 'scrub', describedLiveIndex);
   const describedRestored = await inspect(page, false);
+  const describedRestoredTick = Number(
+    describedRestored.state?.tick ?? describedRestored.state?.currentFrame?.tick
+  );
   requireMeasurement(
     Number(describedRestored.state?.currentFrame?.index) === describedLiveIndex &&
-      describedRestored.tick === describedAfterAgent.tick,
+      describedRestoredTick === describedAfterAgent.tick,
     'returning to the actual live frame index after the ARIA scrub check'
   );
   await api(page, 'pause');
