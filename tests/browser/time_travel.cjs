@@ -64,7 +64,8 @@ const out = await p.evaluate(async () => {
   await new Promise(res => { const r = H.replay(history, { speed: 50, onFrame: f => runB.push(f.epoch + '|' + f.woke.map(w => w.player + ':' + w.intent).join(',')), onDone: res }); });
   const callsAfterReplays = calls;
 
-  return { recorded, history: history.trim().split('\n').length, callsAfterRecording, callsAfterReplays,
+  const cost = H.cost();
+  return { cost, recorded, history: history.trim().split('\n').length, callsAfterRecording, callsAfterReplays,
            woke, standingAfterRewind, runA, runB, matched: JSON.stringify(runA) === JSON.stringify(runB) };
 });
 console.log('recorded keyframes         :', out.history, JSON.stringify(out.recorded.map(r => r.directives)));
@@ -81,6 +82,9 @@ ok('the whole session replayed', out.runA.length === 3);
 ok('replaying cost nothing — no model call at all', out.callsAfterReplays === out.callsAfterRecording);
 ok('two runs of the same history matched frame for frame', out.matched);
 ok('and the epochs came back the same, not re-minted', out.runA[0].split('|')[0] === out.runB[0].split('|')[0]);
+console.log('\nthe ledger                 :', JSON.stringify(out.cost));
+ok('live frames are the only ones that cost a call', out.cost.calls === out.cost.liveFrames);
+ok('replayed and virtual frames were free', out.cost.freeFrames > out.cost.liveFrames && out.cost.callsPerFrame < 0.5);
 console.log('errors:', errs.slice(0,3));
 await b.close();
 })();

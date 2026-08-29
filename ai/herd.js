@@ -271,6 +271,7 @@
       staged.push([rec, { intent, target: d.target || null, say: d.say || null }]);
     }
     const spentVirtual = epoch.virtual;
+    ledger.liveFrames++; ledger.calls++;         // this one was decided, and decisions are the cost
     const applied = [];
     // the commit: one synchronous pass, one instant, every object
     const at = Date.now();
@@ -312,8 +313,19 @@
   // what lets everything stay in sync without anything being sent: two objects carrying the
   // same epoch are provably in the same moment, and a virtual frame always knows which real
   // frame it is a continuation of.
+  // ── the ledger ───────────────────────────────────────────────────────────
+  // This is the whole cost model of the system in four numbers, and it is worth saying plainly:
+  // a frame generated LIVE costs a model call, and every frame after it — replayed, rewound,
+  // or derived as a virtual frame between keyframes — costs nothing at all. The expensive thing
+  // is deciding. Everything downstream of a decision is arithmetic.
+  //
+  // So the meter is not decoration. It tells an operator what they are paying for (novelty) and
+  // what they are getting free (everything that has already been decided once), which is the
+  // number that decides whether a world with a dozen AIs in it can be left running.
+  const ledger = { liveFrames: 0, calls: 0, replayedFrames: 0, rewinds: 0, virtualFrames: 0 };
   let epoch = { id: 'genesis', seq: -1, at: Date.now(), virtual: 0 };
-  const virtualFrame = (rec) => ({ epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id });
+  const virtualFrame = (rec) => { ledger.virtualFrames++;
+    return { epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id }; };
 
   let ensembleChain = [], ensemblePrev = null;
   const ensembleStream = 'rappid:@kody-w/ainexus/ensemble:' +
@@ -347,6 +359,7 @@
       applied.push({ player: rec.id, intent: rec.standing.intent });
     }
     epoch = { id: f.frame_hash, seq: f.seq, at, virtual: 0 };
+    ledger.rewinds++; ledger.replayedFrames++;   // a decision already made costs nothing to make again
     return { woke: applied, epoch: epoch.id, seq: f.seq,
              from: (f.utc || 'an unrecorded moment'), directed: a.directed || applied.length };
   }
@@ -648,6 +661,14 @@
 
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live,
                      epoch: () => Object.assign({}, epoch), rewind, replay,
+                     cost: () => {
+                       const free = ledger.replayedFrames + ledger.virtualFrames;
+                       const total = ledger.liveFrames + free;
+                       return Object.assign({}, ledger, { freeFrames: free, totalFrames: total,
+                         callsPerFrame: total ? +(ledger.calls / total).toFixed(3) : 0,
+                         // what it would have cost to decide every frame afresh, including one
+                         // call per player per frame the naive way
+                         savedCalls: free, paidFor: 'deciding', freeBecause: 'already decided' }); },
                      history: () => ensembleChain.map(f => JSON.stringify(f)).join('\n') + (ensembleChain.length ? '\n' : ''),
                      inSync: () => { const e = [...players.values()].map(r => r.epoch || null);
                                      return { epoch: epoch.id, all: e.every(x => x === epoch.id), of: e.length }; },
