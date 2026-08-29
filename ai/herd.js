@@ -364,7 +364,7 @@
       try {
         if (!ensembleStream) ensembleStream = await streamFor('ensemble');
         frame = await F.buildFrame({ kind: 'memory.save', streamId: ensembleStream,
-          seq: ensembleChain.length,
+          seq: ensembleSeq,
           payload: { asserts: { directed: applied.length, directives: applied.slice(0, 12), calls: 1,
                                 // how much world happened between the last keyframe and this one
                                 virtual_frames_elapsed: spentVirtual },
@@ -372,8 +372,8 @@
                                  resident: (residency.resident || []).slice(0, 16),
                                  missing: (residency.missing || []).slice(0, 6) } },
           prev: ensemblePrev });
-        ensembleChain.push(frame); ensemblePrev = frame.payload_hash;
-        if (ensembleChain.length > 300) ensembleChain.shift();
+        ensembleChain.push(frame); ensemblePrev = frame.payload_hash; ensembleSeq++;
+        if (ensembleChain.length > 300) { ensembleChain.shift(); ensembleTruncated = true; }
         // the new epoch begins here, and every object is in it from this instant
         epoch = { id: frame.frame_hash, seq: frame.seq, at, virtual: 0 };
         for (const [rec] of staged) rec.epoch = epoch.id;
@@ -409,7 +409,10 @@
   const virtualFrame = (rec) => { ledger.virtualFrames++;
     return { epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id }; };
 
-  let ensembleChain = [], ensemblePrev = null;
+  // ensembleSeq counts the line, not the array. The array is windowed at 300 below, and seq taken
+  // from its length would stall there and repeat — the fourth chain in this file to need this said.
+  // It is reset alongside the chain wherever a new line begins (a fork, a re-genesis).
+  let ensembleChain = [], ensemblePrev = null, ensembleSeq = 0, ensembleTruncated = false;
   let ensembleStream = null;
   // Every stream this module opens is minted once, lazily, through the spec's own grammar.
   const ESTATE = { owner: 'kody-w', slug: 'ainexus' };
@@ -480,6 +483,7 @@
     // the new line starts here; the old one is untouched and still true
     ensembleChain = genesis ? [genesis] : [];
     ensemblePrev = genesis ? genesis.payload_hash : null;
+    ensembleSeq = genesis ? (genesis.seq + 1) : 0;   // a new line continues the numbering it starts from
     if (genesis) epoch = { id: genesis.frame_hash, seq: 0, at: epoch.at, virtual: 0 };
     ledger.forks = (ledger.forks || 0) + 1;
     // the whole continuation, as something you could write on a card
@@ -646,10 +650,14 @@
       if (F) {
         try {
           if (!world.streamId) world.streamId = await streamFor('world');
+          // seq COUNTS THE LIFE, NOT THE ARRAY — the third chain in this estate to need saying so.
+          // With seq = chain.length and a window that drops the oldest, the numbering stalls the
+          // moment the window engages and the chain stops verifying. The player chain and the
+          // vbrainstem chain each had this and were each fixed alone; this one was still waiting.
           const f = await F.buildFrame({ kind: 'memory.save', streamId: world.streamId,
-                                         seq: world.chain.length, payload, prev: world.prev });
-          world.chain.push(f); world.prev = f.payload_hash;
-          if (world.chain.length > 500) world.chain.shift();
+                                         seq: (world.seq = world.seq || 0), payload, prev: world.prev });
+          world.chain.push(f); world.prev = f.payload_hash; world.seq++;
+          if (world.chain.length > 500) { world.chain.shift(); world.truncated = true; }
           try { bus && bus.postMessage({ kind: 'memory.save', streamId: world.streamId,
                   chose: payload.asserts.chose, because: payload.asserts.because, hash: f.frame_hash }); } catch (e) {}
         } catch (e) {}
@@ -1100,6 +1108,7 @@
     dimension = { forkedFrom: a.derived_from, lens: a.lens, seed: a.seed };
     seedRng(hashSeed(dimension.seed));
     ensembleChain = [spec.frame]; ensemblePrev = spec.frame.payload_hash;
+    ensembleSeq = (spec.frame.seq || 0) + 1;
     epoch = { id: spec.frame.frame_hash, seq: 0, at: Date.now(), virtual: 0 };
     ledger.tiles = (ledger.tiles || 0) + 1;
     return { entered: spec.frame.frame_hash, seed: a.seed, lens: a.lens, mood: a.mood, woke };
