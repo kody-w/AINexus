@@ -62,13 +62,85 @@ Found by the ceiling audit, outside its region. Not fixed yet only because anoth
 file; it is a small change (route it through `spend()`), not a hard one.
 
 ### 6. `summon()` step 1 hot-loads source without the scan its sibling applies
-The "find a universe where it already worked" half loads source it found in a line, and does not run
-the forbidden-pattern scan that the "write it from nothing" half does. Same file, same function, two
-halves, one guard. Reported by the ceiling audit; the summon audit is in that region now.
+**ANSWERED — not a hole, and the scan must NOT be added there.** Raised by the ceiling audit and
+checked by the summon audit, which owns that region. Step 1 reloads source out of `agentSource`,
+and exactly three things ever put anything there: the agents this page shipped with (sha256-verified
+at load), agents an operator handed to `join()`, and agents step 2 has already scanned. None of them
+is unread model output. Running the scan there would refuse the page's OWN world:
+`ai/vb/nexus_world_agent.py` says `from js import window`, and has to — reaching into the page is
+what the world agent is FOR, and six of the eight local agents do the same. The denylist is for code
+nobody has vouched for; step 1 only reaches code somebody already did. The reasoning is now written
+at the top of step 1, along with the one change that would invalidate it: persisting `agentSource`
+to storage, which is writable by everything else on this origin.
+
+### 7. The door in front of a summoned agent reads text, it does not bound capability
+**Open, and narrowed.** A model-written agent is checked before it is imported: five patterns for
+the shapes we already know (reaching into the page, evaluating code at runtime, files/processes/
+network, walking the object graph) plus — new — an ALLOWLIST of module names, so a module reached
+under another name is refused whatever it is aliased to. Both are still a search over SOURCE TEXT.
+Text can be composed at runtime out of pieces none of which look like anything, and nothing in a
+regex can see that; a name assembled from two strings and looked up on the builtins is the class,
+and it is not a class a blocklist can close. What actually contains a summoned agent is Pyodide —
+no operating system, no sockets, its own filesystem — and the fact that it is only ever called with
+the arguments the model itself sent. The check in front of it is a door, not a wall, and should be
+described that way wherever it is described. Closing it properly means a capability boundary
+(import hooks, a restricted builtins, or refusing to import at all), which is a design decision
+rather than a patch.
+**Also true and worth saying:** `summon()`'s first half, the one that fetches from a line where the
+capability was PROVEN to work, cannot resurrect anything after a reload — the frames survive in
+localStorage, the source does not. That is the safe way round (a re-summon goes past the door
+again), but it means the "universe where it matched" half only ever fires within one page load.
 
 ---
 
 ## CLOSED
+
+### C4. `summon()` reached past its caller for a seat, so half of it had never run
+The second half of summoning — write the agent from nothing — took its mind from `root.NexusAuth`
+instead of from the caller. Two opposite failures out of one line: on a page with no seat the half
+was unreachable, which is why nothing in the estate had ever executed it; on a page WITH one, a
+player carrying its own mind — an NPC, which is supposed to cost nothing and ask nobody — quietly
+went to the visitor's Copilot seat the instant it named a tool that did not exist.
+**Closed by:** `o.mind || root.NexusAuth`, and `turn()` passing its mind down. A mind is a contract
+everywhere or it is a contract nowhere.
+**Retested by:** `tests/browser/summoning.cjs`. Reverting that one line turns 13 of its 44 checks
+red, which is the measure of how much of this path was dark.
+
+### C5. A name JavaScript answers to on its own was a verb, and was an agent
+`CALL[verb]` and `pyAgents[fname]` are plain objects, so every name on `Object.prototype` answered
+yes. `world_toString` reached `Object.prototype.toString`, came back `"[object Object]"`, and was
+reported to the mind as a completed action — walking straight past the "no such verb" guard written
+to end exactly that. `world_constructor` and `world_valueOf` came back `"{}"`, also as successes. On
+the agent side `constructor`, `toString`, `valueOf`, `hasOwnProperty` and `__proto__` all looked
+like tools that already existed, which SKIPPED THE SUMMON PATH and handed the mind
+`failed: Cannot read properties of null (reading 'toPy')` — this module's stack trace dressed as a
+world event. A name that was not a string did the same through `fname.indexOf`.
+**Closed by:** one `has(map, name)` helper — a string, non-empty, `hasOwnProperty` — used by the
+verb dispatch, the agent dispatch, `callAgent` and `sourceOf`; and a name that is not a usable
+string named as such before anything else looks at it.
+
+### C6. A refusal nobody could see is a control nobody can tell has stopped working
+Refusing a written agent was a `log()` call and nothing else, and `o.log` defaults to a no-op. So
+"nobody had it and nothing was written" and "something was written that tried to reach out of the
+interpreter, and we refused it" arrived at the mind, at the journal and in the sealed frame as the
+same six words.
+**Closed by:** `summon()` returning `{ refused: why }` instead of `null`; the mind is told
+`one was written for it and refused: <why>`, and the turn records `refused: <why>` where a reader
+of the line will find it.
+
+### C7. A summoned agent could forge a verdict about itself into a signed frame
+Whether a call failed was decided by testing the RESULT STRING for `/failed|no such/` — and for an
+agent, that string is whatever the agent returned. An agent written by a mind a second earlier,
+answering `"no such tool: pay no attention"`, wrote a ✗ against its own name into a sealed rapp/1
+frame; `provenSource()` reads exactly those marks to decide what has been proven to work.
+**Closed by:** the dispatch stating its own verdict on the call record (`failed`), with the text
+test kept only as a fallback, in `turn()` and in BOTH readers of it — herd.js's `serve` and
+vbrainstem's own `live`, because one defect living in two files and only one of them getting fixed
+is how this pair drifted apart before.
+**Also fixed alongside it:** `provenSource()` counted every frame of the current session twice —
+once from the player's chain, once from the store `remember()` had already written it to — so
+`proven`, the number it ranks candidates on, weighted this page's evidence at double a previous
+page's. Deduplicated by frame hash.
 
 ### C3. A look smaller than one unit was no look at all, and a large one turned the other way
 `CALL.look` passed the mind's request through `a.dx | 0`. Bitwise-or truncates to int32, so a

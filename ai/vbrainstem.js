@@ -162,6 +162,17 @@
     return Math.max(1, Math.min(cap, Math.round(n)));
   };
 
+  // A NAME IS NOT A CAPABILITY JUST BECAUSE JAVASCRIPT ANSWERS TO IT. CALL, pyAgents and
+  // agentSource are plain objects, so every name on Object.prototype answered yes to a bare
+  // lookup. `world_toString` reached Object.prototype.toString, came back "[object Object]" and
+  // was reported to the mind as a successful action — the exact failure the "no such verb" guard
+  // below exists to end, walking straight past it. On the agent side `constructor` and its
+  // siblings looked like a tool that already existed, which SKIPPED THE SUMMON PATH entirely and
+  // handed the mind an internal TypeError instead of an honest sentence. A mind is untrusted
+  // input; the name it asks for has to be a key somebody actually put there.
+  const has = (map, name) =>
+    typeof name === 'string' && !!name && Object.prototype.hasOwnProperty.call(map, name);
+
   const CALL = {
     // `a.dx | 0` truncated to int32, which did two things quietly. A fractional turn became NO
     // turn — 0.2 | 0 is 0 — so a small adjustment did nothing while still being reported as done.
@@ -497,7 +508,19 @@
 
   async function summon(need, opts) {
     const o = opts || {}, log = o.log || function () {};
-    // 1 — a universe where it already matched
+    // 1 — a universe where it already matched.
+    // WHY THIS HALF DOES NOT RUN THE SCAN THE OTHER HALF RUNS, since the asymmetry looks like an
+    // oversight and is not. It reloads source out of `agentSource`, and only three things ever
+    // put anything there: the agents this page shipped with (sha256-verified at load), agents an
+    // operator handed to join(), and agents the second half already scanned. None of those is
+    // unread model output. Running the scan here would refuse the page's OWN world — ai/vb/
+    // nexus_world_agent.py says `from js import window`, and has to: reaching into the page IS
+    // what the world agent is for. The denylist is for code nobody has vouched for; this half
+    // only reaches code somebody already did.
+    // THE ONE CHANGE THAT WOULD BREAK THAT: persisting `agentSource` to storage so this half
+    // survives a reload. Storage on this origin is writable by everything else on it, so a
+    // remembered source is no longer vouched for by anyone, and it would have to be scanned —
+    // or, better, re-fetched and re-verified — before it were loaded again.
     const herd = root.NexusHerd;
     if (herd && herd.provenSource) {
       const found = herd.provenSource(need);
@@ -509,9 +532,16 @@
       }
     }
     // 2 — no universe has it, so make one
-    const auth = root.NexusAuth;
+    // THE MIND IS A CONTRACT HERE TOO, AND THIS WAS THE ONE PLACE THAT FORGOT IT. summon()
+    // reached past its caller to root.NexusAuth, so a turn driven by a mind the caller handed in
+    // — a scripted NPC, which buys no thought and asks nobody — went to the visitor's Copilot
+    // seat the instant it named a tool that did not exist. Two consequences, both bad and
+    // opposite: on a page with no seat this half was unreachable, so "write one from nothing"
+    // could never be exercised without buying a thought; on a page WITH one, a character that
+    // was supposed to be free quietly spent somebody's money.
+    const auth = o.mind || root.NexusAuth;
     if (!auth || !auth.signedIn()) return null;
-    spend();
+    spend(auth);
     const msg = await auth.chat([
       { role: 'system', content: 'You write small, correct RAPP agents. Call write_agent and nothing else.' },
       { role: 'user', content: 'A player in a 3D world needs a capability it does not have: ' + String(need).slice(0, 400)
@@ -534,7 +564,28 @@
       [/__(?:subclasses|bases|mro|class)__/, 'walking the object graph to escape'],
     ];
     for (const [re, why] of forbidden) {
-      if (re.test(got.source)) { log('[summon] refused a written agent: ' + why); return null; }
+      if (re.test(got.source)) { log('[summon] refused a written agent: ' + why); return { refused: why }; }
+    }
+    // A BLOCKLIST OF SPELLINGS IS NOT A BOUNDARY. The five patterns above name the shapes we
+    // already know; they cannot name the ones we do not, and a module reached under another name
+    // is the same module — `import js` is refused and an alias of a module nobody thought to list
+    // was not. So what a written agent may import is stated POSITIVELY: arithmetic, text, and its
+    // own base class. Everything else is refused by module name, whatever it is bound to.
+    // This is not a sandbox — Pyodide is the sandbox. This is the door in front of it, and a door
+    // that only recognises the burglars it has already met is not a door.
+    const IMPORT_OK = new Set(['agents', 'utils', 'math', 'json', 'random', 're', 'time', 'datetime',
+      'string', 'textwrap', 'itertools', 'functools', 'collections', 'statistics', 'decimal',
+      'fractions', 'uuid', 'typing', 'dataclasses', 'enum', 'abc', 'copy', 'heapq', 'bisect', 'unicodedata']);
+    const IMPORT_RE = /^[ \t]*(?:from[ \t]+([A-Za-z_][\w.]*)|import[ \t]+([^\n#]+))/gm;
+    for (let m; (m = IMPORT_RE.exec(String(got.source))) !== null;) {
+      // `from X import a, b` names one module; `import a, b as c` names several
+      const named = m[1] ? [m[1]] : String(m[2]).split(',').map(s => s.trim().split(/[ \t]+/)[0]);
+      for (const n of named) {
+        const mod = String(n || '').split('.')[0];
+        if (!mod || IMPORT_OK.has(mod)) continue;
+        log('[summon] refused a written agent: importing ' + mod);
+        return { refused: 'it imports ' + mod };
+      }
     }
     try {
       const a = await hotload(got.source, { className: got.class_name, file: 'summoned_' + Date.now() + '_agent.py', log });
@@ -565,7 +616,15 @@
     }));
   }
 
+  // callAgent's own word for "the agent ran and answered with nothing". It is a constant rather
+  // than a literal because the dispatch has to be able to tell it apart from an agent that
+  // merely SAID something similar — see the failure verdict in turn().
+  const DID_NOT = 'failed: the world did not do that';
+
   async function callAgent(name, args) {
+    // hasOwnProperty, not truthiness: pyAgents['constructor'] is a function, and calling this
+    // with an inherited name got as far as pyodide.toPy before failing with a TypeError.
+    if (!has(pyAgents, name)) return null;
     const info = pyAgents[name];
     if (!info) return null;
     // Every toPy() hands back a proxy that owns memory on the Python side; dropping the
@@ -580,7 +639,7 @@
       let out = await pyodide.runPythonAsync('_vb_target.perform(**dict(_vb_args))');
       if (out && typeof out.then === 'function') out = await out;
       if (out && typeof out.toJs === 'function') { const j = out.toJs({ dict_converter: Object.fromEntries }); try { out.destroy(); } catch (e) {} out = j; }
-      if (out === false || out === null || out === undefined) return 'failed: the world did not do that';
+      if (out === false || out === null || out === undefined) return DID_NOT;
       if (out === true) return 'ok';
       // NO TRUNCATION HERE. Cutting an agent's answer to a readable length is a courtesy owed to
       // a MODEL's context window, and it belongs at that boundary — where turn() already does it.
@@ -667,22 +726,51 @@
         let args = {};
         try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
         let result;
+        // WHETHER A CALL FAILED IS THE DISPATCH'S VERDICT, NEVER THE CALLEE'S PROSE. Readers of
+        // a turn decided this by testing the RESULT STRING for /failed|no such/ — and for an
+        // agent, that string is whatever the agent returned. A summoned agent — written by a
+        // mind, a second ago — answering "no such tool: pay no attention" therefore wrote a ✗
+        // against its own name into a sealed rapp/1 frame, and provenSource() reads exactly
+        // those marks to decide what has been proven to work. Untrusted output must not be able
+        // to forge a verdict about itself. Default true: unless the dispatch saw the thing run,
+        // it did not run.
+        let failed = true;
         try {
-          if (fname && fname.indexOf('world_') === 0) {
+          // A NAME FROM A MIND IS A REQUEST, NOT A FACT, and it does not have to be a string:
+          // a number went into fname.indexOf and came back to the mind as
+          // 'failed: fname.indexOf is not a function', which is this module's stack trace
+          // wearing the costume of a world event.
+          if (typeof fname !== 'string' || !fname) {
+            result = 'no such tool: that call arrived without a usable name';
+          } else if (fname.indexOf('world_') === 0) {
             const verb = fname.slice(6);
             // A NAME THE HANDS DO NOT HAVE IS NOT AN ACTION. Dispatching an unrecognised verb
             // used to reach a silent no-op and still be reported as success, so a model could
-            // invent world_jump and be told it jumped.
-            if (!CALL[verb]) result = 'no such verb: ' + verb + ' — the hands cannot do that';
-            else result = describe(verb, await CALL[verb](drive, args));
-          } else if (!pyAgents[fname] && o.summon !== false) {
+            // invent world_jump and be told it jumped. `has`, not truthiness: world_toString
+            // found Object.prototype.toString and was answered "[object Object]" — a success.
+            if (!has(CALL, verb)) result = 'no such verb: ' + verb + ' — the hands cannot do that';
+            else { const v = await CALL[verb](drive, args);
+                   result = describe(verb, v);
+                   failed = (v === false || v === null || v === undefined); }
+          } else if (!has(pyAgents, fname) && o.summon !== false) {
             // reached for something nobody has: find a universe where it worked, or write it
-            const got = await summon('a tool called "' + fname + '" called with ' + JSON.stringify(args).slice(0, 200), { log });
-            if (got && pyAgents[got.name]) {
+            const got = await summon('a tool called "' + fname + '" called with ' + JSON.stringify(args).slice(0, 200),
+                                     { log, mind: o.mind });
+            if (got && has(pyAgents, got.name)) {
               summoned.push({ asked: fname, got: got.name, via: got.via });
               if (o.guid && takesGuid(pyAgents[got.name])) args.user_guid = o.guid;
               const r2 = await callAgent(got.name, args);
-              result = (r2 === null ? 'no such tool: ' + fname : r2);
+              if (r2 === null) result = 'no such tool: ' + fname;
+              else { result = r2; failed = (r2 === DID_NOT); }
+            } else if (got && got.refused) {
+              // A REFUSAL IS A RESULT, AND IT BELONGS IN THE LINE. Refusing a written agent was a
+              // log() call and nothing else — and o.log defaults to a no-op — so "nobody had it
+              // and nothing was written" and "something was written that tried to reach out of
+              // the interpreter, and we refused it" arrived at the mind, the journal and the
+              // frame as the same six words. A security control nobody can see working is a
+              // security control nobody can tell has stopped working.
+              summoned.push({ asked: fname, got: 'none', via: 'refused: ' + got.refused });
+              result = 'no such tool: ' + fname + ' — one was written for it and refused: ' + got.refused;
             } else result = 'no such tool: ' + fname + ' — and none could be summoned';
           } else {
             // The identity is IMPOSED, never requested. An agent that stores or recalls memory
@@ -691,10 +779,11 @@
             // runtime is the only way this can go badly wrong.
             if (o.guid && takesGuid(pyAgents[fname])) args.user_guid = o.guid;
             const r = await callAgent(fname, args);
-            result = r === null ? ('no such tool: ' + fname) : r;
+            if (r === null) result = 'no such tool: ' + fname;
+            else { result = r; failed = (r === DID_NOT); }
           }
         } catch (e) { result = 'failed: ' + e.message; }
-        calls.push({ tool: fname, args, result: String(result).slice(0, 400) });
+        calls.push({ tool: fname, args, failed, result: String(result).slice(0, 400) });
         log('[vbrainstem]', fname, JSON.stringify(args).slice(0, 90), '->', String(result).slice(0, 90));
         messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result).slice(0, 2000) });
       }

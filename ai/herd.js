@@ -179,7 +179,11 @@
       entry = { player: rec.id, tick: rec.ticks, slot: r.slot, ms: Date.now() - started, words: r.words,
                 resident: (r.residency && r.residency.resident) || [], missing: (r.residency && r.residency.missing) || [],
                 summoned: r.summoned || [],
-                calls: (r.calls || []).map(c => ({ tool: c.tool, failed: /failed|no such/.test(c.result) })) };
+                // the dispatch's verdict when it has one; the old text test only as a fallback,
+                // because reading /failed|no such/ out of an AGENT's answer let a summoned agent
+                // write a ✗ against its own name into this frame
+                calls: (r.calls || []).map(c => ({ tool: c.tool,
+                  failed: c.failed != null ? !!c.failed : /failed|no such/.test(c.result) })) };
       if (F) {
         try {
           const f = await sealPulse(rec, F,
@@ -824,11 +828,18 @@
     if (!B || !B.sourceOf) return null;
     const words = String(need || '').toLowerCase();
     const scored = new Map();
-    // every line this device holds — this session's players AND everything remembered before
-    const lines = [];
-    for (const r of players.values()) for (const f of r.chain)
+    // every line this device holds — this session's players AND everything remembered before.
+    // ONCE EACH. remember() writes every sealed frame to the store, so a frame from THIS page
+    // was in both lists and every tick of the current session counted twice, while a tick
+    // remembered from a previous one counted once. `proven` is the number this ranks on and it
+    // is supposed to be a count of evidence; a frame is one piece of evidence wherever it is
+    // read from. The frame hash is what says two readings are one frame.
+    const lines = [], held = new Set();
+    for (const r of players.values()) for (const f of r.chain) {
+      if (f.frame_hash) held.add(f.frame_hash);
       lines.push({ p: r.id, a: f.payload.asserts, q: f.payload.requires });
-    for (const l of recall()) lines.push(l);
+    }
+    for (const l of recall()) if (!l.h || !held.has(l.h)) lines.push(l);
     for (const l of lines) {
       const a = l.a || {}, q = l.q || {};
       for (const name of (q.resident || [])) {
