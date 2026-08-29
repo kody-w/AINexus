@@ -1039,11 +1039,15 @@ function watchPage(page, label) {
   page.on('pageerror', error => pageErrors.push(`${label}: ${error.message}`));
 }
 
-async function navigateHeist(context, label) {
+async function navigateHeistAtDomContentLoaded(context, label) {
   const page = await context.newPage();
   watchPage(page, label);
   const response = await page.goto(PAGE_URL, { timeout: 20000, waitUntil: 'domcontentloaded' });
   requireMeasurement(response && response.status() === 200, `${label} HTTP 200`);
+  return page;
+}
+
+async function waitForHeistSurface(page) {
   await page.waitForFunction(() => {
     const visible = element => {
       if (!element) return false;
@@ -1056,7 +1060,174 @@ async function navigateHeist(context, label) {
       (window.__doggHeist.ready === true ||
         [...document.querySelectorAll('dialog, [role="dialog"], [aria-modal="true"]')].some(visible)));
   }, null, { timeout: 12000 });
+}
+
+async function navigateHeist(context, label) {
+  const page = await navigateHeistAtDomContentLoaded(context, label);
+  await waitForHeistSurface(page);
   return page;
+}
+
+async function auditFirstPaintIntroScroll(page) {
+  const setup = await page.evaluate(() => {
+    const card = document.querySelector('.intro-card');
+    if (!card) return { found: false };
+    const overlay = card.closest(
+      '.intro-overlay, #intro-overlay, [class*="intro"][class*="overlay"], dialog, [role="dialog"], [aria-modal="true"]'
+    ) || card.parentElement;
+    if (!overlay) return { found: false };
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    if (!visible(card) || !visible(overlay)) return { found: false };
+    const roots = [document.documentElement, document.body].filter(Boolean);
+    const originals = roots.map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    roots.forEach(element => element.style.setProperty('scroll-behavior', 'auto', 'important'));
+    window.scrollTo(0, 0);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    originals.forEach(({ element, value, priority }) => {
+      if (value) element.style.setProperty('scroll-behavior', value, priority);
+      else element.style.removeProperty('scroll-behavior');
+    });
+
+    const cardRect = card.getBoundingClientRect();
+    const overlayRect = overlay.getBoundingClientRect();
+    const left = Math.max(0, overlayRect.left);
+    const right = Math.min(innerWidth, overlayRect.right);
+    const top = Math.max(0, overlayRect.top);
+    const bottom = Math.min(innerHeight, overlayRect.bottom);
+    const candidates = [
+      { x: (left + Math.min(right, cardRect.left)) / 2, y: (top + bottom) / 2 },
+      { x: (Math.max(left, cardRect.right) + right) / 2, y: (top + bottom) / 2 },
+      { x: (left + right) / 2, y: (top + Math.min(bottom, cardRect.top)) / 2 },
+      { x: (left + right) / 2, y: (Math.max(top, cardRect.bottom) + bottom) / 2 },
+      { x: left + 8, y: top + 8 },
+      { x: right - 8, y: bottom - 8 }
+    ].filter(point =>
+      Number.isFinite(point.x) && Number.isFinite(point.y) &&
+      point.x >= left && point.x < right && point.y >= top && point.y < bottom &&
+      !(point.x >= cardRect.left && point.x <= cardRect.right &&
+        point.y >= cardRect.top && point.y <= cardRect.bottom));
+    const point = candidates.find(candidate => {
+      const stack = document.elementsFromPoint(candidate.x, candidate.y);
+      return stack.some(element => element === overlay || overlay.contains(element)) &&
+        !stack.some(element => element === card || card.contains(element));
+    });
+    return {
+      found: Boolean(point),
+      point,
+      ready: window.__doggHeist?.ready,
+      readyState: document.readyState,
+      documentScrollable: document.documentElement.scrollHeight > innerHeight + 1,
+      card: {
+        scrollTop: card.scrollTop,
+        scrollHeight: card.scrollHeight,
+        clientHeight: card.clientHeight
+      }
+    };
+  });
+  requireMeasurement(setup.found, 'an overlay point outside .intro-card at DOMContentLoaded');
+  requireMeasurement(setup.ready === false, '__doggHeist.ready false at the first-paint scroll probe');
+
+  const before = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0,
+    body: document.body.scrollTop || 0
+  }));
+  await page.mouse.move(setup.point.x, setup.point.y);
+  const samples = [];
+  for (const delta of [225, 225, 225, 225]) {
+    await page.mouse.wheel(0, delta);
+    await sleep(60);
+    samples.push(await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const style = card && getComputedStyle(card);
+      const rect = card && card.getBoundingClientRect();
+      return {
+        window: scrollY,
+        document: document.scrollingElement?.scrollTop || 0,
+        body: document.body.scrollTop || 0,
+        ready: window.__doggHeist?.ready,
+        cardVisible: Boolean(card && !card.hidden && style.display !== 'none' &&
+          style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0)
+      };
+    }));
+  }
+  return {
+    setup,
+    before,
+    samples,
+    totalWheel: 900,
+    locked: samples.every(sample =>
+      sample.window === before.window &&
+      sample.document === before.document &&
+      sample.body === before.body &&
+      sample.ready === false &&
+      sample.cardVisible)
+  };
+}
+
+async function auditShortIntroCardAndUnlock(page) {
+  const card = await page.evaluate(() => {
+    const element = document.querySelector('.intro-card');
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return {
+      x: Math.max(1, Math.min(innerWidth - 1, rect.left + rect.width / 2)),
+      y: Math.max(1, Math.min(innerHeight - 1, rect.top + rect.height / 2)),
+      scrollTop: element.scrollTop,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      page: document.scrollingElement?.scrollTop || 0
+    };
+  });
+  requireMeasurement(card && card.scrollHeight > card.clientHeight + 1,
+    'overflowing .intro-card on a short viewport');
+  await page.mouse.move(card.x, card.y);
+  for (const delta of [200, 200, 200]) await page.mouse.wheel(0, delta);
+  await sleep(200);
+  const cardAfter = await page.evaluate(() => {
+    const element = document.querySelector('.intro-card');
+    return {
+      scrollTop: element?.scrollTop || 0,
+      page: document.scrollingElement?.scrollTop || 0,
+      ready: window.__doggHeist?.ready
+    };
+  });
+
+  const intro = await markIntro(page);
+  requireMeasurement(intro.found, 'the short-screen intro dialog before dismissal');
+  await dismissIntro(page);
+  await finishHeistBoot(page, 'short-screen unlock page');
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
+    document.body.style.setProperty('scroll-behavior', 'auto', 'important');
+    window.scrollTo(0, 0);
+  });
+  await page.mouse.move(8, Math.max(8, (await page.viewportSize()).height - 8));
+  for (const delta of [250, 250, 250, 250]) await page.mouse.wheel(0, delta);
+  await sleep(250);
+  const pageAfter = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0,
+    scrollable: document.documentElement.scrollHeight > innerHeight + 1
+  }));
+  return {
+    card,
+    cardAfter,
+    pageAfter,
+    cardScrolled: cardAfter.scrollTop > card.scrollTop &&
+      cardAfter.page === card.page && cardAfter.ready === false,
+    pageUnlocked: pageAfter.scrollable &&
+      (pageAfter.window > 0 || pageAfter.document > 0)
+  };
 }
 
 async function markIntro(page) {
@@ -2322,6 +2493,184 @@ async function measureContrast(page, mode, roles = []) {
   }, { mode, roles });
 }
 
+async function scanSmallTextContrast(page, stateName) {
+  return page.evaluate(state => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+        style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const disabled = element => Boolean(
+      element.closest('[disabled], [aria-disabled="true"]') ||
+      ('disabled' in element && element.disabled)
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const parse = value => {
+      const match = String(value || '').match(
+        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/i
+      );
+      if (match) {
+        return {
+          r: Number(match[1]),
+          g: Number(match[2]),
+          b: Number(match[3]),
+          a: match[4] === undefined ? 1 : Number(match[4])
+        };
+      }
+      if (!context || !value) return null;
+      try {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = 'rgba(0, 0, 0, 0)';
+        context.fillStyle = value;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+        return { r, g, b, a: a / 255 };
+      } catch (error) {
+        return null;
+      }
+    };
+    const over = (front, back) => {
+      const alpha = front.a + back.a * (1 - front.a);
+      if (!alpha) return { r: 0, g: 0, b: 0, a: 0 };
+      return {
+        r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha,
+        g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha,
+        b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha,
+        a: alpha
+      };
+    };
+    const effectiveBackground = element => {
+      const chain = [];
+      for (let node = element; node; node = node.parentElement) chain.push(node);
+      let color = { r: 255, g: 255, b: 255, a: 1 };
+      for (const node of chain.reverse()) {
+        const next = parse(getComputedStyle(node).backgroundColor);
+        if (next && next.a > 0) color = over(next, color);
+      }
+      return color;
+    };
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 :
+          Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color.r) +
+        0.7152 * channel(color.g) +
+        0.0722 * channel(color.b);
+    };
+    const directText = element => {
+      if (element instanceof HTMLSelectElement) {
+        return element.selectedOptions[0]?.textContent || '';
+      }
+      if (element instanceof HTMLInputElement &&
+          /^(?:button|submit|reset)$/i.test(element.type)) return element.value;
+      const text = [...element.childNodes]
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .map(node => node.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
+      if (text) return text;
+      if (!element.children.length) {
+        return String(element.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+      return '';
+    };
+    const meaningful = text => {
+      const value = String(text || '').replace(/\s+/g, ' ').trim();
+      return /[\p{L}\p{N}]/u.test(value) &&
+        !/^[\s•·●○◦▪▫|—–\-_=+<>()[\]{}]+$/u.test(value);
+    };
+    const selector = element => {
+      if (element.id) return `#${CSS.escape(element.id)}`;
+      const classes = [...element.classList].slice(0, 3)
+        .map(name => `.${CSS.escape(name)}`).join('');
+      const parent = element.parentElement;
+      if (!parent) return element.tagName.toLowerCase() + classes;
+      const siblings = [...parent.children].filter(child => child.tagName === element.tagName);
+      const suffix = siblings.length > 1 ?
+        `:nth-of-type(${siblings.indexOf(element) + 1})` : '';
+      return `${element.tagName.toLowerCase()}${classes}${suffix}`;
+    };
+    const selectedControl = document.querySelector(
+      '#agent-list [aria-pressed="true"], #agent-list .agent-button.selected'
+    );
+    const rows = [];
+    for (const element of document.querySelectorAll('body *')) {
+      if (!visible(element) || disabled(element) ||
+          element.matches('script, style, noscript, canvas, svg, path, option')) continue;
+      const text = directText(element);
+      if (!meaningful(text)) continue;
+      const style = getComputedStyle(element);
+      const fontSize = parseFloat(style.fontSize);
+      if (!Number.isFinite(fontSize) || fontSize >= 14) continue;
+      const foregroundColor = parse(style.color);
+      if (!foregroundColor) continue;
+      const background = effectiveBackground(element);
+      let opacity = foregroundColor.a;
+      for (let node = element; node; node = node.parentElement) {
+        opacity *= Number(getComputedStyle(node).opacity || 1);
+      }
+      const foreground = over(Object.assign({}, foregroundColor, { a: opacity }), background);
+      const foregroundLuminance = luminance(foreground);
+      const backgroundLuminance = luminance(background);
+      const ratio = (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+      rows.push({
+        selector: selector(element),
+        text: text.slice(0, 120),
+        ratio,
+        fontSize,
+        element
+      });
+    }
+
+    const measuredWithin = css => rows.some(row =>
+      row.element.matches(css) || Boolean(row.element.closest(css)));
+    const selectedWithin = css => Boolean(selectedControl) && rows.some(row =>
+      selectedControl.contains(row.element) &&
+      (row.element.matches(css) || Boolean(row.element.closest(css))));
+    const coverage = {
+      boardTip: measuredWithin('#board-tip, .board-tip, [data-board-tip]'),
+      legendItem: measuredWithin('.legend-item, [data-legend-item]'),
+      selectedAgentLabel: Boolean(selectedControl) && rows.some(row =>
+        selectedControl.contains(row.element) &&
+        !row.element.matches('.agent-role, .agent-intent, .agent-cooldown, [data-agent-cooldown]') &&
+        !row.element.closest('.agent-role, .agent-intent, .agent-cooldown, [data-agent-cooldown]')),
+      selectedAgentIntent: selectedWithin(
+        '.agent-intent, [data-agent-intent], [class*="agent"][class*="intent"]'
+      ),
+      selectedAgentCooldown: selectedWithin(
+        '.agent-cooldown[data-agent-cooldown], [data-agent-cooldown]'
+      ),
+      eyebrow: measuredWithin('.eyebrow, [data-eyebrow]'),
+      sectionKicker: measuredWithin('.section-kicker, [data-section-kicker]'),
+      status: measuredWithin('#status-live, .status-label, [data-status-label]'),
+      micro: measuredWithin('.micro, .micro-label, [data-micro]'),
+      eventIntent: measuredWithin(
+        '#event-log .intent, #event-log [data-intent], .event-intent'
+      ),
+      povIntent: measuredWithin(
+        '#pov-grid .intent, #pov-grid [data-intent], .pov-intent'
+      ),
+      stepMark: measuredWithin('.step-mark')
+    };
+    const serialized = rows.map(({ element, ...row }) => row)
+      .sort((a, b) => a.ratio - b.ratio);
+    return {
+      state,
+      count: serialized.length,
+      worst: serialized[0] || null,
+      failures: serialized.filter(row => row.ratio < 4.5).slice(0, 20),
+      coverage,
+      missingCoverage: Object.entries(coverage)
+        .filter(([, present]) => !present).map(([name]) => name)
+    };
+  }, stateName);
+}
+
 async function visibleHelp(page) {
   return page.evaluate(() => {
     const button = document.getElementById('help-button');
@@ -2458,6 +2807,26 @@ async function readDownload(download) {
 async function runSuite() {
   requireMeasurement(fs.existsSync(ARTIFACT), `${ARTIFACT} (DOGG_HEIST_ROOT=${ROOT})`);
   browser = await chromium.launch();
+
+  const firstPaintContext = await browser.newContext({
+    viewport: { width: 390, height: 420 },
+    hasTouch: true,
+    isMobile: true
+  });
+  await serve(firstPaintContext);
+  const firstPaintPage = await navigateHeistAtDomContentLoaded(
+    firstPaintContext,
+    'first-paint intro page'
+  );
+  const firstPaintScroll = await auditFirstPaintIntroScroll(firstPaintPage);
+  result('pre-ready first-paint overlay blocks repeated real wheel input',
+    firstPaintScroll.totalWheel >= 800 && firstPaintScroll.locked,
+    `${firstPaintScroll.setup.readyState}; wheel ${firstPaintScroll.totalWheel}px at ${firstPaintScroll.setup.point.x.toFixed(0)},${firstPaintScroll.setup.point.y.toFixed(0)}; document ${firstPaintScroll.before.document}→${firstPaintScroll.samples.map(sample => sample.document).join('/')}`);
+  const shortIntro = await auditShortIntroCardAndUnlock(firstPaintPage);
+  result('short intro card scrolls while the dismissed page unlocks',
+    shortIntro.cardScrolled && shortIntro.pageUnlocked,
+    `card ${shortIntro.card.scrollTop}→${shortIntro.cardAfter.scrollTop} of ${shortIntro.card.scrollHeight}/${shortIntro.card.clientHeight}; page ${shortIntro.card.page}→${shortIntro.pageAfter.document}`);
+  await firstPaintContext.close();
 
   const primaryContext = await browser.newContext({
     viewport: { width: 1100, height: 800 },
@@ -3211,6 +3580,20 @@ async function runSuite() {
     await api(contrastPage, 'pause');
     const selectedForContrast = await hasSelectedAgentControl(contrastPage);
     const neutralContrast = await measureContrast(contrastPage, 'ready', roles);
+    const activeSmallText = await scanSmallTextContrast(contrastPage, 'active');
+    await api(contrastPage, 'restart', 'ADVERSARY-007');
+    await api(contrastPage, 'pause');
+    await api(contrastPage, 'setSpeed', 20);
+    let completedContrastState = await inspect(contrastPage, false);
+    for (let batch = 0;
+      batch < 12 && !isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state));
+      batch++) {
+      await api(contrastPage, 'step', 8);
+      completedContrastState = await inspect(contrastPage, false);
+    }
+    requireMeasurement(isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state)),
+      `${scheme} completed representative state for systematic contrast`);
+    const completedSmallText = await scanSmallTextContrast(contrastPage, 'completed');
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
       roles: readyContrast.roles,
@@ -3219,6 +3602,8 @@ async function runSuite() {
       selectedControlFound: neutralContrast.selectedControlFound,
       selectedMetadata: neutralContrast.selectedMetadata,
       selectedForContrast,
+      activeSmallText,
+      completedSmallText,
       theme: `${introContrast.theme}|${readyContrast.theme}`
     };
     await contrastContext.close();
@@ -3251,6 +3636,36 @@ async function runSuite() {
       darkSpecificContrast.neutralStatus.text.length > 0 &&
       /\b(cooldown|ready|available|wait|tick|turn)\b|\d/i.test(darkSpecificContrast.selectedMetadata.text),
     `status ${darkSpecificContrast.neutralStatus?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.neutralStatus?.text || 'none'}); metadata ${darkSpecificContrast.selectedMetadata?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.selectedMetadata?.text || 'none'})`);
+  const systematicScans = ['light', 'dark'].flatMap(scheme => [
+    Object.assign({ scheme }, contrastByTheme[scheme].activeSmallText),
+    Object.assign({ scheme }, contrastByTheme[scheme].completedSmallText)
+  ]);
+  const systematicWorst = systematicScans
+    .map(scan => scan.worst && Object.assign({ scheme: scan.scheme, state: scan.state }, scan.worst))
+    .filter(Boolean).sort((a, b) => a.ratio - b.ratio)[0];
+  const systematicFailures = systematicScans.flatMap(scan =>
+    scan.failures.map(failure => Object.assign({
+      scheme: scan.scheme,
+      state: scan.state
+    }, failure)));
+  const systematicCoverageMissing = ['light', 'dark'].flatMap(scheme => {
+    const active = contrastByTheme[scheme].activeSmallText;
+    const completed = contrastByTheme[scheme].completedSmallText;
+    return Object.keys(active.coverage).filter(name => {
+      if (name === 'stepMark') return !completed.coverage.stepMark;
+      return !active.coverage[name] && !completed.coverage[name];
+    }).map(name => `${scheme}:${name}`);
+  });
+  result('systematic sub-14px text contrast passes active and completed themes',
+    systematicScans.length === 4 &&
+      systematicScans.every(scan =>
+        scan.count > 0 && scan.failures.length === 0) &&
+      systematicCoverageMissing.length === 0,
+    systematicFailures.length ?
+      `${systematicFailures[0].scheme}/${systematicFailures[0].state} ${systematicFailures[0].ratio.toFixed(2)}:1 ${systematicFailures[0].selector} "${systematicFailures[0].text}"` :
+      systematicCoverageMissing.length ?
+        `unmeasured required text: ${systematicCoverageMissing.join(', ')}` :
+        `worst ${systematicWorst?.scheme}/${systematicWorst?.state} ${systematicWorst?.ratio.toFixed(2)}:1 ${systematicWorst?.selector} "${systematicWorst?.text}" across ${systematicScans.reduce((sum, scan) => sum + scan.count, 0)} labels`);
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
