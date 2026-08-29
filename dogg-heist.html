@@ -3224,6 +3224,12 @@
         if (liveState && liveState.outcome !== "active") running = false;
       }
 
+      function completeReadiness() {
+        if (ready) return;
+        ready = true;
+        api.ready = true;
+      }
+
       function dismissIntro(shouldPlay) {
         if (introTimer !== null) {
           window.clearTimeout(introTimer);
@@ -3231,6 +3237,7 @@
         }
         elements.intro.hidden = true;
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
+        completeReadiness();
       }
 
       function playGame(markCommand = true) {
@@ -3248,6 +3255,7 @@
         startTimer();
         renderAll();
         persistState();
+        completeReadiness();
         status("Live policy clock running at " + speedMs + " ms per tick.");
         return true;
       }
@@ -3569,6 +3577,24 @@
       function publicState() {
         const frame = currentFrame();
         const live = liveState;
+        const displayed = frame.state;
+        const facilityWidth = displayed.facility.width;
+        const facilityHeight = displayed.facility.height;
+        const totalCellCount = facilityWidth * facilityHeight;
+        const povs = displayed.agents.map((agent) => {
+          const visibleCells = agent.status === "active"
+            ? Array.from(visibleCellsForAgent(displayed, agent)).sort()
+            : [];
+          const knownCells = agent.seen.slice().sort();
+          return {
+            id: agent.id,
+            visibleCells,
+            knownCells,
+            visibleCount: visibleCells.length,
+            knownCount: knownCells.length,
+            totalCellCount
+          };
+        });
         return {
           seed: live.seed,
           tick: live.tick,
@@ -3589,6 +3615,15 @@
           branchId: live.branchId,
           headHash: headFrame().hash,
           alarm: live.alarm,
+          facilityWidth,
+          facilityHeight,
+          totalCellCount,
+          facility: {
+            width: facilityWidth,
+            height: facilityHeight,
+            totalCellCount
+          },
+          povs,
           agents: live.agents.map((agent) => ({
             id: agent.id,
             role: agent.role,
@@ -3852,8 +3887,6 @@
         }
         wireEvents();
         renderAll();
-        ready = true;
-        api.ready = true;
         status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
         introTimer = window.setTimeout(() => {
           introTimer = null;
