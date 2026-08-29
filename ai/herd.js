@@ -358,6 +358,15 @@
   // rapp/1 has no parent pointer on a frame, and inventing one would break the spec. So a fork
   // is a genuinely new stream whose genesis SAYS where it split — the fork is recorded in the
   // data rather than implied by a link, which is also what makes it findable later.
+  // A LENS IS WHAT THE NEW DIMENSION IS SEEN THROUGH. The estate already holds that an identity
+  // is projected through a transform and that migration ships the FRAME, letting the destination
+  // re-derive. So a fork does not have to continue in the same shape as the line it left: it can
+  // carry a lens — another camera rig, another cast, another world, another director — and the
+  // same moment re-derives into something that is genuinely different and genuinely descended.
+  // The lens is named in the genesis, so what changed is on the record and not in somebody's head.
+  const LENSES = {};
+  const lens = (name, fn) => { LENSES[name] = fn; return Object.keys(LENSES); };
+
   async function fork(frame, opts) {
     const o = opts || {};
     const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
@@ -365,12 +374,22 @@
     const stream = 'rappid:@kody-w/ainexus/dimension:' +
       (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
     const woke = rewind(f, o);
+    // wear the lens before the genesis is sealed, so the frame records the world it produced
+    let worn = null;
+    if (o.lens) {
+      const fn = typeof o.lens === 'function' ? o.lens : LENSES[o.lens];
+      if (fn) { try { worn = (await fn({ players, frame: f, woke })) || String(o.lens); }
+                catch (e) { worn = 'lens failed: ' + e.message; } }
+      else worn = 'no such lens: ' + o.lens;
+    }
     let genesis = null;
     if (F) {
       try {
         genesis = await F.buildFrame({ kind: 'nexus.fork', streamId: stream, seq: 0,
           payload: { asserts: { forked_from: f.frame_hash, at_seq: f.seq, at_utc: f.utc || null,
-                                woke: woke.woke, reason: o.reason || 'someone went back' },
+                                woke: woke.woke, reason: o.reason || 'someone went back',
+                                lens: o.lens ? String(typeof o.lens === 'function' ? (o.lens.name || 'anonymous') : o.lens) : null,
+                                lens_said: worn },
                      requires: { of_stream: f.stream_id } },
           prev: null });
       } catch (e) {}
@@ -381,7 +400,7 @@
     if (genesis) epoch = { id: genesis.frame_hash, seq: 0, at: epoch.at, virtual: 0 };
     ledger.forks = (ledger.forks || 0) + 1;
     return { dimension: stream, genesis: genesis && genesis.frame_hash,
-             forkedFrom: f.frame_hash, at: f.seq, woke: woke.woke };
+             forkedFrom: f.frame_hash, at: f.seq, woke: woke.woke, lens: o.lens || null, lensSaid: worn };
   }
 
   function rewind(frame, opts) {
@@ -724,7 +743,8 @@
     return !r ? 'none' : r.truncated ? 'window' : 'chain'; };
 
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
-                     epoch: () => Object.assign({}, epoch), rewind, replay, fork,
+                     epoch: () => Object.assign({}, epoch), rewind, replay, fork, lens,
+                     lenses: () => Object.keys(LENSES),
                      cost: () => {
                        const free = ledger.replayedFrames + ledger.virtualFrames;
                        const total = ledger.liveFrames + free;

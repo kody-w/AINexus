@@ -64,8 +64,16 @@ const out = await p.evaluate(async () => {
   await new Promise(res => { const r = H.replay(history, { speed: 50, onFrame: f => runB.push(f.epoch + '|' + f.woke.map(w => w.player + ':' + w.intent).join(',')), onDone: res }); });
   const callsAfterReplays = calls;
 
+  // going back does not edit the line — it starts another one, and it can wear a different lens
+  H.lens('nightshift', async ({ players }) => {
+    for (const r of players.values()) r.persona = 'You are ' + r.id + ', and it is 3am in the house.';
+    return 'recast for 3am';
+  });
+  const before = { history: history.trim().split('\n').length, epoch: H.epoch().id };
+  const forked = await H.fork(JSON.parse(history.trim().split('\n')[1]), { lens: 'nightshift', reason: 'test' });
+  const after = { epoch: H.epoch().id, personas: [...H.players().values()].map(r => r.persona) };
   const cost = H.cost();
-  return { cost, recorded, history: history.trim().split('\n').length, callsAfterRecording, callsAfterReplays,
+  return { forked, before, after, lenses: H.lenses(), cost, recorded, history: history.trim().split('\n').length, callsAfterRecording, callsAfterReplays,
            woke, standingAfterRewind, runA, runB, matched: JSON.stringify(runA) === JSON.stringify(runB) };
 });
 console.log('recorded keyframes         :', out.history, JSON.stringify(out.recorded.map(r => r.directives)));
@@ -85,6 +93,13 @@ ok('and the epochs came back the same, not re-minted', out.runA[0].split('|')[0]
 console.log('\nthe ledger                 :', JSON.stringify(out.cost));
 ok('live frames are the only ones that cost a call', out.cost.calls === out.cost.liveFrames);
 ok('replayed and virtual frames were free', out.cost.freeFrames > out.cost.liveFrames && out.cost.callsPerFrame < 0.5);
+console.log('\nfork              :', JSON.stringify({ dimension: out.forked.dimension.slice(0,44)+'…',
+  forkedFrom: out.forked.forkedFrom.slice(0,12)+'…', at: out.forked.at, lens: out.forked.lens, said: out.forked.lensSaid }));
+console.log('personas after    :', JSON.stringify(out.after.personas));
+ok('going back starts a NEW dimension rather than editing the old line',
+   /dimension:/.test(out.forked.dimension) && out.forked.genesis && out.after.epoch !== out.before.epoch);
+ok('the genesis records where it split from', out.forked.forkedFrom && out.forked.at === 1);
+ok('and it can be continued through a different lens', out.forked.lensSaid === 'recast for 3am' && out.after.personas.every(p => /3am/.test(p)));
 console.log('errors:', errs.slice(0,3));
 await b.close();
 })();
