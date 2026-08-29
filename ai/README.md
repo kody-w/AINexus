@@ -28,44 +28,11 @@ loop should call `this.aiPlayer?.update();` once per frame — harmless if
 (`index_heavy.html`, `index2.0.html`, `newindex.html`, `nexusAIBattles.html`)
 already have that line.
 
-## The one-line change `index.html` still needs
+## Travelling through a portal
 
-`index.html` owns its own copy of `AIPlayerManager` inline (this file is a
-byte-for-byte extraction of it, plus the traversal fix below) and explicitly
-constructs it in `WorldNavigator.init()`:
-
-```js
-// An AI inhabits this tab when invited with &ai=brainstem
-if (window.NEXUS_AI_MODE === 'brainstem') {
-    this.aiPlayer = new AIPlayerManager(this);
-}
-```
-
-To pick up the traversal fix without duplicating the class, replace that
-inline `class AIPlayerManager { ... }` definition (and the block above) with
-a single include, placed before `index.html`'s own big inline `<script>`
-(next to the other library `<script src>` tags — three.js / peerjs):
-
-```html
-<script src="ai/ai_player.js"></script>
-```
-
-...then delete the inline `class AIPlayerManager { ... }` block and the
-`if (window.NEXUS_AI_MODE === 'brainstem') { this.aiPlayer = new
-AIPlayerManager(this); }` call in `init()` — `ai/ai_player.js` boots itself
-once `window.worldNavigator` exists, so no call site is needed there either.
-`index.html`'s `animate()` already calls `this.aiPlayer.update()`
-unconditionally; change that one line to `this.aiPlayer?.update();` since
-`aiPlayer` is no longer guaranteed to exist yet at the time `animate()`
-first runs (the script now attaches it asynchronously, on the next poll
-tick, rather than synchronously inside `init()`).
-
-## What changed vs. the version still inline in `index.html`
-
-The `travel` agent no longer refuses every portal. When the AI's travel
-agent is dispatched with a portal name, it looks the name up in
-`world.portals` (the same list `fastTravel`/portal-click navigation uses)
-for the portal's real URL, then navigates there carrying:
+When the AI's `travel` agent is dispatched with a portal name, it looks the
+name up in `world.portals` (the same list `fastTravel`/portal-click
+navigation uses) for the portal's real URL, then navigates there carrying:
 
 - `&ai=brainstem` — so the new page re-boots the mind, and
 - `&join=<host>.<token>` — the *same* room invite this tab was launched

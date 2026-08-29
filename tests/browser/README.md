@@ -32,6 +32,13 @@ fails twice, then it is real.
 | `holo_calibration.cjs` | whether matching frames actually lands the projection closer to the truth |
 | `views_live.cjs` | the public DOGG edge holds between ticks, advances when the manifest grows, and leaves a scrubbed viewer in history |
 | `dimension_seed.cjs` | the same seed walking the same walk |
+| `herd.cjs` | one runtime shared by many players under deliberately overlapping turns: nobody speaks through another's body, one player's memory is invisible to the next, and the spend ceiling refuses |
+| `ensemble.cjs` | one model call directing everyone, then free movement that costs nothing — a directive for someone who is not there dropped, an intent nobody has becoming stillness, one keyframe putting every object in the same epoch |
+| `world_frame.cjs` | each player carrying its own hot-loaded agents on the shared runtime, and the world frame choosing who wakes — nobody in a still world, the one who was spoken to when there is a reason — on its own verifiable chain |
+| `hotload.cjs` | the world itself as an agent the brainstem can call, and a brand-new python agent taught from source into a running player and usable on its next thought, with no reload |
+| `time_travel.cjs` | a recorded session replayed twice with no model in the loop, frame for frame and epoch for epoch; a live player woken inside an ancient frame; going back forking a new dimension rather than editing the old line |
 
 `turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs` and `overlay.cjs` need no credentials at all.
-`vbrainstem_python.cjs` needs the network. `copilot_auth.cjs` reaches the live worker.
+The ten that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
+`forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs` and `time_travel.cjs` —
+need the network. `copilot_auth.cjs` reaches the live worker.
