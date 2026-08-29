@@ -51,14 +51,32 @@
   // the default stands. Parsed with `new URL` rather than compared as a string, because that is
   // what actually resolves the near-misses — and `.origin` drops anything smuggled in front of
   // the host, which is the oldest way to make a hostile address read like a friendly one.
+  // AND IT SAYS WHICH ADDRESS IT THREW AWAY. Refusing an endpoint nobody vouched for is right,
+  // but doing it in silence means that the day GitHub serves this API from a host that is not
+  // *.githubcopilot.com — it served Copilot from copilot-proxy.githubusercontent.com for years —
+  // the only symptom is thoughts failing against a host nobody chose, with nothing anywhere
+  // saying the address GitHub sent was discarded. Once per distinct address, so a poll loop
+  // cannot turn this into a wall.
+  const announced = new Set();
   function copilotApi(raw) {
+    const instead = (why) => {
+      const k = String(raw);
+      if (!announced.has(k)) {
+        announced.add(k);
+        try { console.warn('[NexusAuth] copilot endpoint ' + JSON.stringify(clean(k)) + ' ' + why
+                           + ' — using ' + COPILOT_DEFAULT_API + ' instead'); } catch (e) {}
+      }
+      return COPILOT_DEFAULT_API;
+    };
     try {
       const u = new URL(String(raw));
-      if (u.protocol !== 'https:') return COPILOT_DEFAULT_API;
+      if (u.protocol !== 'https:') return instead('is not https');
       const h = u.hostname.toLowerCase();
-      if (h !== 'githubcopilot.com' && !h.endsWith('.githubcopilot.com')) return COPILOT_DEFAULT_API;
+      if (h !== 'githubcopilot.com' && !h.endsWith('.githubcopilot.com')) {
+        return instead('is not a githubcopilot.com host');
+      }
       return u.origin + u.pathname.replace(/\/+$/, '');
-    } catch (e) { return COPILOT_DEFAULT_API; }
+    } catch (e) { return instead('is not a URL'); }
   }
 
   function loadSettings() {

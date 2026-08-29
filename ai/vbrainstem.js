@@ -211,14 +211,23 @@
   }
 
   // ── Pyodide: the agents, as Python ───────────────────────────────────────
-  let pyodide = null, pyAgents = {}, loading = null, loadNote = 'not started';
+  let pyodide = null, pyAgents = {}, loading = null, loadNote = 'not started', building = false;
   const agentSource = {};             // name -> where it came from, so it can be made resident again
   const summonedNames = new Set();    // written by a model rather than fetched — never confused for the rest
 
   async function initPyodide(log) {
-    if (pyodide && Object.keys(pyAgents).length) return pyodide;
+    // THE RUNTIME EXISTS BEFORE THE AGENT LIST DOES, and this function's own body hot-loads the
+    // local agents — while hotload asks for the runtime on the way in. So a call that arrives
+    // while the body is still running must be answered with the interpreter that already exists.
+    // Answering it with `loading` hands the body its own pending promise and it waits for itself
+    // forever: the page stops on "loading agents…" with no error, no timeout and no python for
+    // the life of the tab. The guard below only reaches `loading` when NOTHING loaded from the
+    // grail first, which is why it took an unreachable raw.githubusercontent.com — a blocked
+    // proxy, an offline demo, a moved commit — to show it.
+    if (pyodide && (building || Object.keys(pyAgents).length)) return pyodide;
     if (loading) return loading;
     loading = (async () => {
+      building = true;
       const say = (m) => { loadNote = m; if (log) log('[vbrainstem]', m); };
       try {
         if (typeof root.loadPyodide === 'undefined') {
@@ -312,18 +321,46 @@
           } catch (e) { if (log) log('[vbrainstem] agent', cfg.file, 'failed:', e.message); }
         }
         for (const cfg of LOCAL_AGENTS) {
-          try { await hotload(here(cfg.url), { className: cfg.className, file: cfg.url.split('/').pop() }); }
-          catch (e) { if (log) log('[vbrainstem] world agent failed:', e.message); }
+          const url = here(cfg.url), file = cfg.url.split('/').pop();
+          // WHERE IT CAME FROM IS RECORDED EVEN WHEN THE LOAD WAS REFUSED. Refusing an agent
+          // whose fingerprint could not be read is right; losing it for the life of the page is
+          // not, and that is what happened: nothing else in this module knows where
+          // nexus_world_agent.py lives, so ensureResident — which runs on EVERY turn and exists
+          // precisely to heal a missing agent — reported it missing forever. One 503 on
+          // state/agent_templates.json at the wrong second cost the world agent, and a two-second
+          // outage cost all eight, with no way back but a reload. Now residency can go and get it.
+          const called = cfg.className.replace(/Agent$/, '');
+          if (!agentSource[called]) agentSource[called] = { what: url, file, className: cfg.className };
+          try {
+            const got = await hotload(url, { className: cfg.className, file });
+            // it named itself something else — do not leave a placeholder standing for a name
+            // nothing answers to
+            if (got && got.name !== called && !pyAgents[called]) delete agentSource[called];
+          } catch (e) { if (log) log('[vbrainstem] world agent failed:', e.message); }
         }
         const names = Object.keys(pyAgents);
-        say(names.length ? 'ready with ' + names.join(', ') : 'ready (verbs only — no python agents loaded)');
+        // A PAGE WITH FEWER ABILITIES THAN A MINUTE AGO MUST SAY SO. 'ready with ManageMemory,
+        // ContextMemory' reads like a clean start; it is what a page says when eight agents were
+        // just refused.
+        const short = CORE_AGENTS.filter(n => !pyAgents[n]);
+        // and it only PROMISES a retry for the ones residency can actually reach: the two from
+        // the grail are fetched by `grab` above, not hot-loaded, so nothing records where they
+        // came from and nothing goes back for them. A log line that promises a repair that
+        // cannot happen is worse than one that says nothing.
+        const healable = short.filter(n => has(agentSource, n));
+        const shortfall = short.length
+          ? ' — ' + short.length + ' refused (' + short.join(', ') + ')'
+            + (healable.length ? ', residency will retry ' + healable.length + ' of them' : '')
+          : '';
+        say(names.length ? 'ready with ' + names.join(', ') + shortfall
+                         : 'ready (verbs only — no python agents loaded)' + shortfall);
         return pyodide;
       } catch (e) {
         say('python unavailable: ' + e.message + ' — running on verbs alone');
         pyodide = null;
         loading = null;              // a bad moment is not a life sentence: let it be retried
         return null;
-      }
+      } finally { building = false; }
     })();
     return loading;
   }
@@ -341,41 +378,66 @@
   // ignorance must not silently become permission — a failed fetch of this registry used to turn
   // every later refusal into a load, which is a security check that disappears exactly when the
   // network is being interfered with.
-  let fingerprints = null, fingerprintsTried = false, fingerprintsUnavailable = false;
+  // A FETCH WITH NO DEADLINE IS NOT A CHECK, IT IS A HANG. This one runs on the path every
+  // hot-load takes, and a server that accepts the connection and then says nothing — a stalled
+  // proxy, a captive portal, a CDN edge mid-failover — is a far commoner failure than a 500.
+  // Without this the page waits on it forever and reports "loading agents…" for the life of the
+  // tab. With it, silence becomes an ordinary retryable refusal like all the others.
+  const FINGERPRINT_TIMEOUT_MS = 8000;
+  let fingerprints = null, fingerprintsTried = false, fingerprintsUnavailable = false, asking = null;
   async function publishedFingerprints(log) {
-    if (fingerprintsTried) return fingerprints;
-    fingerprintsTried = true;
-    fingerprintsUnavailable = true;      // cleared below only if the list actually parses
-    try {
-      const r = await fetch(here('../state/agent_templates.json'), { cache: 'no-cache' });
-      if (r.ok) {
-        const reg = await r.json();
-        fingerprints = {};
-        for (const t of (reg.templates || [])) {
-          if (t.file && /^[0-9a-f]{64}$/.test(String(t.sha256 || ''))) {
-            fingerprints[String(t.file).split('/').pop()] = t.sha256;
+    if (fingerprintsTried) return fingerprints;                 // a list that parsed: never re-read
+    // ONE FETCH, ONE ANSWER, HOWEVER MANY ASK. `fingerprintsUnavailable` is raised on the way in
+    // and lowered only when the list parses, so a second hot-load arriving while the first fetch
+    // is still in the air used to read that pessimism as a verdict and REFUSE — for a list that
+    // was about to arrive intact. Hot-loads really do overlap: a call reaching back into the lane
+    // while a turn holds it runs directly rather than queueing. So a caller who finds one in
+    // flight waits for that same answer instead of inventing a worse one.
+    if (asking) return asking;
+    asking = (async () => {
+      fingerprintsUnavailable = true;      // cleared below only if the list actually parses
+      const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), FINGERPRINT_TIMEOUT_MS) : null;
+      try {
+        const r = await fetch(here('../state/agent_templates.json'),
+                              ctl ? { cache: 'no-cache', signal: ctl.signal } : { cache: 'no-cache' });
+        if (r.ok) {
+          const reg = await r.json();
+          // A 200 THAT PARSES IS NOT NECESSARILY THE REGISTRY. Something else answering on this
+          // path with well-formed JSON of another shape used to become an EMPTY allowlist — and an
+          // empty allowlist is not "nothing is published", it is "everything loads unverified".
+          // Ignorance must not become permission by way of a lucky parse.
+          if (!Array.isArray(reg && reg.templates)) throw new Error('not the registry — no templates list');
+          fingerprints = {};
+          for (const t of (reg.templates || [])) {
+            if (t.file && /^[0-9a-f]{64}$/.test(String(t.sha256 || ''))) {
+              fingerprints[String(t.file).split('/').pop()] = t.sha256;
+            }
           }
+          fingerprintsUnavailable = false;
+          fingerprintsTried = true;        // and ONLY here: `tried` now means "the list parsed"
+          if (log) log('[vbrainstem] ' + Object.keys(fingerprints).length + ' published fingerprints loaded');
+        } else {
+          // a 503 does not throw — it is a fetch that worked and a server that did not, and it is
+          // just as retryable as a network error
+          if (log) log('[vbrainstem] fingerprint list came back ' + r.status
+                       + ' — refusing for now, will try again on the next load');
         }
-        fingerprintsUnavailable = false;
-        if (log) log('[vbrainstem] ' + Object.keys(fingerprints).length + ' published fingerprints loaded');
-      } else {
-        // a 503 does not throw — it is a fetch that worked and a server that did not, and it is
-        // just as retryable as a network error
-        fingerprintsTried = false;
-        if (log) log('[vbrainstem] fingerprint list came back ' + r.status
-                     + ' — refusing for now, will try again on the next load');
-      }
-    } catch (e) {
-      // A BAD MOMENT IS NOT A LIFE SENTENCE. Failing closed is right; latching that failure for
-      // the rest of the page's life is not. One flaky fetch of the list — and it is the first
-      // thing the local-agent loop touches — would refuse all eight agents and every later
-      // hot-load with no way back but a reload. initPyodide one function up resets itself for
-      // exactly this reason. A FETCH failure is retryable; a list that parsed is not re-fetched.
-      fingerprintsTried = false;
-      if (log) log('[vbrainstem] could not read the fingerprint list (' + e.message
-                   + ') — refusing for now, will try again on the next load');
-    }
-    return fingerprints;
+      } catch (e) {
+        // A BAD MOMENT IS NOT A LIFE SENTENCE. Failing closed is right; latching that failure for
+        // the rest of the page's life is not. One flaky fetch of the list — and it is the first
+        // thing the local-agent loop touches — would refuse all eight agents and every later
+        // hot-load with no way back but a reload. initPyodide one function up resets itself for
+        // exactly this reason. A FETCH failure is retryable; a list that parsed is not re-fetched.
+        // an AbortError says "the user aborted a request", which is neither true nor useful here
+        const why = (e && e.name === 'AbortError')
+          ? 'no answer in ' + (FINGERPRINT_TIMEOUT_MS / 1000) + 's' : e.message;
+        if (log) log('[vbrainstem] could not read the fingerprint list (' + why
+                     + ') — refusing for now, will try again on the next load');
+      } finally { if (timer) clearTimeout(timer); }
+      return fingerprints;
+    })();
+    try { return await asking; } finally { asking = null; }
   }
 
   async function hotload(what, opts) { return queued(() => hotloadNow(what, opts)); }

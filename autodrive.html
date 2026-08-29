@@ -76,22 +76,61 @@ async function sha256(text) {
 // long as the hash links were internally consistent. ai/frames.js is loaded above and has all of
 // it. Four times tonight one idea lived in two files and only one copy got fixed; this is the
 // fifth, and the fix is to stop having two.
+// ONE SCRIPT TAG IS ONE ATTEMPT, AND A PAGE ONLY EVER GETS ONE OF THEM. ai/frames.js is loaded
+// in the head, so a 500 (or a proxy answering with HTML) at exactly that moment leaves this tower
+// unable to verify — and therefore unable to run — ANY program, for as long as the tab is open,
+// long after the file is fine again. Refusing without the verifier is right. Refusing forever is
+// a capability traded away for nothing, so the load is retried here, on demand, and a later
+// attempt is allowed to succeed.
+let framesLoading = null;
+async function framesModule() {
+  const ready = () => (window.NexusFrames && window.NexusFrames.verifyChain) ? window.NexusFrames : null;
+  if (ready()) return ready();
+  if (!framesLoading) {
+    framesLoading = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      // the cache-buster matters: a 404 the browser held on to would make every retry a replay
+      s.src = new URL('ai/frames.js', location.href).href + '?retry=' + Date.now();
+      s.onload = () => res(); s.onerror = () => rej(new Error('fetch failed'));
+      document.head.appendChild(s);
+    }).then(() => { framesLoading = null; }, () => { framesLoading = null; });
+  }
+  await framesLoading;                       // a failed retry must not latch either
+  if (ready()) return ready();
+  throw new Error('ai/frames.js did not load — refusing to verify a program chain without it');
+}
 async function verifyChain(text) {
-  const F = window.NexusFrames;
-  if (!F || !F.verifyChain) throw new Error('ai/frames.js did not load — refusing to verify a program chain without it');
-  return F.verifyChain(text);
+  return (await framesModule()).verifyChain(text);
 }
 
 // Programs are DATA fetched from committed static files (Article XXIV) — never code.
 // Any verb the driver does not know is refused, so a tampered file cannot execute anything.
 const VERBS = new Set(['look','walk','click','aim','travel','ask','say','press','wait','see','scan','sense','carry','mind','camera','cut']);
+// THE FALLBACK'S STATUS WAS NEVER CHECKED, so a 404 or a 502 came back as the server's error
+// page and travelled on as though it were the file. The chain then died inside JSON.parse and
+// the alert a person actually saw was `Unexpected token '<'` — a message naming neither the file
+// nor what happened to it. Worse, a MISSING program file reached the hash check and was reported
+// as "does not match its sealed hash", which accuses the publication of tampering when the truth
+// is a 404: the most alarming message in this file, raised by the most boring failure there is.
 async function fetchEither(rel) {
-  try { const r = await fetch(RAW + rel, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return { text: await r.text(), via: 'raw' }; }
-  catch (e) { const r = await fetch(rel); return { text: await r.text(), via: 'local' }; }
+  let why = 'raw unavailable';
+  try { const r = await fetch(RAW + rel, { cache: 'no-store' }); if (!r.ok) throw new Error('raw ' + r.status); return { text: await r.text(), via: 'raw' }; }
+  catch (e) { why = e.message; }
+  let r;
+  try { r = await fetch(rel); }
+  catch (e) { throw new Error(rel + ' could not be read (' + e.message + '; ' + why + ')'); }
+  if (!r.ok) throw new Error(rel + ' could not be read (local ' + r.status + '; ' + why + ')');
+  return { text: await r.text(), via: 'local' };
 }
 async function loadProgram(name) {
   const chainSrc = await fetchEither('ai/programs/PROGRAMS.chain.jsonl');
-  const chain = await verifyChain(chainSrc.text);            // throws if the chain itself is broken
+  // A 200 CAN STILL BE THE WRONG BYTES — a proxy's notice page, a half-written body — and those
+  // died inside JSON.parse, so what a person saw in the alert was `Unexpected token '<'`: an
+  // error that names nothing and points nowhere. Say which file failed to verify, whatever the
+  // reason, including a genuine broken link.
+  let chain;
+  try { chain = await verifyChain(chainSrc.text); }
+  catch (e) { throw new Error('ai/programs/PROGRAMS.chain.jsonl did not verify (' + e.message + ') — refused'); }
   const src = await fetchEither('ai/programs/' + name + '.json');
   const digest = await sha256(src.text);
   const sealed = chain.latest[name];
