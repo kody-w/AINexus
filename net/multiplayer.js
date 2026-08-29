@@ -96,6 +96,9 @@
             // public signaling server in clear. It no longer does. The joiner now proves the
             // invite in its first message over the encrypted data channel, after the peer
             // connection is up (see handleNewConnection / the 'hello' case).
+            // Remembered from a previous pass: the fragment is erased below, so a
+            // retry has nothing left to read and would otherwise silently host.
+            const remembered = this.invite || null;
             this.joinToken = null;
             this.declaredUsername = null;
             let inviteHost = null;
@@ -114,7 +117,15 @@
             if (frag) {
                 inviteHost = frag[1];
                 this.joinToken = frag[2];
+                // keep it in memory, out of the URL
+                this.invite = { host: inviteHost, token: this.joinToken,
+                                as: this.declaredUsername };
                 history.replaceState(null, '', window.location.pathname + window.location.search);
+            } else if (remembered) {
+                // a retry: the URL no longer carries the invite, but we still do
+                inviteHost = remembered.host;
+                this.joinToken = remembered.token;
+                if (!this.declaredUsername) this.declaredUsername = remembered.as;
             }
             const urlParams = new URLSearchParams(window.location.search);
             if (!inviteHost && urlParams.get('host')) {

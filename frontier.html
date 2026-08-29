@@ -348,7 +348,7 @@ $('mind').onclick = async () => {
   }
   NexusAuth.signOut();               // clear any dead credential before asking for a fresh one
   try {
-    const { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
+    let { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
     $('code').textContent = user_code;
     $('signin').classList.add('on');
     $('hud').classList.remove('min');
@@ -359,11 +359,21 @@ $('mind').onclick = async () => {
       let tok = null;
       try { tok = await NexusAuth.pollDeviceLogin(); }
       catch (e) { $('signin-note').textContent = e.message; return; }
+      // 'SLOW_DOWN' is a throttle instruction, not a credential. Treating any
+      // truthy value as a token would announce "mind granted" without ever
+      // saving one, hide the panel holding the code the visitor is still
+      // typing, and end the poll for good.
+      if (tok === 'SLOW_DOWN') {
+        interval = (NexusAuth.pendingInterval ? NexusAuth.pendingInterval() : (interval || 5) + 5);
+        setTimeout(tick, interval * 1000);
+        return;
+      }
       if (tok) {
         $('signin').classList.remove('on'); mindState();
         note('mind granted — AI players can think on your Copilot seat');
         return;
       }
+      if (NexusAuth.pendingInterval) interval = NexusAuth.pendingInterval();
       setTimeout(tick, (interval || 5) * 1000);
     };
     setTimeout(tick, (interval || 5) * 1000);

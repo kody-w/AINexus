@@ -617,7 +617,14 @@
     // run a program: a list of steps, each a verb above
     async run(program, onStep) {
       const steps = (program && program.steps) || [];
-      api.stop();
+      // A nested run must not cancel its parent. mind() runs the move the model
+      // chose by calling run() again; with a bare stop()/_running=false pair that
+      // inner run ended the OUTER program on its way out, so a `minded` player
+      // froze silently after its first thought — and only once a mind had been
+      // granted, which is the moment the whole feature is supposed to start.
+      const nested = api._depth > 0;
+      if (!nested) api.stop();                 // a top-level run replaces the last one
+      api._depth = (api._depth || 0) + 1;
       api._running = true;
       do {
         for (const s of steps) {
@@ -659,12 +666,13 @@
           }
         }
       } while (api._running && program && program.loop);
-      api._running = false;
+      api._depth = Math.max(0, (api._depth || 1) - 1);
+      if (api._depth === 0) api._running = false;   // only the outermost run ends the run
       return 'done';
     },
 
-    stop() { api._running = false; return true; },
-    _running: false, _filming: false, _shot: null,
+    stop() { api._running = false; api._depth = 0; return true; },
+    _running: false, _depth: 0, _filming: false, _shot: null,
   };
 
   window.__autodrive = api;

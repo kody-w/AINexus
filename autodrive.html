@@ -84,13 +84,29 @@ function say(i, text, cls) {
   const t = tabs[i]; t && t.journal.push({ at: Date.now(), kind: cls === 'e' ? 'error' : 'log', text });
 }
 
+// The driver announces "ready" as soon as it has hands, which is often BEFORE
+// boot gets around to waiting for it. Waiting for an announcement that already
+// happened is a wait that never ends, so the arrival is REMEMBERED and a late
+// waiter is answered immediately.
+const armedResolvers = new Map();      // frame index -> resolve fn, while waiting
+const armedAlready = new Set();        // frames that already announced
+function armSignal(i) {
+  if (armedAlready.has(i)) return Promise.resolve(true);
+  return new Promise(res => armedResolvers.set(i, res));
+}
+
 window.addEventListener('message', ev => {
   // only our own frames, only shapes we know — this handler NEVER evaluates anything
   const d = ev.data; if (!d || !d.__autodrive) return;
   const i = tabs.findIndex(t => t && t.frame && t.frame.contentWindow === ev.source);
   if (i < 0) return;
   if (d.__autodrive === 'console') say(i, d.text, d.level === 'error' ? 'e' : d.level === 'warn' ? 'w' : '');
-  if (d.__autodrive === 'ready') { $('st' + i).textContent = 'hands ready'; }
+  if (d.__autodrive === 'ready') {
+    $('st' + i).textContent = 'hands ready';
+    armedAlready.add(i);
+    const done = armedResolvers.get(i);
+    if (done) { armedResolvers.delete(i); done(true); }   // wakes boot without a timer
+  }
   if (d.__autodrive === 'vision' && d.shot) {
     const eye = $('eye' + i); const first = eye.querySelector('.none'); first && first.remove();
     const img = new Image(); img.src = d.shot.uri; img.title = d.shot.at + (d.shot.blank ? ' — BLANK' : '');
@@ -124,6 +140,7 @@ function step(i, what) { try { say(i, '· ' + what, 'd'); } catch (e) {} }
 async function boot() {
   document.querySelectorAll('.tab').forEach(e => e.remove());
   tabs.length = 0; room = null;
+  armedAlready.clear(); armedResolvers.clear();
   const n = Math.max(1, Math.min(6, +$('n').value || 1));
   const world = $('world').value, progName = $('prog').value, budget = +$('budget').value || 40;
   let loaded;
@@ -164,7 +181,14 @@ async function boot() {
     // the injected script loads asynchronously — calling into hands that do not exist yet
     // is how a player looks "ready" and never moves
     step(i, 'waiting for the driver to arm');
-    const armed = await waitFor(() => frame.contentWindow.__autodrive, 15000);
+    // Race the announcement against the poll: whichever arrives first. In a
+    // visible tab the poll usually wins; in a background tab it never runs at
+    // all and the message is the only thing that gets through.
+    const armed = await Promise.race([
+      armSignal(i),
+      waitFor(() => frame.contentWindow.__autodrive, 20000),
+    ]);
+    armedResolvers.delete(i);
     step(i, armed ? 'driver armed' : 'driver did NOT arm');
     if (!armed) { say(i, 'driver never armed', 'e'); $('st' + i).textContent = 'no hands'; continue; }
     try { frame.contentWindow.NEXUS_PERSONA = persona; } catch (e) {}
@@ -208,13 +232,27 @@ function waitFor(test, ms) {
   });
 }
 
+// Same throttling hazard as the arm wait: this polls, so a background tab can
+// leave it hanging past its own timeout. The deadline is therefore also checked
+// whenever the tab becomes visible again, so returning to the tab unsticks it.
 function waitForRoom(frame, i) {
   return new Promise(res => {
     const t0 = Date.now();
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; clearInterval(t);
+                            document.removeEventListener('visibilitychange', onVis); res(v); };
+    const onVis = () => {
+      try {
+        const mp = frame.contentWindow.worldNavigator && frame.contentWindow.worldNavigator.multiplayer;
+        if (mp && mp.roomId && mp.roomSecret) finish({ id: mp.roomId, secret: mp.roomSecret });
+        else if (Date.now() - t0 > 30000) { say(i, 'no room after 30s — playing alone', 'w'); finish(null); }
+      } catch (e) {}
+    };
+    document.addEventListener('visibilitychange', onVis);
     const t = setInterval(() => {
       const mp = frame.contentWindow.worldNavigator && frame.contentWindow.worldNavigator.multiplayer;
-      if (mp && mp.roomId && mp.roomSecret) { clearInterval(t); res({ id: mp.roomId, secret: mp.roomSecret }); }
-      else if (Date.now() - t0 > 30000) { clearInterval(t); say(i, 'no room after 30s — playing alone', 'w'); res(null); }
+      if (mp && mp.roomId && mp.roomSecret) finish({ id: mp.roomId, secret: mp.roomSecret });
+      else if (Date.now() - t0 > 30000) { say(i, 'no room after 30s — playing alone', 'w'); finish(null); }
     }, 400);
   });
 }
