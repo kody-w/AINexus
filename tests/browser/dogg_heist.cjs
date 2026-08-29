@@ -6,6 +6,7 @@
 const { createRequire } = require('module');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const localRequire = (() => {
   for (const base of [
@@ -130,6 +131,437 @@ function canonicalProjection(value) {
   return project(value);
 }
 
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function walkJson(value, visit, trail = []) {
+  visit(value, trail);
+  if (!value || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    walkJson(child, visit, trail.concat(Array.isArray(value) ? Number(key) : key));
+  }
+}
+
+function valueAt(root, trail) {
+  let value = root;
+  for (const key of trail) {
+    if (value == null) return undefined;
+    value = value[key];
+  }
+  return value;
+}
+
+function parentAt(root, trail) {
+  return valueAt(root, trail.slice(0, -1));
+}
+
+function canonicalSha256(value) {
+  return crypto.createHash('sha256').update(stable(value), 'utf8').digest('hex');
+}
+
+function hashBody(value) {
+  const match = String(value || '').match(/^(sha256:)?([0-9a-f]{64})$/i);
+  return match ? { prefix: match[1] || '', hex: match[2].toLowerCase() } : null;
+}
+
+function checksumMaterial(root, convention) {
+  if (convention.scope === 'sibling') return cloneJson(valueAt(root, convention.scopePath));
+  if (convention.scope === 'parent') {
+    const parent = cloneJson(valueAt(root, convention.scopePath));
+    delete parent[convention.field];
+    return parent;
+  }
+  const copy = cloneJson(root);
+  delete parentAt(copy, convention.path)[convention.field];
+  return copy;
+}
+
+function findChecksumConvention(root) {
+  const candidates = [];
+  walkJson(root, (value, trail) => {
+    if (!trail.length || typeof value !== 'string') return;
+    const field = String(trail[trail.length - 1]);
+    const parsed = hashBody(value);
+    if (!parsed || !/(checksum|sha256|digest|integrity)/i.test(field)) return;
+    const parentPath = trail.slice(0, -1);
+    const parent = valueAt(root, parentPath);
+    const scopes = [
+      { scope: 'root', scopePath: [], score: 30 - trail.length },
+      { scope: 'parent', scopePath: parentPath, score: 20 - trail.length }
+    ];
+    if (parent && typeof parent === 'object') {
+      for (const sibling of ['payload', 'data', 'state', 'export', 'content', 'manifest']) {
+        if (parent[sibling] && typeof parent[sibling] === 'object') {
+          scopes.push({
+            scope: 'sibling',
+            scopePath: parentPath.concat(sibling),
+            score: 10 - trail.length
+          });
+        }
+      }
+    }
+    for (const scope of scopes) {
+      const convention = Object.assign({
+        path: trail,
+        field,
+        prefix: parsed.prefix
+      }, scope);
+      let material;
+      try {
+        material = checksumMaterial(root, convention);
+      } catch (error) {
+        continue;
+      }
+      if (canonicalSha256(material) === parsed.hex) candidates.push(convention);
+    }
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  requireMeasurement(candidates.length > 0,
+    'the export outer checksum convention from its own canonical JSON/SHA-256');
+  return candidates[0];
+}
+
+function rewriteChecksum(root, convention) {
+  const material = checksumMaterial(root, convention);
+  parentAt(root, convention.path)[convention.field] =
+    convention.prefix + canonicalSha256(material);
+  const rewritten = hashBody(valueAt(root, convention.path));
+  requireMeasurement(rewritten &&
+    rewritten.hex === canonicalSha256(checksumMaterial(root, convention)),
+  'a correctly recomputed canonical outer checksum');
+}
+
+function invalidRoleImport(json) {
+  const parsed = JSON.parse(json);
+  const convention = findChecksumConvention(parsed);
+  const roles = [];
+  walkJson(parsed, (value, trail) => {
+    if (!trail.length || typeof value !== 'string') return;
+    const field = String(trail[trail.length - 1]);
+    const joined = trail.join('.');
+    if (/^(role|agentRole)$/i.test(field) &&
+        /(agents|crew|operatives|players|doggs|dogs)/i.test(joined)) {
+      const coveredPath = convention.scope === 'root' ? [] : convention.scopePath;
+      const covered = coveredPath.every((part, index) => trail[index] === part);
+      roles.push({
+        trail,
+        score: (covered ? 50 : 0) + (/frames|history|chain/i.test(joined) ? 0 : 20) - trail.length
+      });
+    }
+  });
+  roles.sort((a, b) => b.score - a.score);
+  requireMeasurement(roles.length > 0, 'an exported agent role');
+  const selected = roles[0];
+  parentAt(parsed, selected.trail)[selected.trail[selected.trail.length - 1]] =
+    '__INVALID_DOGG_ROLE__';
+  rewriteChecksum(parsed, convention);
+  return {
+    json: JSON.stringify(parsed),
+    rolePath: selected.trail.join('.'),
+    checksumPath: convention.path.join('.'),
+    checksumScope: convention.scope
+  };
+}
+
+function oversizedImport(json) {
+  const parsed = JSON.parse(json);
+  const convention = findChecksumConvention(parsed);
+  const targetBytes = 4 * 1024 * 1024 + 64 * 1024;
+  parsed.importPadding = 'x'.repeat(Math.max(1, targetBytes - Buffer.byteLength(json, 'utf8')));
+  rewriteChecksum(parsed, convention);
+  let output = JSON.stringify(parsed);
+  if (Buffer.byteLength(output, 'utf8') <= 4 * 1024 * 1024) {
+    parsed.importPadding += 'x'.repeat(128 * 1024);
+    rewriteChecksum(parsed, convention);
+    output = JSON.stringify(parsed);
+  }
+  requireMeasurement(Buffer.byteLength(output, 'utf8') > 4 * 1024 * 1024,
+    'a bounded import payload just over 4 MiB');
+  return {
+    json: output,
+    bytes: Buffer.byteLength(output, 'utf8'),
+    checksumPath: convention.path.join('.')
+  };
+}
+
+function findNamedValue(root, names, maxDepth = 8) {
+  const wanted = new Set(names.map(name => name.toLowerCase()));
+  const queue = [{ value: root, trail: [], depth: 0 }];
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current.value || typeof current.value !== 'object' || current.depth > maxDepth) continue;
+    for (const [key, value] of Object.entries(current.value)) {
+      const trail = current.trail.concat(key);
+      if (wanted.has(key.toLowerCase())) return { value, trail };
+      if (value && typeof value === 'object') {
+        queue.push({ value, trail, depth: current.depth + 1 });
+      }
+    }
+  }
+  return null;
+}
+
+function coordinateOf(value) {
+  if (Array.isArray(value) && value.length >= 2 &&
+      Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+    return { x: Number(value[0]), y: Number(value[1]) };
+  }
+  if (typeof value === 'string') {
+    const match = value.match(/(-?\d+)\s*[,/:]\s*(-?\d+)/);
+    if (match) return { x: Number(match[1]), y: Number(match[2]) };
+  }
+  if (!value || typeof value !== 'object') return null;
+  const x = value.x ?? value.col ?? value.column ?? value.cx;
+  const y = value.y ?? value.row ?? value.cy;
+  if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) {
+    return { x: Number(x), y: Number(y) };
+  }
+  for (const key of ['position', 'pos', 'location', 'cell', 'tile', 'at', 'coordinate']) {
+    const nested = coordinateOf(value[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function agentNamed(snapshot, name) {
+  const wanted = new RegExp(name, 'i');
+  return snapshot.agents.find(agent => wanted.test([
+    agent.id,
+    agent.state && agent.state.name,
+    agent.state && agent.state.callsign,
+    agent.state && agent.state.label,
+    agent.state && agent.state.role
+  ].filter(Boolean).join(' ')));
+}
+
+function outcomeOf(state) {
+  const candidates = [];
+  walkJson(state, (value, trail) => {
+    if (!trail.length) return;
+    const key = String(trail[trail.length - 1]);
+    if (/^(outcome|gameOutcome|missionOutcome)$/i.test(key) && value == null) {
+      candidates.push({ value: null, text: 'null', score: 30, trail });
+      return;
+    }
+    if (value == null || typeof value === 'object') return;
+    if (/^(won|lost|complete|completed|gameOver|ended)$/i.test(key) && value === true) {
+      candidates.push({ value: key, text: key, score: 25, trail });
+      return;
+    }
+    if (!/^(outcome|result|gameOutcome|missionOutcome|missionStatus|phase|status)$/i.test(key)) return;
+    const context = trail.slice(0, -1).join('.');
+    if (/^(phase|status)$/i.test(key) && trail.length > 3 &&
+        !/(game|mission|objective|heist|simulation)/i.test(context)) return;
+    const text = String(value);
+    const score = /\b(win|won|victory|success|lose|lost|loss|failure|failed|defeat)\b/i.test(text) ?
+      20 : /(game|mission|objective|heist|simulation)/i.test(context) ? 5 : 1;
+    if (score === 0) return;
+    candidates.push({ value, text, score, trail });
+  });
+  candidates.sort((a, b) => b.score - a.score || a.trail.length - b.trail.length);
+  return candidates.length ? candidates[0].value : undefined;
+}
+
+function isTerminalOutcome(value) {
+  return /\b(win|won|victory|success|lose|lost|loss|failure|failed|defeat|complete|completed|gameover|ended)\b/i
+    .test(String(value ?? ''));
+}
+
+function objectiveOf(state) {
+  const found = findNamedValue(state, [
+    'objective', 'objectives', 'missionObjective', 'mission', 'goal', 'goals'
+  ]);
+  return found ? found.value : undefined;
+}
+
+function agentsOf(state) {
+  const found = findNamedValue(state, ['agents', 'crew', 'operatives', 'players', 'doggs', 'dogs']);
+  return found ? found.value : undefined;
+}
+
+function povsOf(state) {
+  const found = findNamedValue(state, [
+    'povs', 'perceptions', 'agentViews', 'views', 'observations'
+  ]);
+  if (found) return found.value;
+  const agents = agentsOf(state);
+  const entries = Array.isArray(agents) ? agents : Object.values(agents || {});
+  if (!entries.length) return undefined;
+  const derived = entries.map(agent => agent &&
+    (agent.pov || agent.perception || agent.view || agent.visibleCells || agent.knownCells));
+  return derived.every(value => value !== undefined) ? derived : undefined;
+}
+
+function tickOf(state) {
+  for (const key of ['tick', 'currentTick', 'viewTick', 'selectedTick']) {
+    if (Number.isFinite(Number(state && state[key]))) return Number(state[key]);
+  }
+  const found = findNamedValue(state, ['tick', 'currentTick', 'viewTick', 'selectedTick'], 4);
+  return found && Number.isFinite(Number(found.value)) ? Number(found.value) : undefined;
+}
+
+function historicalProjection(state) {
+  return {
+    tick: tickOf(state),
+    outcome: outcomeOf(state),
+    agents: agentsOf(state),
+    objective: objectiveOf(state),
+    povs: povsOf(state)
+  };
+}
+
+function frameState(frame) {
+  const candidates = [
+    frame && frame.state,
+    frame && frame.snapshot,
+    frame && frame.payload && frame.payload.state,
+    frame && frame.payload && frame.payload.snapshot,
+    frame && frame.payload && frame.payload.world,
+    frame && frame.payload,
+    frame
+  ].filter(value => value && typeof value === 'object');
+  for (const candidate of candidates) {
+    const projection = historicalProjection(candidate);
+    if (Number.isFinite(projection.tick) && projection.agents !== undefined &&
+        projection.objective !== undefined && projection.povs !== undefined) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function exportedFrames(exported) {
+  const candidates = [];
+  walkJson(exported, (value, trail) => {
+    if (!Array.isArray(value) || value.length < 2) return;
+    const key = String(trail[trail.length - 1] || '');
+    if (!/(frames|history|chain|timeline)/i.test(key) &&
+        !value.some(frame => frame && typeof frame === 'object' &&
+          (frame.tick !== undefined || frame.seq !== undefined || frame.payload))) return;
+    const usable = value.filter(frame => frameState(frame)).length;
+    if (usable) candidates.push({ frames: value, usable, trail, score: usable * 10 - trail.length });
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  requireMeasurement(candidates.length > 0, 'exported historical frames carrying inspected state');
+  return candidates[0];
+}
+
+function liveMetadataOf(state) {
+  const heads = ['liveHead', 'liveHeadHash', 'headLive'];
+  for (const key of heads) {
+    if (typeof state?.[key] === 'string') return { head: state[key], source: key };
+  }
+  for (const holderName of ['live', 'liveHead', 'timeline', 'metadata', 'meta']) {
+    const holder = state && state[holderName];
+    if (!holder || typeof holder !== 'object') continue;
+    const explicitlyLiveHolder = holderName === 'live' || holderName === 'liveHead';
+    const head = explicitlyLiveHolder ?
+      (holder.headHash || holder.head || holder.liveHeadHash || holder.liveHead) :
+      (holder.liveHeadHash || holder.liveHead);
+    const tick = holder.tick ?? holder.liveTick;
+    const frameCount = holder.frameCount ?? holder.frames;
+    if (typeof head === 'string') {
+      return {
+        head,
+        tick: Number.isFinite(Number(tick)) ? Number(tick) : undefined,
+        frameCount: Number.isFinite(Number(frameCount)) ? Number(frameCount) :
+          Array.isArray(frameCount) ? frameCount.length : undefined,
+        source: holderName
+      };
+    }
+  }
+  return null;
+}
+
+function policyState(snapshot) {
+  const state = snapshot.state;
+  const objectiveText = `${snapshot.dom?.['objective-value'] || ''} ${stable(objectiveOf(state))}`;
+  const requiredCandidates = [];
+  walkJson(state, (value, trail) => {
+    if (!trail.length || !Number.isFinite(Number(value))) return;
+    const key = String(trail[trail.length - 1]);
+    const context = trail.slice(0, -1).join('.');
+    if (/(requiredTerminals|terminalsRequired|requiredHacks|terminalTarget|hackTarget)/i.test(key) ||
+        (key.toLowerCase() === 'required' && /terminal|objective|hack/i.test(context))) {
+      requiredCandidates.push({ value: Number(value), score: 20 - trail.length });
+    }
+  });
+  requiredCandidates.sort((a, b) => b.score - a.score);
+  let required = requiredCandidates[0]?.value;
+  if (required === undefined) {
+    const match = objectiveText.match(/(?:hack|required|need)[^\d]{0,30}(\d+)[^\n]{0,30}terminal/i) ||
+      objectiveText.match(/terminal[^\d]{0,20}(\d+)\s*(?:required|needed)/i);
+    if (match) required = Number(match[1]);
+  }
+
+  const terminals = [];
+  let core;
+  walkJson(state, (value, trail) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    if (/(frames|history|chain|ledger|past|replay)/i.test(trail.join('.'))) return;
+    const identity = [
+      value.id, value.name, value.type, value.kind, value.role, value.label,
+      trail.join(' ')
+    ].filter(Boolean).join(' ');
+    const position = coordinateOf(value);
+    if (/\bterminals?\b/i.test(identity) && position &&
+        ('hacked' in value || 'isHacked' in value || 'status' in value || 'state' in value ||
+          'complete' in value || 'activated' in value)) {
+      const status = String(value.status || value.state || '');
+      terminals.push({
+        id: String(value.id || value.name || value.label || `${position.x},${position.y}`),
+        position,
+        hacked: value.hacked === true || value.isHacked === true ||
+          value.complete === true || value.activated === true ||
+          /\b(hacked|complete|activated|owned)\b/i.test(status)
+      });
+    }
+    if (!core && /\b(core|vault core|data core)\b/i.test(identity) && position) {
+      const status = String(value.status || value.state || '');
+      core = {
+        id: String(value.id || value.name || 'core'),
+        position,
+        complete: value.hacked === true || value.complete === true || value.activated === true ||
+          value.reached === true || /\b(hacked|complete|activated|reached|secured|stolen)\b/i.test(status)
+      };
+    }
+  });
+  const terminalMap = new Map();
+  for (const terminal of terminals) {
+    const key = `${terminal.position.x},${terminal.position.y}`;
+    const existing = terminalMap.get(key);
+    terminalMap.set(key, existing ?
+      Object.assign({}, existing, { hacked: existing.hacked || terminal.hacked }) : terminal);
+  }
+  const uniqueTerminals = [...terminalMap.values()];
+  const agentIntent = snapshot.agents.map(agent => {
+    const intentValues = [];
+    walkJson(agent.state, (value, trail) => {
+      if (!trail.length || value == null) return;
+      const key = String(trail[trail.length - 1]);
+      if (/^(intent|action|target|goal|plan|mode|doing|destination)$/i.test(key) &&
+          (typeof value !== 'object' || value)) {
+        intentValues.push(typeof value === 'string' ? value : stable(value));
+      }
+    });
+    return {
+      id: agent.id,
+      text: intentValues.join(' '),
+      position: coordinateOf(agent.state)
+    };
+  });
+  return {
+    required,
+    terminals: uniqueTerminals,
+    hacked: uniqueTerminals.filter(terminal => terminal.hacked).length,
+    untouched: uniqueTerminals.filter(terminal => !terminal.hacked),
+    core,
+    agentIntent,
+    outcome: outcomeOf(state)
+  };
+}
+
 function mutateExportedHash(json) {
   const parsed = JSON.parse(json);
   const candidates = [];
@@ -216,6 +648,226 @@ async function serve(context) {
 
 function watchPage(page, label) {
   page.on('pageerror', error => pageErrors.push(`${label}: ${error.message}`));
+}
+
+async function navigateHeist(context, label) {
+  const page = await context.newPage();
+  watchPage(page, label);
+  const response = await page.goto(PAGE_URL, { timeout: 20000, waitUntil: 'domcontentloaded' });
+  requireMeasurement(response && response.status() === 200, `${label} HTTP 200`);
+  await page.waitForFunction(() => {
+    const visible = element => {
+      if (!element) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    return Boolean(window.__doggHeist &&
+      (window.__doggHeist.ready === true ||
+        [...document.querySelectorAll('dialog, [role="dialog"], [aria-modal="true"]')].some(visible)));
+  }, null, { timeout: 12000 });
+  return page;
+}
+
+async function markIntro(page) {
+  return page.evaluate(() => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && !element.hasAttribute('inert') &&
+        style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    document.querySelectorAll('[data-dogg-test-intro]').forEach(element =>
+      element.removeAttribute('data-dogg-test-intro'));
+    const dialogs = [...document.querySelectorAll(
+      'dialog, [role="dialog"], [aria-modal="true"]'
+    )].filter(visible).map(element => {
+      const text = String(element.textContent || '').replace(/\s+/g, ' ').trim();
+      const identity = `${element.id} ${element.className} ${text}`;
+      const score = (/intro|brief|mission|operation|heist/i.test(identity) ? 20 : 0) +
+        (/objective|agent|terminal|core/i.test(text) ? 10 : 0) +
+        (element.matches('dialog[open], [aria-modal="true"]') ? 5 : 0);
+      return { element, text, score };
+    }).sort((a, b) => b.score - a.score);
+    if (!dialogs.length) return { found: false, ready: window.__doggHeist?.ready };
+    const chosen = dialogs[0];
+    chosen.element.setAttribute('data-dogg-test-intro', 'true');
+    return {
+      found: true,
+      ready: window.__doggHeist?.ready,
+      text: chosen.text.slice(0, 5000),
+      id: chosen.element.id,
+      score: chosen.score
+    };
+  });
+}
+
+async function dismissIntro(page) {
+  const action = await page.evaluate(() => {
+    const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+    if (!dialog) return { found: false, label: '' };
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && !element.disabled &&
+        style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const controls = [...dialog.querySelectorAll(
+      'button, [role="button"], input[type="button"], input[type="submit"]'
+    )].filter(visible);
+    const ranked = controls.map(control => {
+      const label = [
+        control.id,
+        control.getAttribute('aria-label'),
+        control.getAttribute('title'),
+        control.textContent,
+        control.value
+      ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+      const score = /\b(begin|start|enter|continue|deploy|accept|ready|play|dismiss|understood|briefing)\b/i.test(label) ?
+        20 : /\b(close|ok|okay|done)\b/i.test(label) ? 10 : 0;
+      return { control, label, score };
+    }).sort((a, b) => b.score - a.score);
+    if (!ranked.length || ranked[0].score === 0) return { found: false, label: '' };
+    ranked[0].control.setAttribute('data-dogg-test-intro-dismiss', 'true');
+    return { found: true, label: ranked[0].label };
+  });
+  requireMeasurement(action.found, 'a visible semantic intro dismissal control');
+  await page.locator('[data-dogg-test-intro-dismiss="true"]').click();
+  return action.label;
+}
+
+async function finishHeistBoot(page, label, viewportCheck = false) {
+  const ready = await page.evaluate(() => window.__doggHeist?.ready === true);
+  if (!ready) {
+    const intro = await markIntro(page);
+    requireMeasurement(intro.found, `${label} intro before readiness`);
+    await dismissIntro(page);
+  }
+  await page.waitForFunction(methods => {
+    const api = window.__doggHeist;
+    return Boolean(api && api.ready === true &&
+      methods.every(method => typeof api[method] === 'function'));
+  }, REQUIRED_METHODS, { timeout: 12000 });
+  await installInspector(page);
+  const state = await inspect(page);
+  requireMeasurement(Number.isFinite(state.tick), `${label} logical tick`);
+  requireMeasurement(Number.isFinite(state.frameCount), `${label} frame count`);
+  if (viewportCheck) await page.evaluate(() => scrollTo(0, 0));
+  return page;
+}
+
+async function auditIntroGate(page) {
+  const intro = await markIntro(page);
+  requireMeasurement(intro.found, 'the cold briefing modal');
+  const before = await page.evaluate(async () => {
+    const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+    const api = window.__doggHeist;
+    let state = {};
+    try {
+      state = api && typeof api.state === 'function' ? await Promise.resolve(api.state()) : {};
+    } catch (error) {}
+    const number = value => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      const match = String(value ?? '').match(/-?\d+/);
+      return match ? Number(match[0]) : undefined;
+    };
+    const tick = number(state && (state.tick ?? state.currentTick ?? state.liveTick)) ??
+      number(document.getElementById('tick-value')?.textContent);
+    const frameCount = number(state && (state.frameCount ?? state.framesCount)) ??
+      (Array.isArray(state && state.frames) ? state.frames.length : undefined);
+    const hadTabindex = dialog.hasAttribute('tabindex');
+    const tabindex = dialog.getAttribute('tabindex');
+    if (!hadTabindex) dialog.setAttribute('tabindex', '-1');
+    dialog.focus();
+    const play = document.getElementById('play-toggle');
+    return {
+      ready: api?.ready,
+      tick,
+      frameCount,
+      playing: Boolean(state && (state.playing ?? state.running)),
+      playControl: [
+        play?.getAttribute('aria-pressed'),
+        play?.getAttribute('aria-label'),
+        play?.textContent
+      ].join('|'),
+      scrollY,
+      scrollable: document.documentElement.scrollHeight > innerHeight + 10,
+      hadTabindex,
+      tabindex
+    };
+  });
+  requireMeasurement(Number.isFinite(before.tick), 'the pre-ready logical tick');
+
+  const trapped = [];
+  for (let index = 0; index < 6; index++) {
+    await page.keyboard.press('Tab');
+    trapped.push(await page.evaluate(() => {
+      const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+      return Boolean(dialog && dialog.contains(document.activeElement));
+    }));
+  }
+  for (let index = 0; index < 3; index++) {
+    await page.keyboard.press('Shift+Tab');
+    trapped.push(await page.evaluate(() => {
+      const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+      return Boolean(dialog && dialog.contains(document.activeElement));
+    }));
+  }
+
+  await page.evaluate(() => document.querySelector('[data-dogg-test-intro="true"]')?.focus());
+  await page.keyboard.press('.');
+  await page.keyboard.press('Space');
+  await page.mouse.wheel(0, 700);
+  await sleep(350);
+  const after = await page.evaluate(async beforeTabindex => {
+    const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+    const api = window.__doggHeist;
+    let state = {};
+    try {
+      state = await Promise.resolve(api.state());
+    } catch (error) {}
+    const number = value => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      const match = String(value ?? '').match(/-?\d+/);
+      return match ? Number(match[0]) : undefined;
+    };
+    const tick = number(state && (state.tick ?? state.currentTick ?? state.liveTick)) ??
+      number(document.getElementById('tick-value')?.textContent);
+    const frameCount = number(state && (state.frameCount ?? state.framesCount)) ??
+      (Array.isArray(state && state.frames) ? state.frames.length : undefined);
+    if (dialog && !beforeTabindex.hadTabindex) dialog.removeAttribute('tabindex');
+    if (dialog && beforeTabindex.hadTabindex) {
+      dialog.setAttribute('tabindex', beforeTabindex.tabindex);
+    }
+    const play = document.getElementById('play-toggle');
+    return {
+      ready: api.ready,
+      tick,
+      frameCount,
+      playing: Boolean(state && (state.playing ?? state.running)),
+      playControl: [
+        play?.getAttribute('aria-pressed'),
+        play?.getAttribute('aria-label'),
+        play?.textContent
+      ].join('|'),
+      scrollY,
+      activeInside: Boolean(dialog && dialog.contains(document.activeElement))
+    };
+  }, { hadTabindex: before.hadTabindex, tabindex: before.tabindex });
+
+  return {
+    intro,
+    before,
+    after,
+    focusTrapped: trapped.every(Boolean),
+    activationBlocked: before.tick === after.tick &&
+      (before.frameCount === undefined || before.frameCount === after.frameCount) &&
+      before.playing === after.playing && before.playControl === after.playControl,
+    scrollBlocked: before.scrollY === after.scrollY
+  };
 }
 
 async function installInspector(page) {
@@ -379,21 +1031,8 @@ async function installInspector(page) {
 }
 
 async function openHeist(context, label, viewportCheck = false) {
-  const page = await context.newPage();
-  watchPage(page, label);
-  const response = await page.goto(PAGE_URL, { timeout: 20000, waitUntil: 'domcontentloaded' });
-  requireMeasurement(response && response.status() === 200, `${label} HTTP 200`);
-  await page.waitForFunction(methods => {
-    const api = window.__doggHeist;
-    return Boolean(api && api.ready === true &&
-      methods.every(method => typeof api[method] === 'function'));
-  }, REQUIRED_METHODS, { timeout: 12000 });
-  await installInspector(page);
-  const state = await inspect(page);
-  requireMeasurement(Number.isFinite(state.tick), `${label} logical tick`);
-  requireMeasurement(Number.isFinite(state.frameCount), `${label} frame count`);
-  if (viewportCheck) await page.evaluate(() => scrollTo(0, 0));
-  return page;
+  const page = await navigateHeist(context, label);
+  return finishHeistBoot(page, label, viewportCheck);
 }
 
 async function inspect(page, includeExport = true) {
@@ -675,6 +1314,423 @@ async function inspectPovs(page) {
   });
 }
 
+async function cellEvidence(page, position) {
+  return page.evaluate(target => {
+    const board = document.getElementById('game-board');
+    if (!board) return { found: false, text: '', warning: false, cipher: false };
+    const described = element => {
+      const ids = String(element.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+      return ids.map(id => document.getElementById(id)?.textContent || '').join(' ');
+    };
+    const coordinate = element => {
+      const x = element.dataset.x ?? element.dataset.col ?? element.dataset.column;
+      const y = element.dataset.y ?? element.dataset.row;
+      if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) {
+        return { x: Number(x), y: Number(y) };
+      }
+      for (const value of [
+        element.dataset.cell,
+        element.dataset.coordinate,
+        element.getAttribute('aria-label'),
+        element.getAttribute('title')
+      ]) {
+        const match = String(value || '').match(/(-?\d+)\s*[,/:]\s*(-?\d+)/);
+        if (match) return { x: Number(match[1]), y: Number(match[2]) };
+      }
+      return null;
+    };
+    const cells = [...board.querySelectorAll(
+      '[data-cell], [data-coordinate], [data-x][data-y], [data-col][data-row], [role="gridcell"]'
+    )];
+    const exact = cells.filter(element => {
+      const at = coordinate(element);
+      return at && at.x === target.x && at.y === target.y;
+    });
+    const sources = exact.length ? exact : [board];
+    const text = sources.map(element => {
+      const style = getComputedStyle(element);
+      return [
+        element.getAttribute('aria-label'),
+        element.getAttribute('aria-description'),
+        described(element),
+        element.getAttribute('title'),
+        element.textContent,
+        element.className,
+        JSON.stringify(element.dataset),
+        style.color,
+        style.backgroundColor,
+        style.borderColor,
+        style.outlineColor,
+        style.boxShadow
+      ].filter(Boolean).join(' ');
+    }).join(' ').replace(/\s+/g, ' ').trim();
+    const colors = [...text.matchAll(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/g)]
+      .map(match => match.slice(1, 4).map(Number));
+    const warningColor = colors.some(([red, green, blue]) =>
+      (red >= 160 && red > green * 1.15 && red > blue * 1.25) ||
+      (red >= 170 && green >= 90 && green < red && blue < green * 0.8));
+    const coordinateMentioned = new RegExp(
+      `(?:${target.x}\\s*[,/:]\\s*${target.y}|(?:row|y)\\s*${target.y}.*(?:col|x)\\s*${target.x})`,
+      'i'
+    ).test(text);
+    return {
+      found: exact.length > 0 || coordinateMentioned,
+      text,
+      warning: /\b(amber|danger|threat|warning|warned|unsafe|risk|guard|camera|laser|alarm|marked)\b/i.test(text) ||
+        warningColor,
+      cipher: /\bcipher\b/i.test(text)
+    };
+  }, position);
+}
+
+async function readBoardSemantic(page) {
+  return page.locator('#game-board').evaluate(board => {
+    const referenced = attribute => String(board.getAttribute(attribute) || '')
+      .split(/\s+/).filter(Boolean)
+      .map(id => document.getElementById(id)?.textContent || '').join(' ');
+    const activeId = board.getAttribute('aria-activedescendant');
+    const active = activeId && document.getElementById(activeId);
+    return {
+      text: [
+        board.getAttribute('aria-label'),
+        board.getAttribute('aria-description'),
+        referenced('aria-labelledby'),
+        referenced('aria-describedby'),
+        active && active.getAttribute('aria-label'),
+        active && active.getAttribute('aria-description'),
+        active && active.textContent,
+        board.getAttribute('data-cursor'),
+        board.getAttribute('data-coordinate')
+      ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+      activeId: activeId || ''
+    };
+  });
+}
+
+async function readPovSemanticLabels(page) {
+  return page.evaluate(() => {
+    const grid = document.getElementById('pov-grid');
+    if (!grid) return [];
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const selectors = ['[data-pov-agent]', '[data-agent-id]', '.pov-card', '.pov-panel', '[data-pov]'];
+    let panels = [];
+    for (const selector of selectors) {
+      const found = [...grid.querySelectorAll(selector)].filter(visible);
+      if (found.length === 4) {
+        panels = found;
+        break;
+      }
+    }
+    if (!panels.length) panels = [...grid.children].filter(visible);
+    const referenced = (element, attribute) => String(element.getAttribute(attribute) || '')
+      .split(/\s+/).filter(Boolean)
+      .map(id => document.getElementById(id)?.textContent || '').join(' ');
+    return panels.map(panel => [
+      panel.getAttribute('aria-label'),
+      panel.getAttribute('aria-description'),
+      referenced(panel, 'aria-labelledby'),
+      referenced(panel, 'aria-describedby'),
+      panel.getAttribute('title')
+    ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim());
+  });
+}
+
+async function measureMobileTargeting(page) {
+  return page.evaluate(async () => {
+    const state = await Promise.resolve(window.__doggHeist.state());
+    const board = document.getElementById('game-board');
+    if (!board) return { measurable: false };
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const dimensionCandidates = [];
+    const walk = (value, trail = [], depth = 0) => {
+      if (!value || typeof value !== 'object' || depth > 7) return;
+      if (Array.isArray(value) && value.length && value.every(row => Array.isArray(row))) {
+        dimensionCandidates.push({
+          cols: Math.max(...value.map(row => row.length)),
+          rows: value.length,
+          score: /facility|map|grid|board|layout/i.test(trail.join('.')) ? 20 : 1,
+          source: trail.join('.')
+        });
+      }
+      if (!Array.isArray(value)) {
+        const cols = Number(value.width ?? value.cols ?? value.columns);
+        const rows = Number(value.height ?? value.rows);
+        if (Number.isFinite(cols) && Number.isFinite(rows) && cols > 1 && rows > 1 &&
+            cols <= 200 && rows <= 200) {
+          dimensionCandidates.push({
+            cols,
+            rows,
+            score: /facility|map|grid|board|layout/i.test(trail.join('.')) ? 30 : 2,
+            source: trail.join('.')
+          });
+        }
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (child && typeof child === 'object') walk(child, trail.concat(key), depth + 1);
+      }
+    };
+    walk(state);
+    dimensionCandidates.sort((a, b) => b.score - a.score);
+    const dimensions = dimensionCandidates[0];
+    if (!dimensions) return { measurable: false };
+
+    const roots = [document.documentElement, document.body].filter(Boolean);
+    const originals = roots.map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    roots.forEach(element => element.style.setProperty('scroll-behavior', 'auto', 'important'));
+    board.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const cells = [...board.querySelectorAll(
+      '[data-cell], [data-coordinate], [data-x][data-y], [data-col][data-row], [role="gridcell"]'
+    )].filter(visible);
+    const cellSizes = cells.map(element => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height, element, rect };
+    }).filter(size => size.width > 0 && size.height > 0 &&
+      size.rect.right > 0 && size.rect.left < innerWidth &&
+      size.rect.bottom > 0 && size.rect.top < innerHeight);
+    const boardRect = board.getBoundingClientRect();
+    const visual = board.querySelector('canvas, svg, [role="grid"]') || board;
+    const visualRect = visual.getBoundingClientRect();
+    const contentWidth = Math.max(board.scrollWidth, visual.scrollWidth || 0, visualRect.width, boardRect.width);
+    const contentHeight = Math.max(board.scrollHeight, visual.scrollHeight || 0, visualRect.height, boardRect.height);
+    const calculatedScale = Math.min(
+      contentWidth / dimensions.cols,
+      contentHeight / dimensions.rows
+    );
+    const cellScales = cellSizes.map(size => Math.min(size.width, size.height))
+      .sort((a, b) => a - b);
+    const renderedCellScale = cellScales.length ?
+      cellScales[Math.floor(cellScales.length / 2)] : calculatedScale;
+
+    const targetingControls = [...document.querySelectorAll(
+      'button, [role="button"], [role="gridcell"], [aria-label], [data-action]'
+    )].filter(element => {
+      if (!visible(element) || element === board) return false;
+      const rect = element.getBoundingClientRect();
+      if (rect.right <= 0 || rect.left >= innerWidth || rect.bottom <= 0 || rect.top >= innerHeight) {
+        return false;
+      }
+      const semanticControl = element.matches('button, [role="button"], [role="gridcell"], [data-action]') ||
+        (element.hasAttribute('aria-label') && element.tabIndex >= 0);
+      if (!semanticControl || Math.max(rect.width, rect.height) > 180) return false;
+      const semantics = [
+        element.id, element.className, element.getAttribute('aria-label'),
+        element.getAttribute('title'), element.getAttribute('data-action'), element.textContent
+      ].filter(Boolean).join(' ');
+      return /\b(target|aim|cursor|cell|tile|move|pan|select|up|down|left|right)\b/i.test(semantics);
+    }).map(element => {
+      const rect = element.getBoundingClientRect();
+      return { element, rect, scale: Math.min(rect.width, rect.height) };
+    }).filter(control => control.scale >= 40);
+
+    let target;
+    const visibleCell = cellSizes.find(size =>
+      size.rect.left >= 0 && size.rect.right <= innerWidth &&
+      size.rect.top >= 0 && size.rect.bottom <= innerHeight);
+    if (renderedCellScale < 40 && targetingControls.length) {
+      const control = targetingControls[0];
+      target = {
+        x: control.rect.left + control.rect.width / 2,
+        y: control.rect.top + control.rect.height / 2,
+        kind: 'control',
+        size: control.scale
+      };
+    } else if (visibleCell) {
+      target = {
+        x: visibleCell.rect.left + visibleCell.rect.width / 2,
+        y: visibleCell.rect.top + visibleCell.rect.height / 2,
+        kind: 'cell',
+        size: Math.min(visibleCell.rect.width, visibleCell.rect.height)
+      };
+    } else if (boardRect.right > 0 && boardRect.left < innerWidth &&
+        boardRect.bottom > 0 && boardRect.top < innerHeight) {
+      const left = Math.max(0, boardRect.left);
+      const right = Math.min(innerWidth, boardRect.right);
+      const top = Math.max(0, boardRect.top);
+      const bottom = Math.min(innerHeight, boardRect.bottom);
+      target = { x: (left + right) / 2, y: (top + bottom) / 2, kind: 'board', size: calculatedScale };
+    } else if (targetingControls.length) {
+      const control = targetingControls[0];
+      target = {
+        x: control.rect.left + control.rect.width / 2,
+        y: control.rect.top + control.rect.height / 2,
+        kind: 'control',
+        size: control.scale
+      };
+    }
+    for (const original of originals) {
+      if (original.value) {
+        original.element.style.setProperty('scroll-behavior', original.value, original.priority);
+      } else {
+        original.element.style.removeProperty('scroll-behavior');
+      }
+    }
+    return {
+      measurable: true,
+      dimensions,
+      renderedCellScale,
+      accessibleTargetScale: targetingControls.length ?
+        Math.max(...targetingControls.map(control => control.scale)) : 0,
+      target,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth
+    };
+  });
+}
+
+async function measureContrast(page, mode, roles = []) {
+  return page.evaluate(({ mode, roles }) => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const colorCanvas = document.createElement('canvas');
+    colorCanvas.width = colorCanvas.height = 1;
+    const colorContext = colorCanvas.getContext('2d', { willReadFrequently: true });
+    const parse = value => {
+      const match = String(value || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/i);
+      if (match) {
+        return {
+          r: Number(match[1]),
+          g: Number(match[2]),
+          b: Number(match[3]),
+          a: match[4] === undefined ? 1 : Number(match[4])
+        };
+      }
+      if (!colorContext || !value) return null;
+      try {
+        colorContext.clearRect(0, 0, 1, 1);
+        colorContext.fillStyle = 'rgba(0, 0, 0, 0)';
+        colorContext.fillStyle = value;
+        colorContext.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = colorContext.getImageData(0, 0, 1, 1).data;
+        return { r, g, b, a: a / 255 };
+      } catch (error) {
+        return null;
+      }
+    };
+    const over = (front, back) => {
+      const alpha = front.a + back.a * (1 - front.a);
+      if (!alpha) return { r: 0, g: 0, b: 0, a: 0 };
+      return {
+        r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha,
+        g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha,
+        b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha,
+        a: alpha
+      };
+    };
+    const effectiveBackground = element => {
+      const chain = [];
+      for (let node = element; node; node = node.parentElement) chain.push(node);
+      let color = { r: 255, g: 255, b: 255, a: 1 };
+      for (const node of chain.reverse()) {
+        const next = parse(getComputedStyle(node).backgroundColor);
+        if (next && next.a > 0) color = over(next, color);
+      }
+      return color;
+    };
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 : Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+    };
+    const measurement = element => {
+      const style = getComputedStyle(element);
+      const background = effectiveBackground(element);
+      const parsedForeground = parse(style.color);
+      if (!parsedForeground) return null;
+      let opacity = 1;
+      for (let node = element; node; node = node.parentElement) {
+        opacity *= Number(getComputedStyle(node).opacity || 1);
+      }
+      const foreground = over(Object.assign({}, parsedForeground, {
+        a: parsedForeground.a * opacity
+      }), background);
+      const light = Math.max(luminance(foreground), luminance(background));
+      const dark = Math.min(luminance(foreground), luminance(background));
+      return {
+        ratio: (light + 0.05) / (dark + 0.05),
+        text: String(element.textContent || element.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 100),
+        fontSize: style.fontSize,
+        color: style.color,
+        background: `rgb(${Math.round(background.r)}, ${Math.round(background.g)}, ${Math.round(background.b)})`
+      };
+    };
+    const all = [...document.querySelectorAll('body *')].filter(visible);
+    const bodyStyle = getComputedStyle(document.body);
+    const rootStyle = getComputedStyle(document.documentElement);
+    const theme = [
+      bodyStyle.color, bodyStyle.backgroundColor,
+      rootStyle.color, rootStyle.backgroundColor
+    ].join('|');
+    if (mode === 'intro') {
+      const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+      if (!dialog) return { theme, intro: null };
+      const candidates = [...dialog.querySelectorAll(
+        '[class*="muted" i], [class*="subtitle" i], [class*="lede" i], [data-tone="muted"], small, p'
+      )].filter(element => visible(element) && String(element.textContent || '').trim().length >= 20)
+        .map(element => {
+          const identity = `${element.className} ${element.getAttribute('data-tone') || ''}`;
+          const score = /muted|subtitle|lede/i.test(identity) ? 20 :
+            parseFloat(getComputedStyle(element).fontSize) <= 16 ? 5 : 1;
+          return { element, score };
+        }).sort((a, b) => b.score - a.score);
+      return {
+        theme,
+        intro: candidates.length ? measurement(candidates[0].element) : null
+      };
+    }
+
+    const roleMeasurements = [];
+    for (const role of roles) {
+      const escaped = String(role).trim().toLowerCase();
+      const candidates = all.filter(element => {
+        const text = String(element.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return text === escaped || (text.includes(escaped) && text.length <= escaped.length + 20);
+      }).map(element => {
+        const identity = `${element.className} ${element.id} ${element.getAttribute('data-role') || ''}`;
+        return { element, score: /role/i.test(identity) ? 20 : 1 };
+      }).sort((a, b) => b.score - a.score);
+      if (candidates.length) roleMeasurements.push(measurement(candidates[0].element));
+    }
+    const statusCandidates = all.filter(element => {
+      const identity = [
+        element.id, element.className, element.getAttribute('data-status'),
+        element.getAttribute('aria-label'), element.textContent
+      ].filter(Boolean).join(' ');
+      return /\b(active|live|running|paused|ready)\b/i.test(identity) &&
+        /status|badge|pill|live/i.test(identity);
+    }).map(element => {
+      const identity = `${element.id} ${element.className}`;
+      return { element, score: /active|status-live|live-status/i.test(identity) ? 20 : 1 };
+    }).sort((a, b) => b.score - a.score);
+    return {
+      theme,
+      roles: roleMeasurements.filter(Boolean),
+      status: statusCandidates.length ? measurement(statusCandidates[0].element) : null
+    };
+  }, { mode, roles });
+}
+
 async function visibleHelp(page) {
   return page.evaluate(() => {
     const button = document.getElementById('help-button');
@@ -747,6 +1803,34 @@ async function clickVisibleHelpClose(page) {
   return close.semantics;
 }
 
+async function focusInsideVisibleHelp(page) {
+  return page.evaluate(() => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && !element.disabled &&
+        style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const surfaces = [...document.querySelectorAll(
+      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
+    )].filter(visible).filter(element =>
+      /\b(help|keyboard|controls?|terminals?|objective)\b/i.test(element.textContent || ''))
+      .sort((a, b) => {
+        const score = element => element.matches('dialog[open], [aria-modal="true"], [role="dialog"]') ?
+          20 : element.hasAttribute('popover') ? 10 : 0;
+        return score(b) - score(a);
+      });
+    const surface = surfaces[0];
+    if (!surface) return false;
+    const control = [...surface.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )].find(visible);
+    (control || surface).focus();
+    return surface.contains(document.activeElement);
+  });
+}
+
 async function deterministicRun(page, seed) {
   await api(page, 'pause');
   await api(page, 'restart', seed);
@@ -789,7 +1873,19 @@ async function runSuite() {
     acceptDownloads: true
   });
   await serve(primaryContext);
-  const page = await openHeist(primaryContext, 'primary cold boot');
+  const page = await navigateHeist(primaryContext, 'primary cold boot');
+  const introGate = await auditIntroGate(page);
+  const introDismissal = await dismissIntro(page);
+  await finishHeistBoot(page, 'primary cold boot');
+  const readyAfterIntro = await page.evaluate(() => window.__doggHeist.ready === true);
+  const postIntroScrollable = await page.evaluate(() =>
+    document.documentElement.scrollHeight > innerHeight + 10);
+  result('intro modal traps focus and gates the hidden runtime',
+    introGate.before.ready === false && introGate.after.ready === false &&
+      introGate.focusTrapped && introGate.activationBlocked && introGate.scrollBlocked &&
+      (introGate.before.scrollable || postIntroScrollable) &&
+      readyAfterIntro,
+    `${introDismissal}; focus trapped ${introGate.focusTrapped}; tick held ${introGate.before.tick}; scroll ${introGate.before.scrollY}`);
 
   const reach = await auditReachability(page);
   const coldContextDependent = new Set(['fork-button', 'step-button']);
@@ -960,10 +2056,99 @@ async function runSuite() {
     pov.panels.length === 4 && povRows.every(row => row.observable && row.partial) && eachDiffers,
     `universe ${pov.universe}; ${povRows.map(row => `${row.known}/${row.total}`).join(', ')}; ${new Set(povSignatures).size} signatures`);
 
+  await api(page, 'pause');
+  const boardStateBefore = await inspect(page, false);
+  await page.locator('#game-board').focus();
+  const boardSemanticBefore = await readBoardSemantic(page);
+  await page.keyboard.press('ArrowRight');
+  await sleep(100);
+  const boardSemanticAfter = await readBoardSemantic(page);
+  const boardStateAfter = await inspect(page, false);
+  const coordinateContext = /(?:\b(cell|tile|row|column|coordinate|x|y)\b[^\d-]{0,20}-?\d+|\(?-?\d+\s*[,/:]\s*-?\d+\)?)/i;
+  const tileContext = /\b(threat|danger|safe|guard|camera|laser|terminal|core|wall|floor|objective|agent|loot|alarm)\b/i;
+  result('board cursor exposes changing coordinate and tile semantics',
+    boardSemanticBefore.text && boardSemanticAfter.text &&
+      boardSemanticAfter.text !== boardSemanticBefore.text &&
+      coordinateContext.test(boardSemanticAfter.text) && tileContext.test(boardSemanticAfter.text) &&
+      boardStateAfter.tick === boardStateBefore.tick && boardStateAfter.head === boardStateBefore.head,
+    `${boardSemanticBefore.text.slice(0, 70)} → ${boardSemanticAfter.text.slice(0, 100)}`);
+
+  const povSemanticLabels = await readPovSemanticLabels(page);
+  const agentNames = different.agents.flatMap(agent => [
+    agent.id, agent.state.name, agent.state.callsign
+  ]).filter(Boolean).map(String);
+  const identityPattern = agentNames.length ?
+    new RegExp(agentNames.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'ig') :
+    null;
+  const normalizedPovLabels = povSemanticLabels.map(label =>
+    (identityPattern ? label.replace(identityPattern, '') : label).replace(/\s+/g, ' ').trim());
+  const semanticPartial = label => /\d/.test(label) &&
+    /\b(visible|known|partial|fog|unseen|hidden)\b/i.test(label) &&
+    /\b(threat|danger|guard|camera|laser|terminal|objective|core|alarm|safe)\b/i.test(label);
+  const semanticPovsDiffer = normalizedPovLabels.every((label, index) =>
+    label && normalizedPovLabels.some((other, otherIndex) => otherIndex !== index && other !== label));
+  result('each POV label quantifies a distinct partial tactical view',
+    povSemanticLabels.length === 4 && povSemanticLabels.every(semanticPartial) && semanticPovsDiffer,
+    povSemanticLabels.map(label => label.slice(0, 70)).join(' | '));
+
+  await api(page, 'restart', 'ADVERSARY-000');
+  await api(page, 'pause');
+  await api(page, 'setSpeed', 20);
+  await api(page, 'pause');
+  let dangerSnapshot = await inspect(page, false);
+  while (dangerSnapshot.tick < 13) {
+    await api(page, 'step', 1);
+    dangerSnapshot = await inspect(page, false);
+  }
+  let dangerTransition;
+  for (let attempt = 0; attempt < 12 && dangerSnapshot.tick <= 22; attempt++) {
+    const beforeTransition = dangerSnapshot;
+    const cipherBefore = agentNamed(beforeTransition, 'Cipher');
+    const beforePosition = cipherBefore && coordinateOf(cipherBefore.state);
+    requireMeasurement(beforePosition, `Cipher position at tick ${beforeTransition.tick}`);
+    const neighborEvidence = new Map();
+    for (const dx of [-1, 0, 1]) {
+      for (const dy of [-1, 0, 1]) {
+        if (dx === 0 && dy === 0) continue;
+        const target = { x: beforePosition.x + dx, y: beforePosition.y + dy };
+        neighborEvidence.set(`${target.x},${target.y}`, await cellEvidence(page, target));
+      }
+    }
+    await api(page, 'step', 1);
+    const afterTransition = await inspect(page, false);
+    const cipherAfter = agentNamed(afterTransition, 'Cipher');
+    const afterPosition = cipherAfter && coordinateOf(cipherAfter.state);
+    requireMeasurement(afterPosition, `Cipher position at tick ${afterTransition.tick}`);
+    const moved = beforePosition.x !== afterPosition.x || beforePosition.y !== afterPosition.y;
+    if (moved) {
+      const beforeCell = neighborEvidence.get(`${afterPosition.x},${afterPosition.y}`);
+      const afterCell = await cellEvidence(page, afterPosition);
+      if (beforeCell && beforeCell.found && beforeCell.warning && !beforeCell.cipher &&
+          afterCell.found && afterCell.cipher && Math.abs(beforeTransition.tick - 17) <= 3) {
+        dangerTransition = {
+          beforeTick: beforeTransition.tick,
+          afterTick: afterTransition.tick,
+          from: beforePosition,
+          to: afterPosition,
+          beforeCell,
+          afterCell
+        };
+        dangerSnapshot = afterTransition;
+        break;
+      }
+    }
+    dangerSnapshot = afterTransition;
+  }
+  result('ADVERSARY-000 warns Cipher target before the marked transition',
+    Boolean(dangerTransition),
+    dangerTransition ?
+      `tick ${dangerTransition.beforeTick}→${dangerTransition.afterTick}; ${dangerTransition.from.x},${dangerTransition.from.y}→${dangerTransition.to.x},${dangerTransition.to.y}; ${dangerTransition.beforeCell.text.slice(0, 100)}` :
+      `no warned-and-then-marked Cipher transition measured through tick ${dangerSnapshot.tick}`);
+
   const validVerification = await tryApi(page, 'verifyChain');
   result('the honest hash chain verifies',
     verificationPassed(validVerification),
-    verificationPassed(validVerification) ? `${different.frameCount} frames` :
+    verificationPassed(validVerification) ? `${dangerSnapshot.tick} ticks` :
       (validVerification.error || JSON.stringify(validVerification.value)));
 
   const beforeRestartButton = await inspect(page);
@@ -1127,6 +2312,150 @@ async function runSuite() {
       stable(materialProjection(afterMalformed.state)) === stable(materialProjection(beforeMalformed.state)),
     malformedSurface.text.replace(/\s+/g, ' ').slice(-180));
 
+  await api(page, 'pause');
+  const deepBefore = await inspect(page);
+  const deepBeforeExportValue = await api(page, 'exportState');
+  const deepBeforeExport = typeof deepBeforeExportValue === 'string' ?
+    deepBeforeExportValue : JSON.stringify(deepBeforeExportValue);
+  const semanticMutation = invalidRoleImport(deepBeforeExport);
+  const deepStatusBefore = deepBefore.dom['status-live'];
+  const deepLogBefore = deepBefore.dom['event-log'];
+  const semanticImport = await tryApi(page, 'importState', semanticMutation.json);
+  let semanticSurface;
+  try {
+    semanticSurface = await poll(async () => {
+      const snapshot = await inspect(page);
+      const statusDelta = snapshot.dom['status-live'] !== deepStatusBefore ?
+        snapshot.dom['status-live'] : '';
+      const log = snapshot.dom['event-log'];
+      const logDelta = log.startsWith(deepLogBefore) ? log.slice(deepLogBefore.length) :
+        log !== deepLogBefore ? log : '';
+      return {
+        snapshot,
+        text: `${statusDelta} ${logDelta}`.trim()
+      };
+    }, value => /\b(role|agent|semantic|invalid|unsupported|reject|import)\b/i.test(value.text), 2500);
+  } catch (error) {
+    const snapshot = await inspect(page);
+    const statusDelta = snapshot.dom['status-live'] !== deepStatusBefore ?
+      snapshot.dom['status-live'] : '';
+    const log = snapshot.dom['event-log'];
+    const logDelta = log.startsWith(deepLogBefore) ? log.slice(deepLogBefore.length) :
+      log !== deepLogBefore ? log : '';
+    semanticSurface = {
+      snapshot,
+      text: `${statusDelta} ${logDelta}`.trim()
+    };
+  }
+  const deepAfter = semanticSurface.snapshot;
+  const deepAfterExportValue = await api(page, 'exportState');
+  const deepAfterExport = typeof deepAfterExportValue === 'string' ?
+    deepAfterExportValue : JSON.stringify(deepAfterExportValue);
+  const stateStillWorks = await tryApi(page, 'state');
+  const deepStepBefore = await inspect(page);
+  await api(page, 'step', 1);
+  await sleep(100);
+  const deepStepAfter = await inspect(page);
+  const semanticVisible =
+    /\b(role|agent|semantic|invalid|unsupported|reject|import)\b/i.test(semanticSurface.text);
+  result('checksum-valid invalid role import is deeply transactional',
+    semanticVisible &&
+      (explicitImportRejection(semanticImport) ||
+        (deepAfter.head === deepBefore.head && deepAfter.frameCount === deepBefore.frameCount)) &&
+      deepAfterExport === deepBeforeExport &&
+      deepAfter.head === deepBefore.head &&
+      deepAfter.frameCount === deepBefore.frameCount &&
+      deepAfter.tick === deepBefore.tick &&
+      !stateStillWorks.threw && stateStillWorks.value && typeof stateStillWorks.value === 'object' &&
+      deepStepAfter.tick - deepStepBefore.tick === 1 &&
+      deepStepAfter.frameCount - deepStepBefore.frameCount === 1,
+    `${semanticMutation.rolePath}; checksum ${semanticMutation.checksumPath} (${semanticMutation.checksumScope}); ${semanticSurface.text.replace(/\s+/g, ' ').slice(-130)}`);
+
+  await api(page, 'pause');
+  const oversizeBefore = await inspect(page);
+  const oversizeBeforeExportValue = await api(page, 'exportState');
+  const oversizeBeforeExport = typeof oversizeBeforeExportValue === 'string' ?
+    oversizeBeforeExportValue : JSON.stringify(oversizeBeforeExportValue);
+  const tooLarge = oversizedImport(oversizeBeforeExport);
+  await page.evaluate(() => {
+    const status = document.getElementById('status-live');
+    const log = document.getElementById('event-log');
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const text = () => {
+      const alerts = [...document.querySelectorAll(
+        '[role="alert"], [aria-live="assertive"], [class*="error" i], [class*="toast" i]'
+      )].filter(visible).map(element => element.textContent || '').join(' ');
+      return `${status?.textContent || ''} ${log?.textContent || ''} ${alerts}`.replace(/\s+/g, ' ');
+    };
+    window.__doggOversizeProbe = {
+      base: text(),
+      changeAt: null,
+      errorAt: null,
+      text: ''
+    };
+    document.addEventListener('change', event => {
+      if (event.target instanceof HTMLInputElement && event.target.type === 'file') {
+        window.__doggOversizeProbe.changeAt = performance.now();
+      }
+    }, true);
+    const observer = new MutationObserver(() => {
+      const current = text();
+      if (current !== window.__doggOversizeProbe.base &&
+          /\b(too large|oversize|size limit|4\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(current)) {
+        window.__doggOversizeProbe.errorAt ??= performance.now();
+        window.__doggOversizeProbe.text = current;
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  const oversizedChooserPromise = page.waitForEvent('filechooser', { timeout: 4000 });
+  await page.locator('#import-button').click();
+  const oversizedChooser = await oversizedChooserPromise;
+  await oversizedChooser.setFiles({
+    name: 'oversized-dogg-heist.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(tooLarge.json)
+  });
+  let oversizeTiming;
+  try {
+    oversizeTiming = await poll(
+      () => page.evaluate(() => window.__doggOversizeProbe),
+      probe => Number.isFinite(probe?.changeAt) && Number.isFinite(probe?.errorAt),
+      1100,
+      20
+    );
+  } catch (error) {
+    oversizeTiming = await page.evaluate(() => window.__doggOversizeProbe);
+  }
+  await api(page, 'pause');
+  const oversizeAfter = await inspect(page);
+  const oversizeAfterExportValue = await api(page, 'exportState');
+  const oversizeAfterExport = typeof oversizeAfterExportValue === 'string' ?
+    oversizeAfterExportValue : JSON.stringify(oversizeAfterExportValue);
+  await api(page, 'setSpeed', 120);
+  await api(page, 'play');
+  const oversizePlayed = await waitForTick(page, oversizeAfter.tick + 1, 3000);
+  await api(page, 'pause');
+  const oversizeDelay = Number.isFinite(oversizeTiming?.changeAt) &&
+    Number.isFinite(oversizeTiming?.errorAt) ?
+    oversizeTiming.errorAt - oversizeTiming.changeAt : Infinity;
+  result('oversized import is rejected promptly without poisoning play',
+    tooLarge.bytes > 4 * 1024 * 1024 && tooLarge.bytes < 5 * 1024 * 1024 &&
+      oversizeDelay >= 0 && oversizeDelay < 750 &&
+      /\b(too large|oversize|size limit|4\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(oversizeTiming?.text || '') &&
+      oversizeAfterExport === oversizeBeforeExport &&
+      oversizeAfter.head === oversizeBefore.head &&
+      oversizeAfter.frameCount === oversizeBefore.frameCount &&
+      oversizeAfter.tick === oversizeBefore.tick &&
+      oversizePlayed.tick > oversizeAfter.tick,
+    `${(tooLarge.bytes / 1048576).toFixed(2)} MiB; rejected in ${Number.isFinite(oversizeDelay) ? oversizeDelay.toFixed(1) : 'unmeasured'}ms; checksum ${tooLarge.checksumPath}`);
+
   await page.locator('#help-button').click();
   const helpOpened = await poll(() => visibleHelp(page), value => value.count > 0, 2500);
   const helpCloseControl = await clickVisibleHelpClose(page);
@@ -1140,7 +2469,28 @@ async function runSuite() {
       /help|control|keyboard|key|play|step/i.test(helpOpened.text),
     `${helpCloseControl}; ${helpOpened.text.replace(/\s+/g, ' ').slice(0, 100)}`);
 
-  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await page.evaluate(() => {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  });
+  await page.keyboard.press('h');
+  const helpOpenedByH = await poll(() => visibleHelp(page), value => value.count > 0, 2500);
+  const helpFocusInside = await focusInsideVisibleHelp(page);
+  await page.keyboard.press('h');
+  const helpClosedByH = await poll(() => visibleHelp(page), value => value.count === 0, 2500);
+  const amberUnhacked = /(?:amber.{0,60}(?:marks?|means?|denotes?|indicates?)?\s*unhacked\s+terminals?|unhacked\s+terminals?.{0,60}amber)/i
+    .test(helpOpenedByH.text);
+  const greenUnhacked = /(?:green\s+(?:marks?|means?|denotes?|indicates?)?\s*unhacked\s+terminals?|unhacked\s+terminals?\s+(?:are|is|show|display|appear|glow|use|=|:)\s*green)/i
+    .test(helpOpenedByH.text);
+  result('help tells the amber truth and H toggles from modal focus',
+    helpOpenedByH.count > 0 && helpFocusInside && helpClosedByH.count === 0 &&
+      amberUnhacked && !greenUnhacked,
+    `focus inside ${helpFocusInside}; amber ${amberUnhacked}; green ${greenUnhacked}`);
+
+  const mobileContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true
+  });
   await serve(mobileContext);
   const mobilePage = await openHeist(mobileContext, '390x844 page', true);
   const mobileReach = await auditReachability(mobilePage);
@@ -1155,7 +2505,210 @@ async function runSuite() {
       mobileLayout.bodyWidth <= mobileLayout.innerWidth + 1 &&
       mobileBad.length === 0,
     `${mobileLayout.documentWidth}/${mobileLayout.innerWidth}px; ${mobileBad.length ? `blocked: ${mobileBad.map(item => item.id).join(', ')}` : `${mobileReach.length} reachable`}`);
+
+  await api(mobilePage, 'pause');
+  const mobileTarget = await measureMobileTargeting(mobilePage);
+  requireMeasurement(mobileTarget.measurable && mobileTarget.target,
+    'public facility dimensions and a visible mobile target');
+  const mobileTouchBefore = await inspect(mobilePage);
+  await mobilePage.touchscreen.tap(mobileTarget.target.x, mobileTarget.target.y);
+  let mobileTouchAfter;
+  try {
+    mobileTouchAfter = await poll(async () => {
+      const snapshot = await inspect(mobilePage);
+      const statusDelta = snapshot.dom['status-live'] !== mobileTouchBefore.dom['status-live'] ?
+        snapshot.dom['status-live'] : '';
+      const log = snapshot.dom['event-log'];
+      const logDelta = log.startsWith(mobileTouchBefore.dom['event-log']) ?
+        log.slice(mobileTouchBefore.dom['event-log'].length) :
+        log !== mobileTouchBefore.dom['event-log'] ? log : '';
+      const stateChanged = stable(materialProjection(snapshot.state)) !==
+        stable(materialProjection(mobileTouchBefore.state));
+      const text = `${statusDelta} ${logDelta}`.trim();
+      const directiveEvidence = stateChanged ||
+        /\b(directive|queued|route|move order|ordered|target set|destination)\b/i.test(text);
+      return {
+        snapshot,
+        stateChanged,
+        directiveEvidence,
+        text
+      };
+    }, value => value.directiveEvidence, 1800, 40);
+  } catch (error) {
+    const snapshot = await inspect(mobilePage);
+    mobileTouchAfter = {
+      snapshot,
+      stateChanged: false,
+      directiveEvidence: false,
+      text: ''
+    };
+  }
+  const mobileStepBefore = mobileTouchAfter.snapshot;
+  await api(mobilePage, 'step', 1);
+  await sleep(100);
+  const mobileStepAfter = await inspect(mobilePage);
+  result('mobile board exposes a 40px target and accepts a real touch directive',
+    (mobileTarget.renderedCellScale >= 40 || mobileTarget.accessibleTargetScale >= 40) &&
+      mobileTarget.target.size >= 40 &&
+      mobileTarget.documentWidth <= mobileTarget.viewportWidth + 1 &&
+      mobileTouchAfter.directiveEvidence &&
+      mobileTouchAfter.snapshot.tick === mobileTouchBefore.tick &&
+      mobileStepAfter.tick - mobileStepBefore.tick === 1 &&
+      mobileStepAfter.frameCount - mobileStepBefore.frameCount === 1,
+    `${mobileTarget.dimensions.cols}x${mobileTarget.dimensions.rows} via ${mobileTarget.dimensions.source}; cell ${mobileTarget.renderedCellScale.toFixed(1)}px, control ${mobileTarget.accessibleTargetScale.toFixed(1)}px; ${mobileTarget.target.kind}`);
   await mobileContext.close();
+
+  const contrastByTheme = {};
+  for (const scheme of ['light', 'dark']) {
+    const contrastContext = await browser.newContext({
+      viewport: { width: 1000, height: 760 },
+      colorScheme: scheme
+    });
+    await serve(contrastContext);
+    const contrastPage = await navigateHeist(contrastContext, `${scheme} contrast page`);
+    const contrastIntro = await markIntro(contrastPage);
+    requireMeasurement(contrastIntro.found && contrastIntro.ready !== true,
+      `${scheme} intro muted-copy contrast before readiness`);
+    const introContrast = await measureContrast(contrastPage, 'intro');
+    await dismissIntro(contrastPage);
+    await finishHeistBoot(contrastPage, `${scheme} contrast page`);
+    const contrastState = await inspect(contrastPage, false);
+    const roles = contrastState.agents.map(agent => agent.state &&
+      (agent.state.role || agent.state.agentRole))
+      .filter(role => typeof role === 'string' && role.trim()).map(role => role.trim());
+    requireMeasurement(roles.length === 4, `${scheme} four public agent roles`);
+    await api(contrastPage, 'pause');
+    await api(contrastPage, 'setSpeed', 120);
+    await api(contrastPage, 'play');
+    await waitForTick(contrastPage, contrastState.tick + 1, 3000);
+    const readyContrast = await measureContrast(contrastPage, 'ready', roles);
+    await api(contrastPage, 'pause');
+    contrastByTheme[scheme] = {
+      intro: introContrast.intro,
+      roles: readyContrast.roles,
+      status: readyContrast.status,
+      theme: `${introContrast.theme}|${readyContrast.theme}`
+    };
+    await contrastContext.close();
+  }
+  const contrastMeasurements = ['light', 'dark'].flatMap(scheme => {
+    const measured = contrastByTheme[scheme];
+    return [measured.intro, measured.status, ...measured.roles].filter(Boolean)
+      .map(entry => ({ scheme, entry }));
+  });
+  const contrastMinimum = contrastMeasurements.length ?
+    Math.min(...contrastMeasurements.map(item => item.entry.ratio)) : 0;
+  result('small role, active-status, and intro-muted text meet 4.5:1 in both themes',
+    ['light', 'dark'].every(scheme => {
+      const measured = contrastByTheme[scheme];
+      return measured.intro && measured.status && measured.roles.length === 4 &&
+        [measured.intro, measured.status, ...measured.roles].every(entry =>
+          entry.ratio >= 4.5 && parseFloat(entry.fontSize) < 24);
+    }) &&
+      contrastByTheme.light.theme !== contrastByTheme.dark.theme,
+    `minimum ${contrastMinimum.toFixed(2)}:1; light ${contrastByTheme.light.theme}; dark ${contrastByTheme.dark.theme}`);
+
+  const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
+  await serve(policyContext);
+  const policyPage = await openHeist(policyContext, 'ADVERSARY-007 policy page');
+  await api(policyPage, 'restart', 'ADVERSARY-007');
+  await api(policyPage, 'pause');
+  await api(policyPage, 'setSpeed', 20);
+  await api(policyPage, 'pause');
+  let policySnapshot = await inspect(policyPage, false);
+  let thresholdSnapshot;
+  let thresholdPolicy;
+  for (let step = 0; step < 90; step++) {
+    const measured = policyState(policySnapshot);
+    if (Number.isFinite(measured.required) && measured.required > 0 &&
+        measured.terminals.length > measured.required &&
+        measured.hacked >= measured.required && measured.untouched.length > 0) {
+      thresholdSnapshot = policySnapshot;
+      thresholdPolicy = measured;
+      break;
+    }
+    await api(policyPage, 'step', 1);
+    policySnapshot = await inspect(policyPage, false);
+  }
+  requireMeasurement(thresholdSnapshot && thresholdPolicy,
+    'ADVERSARY-007 reaching its required terminal count with untouched extras');
+  const distanceToCore = measured => {
+    if (!measured.core) return Infinity;
+    const distances = measured.agentIntent.filter(agent => agent.position).map(agent =>
+      Math.hypot(
+        agent.position.x - measured.core.position.x,
+        agent.position.y - measured.core.position.y
+      ));
+    return distances.length ? Math.min(...distances) : Infinity;
+  };
+  const thresholdDistance = distanceToCore(thresholdPolicy);
+  let postThresholdSnapshot = thresholdSnapshot;
+  let postThresholdPolicy = thresholdPolicy;
+  let pursuedCore = false;
+  let extraTerminalHacked = false;
+  let pursuitEvidence = '';
+  for (let step = 0; step < 10 && !pursuedCore; step++) {
+    await api(policyPage, 'step', 1);
+    postThresholdSnapshot = await inspect(policyPage, false);
+    postThresholdPolicy = policyState(postThresholdSnapshot);
+    if (postThresholdPolicy.hacked > thresholdPolicy.hacked) extraTerminalHacked = true;
+    const coreIntent = postThresholdPolicy.agentIntent.find(agent =>
+      /\b(core|vault|extract|escape)\b/i.test(agent.text));
+    const nearer = Number.isFinite(thresholdDistance) &&
+      distanceToCore(postThresholdPolicy) < thresholdDistance - 0.1;
+    const coreCompleted = Boolean(postThresholdPolicy.core?.complete) &&
+      !Boolean(thresholdPolicy.core?.complete);
+    if (coreIntent || nearer || coreCompleted) {
+      pursuedCore = true;
+      pursuitEvidence = coreIntent ? `${coreIntent.id}: ${coreIntent.text}` :
+        nearer ? `core distance ${thresholdDistance.toFixed(2)}→${distanceToCore(postThresholdPolicy).toFixed(2)}` :
+          'core state completed';
+    }
+  }
+  result('ADVERSARY-007 pursues the core without hacking surplus terminals',
+    thresholdPolicy.hacked >= thresholdPolicy.required &&
+      thresholdPolicy.untouched.length > 0 && pursuedCore && !extraTerminalHacked,
+    `required ${thresholdPolicy.required}, hacked ${thresholdPolicy.hacked}, untouched ${thresholdPolicy.untouched.length}; ${pursuitEvidence || 'no core pursuit'}`);
+
+  let terminalSnapshot = postThresholdSnapshot;
+  for (let step = 0; step < 120 && !isTerminalOutcome(outcomeOf(terminalSnapshot.state)); step++) {
+    await api(policyPage, 'step', 1);
+    terminalSnapshot = await inspect(policyPage, false);
+  }
+  requireMeasurement(isTerminalOutcome(outcomeOf(terminalSnapshot.state)),
+    'a deterministic win/loss for history coherence');
+  terminalSnapshot = await inspect(policyPage);
+  const frameBundle = exportedFrames(terminalSnapshot.exported);
+  const inspectedFrames = frameBundle.frames.map((frame, index) => {
+    const state = frameState(frame);
+    return state ? { index, state, projection: historicalProjection(state) } : null;
+  }).filter(Boolean);
+  const terminalTick = tickOf(terminalSnapshot.state);
+  const historicalFrame = [...inspectedFrames].reverse().find(candidate =>
+    Number.isFinite(candidate.projection.tick) &&
+    candidate.projection.tick < terminalTick &&
+    candidate.projection.outcome !== undefined &&
+    candidate.projection.agents !== undefined &&
+    candidate.projection.objective !== undefined &&
+    candidate.projection.povs !== undefined);
+  requireMeasurement(historicalFrame, 'a complete prior exported frame to inspect');
+  await api(policyPage, 'scrub', historicalFrame.index);
+  await sleep(100);
+  const historicalView = await inspect(policyPage, false);
+  const viewed = historicalProjection(historicalView.state);
+  const liveMetadata = liveMetadataOf(historicalView.state);
+  result('scrubbed state is coherent with its frame while retaining the live head',
+    viewed.tick === historicalFrame.projection.tick &&
+      stable(viewed.outcome) === stable(historicalFrame.projection.outcome) &&
+      stable(canonicalProjection(viewed.agents)) ===
+        stable(canonicalProjection(historicalFrame.projection.agents)) &&
+      stable(canonicalProjection(viewed.objective)) ===
+        stable(canonicalProjection(historicalFrame.projection.objective)) &&
+      stable(canonicalProjection(viewed.povs)) ===
+        stable(canonicalProjection(historicalFrame.projection.povs)) &&
+      liveMetadata && liveMetadata.head === terminalSnapshot.head,
+    `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; outcome ${String(viewed.outcome)}; live ${liveMetadata?.source || 'missing'} ${String(liveMetadata?.head || '').slice(0, 12)}…`);
+  await policyContext.close();
 
   const deniedContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
   await deniedContext.addInitScript(() => {
