@@ -2649,9 +2649,7 @@ async function scanSmallTextContrast(page, stateName) {
       sectionKicker: measuredWithin('.section-kicker, [data-section-kicker]'),
       status: measuredWithin('#status-live, .status-label, [data-status-label]'),
       micro: measuredWithin('.micro, .micro-label, [data-micro]'),
-      eventIntent: measuredWithin(
-        '#event-log .intent, #event-log [data-intent], .event-intent'
-      ),
+      eventLogText: measuredWithin('#event-log li, #event-log li strong'),
       povIntent: measuredWithin(
         '#pov-grid .intent, #pov-grid [data-intent], .pov-intent'
       ),
@@ -3651,10 +3649,14 @@ async function runSuite() {
   const systematicCoverageMissing = ['light', 'dark'].flatMap(scheme => {
     const active = contrastByTheme[scheme].activeSmallText;
     const completed = contrastByTheme[scheme].completedSmallText;
-    return Object.keys(active.coverage).filter(name => {
+    const missing = Object.keys(active.coverage).filter(name => {
       if (name === 'stepMark') return !completed.coverage.stepMark;
+      if (name === 'eventLogText') return false;
       return !active.coverage[name] && !completed.coverage[name];
     }).map(name => `${scheme}:${name}`);
+    if (!active.coverage.eventLogText) missing.push(`${scheme}:active-eventLogText`);
+    if (!completed.coverage.eventLogText) missing.push(`${scheme}:completed-eventLogText`);
+    return [...new Set(missing)];
   });
   result('systematic sub-14px text contrast passes active and completed themes',
     systematicScans.length === 4 &&
