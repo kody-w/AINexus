@@ -324,6 +324,49 @@ function coordinateOf(value) {
   return null;
 }
 
+function facilityDimensions(snapshot) {
+  const latest = snapshot.exported ? latestExportFrame(snapshot.exported) : null;
+  const roots = [
+    snapshot.state,
+    snapshot.exported && snapshot.exported.state,
+    latest && latest.state,
+    latest && latest.snapshot,
+    latest && latest.payload && latest.payload.state,
+    latest && latest.payload && latest.payload.snapshot,
+    latest && latest.payload,
+    latest
+  ].filter(value => value && typeof value === 'object');
+  const candidates = [];
+  for (const root of roots) {
+    walkJson(root, (value, trail) => {
+      if (!value || typeof value !== 'object') return;
+      const context = trail.join('.');
+      if (Array.isArray(value) && value.length && value.every(row => Array.isArray(row))) {
+        candidates.push({
+          cols: Math.max(...value.map(row => row.length)),
+          rows: value.length,
+          source: context,
+          score: /facility|map|grid|board|layout/i.test(context) ? 20 : 1
+        });
+      } else if (!Array.isArray(value)) {
+        const cols = Number(value.width ?? value.cols ?? value.columns);
+        const rows = Number(value.height ?? value.rows);
+        if (Number.isFinite(cols) && Number.isFinite(rows) &&
+            cols > 1 && rows > 1 && cols <= 200 && rows <= 200) {
+          candidates.push({
+            cols,
+            rows,
+            source: context,
+            score: /facility|map|grid|board|layout/i.test(context) ? 30 : 2
+          });
+        }
+      }
+    });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0] || null;
+}
+
 function agentNamed(snapshot, name) {
   const wanted = new RegExp(name, 'i');
   return snapshot.agents.find(agent => wanted.test([
@@ -447,6 +490,26 @@ function exportedFrames(exported) {
   return candidates[0];
 }
 
+function latestExportFrame(exported) {
+  const candidates = [];
+  walkJson(exported, (value, trail) => {
+    if (!Array.isArray(value) || !value.length) return;
+    const key = String(trail[trail.length - 1] || '');
+    if (!/(frames|history|chain|timeline)/i.test(key)) return;
+    const objects = value.filter(item => item && typeof item === 'object').length;
+    if (!objects) return;
+    candidates.push({
+      frame: value[value.length - 1],
+      trail,
+      score: objects * 5 - trail.length
+    });
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates.length) return candidates[0].frame;
+  const direct = findNamedValue(exported, ['currentFrame', 'headFrame', 'liveFrame'], 5);
+  return direct && direct.value && typeof direct.value === 'object' ? direct.value : null;
+}
+
 function liveMetadataOf(state) {
   const heads = ['liveHead', 'liveHeadHash', 'headLive'];
   for (const key of heads) {
@@ -476,17 +539,32 @@ function liveMetadataOf(state) {
 
 function policyState(snapshot) {
   const state = snapshot.state;
-  const objectiveText = `${snapshot.dom?.['objective-value'] || ''} ${stable(objectiveOf(state))}`;
+  const latest = snapshot.exported && latestExportFrame(snapshot.exported);
+  const detailRoots = [
+    latest && latest.state,
+    latest && latest.snapshot,
+    latest && latest.payload && latest.payload.state,
+    latest && latest.payload && latest.payload.snapshot,
+    latest && latest.payload,
+    latest
+  ].filter(value => value && typeof value === 'object');
+  const objectiveText = [
+    snapshot.dom?.['objective-value'] || '',
+    stable(objectiveOf(state)),
+    ...detailRoots.map(root => stable(objectiveOf(root)))
+  ].join(' ');
   const requiredCandidates = [];
-  walkJson(state, (value, trail) => {
-    if (!trail.length || !Number.isFinite(Number(value))) return;
-    const key = String(trail[trail.length - 1]);
-    const context = trail.slice(0, -1).join('.');
-    if (/(requiredTerminals|terminalsRequired|requiredHacks|terminalTarget|hackTarget)/i.test(key) ||
-        (key.toLowerCase() === 'required' && /terminal|objective|hack/i.test(context))) {
-      requiredCandidates.push({ value: Number(value), score: 20 - trail.length });
-    }
-  });
+  for (const root of [state, ...detailRoots]) {
+    walkJson(root, (value, trail) => {
+      if (!trail.length || !Number.isFinite(Number(value))) return;
+      const key = String(trail[trail.length - 1]);
+      const context = trail.slice(0, -1).join('.');
+      if (/(requiredTerminals|terminalsRequired|requiredHacks|terminalTarget|hackTarget)/i.test(key) ||
+          (key.toLowerCase() === 'required' && /terminal|objective|hack/i.test(context))) {
+        requiredCandidates.push({ value: Number(value), score: 20 - trail.length });
+      }
+    });
+  }
   requiredCandidates.sort((a, b) => b.score - a.score);
   let required = requiredCandidates[0]?.value;
   if (required === undefined) {
@@ -497,36 +575,38 @@ function policyState(snapshot) {
 
   const terminals = [];
   let core;
-  walkJson(state, (value, trail) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
-    if (/(frames|history|chain|ledger|past|replay)/i.test(trail.join('.'))) return;
-    const identity = [
-      value.id, value.name, value.type, value.kind, value.role, value.label,
-      trail.join(' ')
-    ].filter(Boolean).join(' ');
-    const position = coordinateOf(value);
-    if (/\bterminals?\b/i.test(identity) && position &&
-        ('hacked' in value || 'isHacked' in value || 'status' in value || 'state' in value ||
-          'complete' in value || 'activated' in value)) {
-      const status = String(value.status || value.state || '');
-      terminals.push({
-        id: String(value.id || value.name || value.label || `${position.x},${position.y}`),
-        position,
-        hacked: value.hacked === true || value.isHacked === true ||
-          value.complete === true || value.activated === true ||
-          /\b(hacked|complete|activated|owned)\b/i.test(status)
-      });
-    }
-    if (!core && /\b(core|vault core|data core)\b/i.test(identity) && position) {
-      const status = String(value.status || value.state || '');
-      core = {
-        id: String(value.id || value.name || 'core'),
-        position,
-        complete: value.hacked === true || value.complete === true || value.activated === true ||
-          value.reached === true || /\b(hacked|complete|activated|reached|secured|stolen)\b/i.test(status)
-      };
-    }
-  });
+  for (const root of detailRoots) {
+    walkJson(root, (value, trail) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      if (/(frames|history|chain|ledger|past|replay)/i.test(trail.join('.'))) return;
+      const identity = [
+        value.id, value.name, value.type, value.kind, value.role, value.label,
+        trail.join(' ')
+      ].filter(Boolean).join(' ');
+      const position = coordinateOf(value);
+      if (/\bterminals?\b/i.test(identity) && position &&
+          ('hacked' in value || 'isHacked' in value || 'status' in value || 'state' in value ||
+            'complete' in value || 'activated' in value)) {
+        const status = String(value.status || value.state || '');
+        terminals.push({
+          id: String(value.id || value.name || value.label || `${position.x},${position.y}`),
+          position,
+          hacked: value.hacked === true || value.isHacked === true ||
+            value.complete === true || value.activated === true ||
+            /\b(hacked|complete|activated|owned)\b/i.test(status)
+        });
+      }
+      if (!core && /\b(core|vault core|data core)\b/i.test(identity) && position) {
+        const status = String(value.status || value.state || '');
+        core = {
+          id: String(value.id || value.name || 'core'),
+          position,
+          complete: value.hacked === true || value.complete === true || value.activated === true ||
+            value.reached === true || /\b(hacked|complete|activated|reached|secured|stolen)\b/i.test(status)
+        };
+      }
+    });
+  }
   const terminalMap = new Map();
   for (const terminal of terminals) {
     const key = `${terminal.position.x},${terminal.position.y}`;
@@ -1314,73 +1394,147 @@ async function inspectPovs(page) {
   });
 }
 
-async function cellEvidence(page, position) {
-  return page.evaluate(target => {
+function coordinateFromBoardText(text) {
+  const source = String(text || '');
+  let match = source.match(/\b(?:x|col(?:umn)?)\s*[:=]?\s*(-?\d+).*?\b(?:y|row)\s*[:=]?\s*(-?\d+)/i);
+  if (match) return { x: Number(match[1]), y: Number(match[2]) };
+  match = source.match(/\brow\s*[:=]?\s*(-?\d+).*?\bcol(?:umn)?\s*[:=]?\s*(-?\d+)/i);
+  if (match) return { x: Number(match[2]), y: Number(match[1]) };
+  match = source.match(/(?:cell|tile|coordinate|cursor|at)?[^\d-]{0,15}(-?\d+)\s*[,/:]\s*(-?\d+)/i);
+  return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+}
+
+async function moveBoardCursorTo(page, target, dimensions) {
+  await page.locator('#game-board').focus();
+  const tickBefore = (await inspect(page, false)).tick;
+  let semantic = await readBoardSemantic(page);
+  let current = coordinateFromBoardText(semantic.text);
+  requireMeasurement(current, 'the board cursor coordinate in its accessible description');
+  const opposite = {
+    ArrowRight: 'ArrowLeft',
+    ArrowLeft: 'ArrowRight',
+    ArrowDown: 'ArrowUp',
+    ArrowUp: 'ArrowDown'
+  };
+  const limit = Math.max(20, dimensions.cols * dimensions.rows * 2);
+  let presses = 0;
+  while ((current.x !== target.x || current.y !== target.y) && presses < limit) {
+    const distance = Math.abs(target.x - current.x) + Math.abs(target.y - current.y);
+    const preferred = [
+      target.x > current.x && 'ArrowRight',
+      target.x < current.x && 'ArrowLeft',
+      target.y > current.y && 'ArrowDown',
+      target.y < current.y && 'ArrowUp',
+      'ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'
+    ].filter(Boolean);
+    let advanced = false;
+    for (const key of [...new Set(preferred)]) {
+      await page.keyboard.press(key);
+      presses++;
+      const candidateSemantic = await readBoardSemantic(page);
+      const candidate = coordinateFromBoardText(candidateSemantic.text);
+      requireMeasurement(candidate, `board cursor coordinate after ${key}`);
+      const candidateDistance = Math.abs(target.x - candidate.x) + Math.abs(target.y - candidate.y);
+      if (candidateDistance < distance) {
+        current = candidate;
+        semantic = candidateSemantic;
+        advanced = true;
+        break;
+      }
+      if (candidate.x !== current.x || candidate.y !== current.y) {
+        await page.keyboard.press(opposite[key]);
+        presses++;
+        const restoredSemantic = await readBoardSemantic(page);
+        const restored = coordinateFromBoardText(restoredSemantic.text);
+        requireMeasurement(restored && restored.x === current.x && restored.y === current.y,
+          `non-mutating cursor restoration after ${key}`);
+        semantic = restoredSemantic;
+      }
+    }
+    requireMeasurement(advanced, `a keyboard path from ${current.x},${current.y} to ${target.x},${target.y}`);
+  }
+  const tickAfter = (await inspect(page, false)).tick;
+  requireMeasurement(current.x === target.x && current.y === target.y,
+    `the board cursor reaching ${target.x},${target.y}`);
+  requireMeasurement(tickAfter === tickBefore, 'board cursor navigation remaining non-mutating');
+  return { semantic, coordinate: current, presses };
+}
+
+async function sampleCanvasCell(page, snapshot, target) {
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, 'public facility dimensions for canvas sampling');
+  requireMeasurement(target.x >= 0 && target.y >= 0 &&
+    target.x < dimensions.cols && target.y < dimensions.rows,
+  `target ${target.x},${target.y} inside the public facility`);
+  const sample = await page.evaluate(({ target, dimensions }) => {
     const board = document.getElementById('game-board');
-    if (!board) return { found: false, text: '', warning: false, cipher: false };
-    const described = element => {
-      const ids = String(element.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
-      return ids.map(id => document.getElementById(id)?.textContent || '').join(' ');
-    };
-    const coordinate = element => {
-      const x = element.dataset.x ?? element.dataset.col ?? element.dataset.column;
-      const y = element.dataset.y ?? element.dataset.row;
-      if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) {
-        return { x: Number(x), y: Number(y) };
-      }
-      for (const value of [
-        element.dataset.cell,
-        element.dataset.coordinate,
-        element.getAttribute('aria-label'),
-        element.getAttribute('title')
-      ]) {
-        const match = String(value || '').match(/(-?\d+)\s*[,/:]\s*(-?\d+)/);
-        if (match) return { x: Number(match[1]), y: Number(match[2]) };
-      }
+    const canvas = board instanceof HTMLCanvasElement ? board : board?.querySelector('canvas');
+    if (!canvas || !canvas.width || !canvas.height) return null;
+    const scratch = document.createElement('canvas');
+    scratch.width = canvas.width;
+    scratch.height = canvas.height;
+    const context = scratch.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+    try {
+      context.drawImage(canvas, 0, 0);
+    } catch (error) {
       return null;
-    };
-    const cells = [...board.querySelectorAll(
-      '[data-cell], [data-coordinate], [data-x][data-y], [data-col][data-row], [role="gridcell"]'
-    )];
-    const exact = cells.filter(element => {
-      const at = coordinate(element);
-      return at && at.x === target.x && at.y === target.y;
-    });
-    const sources = exact.length ? exact : [board];
-    const text = sources.map(element => {
-      const style = getComputedStyle(element);
-      return [
-        element.getAttribute('aria-label'),
-        element.getAttribute('aria-description'),
-        described(element),
-        element.getAttribute('title'),
-        element.textContent,
-        element.className,
-        JSON.stringify(element.dataset),
-        style.color,
-        style.backgroundColor,
-        style.borderColor,
-        style.outlineColor,
-        style.boxShadow
-      ].filter(Boolean).join(' ');
-    }).join(' ').replace(/\s+/g, ' ').trim();
-    const colors = [...text.matchAll(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/g)]
-      .map(match => match.slice(1, 4).map(Number));
-    const warningColor = colors.some(([red, green, blue]) =>
-      (red >= 160 && red > green * 1.15 && red > blue * 1.25) ||
-      (red >= 170 && green >= 90 && green < red && blue < green * 0.8));
-    const coordinateMentioned = new RegExp(
-      `(?:${target.x}\\s*[,/:]\\s*${target.y}|(?:row|y)\\s*${target.y}.*(?:col|x)\\s*${target.x})`,
-      'i'
-    ).test(text);
+    }
+    const cellWidth = canvas.width / dimensions.cols;
+    const cellHeight = canvas.height / dimensions.rows;
+    const colors = [];
+    let warningPixels = 0;
+    let opaquePixels = 0;
+    let hash = 2166136261;
+    for (let row = 0; row < 15; row++) {
+      for (let col = 0; col < 15; col++) {
+        const x = Math.max(0, Math.min(canvas.width - 1,
+          Math.floor((target.x + 0.06 + 0.88 * col / 14) * cellWidth)));
+        const y = Math.max(0, Math.min(canvas.height - 1,
+          Math.floor((target.y + 0.06 + 0.88 * row / 14) * cellHeight)));
+        const pixel = [...context.getImageData(x, y, 1, 1).data];
+        colors.push(pixel);
+        for (const value of pixel) {
+          hash ^= value;
+          hash = Math.imul(hash, 16777619);
+        }
+        const [red, green, blue, alpha] = pixel;
+        if (alpha > 20) opaquePixels++;
+        if (alpha > 20 && (
+          (red >= 150 && red > green * 1.16 && red > blue * 1.2) ||
+          (red >= 170 && green >= 75 && green < red * 0.92 && blue < green * 0.85)
+        )) warningPixels++;
+      }
+    }
     return {
-      found: exact.length > 0 || coordinateMentioned,
-      text,
-      warning: /\b(amber|danger|threat|warning|warned|unsafe|risk|guard|camera|laser|alarm|marked)\b/i.test(text) ||
-        warningColor,
-      cipher: /\bcipher\b/i.test(text)
+      colors,
+      hash: (hash >>> 0).toString(16),
+      warningRatio: warningPixels / colors.length,
+      opaqueRatio: opaquePixels / colors.length,
+      canvas: { width: canvas.width, height: canvas.height },
+      cell: { width: cellWidth, height: cellHeight }
     };
-  }, position);
+  }, { target, dimensions });
+  requireMeasurement(sample && sample.colors.length === 225 && sample.opaqueRatio > 0.5,
+    `readable target-specific canvas pixels at ${target.x},${target.y}`);
+  return Object.assign(sample, { dimensions });
+}
+
+function canvasSampleDelta(before, after) {
+  requireMeasurement(before.colors.length === after.colors.length, 'equal canvas sample grids');
+  let changed = 0;
+  let distance = 0;
+  for (let index = 0; index < before.colors.length; index++) {
+    const a = before.colors[index];
+    const b = after.colors[index];
+    const difference = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    distance += difference;
+    if (difference >= 24) changed++;
+  }
+  return {
+    changedRatio: changed / before.colors.length,
+    meanDistance: distance / before.colors.length
+  };
 }
 
 async function readBoardSemantic(page) {
@@ -2096,54 +2250,56 @@ async function runSuite() {
   await api(page, 'setSpeed', 20);
   await api(page, 'pause');
   let dangerSnapshot = await inspect(page, false);
-  while (dangerSnapshot.tick < 13) {
+  while (dangerSnapshot.tick < 16) {
     await api(page, 'step', 1);
     dangerSnapshot = await inspect(page, false);
   }
-  let dangerTransition;
-  for (let attempt = 0; attempt < 12 && dangerSnapshot.tick <= 22; attempt++) {
-    const beforeTransition = dangerSnapshot;
-    const cipherBefore = agentNamed(beforeTransition, 'Cipher');
-    const beforePosition = cipherBefore && coordinateOf(cipherBefore.state);
-    requireMeasurement(beforePosition, `Cipher position at tick ${beforeTransition.tick}`);
-    const neighborEvidence = new Map();
-    for (const dx of [-1, 0, 1]) {
-      for (const dy of [-1, 0, 1]) {
-        if (dx === 0 && dy === 0) continue;
-        const target = { x: beforePosition.x + dx, y: beforePosition.y + dy };
-        neighborEvidence.set(`${target.x},${target.y}`, await cellEvidence(page, target));
-      }
-    }
-    await api(page, 'step', 1);
-    const afterTransition = await inspect(page, false);
-    const cipherAfter = agentNamed(afterTransition, 'Cipher');
-    const afterPosition = cipherAfter && coordinateOf(cipherAfter.state);
-    requireMeasurement(afterPosition, `Cipher position at tick ${afterTransition.tick}`);
-    const moved = beforePosition.x !== afterPosition.x || beforePosition.y !== afterPosition.y;
-    if (moved) {
-      const beforeCell = neighborEvidence.get(`${afterPosition.x},${afterPosition.y}`);
-      const afterCell = await cellEvidence(page, afterPosition);
-      if (beforeCell && beforeCell.found && beforeCell.warning && !beforeCell.cipher &&
-          afterCell.found && afterCell.cipher && Math.abs(beforeTransition.tick - 17) <= 3) {
-        dangerTransition = {
-          beforeTick: beforeTransition.tick,
-          afterTick: afterTransition.tick,
-          from: beforePosition,
-          to: afterPosition,
-          beforeCell,
-          afterCell
-        };
-        dangerSnapshot = afterTransition;
-        break;
-      }
-    }
-    dangerSnapshot = afterTransition;
-  }
+  requireMeasurement(dangerSnapshot.tick === 16, 'ADVERSARY-000 tick 16 baseline');
+  dangerSnapshot = await inspect(page);
+  const dangerTarget = { x: 7, y: 7 };
+  const dangerDimensions = facilityDimensions(dangerSnapshot);
+  requireMeasurement(dangerDimensions, 'ADVERSARY-000 public facility dimensions');
+  const cipherAt16 = agentNamed(dangerSnapshot, 'Cipher');
+  const cipherPosition16 = cipherAt16 && coordinateOf(cipherAt16.state);
+  requireMeasurement(cipherPosition16, 'Cipher position at tick 16');
+  await moveBoardCursorTo(page, dangerTarget, dangerDimensions);
+  const targetPixels16 = await sampleCanvasCell(page, dangerSnapshot, dangerTarget);
+
+  await api(page, 'step', 1);
+  const dangerAt17 = await inspect(page);
+  requireMeasurement(dangerAt17.tick === 17, 'ADVERSARY-000 tick 17 danger preview');
+  const cursorAtTarget = await moveBoardCursorTo(page, dangerTarget, dangerDimensions);
+  const targetPixels17 = await sampleCanvasCell(page, dangerAt17, dangerTarget);
+  const targetPixelDelta = canvasSampleDelta(targetPixels16, targetPixels17);
+  const targetSemanticWarning =
+    /\b(danger|threat|warning|warned|unsafe|risk|guard|camera|laser|alarm|marked|red|amber)\b/i
+      .test(cursorAtTarget.semantic.text);
+  const eventLog17 = dangerAt17.dom['event-log'];
+
+  await api(page, 'step', 1);
+  const dangerAt18 = await inspect(page);
+  const cipherAt18 = agentNamed(dangerAt18, 'Cipher');
+  const cipherPosition18 = cipherAt18 && coordinateOf(cipherAt18.state);
+  requireMeasurement(cipherPosition18, 'Cipher position at tick 18');
+  const eventLog18 = dangerAt18.dom['event-log'];
+  const eventDelta = eventLog18.startsWith(eventLog17) ?
+    eventLog18.slice(eventLog17.length) :
+    eventLog18.includes(eventLog17) ? eventLog18.replace(eventLog17, '') : eventLog18;
+  const eventMarksCipher = /\bcipher\b/i.test(eventDelta) &&
+    /(?:7\s*[,/:]\s*7|(?:x|col(?:umn)?)\s*[:=]?\s*7.{0,40}(?:y|row)\s*[:=]?\s*7|(?:row|y)\s*[:=]?\s*7.{0,40}(?:col(?:umn)?|x)\s*[:=]?\s*7)/i
+      .test(eventDelta);
+  const dangerTransition = dangerAt18.tick === 18 &&
+    (cipherPosition16.x !== dangerTarget.x || cipherPosition16.y !== dangerTarget.y) &&
+    cipherPosition18.x === dangerTarget.x && cipherPosition18.y === dangerTarget.y &&
+    cursorAtTarget.coordinate.x === dangerTarget.x &&
+    cursorAtTarget.coordinate.y === dangerTarget.y &&
+    targetSemanticWarning &&
+    targetPixelDelta.changedRatio >= 0.02 && targetPixelDelta.meanDistance >= 4 &&
+    eventMarksCipher;
+  dangerSnapshot = dangerAt18;
   result('ADVERSARY-000 warns Cipher target before the marked transition',
-    Boolean(dangerTransition),
-    dangerTransition ?
-      `tick ${dangerTransition.beforeTick}→${dangerTransition.afterTick}; ${dangerTransition.from.x},${dangerTransition.from.y}→${dangerTransition.to.x},${dangerTransition.to.y}; ${dangerTransition.beforeCell.text.slice(0, 100)}` :
-      `no warned-and-then-marked Cipher transition measured through tick ${dangerSnapshot.tick}`);
+    dangerTransition,
+    `target 7,7; pixels ${targetPixels16.hash}→${targetPixels17.hash}, warning ${(targetPixels17.warningRatio * 100).toFixed(1)}%, changed ${(targetPixelDelta.changedRatio * 100).toFixed(1)}%; ${eventDelta.replace(/\s+/g, ' ').slice(-100)}`);
 
   const validVerification = await tryApi(page, 'verifyChain');
   result('the honest hash chain verifies',
@@ -2615,60 +2771,44 @@ async function runSuite() {
   await api(policyPage, 'pause');
   await api(policyPage, 'setSpeed', 20);
   await api(policyPage, 'pause');
-  let policySnapshot = await inspect(policyPage, false);
-  let thresholdSnapshot;
-  let thresholdPolicy;
-  for (let step = 0; step < 90; step++) {
-    const measured = policyState(policySnapshot);
-    if (Number.isFinite(measured.required) && measured.required > 0 &&
-        measured.terminals.length > measured.required &&
-        measured.hacked >= measured.required && measured.untouched.length > 0) {
-      thresholdSnapshot = policySnapshot;
-      thresholdPolicy = measured;
-      break;
-    }
+  let policySnapshot = await inspect(policyPage);
+  while (policySnapshot.tick < 13) {
     await api(policyPage, 'step', 1);
-    policySnapshot = await inspect(policyPage, false);
+    policySnapshot = await inspect(policyPage);
   }
-  requireMeasurement(thresholdSnapshot && thresholdPolicy,
-    'ADVERSARY-007 reaching its required terminal count with untouched extras');
-  const distanceToCore = measured => {
-    if (!measured.core) return Infinity;
-    const distances = measured.agentIntent.filter(agent => agent.position).map(agent =>
-      Math.hypot(
-        agent.position.x - measured.core.position.x,
-        agent.position.y - measured.core.position.y
-      ));
-    return distances.length ? Math.min(...distances) : Infinity;
-  };
-  const thresholdDistance = distanceToCore(thresholdPolicy);
-  let postThresholdSnapshot = thresholdSnapshot;
+  requireMeasurement(policySnapshot.tick === 13, 'ADVERSARY-007 tick 13 policy frame');
+  const thresholdPolicy = policyState(policySnapshot);
+  requireMeasurement(thresholdPolicy.terminals.length > 2,
+    'ADVERSARY-007 current exported frame terminals, including untouched extras');
+  const thresholdCoreIntent = thresholdPolicy.agentIntent.find(agent =>
+    /\b(core|vault)\b/i.test(agent.text));
+  let priorPolicyFeedback =
+    `${policySnapshot.dom['status-live']} ${policySnapshot.dom['event-log']}`;
+  let postThresholdSnapshot = policySnapshot;
   let postThresholdPolicy = thresholdPolicy;
-  let pursuedCore = false;
   let extraTerminalHacked = false;
-  let pursuitEvidence = '';
-  for (let step = 0; step < 10 && !pursuedCore; step++) {
+  let acquisitionEvidence = '';
+  for (let step = 0; step < 10 && !acquisitionEvidence; step++) {
     await api(policyPage, 'step', 1);
-    postThresholdSnapshot = await inspect(policyPage, false);
+    postThresholdSnapshot = await inspect(policyPage);
     postThresholdPolicy = policyState(postThresholdSnapshot);
     if (postThresholdPolicy.hacked > thresholdPolicy.hacked) extraTerminalHacked = true;
-    const coreIntent = postThresholdPolicy.agentIntent.find(agent =>
-      /\b(core|vault|extract|escape)\b/i.test(agent.text));
-    const nearer = Number.isFinite(thresholdDistance) &&
-      distanceToCore(postThresholdPolicy) < thresholdDistance - 0.1;
-    const coreCompleted = Boolean(postThresholdPolicy.core?.complete) &&
-      !Boolean(thresholdPolicy.core?.complete);
-    if (coreIntent || nearer || coreCompleted) {
-      pursuedCore = true;
-      pursuitEvidence = coreIntent ? `${coreIntent.id}: ${coreIntent.text}` :
-        nearer ? `core distance ${thresholdDistance.toFixed(2)}→${distanceToCore(postThresholdPolicy).toFixed(2)}` :
-          'core state completed';
+    const feedback = `${postThresholdSnapshot.dom['status-live']} ${postThresholdSnapshot.dom['event-log']}`;
+    const feedbackDelta = feedback.startsWith(priorPolicyFeedback) ?
+      feedback.slice(priorPolicyFeedback.length) :
+      feedback.includes(priorPolicyFeedback) ? feedback.replace(priorPolicyFeedback, '') : feedback;
+    if (/\b(core|vault)\b.{0,80}\b(hacked|acquired|secured|stolen|reached|complete)\b|\b(hacked|acquired|secured|stolen|reached|complete)\b.{0,80}\b(core|vault)\b/i
+      .test(feedbackDelta) || /\b(win|won|victory|success)\b/i.test(String(postThresholdPolicy.outcome ?? ''))) {
+      acquisitionEvidence = feedbackDelta.replace(/\s+/g, ' ').slice(-140) ||
+        String(postThresholdPolicy.outcome);
     }
+    priorPolicyFeedback = feedback;
   }
   result('ADVERSARY-007 pursues the core without hacking surplus terminals',
-    thresholdPolicy.hacked >= thresholdPolicy.required &&
-      thresholdPolicy.untouched.length > 0 && pursuedCore && !extraTerminalHacked,
-    `required ${thresholdPolicy.required}, hacked ${thresholdPolicy.hacked}, untouched ${thresholdPolicy.untouched.length}; ${pursuitEvidence || 'no core pursuit'}`);
+    thresholdPolicy.required === 2 && thresholdPolicy.hacked === 2 &&
+      thresholdPolicy.untouched.length > 0 && Boolean(thresholdCoreIntent) &&
+      !extraTerminalHacked,
+    `tick 13: 2/2 with ${thresholdPolicy.untouched.length} untouched; ${thresholdCoreIntent ? `${thresholdCoreIntent.id}: ${thresholdCoreIntent.text}` : 'no core/vault intent'}; ${acquisitionEvidence || 'pursuit observed before acquisition'}`);
 
   let terminalSnapshot = postThresholdSnapshot;
   for (let step = 0; step < 120 && !isTerminalOutcome(outcomeOf(terminalSnapshot.state)); step++) {
