@@ -18,6 +18,13 @@
  *   · BroadcastChannel — other tabs on this origin, which is what a recording rig is
  *   · the room's own peer connections, when a multiplayer session exists
  * Both carry the same tiny pose frame, so a world does not care which one it heard.
+ *
+ * BOTH DIRECTIONS OF BOTH PIPES, or the sentence above is a lie. A pose was published to the
+ * peer connections from the first day and never LISTENED for on them, so the only presences a
+ * world ever painted were the ones BroadcastChannel carried — and BroadcastChannel does not
+ * leave the browser it was sent from. "Different machines" meant "different tabs" until the
+ * ear below existed. Measured, not assumed: two isolated browser contexts in one real PeerJS
+ * room, a chat frame crossing and a pose frame not — see tests/browser/holo_wire.cjs.
  */
 (function (root) {
   'use strict';
@@ -26,6 +33,24 @@
   const GONE_MS = 6000;                 // a presence unheard this long has left
   const SEND_MS = 120;
   const HIST = 24;                      // how many matched frames to calibrate against
+  const MAX_PRESENT = 32;               // a stranger publishing under a thousand names is a
+                                        // flood, not a room
+
+  // ── nothing that arrives here is trusted ─────────────────────────────────
+  // Every pose comes from somewhere else — another tab, and now another machine — so it is
+  // input, not data. A pose is three short strings and a handful of numbers. Anything that is
+  // not that shape is dropped rather than thrown (a throw inside the painter's frame loop
+  // stops everyone being painted, not just the liar), non-finite numbers are refused because
+  // one NaN in a position poisons an eased transform permanently, and the strings are stripped
+  // of the characters that turn a label into markup: a name from a stranger reaches a
+  // nameplate, a camera title (ai/cams.js), and an innerHTML rail (house.html:102), and this
+  // estate has already been bitten by exactly that once.
+  const num = (v, fb) => (typeof v === 'number' && isFinite(v)) ? Math.max(-1e6, Math.min(1e6, v)) : fb;
+  const txt = (v, n) => (typeof v === 'string')
+    ? (v.replace(/[\u0000-\u001f\u007f<>&"'`\\]/g, '').trim().slice(0, n) || null) : null;
+  const hex = (v) => (typeof v === 'string' && /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(v))
+    ? (v[0] === '#' ? v : '#' + v)
+    : (typeof v === 'number' && isFinite(v) && v >= 0 && v <= 0xffffff) ? v : null;
 
   const state = { me: null, others: new Map(), group: null, world: null, bus: null,
                   publishing: null, painting: null, seen: 0, sent: 0, frame: 0 };
@@ -40,15 +65,19 @@
   }
 
   function receive(d) {
-    if (!d || d.kind !== 'pose' || !d.id) return;
-    if (state.me && d.id === state.me.id) return;                 // not your own reflection
-    const prev = state.others.get(d.id);
+    if (!d || typeof d !== 'object' || d.kind !== 'pose') return null;
+    const id = txt(d.id, 64); if (!id) return null;
+    if (state.me && id === state.me.id) return null;              // not your own reflection
+    const prev = state.others.get(id);
+    if (!prev && state.others.size >= MAX_PRESENT) return null;   // the flood stops at the door
     const t = now();
-    const p = { id: d.id, name: d.name || d.id, color: d.color || null,
-      world: d.world || null, speaking: !!d.speaking, at: t,
-      pos: d.pos || (prev && prev.pos) || { x: 0, y: 0, z: 0 },
-      yaw: typeof d.yaw === 'number' ? d.yaw : (prev ? prev.yaw : 0),
-      f: typeof d.f === 'number' ? d.f : null,
+    const q = (d.pos && typeof d.pos === 'object') ? d.pos : null;
+    const p = { id: id, name: txt(d.name, 40) || id, color: hex(d.color),
+      world: txt(d.world, 60), speaking: !!d.speaking, at: t,
+      pos: q ? { x: num(q.x, 0), y: num(q.y, 0), z: num(q.z, 0) }
+             : (prev && prev.pos) || { x: 0, y: 0, z: 0 },
+      yaw: num(d.yaw, prev ? prev.yaw : 0),
+      f: num(d.f, null),
       shown: prev ? prev.shown : null,
       hist: (prev && prev.hist) || [],
       vel: (prev && prev.vel) || { x: 0, y: 0, z: 0 },
@@ -80,8 +109,56 @@
       }
       p.hist = prev.hist;
     }
-    state.others.set(d.id, p);
+    state.others.set(id, p);
     state.seen++;
+    return p;
+  }
+
+  // the pose as it goes back out on the wire: primitives only, and only the ones a pose has —
+  // the record kept above also holds a THREE.Group and a history, which are nobody else's
+  const outward = (p) => ({ kind: 'pose', id: p.id, name: p.name, color: p.color, world: p.world,
+    speaking: p.speaking, pos: { x: p.pos.x, y: p.pos.y, z: p.pos.z }, yaw: p.yaw, f: p.f });
+
+  // ── the other ear: a pose that came from another machine ─────────────────
+  // Publishing to the room's connections was only half a wire. The room's own dispatcher
+  // switches on data.type (net/multiplayer.js:328) and silently drops every type it does not
+  // know; 'holo' is not one of them, so a pose crossed the network, arrived at the far end,
+  // and died in that switch. A DataConnection is an emitter, so this listens on it directly
+  // rather than reaching into that switch — same channel, same frame, one more ear, and no
+  // other file touched. What comes off the wire goes through exactly the same door a
+  // BroadcastChannel pose goes through, so it is painted by the same code or not at all.
+  //
+  // Only ACCEPTED connections are listened to. The host holds an unproven channel in `pending`
+  // until it presents the invite, and `pending` is not this map — so a stranger cannot project
+  // itself into a room it has not been let into.
+  const heard = new WeakSet();
+  let wiredAt = 0;
+  function wire() {
+    const t = now(); if (t - wiredAt < 400) return; wiredAt = t;   // connections change slowly
+    const w = root.worldNavigator, mp = w && w.multiplayer;
+    if (!mp || !mp.connections || typeof mp.connections.forEach !== 'function') return;
+    // this is called from inside the publish loop, so it swallows its own trouble: an ear that
+    // throws here would silence the mouth on the next line, which is the bug it exists to fix
+    try { listen(mp); } catch (e) {}
+  }
+
+  function listen(mp) {
+    mp.connections.forEach((cn) => {
+      if (!cn || typeof cn.on !== 'function' || heard.has(cn)) return;
+      heard.add(cn);
+      try {
+        cn.on('data', (d) => {
+          if (!d || d.type !== 'holo') return;
+          const p = receive(d.pose);
+          if (!p || !mp.isHost) return;
+          // A joiner is connected only to the host, so without a relay two joiners are
+          // invisible to each other — the same reason chat is relayed (net/multiplayer.js:357).
+          // What is passed on is what came through the door, never the bytes that arrived.
+          const out = { type: 'holo', pose: outward(p) };
+          mp.connections.forEach((c) => { if (c !== cn) { try { c.send(out); } catch (e) {} } });
+        });
+      } catch (e) {}
+    });
   }
 
   // ── publishing: this is where I am ───────────────────────────────────────
@@ -100,8 +177,9 @@
         pos: c ? { x: +c.x.toFixed(2), y: +c.y.toFixed(2), z: +c.z.toFixed(2) } : { x: 0, y: 0, z: 0 },
         yaw: +(((w && w.rotation && w.rotation.y) || (w && w.camera && w.camera.rotation.y) || 0)).toFixed(3) };
       const b = bus(); if (b) { try { b.postMessage(pose); state.sent++; } catch (e) {} }
-      // and to the room, if this world is in one — same frame, different pipe
+      // and to the room, if this world is in one — same frame, different pipe, both ways
       try {
+        wire();
         const mp = w && w.multiplayer;
         mp && mp.connections && mp.connections.forEach(cn => { try { cn.send({ type: 'holo', pose }); } catch (e) {} });
       } catch (e) {}
@@ -185,6 +263,7 @@
     if (state.painting) return state.painting;
     const calibrated = o.calibrate !== false;
     const step = () => {
+      wire();                    // a world that only WATCHES still has to hear the room
       const w = root.worldNavigator, T = root.THREE;
       if (w && w.scene && T) {
         if (!state.group || state.group.parent !== w.scene) {
@@ -238,7 +317,7 @@
       state.painting = requestAnimationFrame(step);
     };
     state.painting = requestAnimationFrame(step);
-    bus();
+    bus(); wire();
     return state.painting;
   }
 
