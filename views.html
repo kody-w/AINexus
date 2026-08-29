@@ -136,6 +136,12 @@ async function runLive(n) {
 
     // budgets are not optional just because this view is prettier
     const d = c.frame.contentWindow.__autodrive;
+    // The driver labels itself now, but a label is not an announcement: say it
+    // out loud in the room, exactly as the control tower does.
+    try {
+      d.labelAsAI && d.labelAsAI(persona);
+      d.say('🤖 ' + persona + ' here — I am an AI playing with the same controls you have.');
+    } catch (e) {}
     c.doing.textContent = 'playing';
     d.run(loaded.prog, (verb) => {
       c.turns++;

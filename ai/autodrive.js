@@ -670,6 +670,37 @@
   window.__autodrive = api;
   // the console IS the CLI: `drive.say("hi")`, `drive.travel("Crystal")`, `drive.snapshot()`
   window.drive = api;
+
+  // ── the label is not the caller's job ──────────────────────────────────────
+  // "Every AI player is labelled as an AI to everyone in the room" is an
+  // invariant of this system, and an invariant a caller has to remember is one
+  // that eventually gets forgotten — it already was, by the new live views grid,
+  // which set NEXUS_IS_AI but never touched the multiplayer username, so its
+  // players would have appeared to the room as unlabelled people.
+  //
+  // So the driver labels itself the moment it has hands. Anything that arms a
+  // driver gets this for free and cannot opt out by omission. It is idempotent,
+  // so a caller that also labels (the control tower does) changes nothing.
+  api.labelAsAI = function (persona) {
+    const who = persona || window.NEXUS_PERSONA || 'anon';
+    try {
+      const mp = window.worldNavigator && window.worldNavigator.multiplayer;
+      if (mp) {
+        const tag = '🤖 ' + who + ' (AI)';
+        if (mp.username !== tag) mp.username = tag;
+        if (mp.peer) mp.peer.__isAI = true;
+      }
+      window.NEXUS_IS_AI = true;
+      return true;
+    } catch (e) { return false; }
+  };
+  // The world may not have built its multiplayer yet when the driver arms, so
+  // try until it exists rather than labelling once into a void.
+  (function labelWhenPossible(tries) {
+    if (api.labelAsAI() && window.worldNavigator && window.worldNavigator.multiplayer) return;
+    if (tries > 40) return;                       // ~20s, then give up quietly
+    setTimeout(() => labelWhenPossible(tries + 1), 500);
+  })(0);
   log('hands ready — window.drive' + (ARRIVED_WITH ? ' · arrived carrying ' + Object.keys(ARRIVED_WITH).join(',') : ''));
   try { parent.postMessage({ __autodrive: 'ready', title: document.title }, '*'); } catch (e) {}
 })();
