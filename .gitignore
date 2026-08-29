@@ -180,3 +180,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .vscode/settings.json
+
+# Dependencies are installed, never committed. A broken partial copy of
+# tests/node_modules was tracked here (323 files, 6.2MB) with playwright-core
+# missing its lib/, so PLAYWRIGHT_DIR=tests failed with "Cannot find module
+# ./lib/inprocess" — an install that looks present and is not.
+node_modules/
