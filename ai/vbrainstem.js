@@ -172,11 +172,56 @@
         say('starting python…');
         pyodide = await root.loadPyodide({ indexURL: PYODIDE_URL });
 
-        const grab = async (u, fallback) => {
-          try { const r = await fetch(u, { cache: 'force-cache' }); if (r.ok) return await r.text(); } catch (e) {}
+        // THE BOOTSTRAP FETCHES ARE THE ONES THAT MATTER MOST, and they were the ones with no
+        // check at all. hotloadNow verifies the eight same-origin agents under ai/vb/ — the files
+        // that shipped with this page — while basic_agent.py, manage_memory_agent.py and
+        // context_memory_agent.py came from OTHER repositories, off a mutable `main`, straight into
+        // runPythonAsync. basic_agent.py is the base class all eight verified agents inherit from,
+        // so the hash-checked leaves were hanging off an unchecked root, and ManageMemory is a core
+        // agent offered to every player on every turn. state/bootstrap_agents.json pins each to a
+        // commit and publishes its sha256; a fingerprint against a moving branch is a promise that
+        // breaks itself.
+        let bootstrap = null;
+        try {
+          const br = await fetch(here('../state/bootstrap_agents.json'), { cache: 'no-cache' });
+          if (br.ok) {
+            bootstrap = {};
+            for (const a of ((await br.json()).agents || [])) bootstrap[a.file] = a;
+          }
+        } catch (e) { if (log) log('[vbrainstem] no bootstrap manifest: ' + e.message); }
+
+        const digest = async (text) => [...new Uint8Array(await crypto.subtle.digest(
+          'SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // grab(url, fallback, pinName): with a pinName, the pinned commit is fetched instead of
+        // whatever `main` says today, and bytes that do not match are REFUSED — the fallback is
+        // used, never the unverified bytes. Refusing here means losing a capability; running
+        // unread code from a branch anyone can move means losing the tab.
+        const grab = async (u, fallback, pinName) => {
+          const pin = pinName && bootstrap && bootstrap[pinName];
+          const url = pin ? 'https://raw.githubusercontent.com/' + pin.repo + '/' + pin.commit + '/' + pin.path : u;
+          try {
+            const r = await fetch(url, { cache: pin ? 'no-cache' : 'force-cache' });
+            if (r.ok) {
+              const text = await r.text();
+              if (pin) {
+                const got = await digest(text);
+                if (got !== pin.sha256) {
+                  if (log) log('[vbrainstem] REFUSED ' + pinName + ': published ' + pin.sha256.slice(0, 12)
+                               + '… but fetched ' + got.slice(0, 12) + '… — not run');
+                  return fallback;
+                }
+                if (log) log('[vbrainstem] verified ' + pinName + ' against its pinned sha256');
+              } else if (pinName && !pin) {
+                if (log) log('[vbrainstem] ' + pinName + ' has no published fingerprint — not run');
+                return fallback;
+              }
+              return text;
+            }
+          } catch (e) {}
           return fallback;
         };
-        const basic = await grab(BASIC_AGENT_URL,
+        const basic = await grab(BASIC_AGENT_URL, undefined, 'basic_agent.py') || (
           'class BasicAgent:\n    def __init__(self, name=None, metadata=None):\n' +
           '        if name is not None: self.name = name\n        if metadata is not None: self.metadata = metadata\n' +
           '    def system_context(self):\n        return None\n');
@@ -192,7 +237,7 @@
         say('loading agents…');
         for (const cfg of AGENTS) {
           try {
-            const src = await grab(AGENT_BASE + cfg.file, null);
+            const src = await grab(AGENT_BASE + cfg.file, null, cfg.file);
             if (!src) continue;
             pyodide.FS.writeFile('/agents/' + cfg.file, src);
             const mod = cfg.file.replace(/\.py$/, ''), slot = '_vb_' + cfg.className;

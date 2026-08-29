@@ -1,0 +1,31 @@
+{
+ "agents": [
+  {
+   "bytes": 1303,
+   "commit": "64db61f441d7b733892fd4e27a6ee787e7369a28",
+   "file": "basic_agent.py",
+   "path": "rapp_brainstem/agents/basic_agent.py",
+   "repo": "kody-w/rapp-installer",
+   "sha256": "701488bc00d536a7b23295e7da99c62f24e9b00f233daa325886430c736b78eb"
+  },
+  {
+   "bytes": 6954,
+   "commit": "925dee4a211965f2582e71a6d2ad75f60a54ea7d",
+   "file": "context_memory_agent.py",
+   "path": "rapp_brainstem/agents/context_memory_agent.py",
+   "repo": "kody-w/RAPP",
+   "sha256": "4364e77ae26e10e243dbef03d159e9d0d75e1f761578c8e992162a90a31a5be7"
+  },
+  {
+   "bytes": 4057,
+   "commit": "925dee4a211965f2582e71a6d2ad75f60a54ea7d",
+   "file": "manage_memory_agent.py",
+   "path": "rapp_brainstem/agents/manage_memory_agent.py",
+   "repo": "kody-w/RAPP",
+   "sha256": "525f489255c3c3bf4b6ac33287d207b2319cddadee50797cceca0db17e95725c"
+  }
+ ],
+ "count": 3,
+ "note": "The three python files this estate fetches from OTHER repositories before any agent runs. They were fetched from a mutable `main` and executed with no digest at all, while learn.html told strangers that an agent fetched by name is hashed and refused on mismatch. basic_agent.py is the base class every verified agent inherits from, so the checked leaves hung off an unchecked root. Pinned to a commit because a fingerprint against a moving branch is a promise that breaks itself.",
+ "schema": "nexus-bootstrap-agents/1"
+}

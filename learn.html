@@ -62,11 +62,14 @@ code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px
   <p class="is">You are about to run a stranger’s file on your own machine. Ask about that.</p>
   <p>It is the right question and it deserves a straight answer rather than a reassuring one.
   An agent is one readable file — you can look at it, which is the first defence and the reason
-  the one-file rule exists at all. Beyond that: an agent fetched by name is hashed as it arrives
-  and compared against the fingerprint published for it, and it is <em>refused</em> if the bytes
-  do not match &mdash; not repaired, not run with a warning. The same check guards the templates
-  a world is forged from. What it cannot do is vouch for a file nobody has published a fingerprint
-  for; that one you are reading yourself. And a file that matches its fingerprint is still a file that
+  the one-file rule exists at all. Beyond that: every agent this page loads is hashed as it arrives
+  and compared against the fingerprint published for it, and it is <em>refused</em> if the bytes do
+  not match &mdash; not repaired, not run with a warning. That includes the handful fetched from
+  other repositories before anything else runs, which are pinned to a particular commit rather than
+  to a branch someone could move afterwards. The same check guards the templates a world is forged
+  from. What it cannot do is vouch for a file you hand it yourself at runtime, with no published
+  fingerprint to check against; that one you are reading yourself. And a file that matches its
+  fingerprint is still a file that
   does what it says, and what it says might be something you did not want. Read it, or run it
   somewhere you do not mind losing.</p>
   <p class="eg"><b>The honest version:</b> this is the same trust you extend to any package you
