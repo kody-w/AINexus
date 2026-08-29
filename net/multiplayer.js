@@ -835,7 +835,14 @@
                 }
             };
             avatar.traverse((obj) => {
-                release(obj.geometry);
+                // NOT a Sprite's geometry. In three.js r128 every Sprite on the page shares
+                // one module-level BufferGeometry, so disposing "this avatar's" sprite quad
+                // deletes the buffers behind every other nametag AND every unrelated label
+                // sprite the world itself placed. The renderer re-uploads on the next frame,
+                // so nothing stays blank — but a departure would churn the whole page's
+                // sprite buffers, which is the opposite of what disposing is for. The
+                // material and its canvas texture ARE ours, and those still go.
+                if (!(obj.isSprite || obj.type === 'Sprite')) release(obj.geometry);
                 if (Array.isArray(obj.material)) obj.material.forEach(release);
                 else release(obj.material);
                 if (obj.isLight || obj.type === 'PointLight') release(obj);

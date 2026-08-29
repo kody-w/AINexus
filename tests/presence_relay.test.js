@@ -32,12 +32,18 @@ function releasable(tag) {
     dispose() { disposals.push(tag); }
   };
 }
+const SHARED_SPRITE_GEOMETRY = { __tag: 'SpriteSharedGeometry', dispose() { disposals.push('SpriteSharedGeometry'); } };
 const THREE = {
   Group: class extends Obj3D { constructor() { super('Group'); } },
   // the stub has to CARRY geometry/material, or a traversal looking for them finds an
   // avatar that appears to own nothing and a leak passes as a clean teardown
   Mesh: class extends Obj3D { constructor(geometry, material) { super('Mesh'); this.geometry = geometry; this.material = material; } },
-  Sprite: class extends Obj3D { constructor(material) { super('Sprite'); this.material = material; } },
+  // Every Sprite in three.js r128 shares ONE module-level BufferGeometry. Modelling that
+  // is the whole point: a stub where each sprite owned its own geometry would have called
+  // disposing it correct, which is how the leak got past this file the first time.
+  Sprite: class extends Obj3D {
+    constructor(material) { super('Sprite'); this.isSprite = true; this.material = material; this.geometry = SHARED_SPRITE_GEOMETRY; }
+  },
   PointLight: class extends Obj3D { constructor() { super('PointLight'); } dispose() { disposals.push('PointLight'); } },
   CylinderGeometry: releasable('CylinderGeometry'), SphereGeometry: releasable('SphereGeometry'),
   MeshStandardMaterial: releasable('MeshStandardMaterial'), SpriteMaterial: releasable('SpriteMaterial'),
@@ -179,6 +185,15 @@ pruner.players.get('GUEST006').lastUpdate = Date.now() - 6000;
 pruner.update();
 R['7_prune_disposes'] = { stillKnown: [...pruner.players.keys()], disposed: disposals.slice().sort() };
 
+// ── 8. a prune must not tear down geometry three.js shares page-wide ────────
+// The nametag sprite's quad is not ours to release: every other player's nametag and
+// every label the world itself placed ride the same object.
+R['8_shared_sprite_geometry_survives'] = {
+  disposedSharedQuad: disposals.includes('SpriteSharedGeometry'),
+  ourSpriteMaterialDisposed: disposals.includes('SpriteMaterial'),
+  ourCanvasTextureDisposed: disposals.includes('CanvasTexture'),
+};
+
 console.log(JSON.stringify(R, null, 1));
 const pass =
   R['1_host_label_replaced_not_stacked'].spriteCount === 1 &&
@@ -194,6 +209,9 @@ const pass =
   R['6_implausible_ids_refused'].known.join(',') === '9a1f4c2e-77b0-4f31-8c6d-0e2b5a9d1f77,HOST0001' &&
   R['7_prune_disposes'].stillKnown.length === 0 &&
   R['7_prune_disposes'].disposed.join(',') ===
-    'CanvasTexture,CylinderGeometry,MeshStandardMaterial,PointLight,SphereGeometry,SpriteMaterial';
+    'CanvasTexture,CylinderGeometry,MeshStandardMaterial,PointLight,SphereGeometry,SpriteMaterial' &&
+  R['8_shared_sprite_geometry_survives'].disposedSharedQuad === false &&
+  R['8_shared_sprite_geometry_survives'].ourSpriteMaterialDisposed === true &&
+  R['8_shared_sprite_geometry_survives'].ourCanvasTextureDisposed === true;
 console.log(pass ? 'ALL PASS' : 'FAIL');
 process.exit(pass ? 0 : 1);

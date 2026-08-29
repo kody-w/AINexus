@@ -318,6 +318,11 @@
             persona: 'You are ' + (window.NEXUS_PERSONA || 'a visitor') + '.',
             log: log,
           });
+          // A turn that was killed while parked in auth.chat must not deliver the line
+          // it was carrying: the reply arrives long after the operator pulled the kill
+          // switch, and the tower already reports this player stopped. Only the MOVE was
+          // guarded before, so a stopped player went on talking to the whole room.
+          if (myTurn !== api._epoch) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null, via: 'vbrainstem' }; }
           if (r.words) await api.say(r.words.slice(0, 240));
           return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
         } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
@@ -356,6 +361,9 @@
         return null;
       }
       const words = reply.split('|||NEXUS|||')[0].trim();
+      // same gate as the vbrainstem path above: the chat call has no timeout, so this
+      // reply can land minutes after a stop
+      if (myTurn !== api._epoch) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null }; }
       if (words) await api.say(words.slice(0, 240));
       let move = null;
       try { const m = String(block).match(/\{[\s\S]*\}/); if (m) move = JSON.parse(m[0]); } catch (e) {}
@@ -633,7 +641,13 @@
     // "is the turn that issued this still alive" — only the caller knows.
     async run(program, onStep, opts) {
       const steps = (program && program.steps) || [];
-      if (opts && opts.turn) {
+      // Ask whether the caller DECLARED a turn, not whether the declaration is truthy.
+      // Generation 0 is the generation every freshly loaded page starts in, and `0` is
+      // falsy: testing `opts.turn` sent the first turn of every page down the operator
+      // branch, where it called stop() and cancelled the turn that issued it — this
+      // mechanism's own bug, for the third time, one layer over. The claim is a value;
+      // its presence is the question.
+      if (opts && Object.prototype.hasOwnProperty.call(opts, 'turn')) {
         // The claim carries the GENERATION it belongs to, not a bare "I am a turn".
         // A boolean would let a zombie through: a turn parked in auth.chat that wakes
         // after the operator has already started a different program would claim the

@@ -42,7 +42,18 @@ function makeDriver(file) {
   if (!d) { console.log('FAIL: driver did not attach'); process.exit(1); }
   const R = {};
   const step = { do: 'wait', ms: 10 };
-  const TURN = { turn: true };          // a call issued BY a turn declares itself
+
+  // 0) THE FRESH PAGE — this case must run before anything else touches the driver.
+  //    A newly loaded page sits in generation 0, and 0 is falsy. Asking whether the
+  //    caller's claim is TRUTHY instead of whether it EXISTS sent the first turn of
+  //    every page down the operator branch, where it called stop() and cancelled the
+  //    turn that issued it. Every other case here opens with a stop, which moves the
+  //    epoch to 1 and hides it — which is exactly how it got past this file.
+  const freshEpoch = d._epoch;
+  d._liveTurn = d._epoch;                          // what mind() does on entry
+  const v0 = await d.run({ steps: [step] }, null, { turn: freshEpoch });
+  R['0_generation_zero_is_a_real_claim'] =
+    { freshEpoch, verdict: v0, epochAfter: d._epoch, selfCancelled: d._epoch !== freshEpoch };
 
   // A) a turn's own tool calls must not cancel the turn that issued them.
   //    This is the drive.mind() path: turn() runs with nothing else on the stack and
@@ -103,6 +114,9 @@ function makeDriver(file) {
 
   console.log(JSON.stringify(R, null, 1));
   const pass =
+    R['0_generation_zero_is_a_real_claim'].freshEpoch === 0 &&
+    R['0_generation_zero_is_a_real_claim'].verdict === 'done' &&
+    R['0_generation_zero_is_a_real_claim'].selfCancelled === false &&
     R.A_turn_survives_own_tool_calls.verdicts.every((v) => v === 'done') &&
     R.A_turn_survives_own_tool_calls.epochUnchanged &&
     R.B_operator_stop_seen.epochBumped &&
