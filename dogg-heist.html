@@ -7,6 +7,17 @@
       const theme =
         param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.setAttribute("data-theme", theme);
+      const earlyIntroKeyGuard = (event) => {
+        if (!document.documentElement.classList.contains("intro-open") || event.key !== "Tab") return;
+        const start = document.getElementById("intro-start");
+        if (!start) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        start.focus();
+      };
+      document.addEventListener("keydown", earlyIntroKeyGuard, true);
+      document.addEventListener("keyup", earlyIntroKeyGuard, true);
+      window.__doggIntroKeyGuard = earlyIntroKeyGuard;
     })();
   </script>
   <meta charset="UTF-8">
@@ -1354,9 +1365,8 @@
   </style>
 </head>
 <body class="intro-open">
-  <a class="skip-link" href="#game-board">Skip to tactical board</a>
-
   <div class="app-shell" inert aria-hidden="true">
+    <a class="skip-link" href="#game-board">Skip to tactical board</a>
     <header class="topline">
       <div>
         <p class="eyebrow">DOGG / Deterministic Operations Graph Game</p>
@@ -1659,6 +1669,7 @@
 
       const elements = {
         appShell: document.querySelector(".app-shell"),
+        skipLink: document.querySelector(".skip-link"),
         play: document.getElementById("play-toggle"),
         step: document.getElementById("step-button"),
         restart: document.getElementById("restart-button"),
@@ -2984,6 +2995,23 @@
         ctx.restore();
       }
 
+      function drawMarkerBadge(ctx, metrics, text, x, y, scale = 0.3) {
+        const rect = cellRect(metrics, x, y);
+        const radius = Math.min(rect.w, rect.h) * 0.235;
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = palette["canvas-ink"];
+        ctx.beginPath();
+        ctx.arc(rect.cx, rect.cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = palette.surface;
+        ctx.font = "900 " + Math.max(8, rect.h * scale) + "px Consolas, 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, rect.cx, rect.cy);
+        ctx.restore();
+      }
+
       function drawDiamond(ctx, metrics, x, y, color, alpha = 1) {
         const rect = cellRect(metrics, x, y);
         const radius = Math.min(rect.w, rect.h) * 0.31;
@@ -3135,7 +3163,6 @@
       }
 
       function drawKnownStatics(ctx, metrics, state, seen, visible, privateAgentId = null) {
-        const objectiveInk = document.documentElement.dataset.theme === "dark" ? palette.surface : palette["canvas-ink"];
         drawExtraction(ctx, metrics, state.extraction);
         state.doors.forEach((door) => {
           const cell = keyOf(door.x, door.y);
@@ -3145,11 +3172,11 @@
           const cell = keyOf(terminal.x, terminal.y);
           if (!seen.has(cell)) return;
           drawDiamond(ctx, metrics, terminal.x, terminal.y, terminal.hacked ? palette.success : palette.warning, visible.has(cell) ? 0.95 : 0.42);
-          drawText(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, objectiveInk, 0.25);
+          drawMarkerBadge(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, 0.29);
         });
         if (seen.has(keyOf(state.core.x, state.core.y)) || !privateAgentId) {
           drawDiamond(ctx, metrics, state.core.x, state.core.y, palette.warning, state.core.acquired ? 0.35 : 1);
-          drawText(ctx, metrics, "C", state.core.x, state.core.y, objectiveInk, 0.28);
+          drawMarkerBadge(ctx, metrics, "C", state.core.x, state.core.y, 0.3);
         }
         state.hazards.forEach((hazard) => {
           const discovered = privateAgentId ? hazard.discoveredBy.includes(privateAgentId) : hazard.discoveredBy.length > 0;
@@ -3698,6 +3725,18 @@
         return scrubTimeline(frames.length - 1);
       }
 
+      function createForkTransition(parentFrame, counter, abandonedCount) {
+        if (!Number.isInteger(counter) || counter < 1) throw new Error("Fork counter is invalid.");
+        if (!Number.isInteger(abandonedCount) || abandonedCount < 1) throw new Error("Fork must abandon at least one future frame.");
+        const state = clone(parentFrame.state);
+        const oldBranch = state.branchId;
+        state.branchId = "B" + counter + "-" + sha256(parentFrame.hash + "|" + counter).slice(0, 7).toUpperCase();
+        state.stats.forks += 1;
+        const events = ["Forked " + oldBranch + " at tick " + state.tick + ". " + abandonedCount + " future frame" + (abandonedCount === 1 ? "" : "s") + " abandoned."];
+        state.lastEvents = events.slice();
+        return { state, events, branchId: state.branchId };
+      }
+
       function forkTimeline() {
         userCommanded = true;
         dismissIntro(false);
@@ -3709,19 +3748,43 @@
         stopTimer();
         const selectedFrame = currentFrame();
         const abandoned = frames.length - viewIndex - 1;
+        const transition = createForkTransition(selectedFrame, branchCounter + 1, abandoned);
         frames = frames.slice(0, viewIndex + 1);
         branchCounter += 1;
-        liveState = clone(selectedFrame.state);
-        const oldBranch = liveState.branchId;
-        liveState.branchId = "B" + branchCounter + "-" + sha256(selectedFrame.hash + "|" + branchCounter).slice(0, 7).toUpperCase();
-        liveState.stats.forks += 1;
-        const events = ["Forked " + oldBranch + " at tick " + liveState.tick + ". " + abandoned + " future frame" + (abandoned === 1 ? "" : "s") + " abandoned."];
-        liveState.lastEvents = events.slice();
-        sealFrame("fork", events);
+        liveState = transition.state;
+        sealFrame("fork", transition.events);
         renderAll();
         persistState();
         toast("New branch " + liveState.branchId + " sealed from tick " + liveState.tick + ".", "success");
         return true;
+      }
+
+      function applyDirectiveTransition(state, agentId, x, y) {
+        if (state.outcome !== "active") {
+          throw new Error("This branch is already sealed.");
+        }
+        const agent = state.agents.find((item) => item.id === agentId);
+        const targetX = Math.round(Number(x));
+        const targetY = Math.round(Number(y));
+        if (!agent || agent.status !== "active") {
+          throw new Error("Unknown or inactive agent directive.");
+        }
+        if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || !inBounds(targetX, targetY) || tileAt(state, targetX, targetY) === "W") {
+          throw new Error("Waypoint rejected: choose a traversable facility tile.");
+        }
+        const path = findPath(state, agent, { x: targetX, y: targetY }, agent, {
+          visible: visibleCellsForAgent(state, agent),
+          knownDanger: currentDangerCells(state)
+        });
+        if (!path.length && (agent.x !== targetX || agent.y !== targetY)) {
+          throw new Error("Waypoint rejected: " + ROLE[agent.id].name + " has no legal route.");
+        }
+        state.directiveSerial += 1;
+        agent.directive = { x: targetX, y: targetY, serial: state.directiveSerial };
+        agent.lastIntent = "Following your waypoint";
+        const events = ["Directive " + state.directiveSerial + " queued for " + ROLE[agent.id].name + " → [" + targetX + "," + targetY + "]."];
+        state.lastEvents = events.slice();
+        return { agentId: agent.id, targetX, targetY, events };
       }
 
       function queueDirective(agentId, x, y) {
@@ -3731,39 +3794,18 @@
           toast("Historical frames cannot accept directives. Fork or return live.", "error");
           return false;
         }
-        if (liveState.outcome !== "active") {
-          toast("This branch is already sealed.", "error");
+        let transition;
+        try {
+          transition = applyDirectiveTransition(liveState, agentId, x, y);
+        } catch (error) {
+          toast(error.message, "error");
           return false;
         }
-        const agent = liveState.agents.find((item) => item.id === agentId);
-        const targetX = Math.round(Number(x));
-        const targetY = Math.round(Number(y));
-        if (!agent || agent.status !== "active") {
-          toast("Unknown or inactive agent directive.", "error");
-          return false;
-        }
-        if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || !inBounds(targetX, targetY) || tileAt(liveState, targetX, targetY) === "W") {
-          toast("Waypoint rejected: choose a traversable facility tile.", "error");
-          return false;
-        }
-        const path = findPath(liveState, agent, { x: targetX, y: targetY }, agent, {
-          visible: visibleCellsForAgent(liveState, agent),
-          knownDanger: currentDangerCells(liveState)
-        });
-        if (!path.length && (agent.x !== targetX || agent.y !== targetY)) {
-          toast("Waypoint rejected: " + ROLE[agent.id].name + " has no legal route.", "error");
-          return false;
-        }
-        liveState.directiveSerial += 1;
-        agent.directive = { x: targetX, y: targetY, serial: liveState.directiveSerial };
-        agent.lastIntent = "Following your waypoint";
-        const events = ["Directive " + liveState.directiveSerial + " queued for " + ROLE[agent.id].name + " → [" + targetX + "," + targetY + "]."];
-        liveState.lastEvents = events.slice();
-        sealFrame("directive", events);
-        keyboardCursor = { x: targetX, y: targetY };
+        sealFrame("directive", transition.events);
+        keyboardCursor = { x: transition.targetX, y: transition.targetY };
         renderAll();
         persistState();
-        toast(ROLE[agent.id].name + " accepted waypoint [" + targetX + "," + targetY + "].", "success");
+        toast(ROLE[transition.agentId].name + " accepted waypoint [" + transition.targetX + "," + transition.targetY + "].", "success");
         return true;
       }
 
@@ -4039,6 +4081,71 @@
         if (state.outcome === "lost" && !state.outcomeReason) throw new Error(label + " lost outcome requires a reason.");
       }
 
+      function requireExactTransition(actualState, actualEvents, expectedState, expectedEvents, frameIndex, kind) {
+        if (stableStringify(actualEvents) !== stableStringify(expectedEvents)) {
+          throw new Error("Frame " + frameIndex + " " + kind + " events do not match deterministic replay.");
+        }
+        if (stableStringify(actualState) !== stableStringify(expectedState)) {
+          throw new Error("Frame " + frameIndex + " " + kind + " state does not match deterministic replay.");
+        }
+      }
+
+      function validateDirectiveTransition(previousFrame, frame, frameIndex) {
+        if (frame.events.length !== 1) throw new Error("Frame " + frameIndex + " directive must contain exactly one event.");
+        const match = /^Directive (\d+) queued for (Ghost|Cipher|Atlas|Spark) → \[(\d+),(\d+)\]\.$/.exec(frame.events[0]);
+        if (!match) throw new Error("Frame " + frameIndex + " directive event is malformed.");
+        const agentId = AGENT_ORDER.find((id) => ROLE[id].name === match[2]);
+        const expectedState = clone(previousFrame.state);
+        const transition = applyDirectiveTransition(expectedState, agentId, Number(match[3]), Number(match[4]));
+        if (Number(match[1]) !== expectedState.directiveSerial) {
+          throw new Error("Frame " + frameIndex + " directive serial is not the next legal serial.");
+        }
+        requireExactTransition(frame.state, frame.events, expectedState, transition.events, frameIndex, "directive");
+      }
+
+      function validateForkTransition(previousFrame, frame, frameIndex) {
+        if (frame.events.length !== 1) throw new Error("Frame " + frameIndex + " fork must contain exactly one event.");
+        const eventMatch = /^Forked (B\d+-[A-F0-9]{7}) at tick (\d+)\. (\d+) future (frame|frames) abandoned\.$/.exec(frame.events[0]);
+        if (!eventMatch) throw new Error("Frame " + frameIndex + " fork event is malformed.");
+        const branchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(frame.branchId);
+        const parentBranchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(previousFrame.branchId);
+        if (!branchMatch || !parentBranchMatch) throw new Error("Frame " + frameIndex + " fork branch is malformed.");
+        const counter = Number(branchMatch[1]);
+        const parentCounter = Number(parentBranchMatch[1]);
+        const abandonedCount = Number(eventMatch[3]);
+        if (counter <= parentCounter) throw new Error("Frame " + frameIndex + " fork counter did not advance.");
+        if (eventMatch[1] !== previousFrame.branchId || Number(eventMatch[2]) !== previousFrame.tick) {
+          throw new Error("Frame " + frameIndex + " fork event disagrees with its parent.");
+        }
+        if ((abandonedCount === 1) !== (eventMatch[4] === "frame")) {
+          throw new Error("Frame " + frameIndex + " fork event has invalid pluralization.");
+        }
+        const transition = createForkTransition(previousFrame, counter, abandonedCount);
+        if (transition.branchId !== frame.branchId) {
+          throw new Error("Frame " + frameIndex + " fork branch id is not derived from its parent.");
+        }
+        requireExactTransition(frame.state, frame.events, transition.state, transition.events, frameIndex, "fork");
+      }
+
+      function validateSemanticTransition(previousFrame, frame, frameIndex) {
+        if (frame.kind === "tick") {
+          if (previousFrame.state.outcome !== "active") {
+            throw new Error("Frame " + frameIndex + " advances a sealed mission.");
+          }
+          const expectedState = clone(previousFrame.state);
+          const expectedEvents = transitionOneTick(expectedState);
+          requireExactTransition(frame.state, frame.events, expectedState, expectedEvents, frameIndex, "tick");
+          return;
+        }
+        if (frame.kind === "directive") {
+          validateDirectiveTransition(previousFrame, frame, frameIndex);
+          return;
+        }
+        if (frame.kind === "fork") {
+          validateForkTransition(previousFrame, frame, frameIndex);
+        }
+      }
+
       function verifyFrames(candidateFrames) {
         try {
           requireArray(candidateFrames, "Frame collection", 1, 5000);
@@ -4066,6 +4173,8 @@
               seed = frame.state.seed;
               const genesisParent = sha256("DOGG_HEIST_GENESIS|" + seed);
               if (frame.parentHash !== genesisParent) throw new Error("Genesis parent hash is invalid.");
+              const expectedGenesis = createInitialState(seed);
+              requireExactTransition(frame.state, frame.events, expectedGenesis, expectedGenesis.lastEvents, index, "genesis");
             } else {
               if (frame.parentHash !== previousHash) throw new Error("Frame " + index + " does not point to its actual parent.");
               const expectedTick = frame.kind === "tick" ? previousFrame.tick + 1 : previousFrame.tick;
@@ -4081,6 +4190,7 @@
             }
             const expectedHash = sha256(stableStringify(frameMaterial(frame)));
             if (expectedHash !== frame.hash) throw new Error("Frame " + index + " hash verification failed.");
+            if (previousFrame) validateSemanticTransition(previousFrame, frame, index);
             previousHash = frame.hash;
             previousFrame = frame;
           }
@@ -4094,8 +4204,6 @@
         const result = verifyFrames(frames);
         if (showResult) {
           toast(result.valid ? "Verified " + frames.length + " immutable DOGG frames." : "Chain verification failed: " + result.reason, result.valid ? "success" : "error");
-        } else if (!result.valid) {
-          status("Chain verification failed: " + result.reason, "error");
         }
         return result.valid;
       }
@@ -4164,6 +4272,10 @@
         if (verification.seed !== data.seed) throw new Error("Export seed disagrees with the frame chain.");
         if (data.viewIndex < 0 || data.viewIndex >= data.frames.length) throw new Error("Export timeline cursor is out of range.");
         const finalFrame = data.frames[data.frames.length - 1];
+        const finalBranchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(finalFrame.branchId);
+        if (!finalBranchMatch || Number(finalBranchMatch[1]) !== data.branchCounter) {
+          throw new Error("Export branch counter disagrees with the live branch.");
+        }
         const viewingHistory = data.viewIndex !== data.frames.length - 1;
         if (data.running && viewingHistory) {
           throw new Error("Export cannot be running while its timeline cursor is historical.");
@@ -4593,7 +4705,10 @@
           elements.helpDialog.open ? closeHelp() : openHelp();
           return;
         }
-        if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) return;
+        const buttonActivation = event.target instanceof HTMLButtonElement &&
+          (event.code === "Space" || event.key === "Enter");
+        const linkActivation = event.target instanceof HTMLAnchorElement && event.key === "Enter";
+        if (buttonActivation || linkActivation) return;
         if (elements.helpDialog.open && event.key.toLowerCase() !== "h") return;
         if (event.code === "Space") {
           event.preventDefault();
@@ -4642,6 +4757,9 @@
         });
         elements.help.addEventListener("click", openHelp);
         elements.helpClose.addEventListener("click", closeHelp);
+        elements.skipLink.addEventListener("click", () => {
+          window.setTimeout(() => elements.board.focus({ preventScroll: true }), 0);
+        });
         elements.board.addEventListener("pointerdown", handleBoardPointerDown);
         elements.board.addEventListener("pointermove", handleBoardPointerMove);
         elements.board.addEventListener("pointerup", handleBoardPointerUp);
@@ -4658,6 +4776,12 @@
         });
         window.addEventListener("keydown", handleGlobalKey);
         document.addEventListener("keydown", handleIntroKeydown, true);
+        document.addEventListener("keyup", handleIntroKeydown, true);
+        if (window.__doggIntroKeyGuard) {
+          document.removeEventListener("keydown", window.__doggIntroKeyGuard, true);
+          document.removeEventListener("keyup", window.__doggIntroKeyGuard, true);
+          delete window.__doggIntroKeyGuard;
+        }
         window.addEventListener("resize", renderAll);
 
         const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
