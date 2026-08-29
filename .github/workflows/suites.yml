@@ -48,12 +48,20 @@ jobs:
       - name: install playwright + chromium
         working-directory: tests
         run: |
-          npm install --no-audit --no-fund playwright@1.55.1
-          # Install browsers with the LOCAL playwright, not whatever npx fetches. `npx playwright`
-          # will happily download a newer CLI and install ITS browser revision, leaving the pinned
-          # 1.55.1 looking for a revision that is not there.
+          # ONE playwright, chosen by tests/package.json and used for everything. Pinning
+          # playwright@1.55.1 here while package.json asked for @playwright/test ^1.40.0 gave two:
+          # the CLI installed chromium for 1.57.0 while the suites loaded a different copy, and
+          # every suite died on "Executable doesn't exist" with the browser sitting right there.
+          npm install --no-audit --no-fund
           ./node_modules/.bin/playwright install --with-deps chromium
-          ./node_modules/.bin/playwright --version
+          # and prove they are the same one, so this cannot come back quietly
+          CLI=$(./node_modules/.bin/playwright --version | awk '{print $2}')
+          LIB=$(node -e "console.log(require('playwright/package.json').version)")
+          echo "playwright CLI $CLI · library $LIB"
+          if [ "$CLI" != "$LIB" ]; then
+            echo "::error::the playwright that installed the browsers ($CLI) is not the one the suites load ($LIB)"
+            exit 1
+          fi
 
       - name: run the suites that do not need Pyodide
         env:
