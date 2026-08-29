@@ -24,11 +24,16 @@ function makeDriver(file) {
   const events = [];
   const realMove = function originalUpdateMovement() {};
   const world = {
-    camera: { position: { x: 0, y: 0, z: 0, set() {}, clone() { return this; } },
-              rotation: { x: 0, y: 0, z: 0 }, lookAt() {}, quaternion: {} },
+    camera: {
+      position: { x: 0, y: 0, z: 0, set() {}, clone() { return this; } },
+      rotation: { x: 0, y: 0, z: 0 }, lookAt() {}, quaternion: {},
+      // facing() reads the heading through this; the mousemove handler below turns it
+      getWorldDirection(v) { v.x = Math.sin(world.camera.rotation.y); v.y = 0; v.z = Math.cos(world.camera.rotation.y); return v; },
+    },
     scene: { children: [], add() {}, remove() {} },
     updateMovement: realMove, updateHover: function originalUpdateHover() {},
     isPointerLocked: false, portals: [],
+    portalIndex: [{ name: 'Crystal Caverns', x: 0, y: 0, z: -50 }],
   };
   const win = {
     worldNavigator: world, __events: events, __realMove: realMove,
@@ -42,7 +47,16 @@ function makeDriver(file) {
     parent: null, innerWidth: 800, innerHeight: 600,
   };
   win.window = win; win.self = win; win.top = win;
-  win.dispatchEvent = (ev) => { events.push({ type: ev.type, key: ev.key }); return true; };
+  win.THREE = { Vector3: class { constructor() { this.x = 0; this.y = 0; this.z = 0; } } };
+  win.dispatchEvent = (ev) => {
+    events.push({ type: ev.type, key: ev.key });
+    // turn the head, so aim()'s calibration finds a real radians-per-unit and its loop
+    // can actually converge — otherwise travel() returns before it ever walks or clicks
+    if (ev.type === 'mousemove' && typeof ev.movementX === 'number') {
+      world.camera.rotation.y -= ev.movementX * 0.0025;
+    }
+    return true;
+  };
   doc.dispatchEvent = win.dispatchEvent;
   win.KeyboardEvent = function (type, o) { this.type = type; this.key = (o || {}).key; };
   const ctx = vm.createContext(win);
@@ -191,6 +205,28 @@ function makeDriver(file) {
   };
   void walking;
 
+  // L) A VERB THAT AWAITS IS A FRAME TOO. travel() is a multi-second chain — aim, walk,
+  //    then a click that OPENS A PORTAL AND NAVIGATES THE TAB. run() re-checks the
+  //    generation between steps but never inside one, so a stop landing mid-travel could
+  //    not reach it: the killed frame walked on, clicked, and left for another world where
+  //    the driver re-armed fresh and the tower's "stopped" described nothing that existed.
+  d.stop();
+  win.__events.length = 0;
+  const clicks = [];
+  const realMouse = win.MouseEvent;
+  win.MouseEvent = function (type, o) { this.type = type; if (type === 'click') clicks.push(type); Object.assign(this, o || {}); };
+  const travelling = d.run({ steps: [{ do: 'travel', portal: 'Crystal Caverns' }] }, null);
+  await new Promise((r) => setTimeout(r, 150));     // inside the approach
+  d.stop();                                          // the operator pulls the switch
+  const verdictL = await Promise.race([travelling, new Promise((r) => setTimeout(() => r('HUNG'), 4000))]);
+  win.MouseEvent = realMouse;
+  R.L_a_stopped_travel_does_not_open_the_door = {
+    verdict: verdictL,
+    clicksAfterStop: clicks.length,
+    keyStillHeld: win.__events.filter((e) => e.type === 'keydown' && e.key === 'w').length >
+                  win.__events.filter((e) => e.type === 'keyup' && e.key === 'w').length,
+  };
+
   console.log(JSON.stringify(R, null, 1));
   const pass =
     R['0_generation_zero_is_a_real_claim'].freshEpoch === 0 &&
@@ -212,7 +248,9 @@ function makeDriver(file) {
     R.K_stop_leaves_the_world_as_it_found_it.legsWereStubbed === true &&
     R.K_stop_leaves_the_world_as_it_found_it.legsRestored === true &&
     R.K_stop_leaves_the_world_as_it_found_it.filming === false &&
-    R.K_stop_leaves_the_world_as_it_found_it.pointerHeld === false;
+    R.K_stop_leaves_the_world_as_it_found_it.pointerHeld === false &&
+    R.L_a_stopped_travel_does_not_open_the_door.clicksAfterStop === 0 &&
+    R.L_a_stopped_travel_does_not_open_the_door.keyStillHeld === false;
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();

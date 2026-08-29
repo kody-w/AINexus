@@ -59,6 +59,17 @@
   }
   function releaseHeldKeys() { for (const c of Array.from(held)) key(c, false); }
 
+  // A VERB THAT AWAITS IS A FRAME TOO. run()'s loop re-checks the generation between
+  // steps, but never inside one — and travel/aim/walk/scan are multi-second await chains.
+  // A stop landing inside travel therefore could not reach it: the killed frame walked on,
+  // clicked, and navigated the tab into another world, where the driver re-armed fresh and
+  // the tower's "stopped" no longer described anything that existed. Capture the
+  // generation on entry; ask after every await whether it outlived us.
+  function generationGate() {
+    const mine = api._epoch;
+    return () => api._epoch === mine;
+  }
+
   function mouse(type, opts) {
     const ev = new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, view: window,
       clientX: innerWidth / 2, clientY: innerHeight / 2, button: 0 }, opts || {}));
@@ -161,8 +172,13 @@
     },
 
     async walk(dir, ms) {
+      const live = generationGate();
       const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
-      key(k, true); await sleep(Math.max(50, ms | 0)); key(k, false); await sleep(40);
+      key(k, true);
+      await sleep(Math.max(50, ms | 0));
+      key(k, false);                       // let go of what we pressed, stopped or not
+      if (!live()) return null;            // ...and do not report a walk that was cut short
+      await sleep(40);
       return api.snapshot().me;
     },
 
@@ -201,7 +217,9 @@
       const perUnit = wrap(api.facing() - before) / 60;
       if (!isFinite(perUnit) || Math.abs(perUnit) < 1e-6) { log('this world does not turn on a mouse look'); return false; }
 
+      const live = generationGate();
       for (let i = 0; i < 40; i++) {
+        if (!live()) return false;         // the operator stopped us mid-turn
         const err = wrap(want() - api.facing());
         if (Math.abs(err) < 0.045) { log('aimed at', p.name); return true; }
         const dx = Math.max(-260, Math.min(260, err / perUnit));
@@ -222,7 +240,13 @@
           window.__NEXUS_CARRY_FRAGMENT = '&carry=' + b64;
         } catch (e) {}
       }
+      const live = generationGate();
       await api.walk('forward', 900);
+      // The click is the irreversible half — it opens a portal and NAVIGATES THE TAB. A
+      // stop that landed during the approach must not be followed through: the walk was
+      // cut short, so this click would land short of the door anyway, and if it did hit
+      // the tab would leave for another world under a driver the tower thinks is stopped.
+      if (!live()) { log('stopped during the approach — not entering', name); return false; }
       await api.click();
       log('entered', name, api._carry ? '(carrying ' + Object.keys(api._carry).join(',') + ')' : '');
       return true;
@@ -396,6 +420,12 @@
       const w = W(); if (!w || !w.camera) { log('no camera to operate'); return false; }
       if (api._filming) return true;
       api._filming = true;
+      // Each camera loop gets a serial. A stop lowers _filming and a camera step in the
+      // SAME task raises it again, so the previous loop's already-scheduled rAF callback
+      // would wake, see a bare global set to true, and run beside the new one — two loops
+      // fighting over one camera and doubling the vision posts. The flag says "a camera is
+      // filming"; the serial says "and it is this one".
+      const myFilm = api._filmSeq = (api._filmSeq || 0) + 1;
       api._saved = { updateMovement: w.updateMovement, updateHover: w.updateHover };
       w.updateMovement = () => {};
       if (w.updateHover) w.updateHover = () => {};
@@ -421,7 +451,7 @@
       let i = 0, angle = Math.random() * Math.PI * 2, until = 0, taken = 0, fresh = false;
 
       const step = () => {
-        if (!api._filming) return;
+        if (!api._filming || api._filmSeq !== myFilm) return;
         const now = performance.now();
         if (now > until) {
           const sh = shots[i % shots.length]; i++; until = now + o.hold;
@@ -770,7 +800,7 @@
     },
     // _epoch    — bumped by stop(); everything issued before it is void
     // _liveTurn — the generation the operator program currently on the stack belongs to
-    _running: false, _depth: 0, _epoch: 0, _liveTurn: 0, _filming: false, _shot: null,
+    _running: false, _depth: 0, _epoch: 0, _liveTurn: 0, _filming: false, _filmSeq: 0, _shot: null,
   };
 
   window.__autodrive = api;
