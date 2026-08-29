@@ -71,8 +71,9 @@
       guid: p.guid || guidFor(String(p.id)),
       agents: [],                     // names this player can see, beyond the shared core
       ticks: 0, acts: 0, journal: [], chain: [], prev: null, seq: 0, truncated: 0,
-      streamId: 'rappid:@kody-w/ainexus/player:' +
-        (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)),
+      // minted on the first seal, through the spec's own grammar — a slug cannot hold a
+      // slash and the tail must be 64 hex from a uuid4, never spelled (§6.1, §6.2)
+      streamId: null,
     };
     // this player's own agents, hot-loaded once into the shared runtime and thereafter free
     // hotload replaces live instances, so it goes through the same lane a turn holds — a player
@@ -120,7 +121,10 @@
                 calls: (r.calls || []).map(c => ({ tool: c.tool, failed: /failed|no such/.test(c.result) })) };
       if (F) {
         try {
-          const f = await F.buildFrame({ kind: 'nexus.tick', streamId: rec.streamId, seq: rec.seq++,
+          // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
+          // Sharing one body-stream put two biographies in one book with colliding seq numbers.
+          if (!rec.streamId) rec.streamId = await root.NexusFrames.mintRappid('kody-w', 'nexus-player');
+          const f = await F.buildFrame({ kind: 'body.pulse', streamId: rec.streamId, seq: rec.seq++,
             payload: { asserts: { tick: rec.ticks, player: rec.id, said: r.words || '',
                                   called: entry.calls.map(c => c.tool + (c.failed ? ' ✗' : '')),
                                   at: (s0 && s0.me) || {},
@@ -143,7 +147,7 @@
           // be a chain. seq is now its own counter, and a window says out loud that it is one.
           if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
           entry.frame = f.frame_hash;
-        } catch (e) {}
+        } catch (e) { entry.sealFailed = e.message; }
       }
     } catch (e) {
       entry = { player: rec.id, tick: rec.ticks, ms: Date.now() - started, error: e.message };
@@ -314,7 +318,8 @@
     let frame = null;
     if (F && applied.length) {
       try {
-        frame = await F.buildFrame({ kind: 'nexus.ensemble', streamId: ensembleStream,
+        if (!ensembleStream) ensembleStream = await streamFor('ensemble');
+        frame = await F.buildFrame({ kind: 'memory.save', streamId: ensembleStream,
           seq: ensembleChain.length,
           payload: { asserts: { directed: applied.length, directives: applied.slice(0, 12), calls: 1,
                                 // how much world happened between the last keyframe and this one
@@ -360,8 +365,16 @@
     return { epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id }; };
 
   let ensembleChain = [], ensemblePrev = null;
-  const ensembleStream = 'rappid:@kody-w/ainexus/ensemble:' +
-    (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
+  let ensembleStream = null;
+  // Every stream this module opens is minted once, lazily, through the spec's own grammar.
+  const ESTATE = { owner: 'kody-w', slug: 'ainexus' };
+  const minted = {};
+  async function streamFor(what) {
+    const F = root.NexusFrames;
+    if (!F) throw new Error('no frames module: cannot mint a rappid');
+    if (!minted.body) minted.body = await F.mintRappid(ESTATE.owner, ESTATE.slug);
+    return what === 'body' ? minted.body : F.memoryStream(minted.body, what);
+  }
 
   // ── time travel through the exhaust ──────────────────────────────────────
   // The keyframes are already written down. That means a past session is not a log of something
@@ -397,8 +410,7 @@
     const o = opts || {};
     const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
     const F = root.NexusFrames;
-    const stream = 'rappid:@kody-w/ainexus/dimension:' +
-      (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
+    const stream = await streamFor('dimension');
     const woke = rewind(f, o);
     // wear the lens before the genesis is sealed, so the frame records the world it produced
     let worn = null;
@@ -411,7 +423,7 @@
     let genesis = null;
     if (F) {
       try {
-        genesis = await F.buildFrame({ kind: 'nexus.fork', streamId: stream, seq: 0,
+        genesis = await F.buildFrame({ kind: 'memory.save', streamId: stream, seq: 0,
           payload: { asserts: { forked_from: f.frame_hash, at_seq: f.seq, at_utc: f.utc || null,
                                 woke: woke.woke, reason: o.reason || 'someone went back',
                                 lens: o.lens ? String(typeof o.lens === 'function' ? (o.lens.name || 'anonymous') : o.lens) : null,
@@ -532,8 +544,7 @@
     const o = Object.assign({ everyMs: 1500, secondsEach: 20 }, opts || {});
     const seen = new Map();
     const world = { tick: 0, chain: [], prev: null, running: true, busy: false,
-      streamId: 'rappid:@kody-w/ainexus/world:' +
-        (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)) };
+      streamId: null };   // minted below
 
     // A frame published anywhere on this device triggers the next run here, and this world's
     // frames are announced the same way — so two tabs watching one world take turns rather than
@@ -589,11 +600,12 @@
       };
       if (F) {
         try {
-          const f = await F.buildFrame({ kind: 'nexus.world', streamId: world.streamId,
+          if (!world.streamId) world.streamId = await streamFor('world');
+          const f = await F.buildFrame({ kind: 'memory.save', streamId: world.streamId,
                                          seq: world.chain.length, payload, prev: world.prev });
           world.chain.push(f); world.prev = f.payload_hash;
           if (world.chain.length > 500) world.chain.shift();
-          try { bus && bus.postMessage({ kind: 'nexus.world', streamId: world.streamId,
+          try { bus && bus.postMessage({ kind: 'memory.save', streamId: world.streamId,
                   chose: payload.asserts.chose, because: payload.asserts.because, hash: f.frame_hash }); } catch (e) {}
         } catch (e) {}
       }
@@ -848,8 +860,8 @@
       requires: { players: cast.map(c => c.id) },
     };
     if (!F) return { payload, deterministic: false };
-    const stream = 'rappid:@kody-w/ainexus/tile:' + String(f.frame_hash).slice(0, 16) + ':' + hashSeed(String(index)).toString(16);
-    const genesis = await F.buildFrame({ kind: 'nexus.tile', streamId: stream, seq: 0, utc, payload, prev: null });
+    const stream = await streamFor('tile-' + hashSeed(String(index)).toString(16));
+    const genesis = await F.buildFrame({ kind: 'memory.save', streamId: stream, seq: 0, utc, payload, prev: null });
     return { frame: genesis, seed: payload.asserts.seed, key: String(index), cast, lens: lensName, mood,
              stream, hash: genesis.frame_hash };
   }
@@ -929,8 +941,8 @@
     if (F) {
       const from = o.from || null;
       frame = await F.buildFrame({
-        kind: 'nexus.slosh', seq: 0, prev: null,
-        streamId: (from && from.stream_id ? from.stream_id : 'rappid:@kody-w/ainexus/slosh') + ':slosh',
+        kind: 'memory.save', seq: 0, prev: null,
+        streamId: await streamFor('slosh'),
         utc: (from && from.utc) || undefined,
         payload: { asserts: Object.assign({}, subject, {
                      sloshed_from: from ? from.frame_hash : null,

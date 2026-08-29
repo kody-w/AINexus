@@ -53,6 +53,13 @@
   }
 
   async function buildFrame(o) {
+    // A frame that is wrong is easier to refuse than to migrate: §12.1 re-genesis is an
+    // owner-signed operation, so a non-compliant frame minted today is somebody's signature
+    // tomorrow. Refuse at the door unless the caller says it knows better.
+    if (o.lax !== true) {
+      const why = compliant(o.kind, o.streamId);
+      if (why) throw new Error('refusing a non-rapp/1 frame — ' + why);
+    }
     const f = {
       spec: 'rapp/1',
       kind: o.kind,
@@ -92,5 +99,65 @@
     return { frames: frames.length, latest, head: prev && prev.frame_hash, headPayload: prev && prev.payload_hash };
   }
 
-  root.NexusFrames = { canonical, H, buildFrame, verifyChain, utcNow };
+  // ── identity, the way the spec actually spells it ────────────────────────
+  // rappid = "rappid:@" owner "/" slug ":" 64-hex, and the tail is MINTED from a uuid4 — never
+  // derived from a name (§6.2 forbids sha256("owner/slug") outright). A stream_id is then either
+  // that bare rappid (a body-stream: one organism's biography) or the rappid plus one lowercase
+  // label (a memory-stream: one instance's memory). Anything else — two labels, an uppercase
+  // letter, a dot — is not a conformant form, however readable it looks.
+  //
+  // And the kind must be REGISTERED. The registry is exact-match: inventing `nexus.tick` because
+  // it reads well does not make it a kind, and a family must match its stream's form (§7.2).
+  const LCLABEL = /^[a-z0-9]+(?:-?[a-z0-9]+)*$/;
+
+  async function mintRappid(owner, slug) {
+    if (!LCLABEL.test(owner) || owner.length > 39) throw new Error('owner must be a lowercase label, 1-39');
+    if (!LCLABEL.test(slug) || slug.length > 100) throw new Error('slug must be a lowercase label, 1-100');
+    // uuid4's sixteen octets, hashed in the rappid space — minted once, never spelled
+    const u = (root.crypto && root.crypto.randomUUID) ? root.crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+    const hex = u.replace(/-/g, '');
+    const octets = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) octets[i] = parseInt(hex.substr(i * 2, 2), 16);
+    const space = new TextEncoder().encode('rapp/1:rappid');
+    const bytes = new Uint8Array(space.length + 1 + octets.length);
+    bytes.set(space, 0); bytes[space.length] = 0x0a; bytes.set(octets, space.length + 1);
+    const tail = hex2(await crypto.subtle.digest('SHA-256', bytes));
+    return 'rappid:@' + owner + '/' + slug + ':' + tail;
+  }
+  const hex2 = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // one instance's memory, hanging off an organism — the label must be a clean lowercase word
+  function memoryStream(rappid, instance) {
+    const label = String(instance).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-').slice(0, 64);
+    if (!LCLABEL.test(label)) throw new Error('instance does not reduce to a label: ' + instance);
+    return rappid + ':' + label;
+  }
+
+  const RAPPID = /^rappid:@[a-z0-9]+(?:-?[a-z0-9]+)*\/[a-z0-9]+(?:-?[a-z0-9]+)*:[0-9a-f]{64}$/;
+  const MEMORY = /^rappid:@[a-z0-9]+(?:-?[a-z0-9]+)*\/[a-z0-9]+(?:-?[a-z0-9]+)*:[0-9a-f]{64}:[a-z0-9]+(?:-?[a-z0-9]+)*$/;
+  // exactly the kinds the anchor registers, and the form each family demands
+  const KINDS = {
+    'body.pulse': 'body', 'body.twin-pulse': 'body', 'body.reconstructed': 'body', 'body.re-genesis': 'body',
+    'memory.chat-turn': 'memory', 'memory.tool-call': 'memory', 'memory.save': 'memory',
+    'memory.reconstructed': 'memory', 'memory.re-genesis': 'memory',
+    'swarm.guidance': 'swarm', 'swarm.echo': 'swarm', 'swarm.telemetry': 'swarm',
+    'swarm.reconstructed': 'swarm', 'swarm.re-genesis': 'swarm',
+  };
+  function formOf(sid) { return RAPPID.test(sid) ? 'body-stream' : MEMORY.test(sid) ? 'memory-stream'
+                              : /^net:[a-z0-9]+(?:-?[a-z0-9]+)*$/.test(sid) ? 'swarm-stream' : null; }
+  function compliant(kind, streamId) {
+    const fam = KINDS[kind];
+    if (!fam) return 'kind is not registered: ' + kind;
+    const form = formOf(streamId);
+    if (!form) return 'stream_id matches no conformant form';
+    const want = { body: 'body-stream', memory: 'memory-stream', swarm: 'swarm-stream' }[fam];
+    if (form !== want) return "family '" + fam + "' needs a " + want + ', got a ' + form;
+    return null;
+  }
+
+  root.NexusFrames = { canonical, H, buildFrame, verifyChain, utcNow,
+                       mintRappid, memoryStream, compliant, formOf, REGISTERED_KINDS: KINDS };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -22,7 +22,7 @@ const out=await p.evaluate(async()=>{
   const H=window.NexusHerd, F=window.NexusFrames, B=window.NexusBrainstem;
   await B.initPyodide(()=>{});
   for(const id of ['mara','devon','kit']) await H.join({id,persona:'You are '+id+'.'});
-  const parent = await F.buildFrame({ kind:'nexus.ensemble', streamId:'rappid:@kody-w/ainexus/ensemble:s',
+  const parent = await F.buildFrame({ kind: 'body.pulse', streamId: 'rappid:@kody-w/ainexus:' + 'ab'.repeat(32),
     seq:0, utc:'2026-08-29T00:00:00.000Z',
     payload:{ asserts:{directed:3}, requires:{players:['mara','devon','kit']} }, prev:null });
 

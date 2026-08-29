@@ -25,7 +25,7 @@ const out=await p.evaluate(async()=>{
   const agentReg = JSON.stringify(await (await fetch('state/agent_templates.json')).json());
   const worldReg = JSON.stringify(await (await fetch('state/worlds.json')).json());
   for (const id of ['mara','devon']) await H.join({id,persona:'You are '+id+'.'});
-  const parent = await F.buildFrame({kind:'nexus.ensemble',streamId:'rappid:@kody-w/ainexus/ensemble:sp',
+  const parent = await F.buildFrame({kind: 'body.pulse',streamId: 'rappid:@kody-w/ainexus:' + 'ab'.repeat(32),
     seq:0,utc:'2026-08-29T00:00:00.000Z',payload:{asserts:{directed:2},requires:{players:['mara','devon']}},prev:null});
 
   // parent 1: a creature grown out of a conversation

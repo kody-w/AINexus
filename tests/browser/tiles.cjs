@@ -29,7 +29,7 @@ const out=await p.evaluate(async()=>{
   for(const id of ['mara','devon','kit','ola','sam']) await H.join({id,persona:'You are '+id+'.',drive:mk(id)});
 
   // one purchased frame — the parent everything below is derived from
-  const parent = await F.buildFrame({ kind:'nexus.ensemble', streamId:'rappid:@kody-w/ainexus/ensemble:test',
+  const parent = await F.buildFrame({ kind: 'body.pulse', streamId: 'rappid:@kody-w/ainexus:' + 'ab'.repeat(32),
     seq:0, utc:'2026-08-29T00:00:00.000Z',
     payload:{ asserts:{ directed:5 }, requires:{ players:['mara','devon','kit','ola','sam'] } }, prev:null });
 
@@ -42,7 +42,7 @@ const out=await p.evaluate(async()=>{
   const wb = await H.wear(parent, 'the-night-the-power-went');
   const wc = await H.wear(parent, 'the-night-the-power-came-back');
   // and the same key against a DIFFERENT record wears a different tile
-  const other = await F.buildFrame({ kind:'nexus.ensemble', streamId:'rappid:@kody-w/ainexus/ensemble:other',
+  const other = await F.buildFrame({ kind: 'body.pulse', streamId: 'rappid:@kody-w/ainexus:' + 'cd'.repeat(32),
     seq:0, utc:'2026-08-29T00:00:00.000Z',
     payload:{ asserts:{ directed:5 }, requires:{ players:['mara','devon','kit','ola','sam'] } }, prev:null });
   const wd = await H.wear(other, 'the-night-the-power-went');

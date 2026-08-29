@@ -604,10 +604,10 @@
     // The identity is minted once, from randomness. Never from the persona's name — a name-hash
     // would make two players called "greeter" the same being, which is the one mistake this
     // estate does not make twice.
-    const streamId = o.streamId || ('rappid:@kody-w/ainexus/player:' +
-      (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)));
+    // minted on first use through the spec's grammar, never spelled from a name (§6.2)
+    let streamId = o.streamId || null;
     const state = { ticks: 0, acts: 0, words: 0, running: true, done: false, journal: [],
-                    stopped: null, streamId, chain: [], prev: null };
+                    stopped: null, get streamId() { return streamId; }, chain: [], prev: null };
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // what this tick claims, and what it leaned on
@@ -629,7 +629,10 @@
       if (named.length) requires.named = named.slice(0, 8);
       if (portals.length) requires.portals_in_view = portals.slice(0, 12);
       try {
-        const f = await F.buildFrame({ kind: 'nexus.tick', streamId, seq: state.chain.length,
+        // a player's ticks are its biography: body.pulse on a body-stream, which is a bare
+        // MINTED rappid (§6.1, §7.2). Minted here on first use rather than spelled from a name.
+        if (!streamId) streamId = await F.mintRappid('kody-w', 'nexus-player');
+        const f = await F.buildFrame({ kind: 'body.pulse', streamId, seq: state.chain.length,
                                        payload: { asserts, requires }, prev: state.prev });
         state.chain.push(f); state.prev = f.payload_hash;
         if (state.chain.length > 500) state.chain.shift();     // a long session is still bounded

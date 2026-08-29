@@ -62,7 +62,10 @@ console.log('\nchecks:');
 ok('it ticked without anything outside stepping it', out.ticks >= 5);
 ok('every tick sealed a frame', out.frames === out.ticks);
 ok('the line verifies against its own hashes', !!out.verified && out.verified.frames === out.frames);
-ok('the identity was minted, not derived from the name', /player:[0-9a-f-]{8,}/.test(out.streamId));
+// the OLD assertion accepted 'rappid:@kody-w/ainexus/player:<uuid>', which is not a rappid at
+// all — a slug cannot hold a slash and the tail must be 64 hex minted from a uuid4 (§6.1, §6.2)
+ok('the stream is a conformant body-stream, minted not spelled',
+   /^rappid:@[a-z0-9-]+\/[a-z0-9-]+:[0-9a-f]{64}$/.test(out.streamId));
 console.log('errors:', errs.slice(0,3));
 await b.close();
 })();

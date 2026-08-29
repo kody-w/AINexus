@@ -54,7 +54,7 @@ const out=await p.evaluate(async()=>{
   const oR = await forge(tR), oR2 = await forge(tR), oV = await forge(tV), oN = await forge(tN), oO = await forge(tO);
 
   // a chat-tile is a real frame: particle and wave, standing on its own
-  const framed = await F.buildFrame({ kind:'nexus.tile', streamId:'rappid:@kody-w/ainexus/chat:test',
+  const framed = await F.buildFrame({ kind: 'body.pulse', streamId: 'rappid:@kody-w/ainexus:' + 'ab'.repeat(32),
     seq:0, utc:'2026-08-29T14:00:00.000Z', payload:{ asserts:tR, requires:{} }, prev:null });
   const verified = await F.verifyChain([framed]).then(v=>v.frames).catch(e=>'FAILED '+e.message);
 

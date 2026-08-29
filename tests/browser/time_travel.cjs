@@ -97,7 +97,8 @@ console.log('\nfork              :', JSON.stringify({ dimension: out.forked.dime
   forkedFrom: out.forked.forkedFrom.slice(0,12)+'…', at: out.forked.at, lens: out.forked.lens, said: out.forked.lensSaid }));
 console.log('personas after    :', JSON.stringify(out.after.personas));
 ok('going back starts a NEW dimension rather than editing the old line',
-   /dimension:/.test(out.forked.dimension) && out.forked.genesis && out.after.epoch !== out.before.epoch);
+   /^rappid:@[a-z0-9-]+\/[a-z0-9-]+:[0-9a-f]{64}:dimension$/.test(out.forked.dimension)
+   && out.forked.genesis && out.after.epoch !== out.before.epoch);
 ok('the genesis records where it split from', out.forked.forkedFrom && out.forked.at === 1);
 ok('and it can be continued through a different lens', out.forked.lensSaid === 'recast for 3am' && out.after.personas.every(p => /3am/.test(p)));
 console.log('errors:', errs.slice(0,3));
