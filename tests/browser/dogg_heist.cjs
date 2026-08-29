@@ -1478,6 +1478,25 @@ async function serve(context) {
   });
 }
 
+async function denyStorage(context) {
+  await context.addInitScript(() => {
+    const denied = () => {
+      throw new DOMException('Storage denied by black-box test', 'SecurityError');
+    };
+    for (const method of ['getItem', 'setItem', 'removeItem', 'clear', 'key']) {
+      Object.defineProperty(Storage.prototype, method, {
+        configurable: true,
+        writable: true,
+        value: denied
+      });
+    }
+    Object.defineProperty(Storage.prototype, 'length', {
+      configurable: true,
+      get: denied
+    });
+  });
+}
+
 async function auditSlowStreamFirstPaint(browser) {
   const html = fs.readFileSync(ARTIFACT, 'utf8');
   const scripts = [...html.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/gi)];
@@ -5817,10 +5836,12 @@ async function runSuite() {
       oversizePlayed.tick > oversizeAfter.tick,
     `${(tooLarge.bytes / 1048576).toFixed(2)} MiB; rejected in ${Number.isFinite(oversizeDelay) ? oversizeDelay.toFixed(1) : 'unmeasured'}ms; checksum ${tooLarge.checksumPath}`);
 
+  const longSessionStarted = Date.now();
   const longContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
+  await denyStorage(longContext);
   await serve(longContext);
   const longPage = await openHeist(longContext, 'long-session page');
-  await api(longPage, 'restart', 'LONG-SESSION-720');
+  await api(longPage, 'restart', 'LONG-SESSION-760');
   await api(longPage, 'pause');
   await api(longPage, 'setSpeed', 1);
   const longStart = await inspect(longPage);
@@ -5841,7 +5862,7 @@ async function runSuite() {
   }));
   requireMeasurement([...longSafeTargets.values()].every(Boolean),
     'one legal hold-position target per long-session agent');
-  const longDirectives = Array.from({ length: 720 }, (_, index) => {
+  const longDirectives = Array.from({ length: 760 }, (_, index) => {
     const agent = longAgents[index % longAgents.length];
     const target = longSafeTargets.get(agent.id);
     return {
@@ -5876,8 +5897,8 @@ async function runSuite() {
     }
     return { count, rejection };
   }, longDirectives);
-  requireMeasurement(queuedLong.count === 720 && !queuedLong.rejection,
-    `720 legal directives queued (accepted ${queuedLong.count})`);
+  requireMeasurement(queuedLong.count === 760 && !queuedLong.rejection,
+    `760 legal directives queued (accepted ${queuedLong.count})`);
   const longTickBudget = 900;
   const longStep = await tryApi(longPage, 'step', longTickBudget);
   requireMeasurement(!longStep.threw, `long-session step(${longTickBudget})`);
@@ -5896,28 +5917,29 @@ async function runSuite() {
   requireMeasurement(resultingTicks > 0 && resultingTicks <= longTickBudget && longStopEvidence,
     `legal ticks stopping at terminal/maxTicks (${resultingTicks}/${longTickBudget})`);
   requireMeasurement(longSnapshot.frameCount === expectedLongFrames &&
-    longSnapshot.frameCount > 720,
+    longSnapshot.frameCount > 760,
   `genesis + directives + legal ticks (${longSnapshot.frameCount} = ${longStart.frameCount} + ${queuedLong.count} + ${resultingTicks})`);
-  requireMeasurement(longBytes > 4_000_000 && longBytes <= 8 * 1024 * 1024,
-    `a valid long export above 4 MB and within 8 MiB (${longBytes} bytes)`);
+  requireMeasurement(longBytes > 4 * 1024 * 1024 && longBytes <= 8 * 1024 * 1024,
+    `a valid long export above 4 MiB and within 8 MiB (${longBytes} bytes)`);
 
   const longImportContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
+  await denyStorage(longImportContext);
   await serve(longImportContext);
   const longImportPage = await openHeist(longImportContext, 'long-session import page');
   await api(longImportPage, 'pause');
   const longImportOutcome = await tryApi(longImportPage, 'importState', longExport);
   requireMeasurement(!longImportOutcome.threw && !explicitImportRejection(longImportOutcome),
-    'fresh-context import of the valid >4 MB session');
+    'fresh-context import of the valid >4 MiB session');
   await api(longImportPage, 'pause');
   const longImported = await inspect(longImportPage);
   const longImportedVerification = await tryApi(longImportPage, 'verifyChain');
-  result('720-directive legal session round-trips under the bounded cap',
+  result('760-directive legal session round-trips above 4 MiB',
     longImported.exportText === longExport &&
       longImported.head === longSnapshot.head &&
       longImported.frameCount === longSnapshot.frameCount &&
       longImported.tick === longSnapshot.tick &&
       verificationPassed(longImportedVerification),
-    `${queuedLong.count} directives + ${resultingTicks} legal ticks + ${longStart.frameCount} genesis = ${longSnapshot.frameCount} frames; ${longBytes} bytes (${(longBytes / 1000000).toFixed(2)} MB / ${(longBytes / 1048576).toFixed(2)} MiB); ${String(topLevelOutcomeOf(longSnapshot.state))}`);
+    `${queuedLong.count} directives + ${resultingTicks} legal ticks + ${longStart.frameCount} genesis = ${longSnapshot.frameCount} frames; ${longBytes} bytes (${(longBytes / 1048576).toFixed(2)} MiB); ${String(topLevelOutcomeOf(longSnapshot.state))}; ${Date.now() - longSessionStarted}ms`);
   await longImportContext.close();
 
   const exposedLimits = exposedRuntimeLimits(longSnapshot);
