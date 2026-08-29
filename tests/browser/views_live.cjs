@@ -21,12 +21,23 @@ let frames = 1;
 let delayFrameOne = false;
 let releaseFrameOne;
 let frameOneGate = new Promise(resolve => { releaseFrameOne = resolve; });
+let delayNextManifest = false;
+let releaseManifest;
+let manifestGate = Promise.resolve();
+let manifestHeld;
+let manifestHeldGate = Promise.resolve();
 const errors = [];
 await context.route('https://kody-w.github.io/AINexus/**', async route => {
   const url = new URL(route.request().url());
   const relative = decodeURIComponent(url.pathname).replace(/^\/AINexus\//, '');
   if (relative === 'test/live/manifest.json') {
-    const ticks = Array.from({ length: frames }, (_, index) => ({
+    const responseFrames = frames;
+    if (delayNextManifest) {
+      delayNextManifest = false;
+      manifestHeld();
+      await manifestGate;
+    }
+    const ticks = Array.from({ length: responseFrames }, (_, index) => ({
       id: 'tick-' + index,
       capturedAt: new Date(Date.UTC(2026, 7, 29, 0, index * 5)).toISOString()
     }));
@@ -36,7 +47,7 @@ await context.route('https://kody-w.github.io/AINexus/**', async route => {
       body: JSON.stringify({
         version: 2,
         live: true,
-        frames,
+        frames: responseFrames,
         ticks,
         players: [{
           id: 'wanderer',
@@ -115,6 +126,20 @@ await page.waitForFunction(() => window.__viewsState().frame === 2);
 await check('the next tick continues forward instead of looping', async () => {
   const state = await page.evaluate(() => window.__viewsState());
   return state.frames === 3 && state.tick === 'tick-2';
+});
+
+manifestGate = new Promise(resolve => { releaseManifest = resolve; });
+manifestHeldGate = new Promise(resolve => { manifestHeld = resolve; });
+delayNextManifest = true;
+frames = 4;
+await manifestHeldGate;
+frames = 5;
+await page.waitForFunction(() => window.__viewsState().frames === 5);
+releaseManifest();
+await page.waitForTimeout(200);
+await check('an older manifest response cannot move the live edge backward', async () => {
+  const state = await page.evaluate(() => window.__viewsState());
+  return state.frames === 5 && state.frame === 4 && state.tick === 'tick-4';
 });
 
 console.log('page errors:', errors);

@@ -73,7 +73,9 @@ const view = {
   signature: '',
   frameAt: 0,
   focusAt: 0,
-  imageRetry: 0
+  imageRetry: 0,
+  refreshStarted: 0,
+  refreshApplied: 0
 };
 
 function layout(n) {
@@ -272,8 +274,11 @@ function applyManifest(manifest, url) {
 }
 
 async function refreshManifest() {
+  const generation = ++view.refreshStarted;
   try {
     const result = await fetchManifest(PRIMARY_MANIFEST);
+    if (generation < view.refreshApplied) return;
+    view.refreshApplied = generation;
     applyManifest(result.manifest, result.url);
     return;
   } catch (error) {
@@ -286,6 +291,8 @@ async function refreshManifest() {
   if (FALLBACK_MANIFEST) {
     try {
       const result = await fetchManifest(FALLBACK_MANIFEST);
+      if (generation < view.refreshApplied) return;
+      view.refreshApplied = generation;
       applyManifest(result.manifest, result.url);
       setStatus('WAITING FOR LIVE', true);
       return;
