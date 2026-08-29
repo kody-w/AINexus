@@ -73,6 +73,11 @@ whatever order an implementation happens to read in.
 Let `roster` be the record's `payload.requires.players`, in the order the record gives them, and
 `R = len(roster)`. `R` MUST be at least 1.
 
+The roster MUST come from the record. An implementation MUST NOT substitute whoever happens to be
+present locally when a record names nobody — it MUST refuse instead. A local substitution makes the
+tile unreproducible on any other machine while still looking successful on this one, which defeats
+the only promise §1 makes.
+
 1. **How many are present.** `n = clamp(2 + uniform(R−1), 2, R)`. When `R = 1`, skip the draw and
    set `n = 1`.
 2. **Who.** Fisher–Yates over a copy of `roster`, for `i` from `R−1` down to `1`:
@@ -81,7 +86,11 @@ Let `roster` be the record's `payload.requires.players`, in the order the record
 3. **Each one, in that order** — four draws per person, always in this sequence:
    `x = uniform(29) − 14`, `z = uniform(29) − 14`,
    `standing = INTENT[uniform(6)]`, `where = PLACE[uniform(6)]`.
-4. **The lens.** `lens = LENS[uniform(5)]`.
+4. **The lens.** `lens = LENS[uniform(5)]`. An implementation MAY let a caller override the
+   resulting lens, but the octet MUST still be drawn: skipping the draw shifts every later read
+   off the keystream, so an override would silently change the mood, the moment, and the cast
+   positions too. A tile produced with an override is outside the vectors in §8 and outside the
+   guarantee in §1 — it is a local convenience, not a wearing.
 5. **What is already wrong.** `mood = MOOD[uniform(8)]`.
 6. **The moment.** `offset = wide(86400, 3)` seconds, added to the record's `utc`.
 
@@ -154,6 +163,23 @@ Roster: `ada, bo, cy, del, eze`
 | `(empty)` | `0e8c376ac729a880…` | 26 | 4 | quiet | something was said earlier and not |
 | `é-accented-key` | `ad07de59e359ceb6…` | 26 | 4 | closeup | they have been here too long |
 | `9007199254740991` | `efd98ab79b925d27…` | 32 | 5 | wide | someone is about to leave |
+
+### The single-player record
+
+§4 step 1 names the `R = 1` case, so the vectors cover it. These are drawn against a second
+record whose `requires.players` is `["ada"]` alone, with no explicit cast — the roster resolves
+from the record, which is the path a stranger's implementation takes.
+
+Record: ``3c16ee3d0dc6f2b4d9400438452641b4ba2943050b7a267bbadb61de4b5b33fe``
+Roster: `ada`
+
+| key | tile `frame_hash` | octets drawn | present | lens | mood |
+|---|---|---|---|---|---|
+| `0` | `b5ad0573fc4bdcbf…` | 9 | 1 | wide | something was said earlier and not resolved |
+| `alone-in-the-world` | `4a3c143ae7e4e14f…` | 9 | 1 | wide | something was said earlier and not resolved |
+
+A conformant implementation produces a one-person tile here. Producing a two-person tile — or
+throwing — means the clamp in step 1 has overridden the carve-out that follows it.
 
 Check with `node tools/check_vectors.cjs`.
 
