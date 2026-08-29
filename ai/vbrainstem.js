@@ -43,9 +43,12 @@
     // the inverse: a world wearing an organism rather than a lens wearing a world
     { url: 'vb/adapt_agent.py', className: 'AdaptAgent' },
     { url: 'vb/world_forge_agent.py', className: 'WorldForgeAgent' },
+    // a conversation is the smallest frame there is, and the cheapest thing to slosh
+    { url: 'vb/chat_tile_agent.py', className: 'ChatTileAgent' },
+    { url: 'vb/organism_forge_agent.py', className: 'OrganismForgeAgent' },
   ];
   const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld',
-                       'LensGravity', 'LensDayNight', 'LensCataclysm', 'Adapt', 'WorldForge'];
+                       'LensGravity', 'LensDayNight', 'LensCataclysm', 'Adapt', 'WorldForge', 'ChatTile', 'OrganismForge'];
 
   // ── the ceiling ──────────────────────────────────────────────────────────
   // A herd of players thinking every few seconds, several model round trips each, on somebody
