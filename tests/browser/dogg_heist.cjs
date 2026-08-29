@@ -2214,6 +2214,34 @@ async function dismissIntro(page) {
     return { found: true, autoDismissed: false, label: ranked[0].label };
   });
   if (action.autoDismissed) return action.label;
+  if (!action.found) {
+    const resolution = await poll(
+      () => page.evaluate(() => {
+        const surface = document.getElementById('intro-overlay');
+        const control = document.getElementById('intro-start');
+        const surfaceStyle = surface && getComputedStyle(surface);
+        const surfaceRect = surface && surface.getBoundingClientRect();
+        const visible = Boolean(surface && !surface.hidden &&
+          surfaceStyle.display !== 'none' && surfaceStyle.visibility !== 'hidden' &&
+          Number(surfaceStyle.opacity) > 0 && surfaceRect.width > 0 && surfaceRect.height > 0);
+        const controlStyle = control && getComputedStyle(control);
+        const controlRect = control && control.getBoundingClientRect();
+        const controlReady = Boolean(visible && control && !control.disabled &&
+          controlStyle.display !== 'none' && controlStyle.visibility !== 'hidden' &&
+          Number(controlStyle.opacity) > 0 && controlRect.width > 0 && controlRect.height > 0);
+        return {
+          autoDismissed: !visible && window.__doggHeist?.ready === true,
+          controlReady
+        };
+      }),
+      value => value.autoDismissed || value.controlReady,
+      3500,
+      25
+    );
+    if (resolution.autoDismissed) return 'auto-dismissed';
+    await page.locator('#intro-start').click();
+    return 'intro-start';
+  }
   requireMeasurement(action.found, 'a visible semantic intro dismissal control');
   try {
     await page.locator('[data-dogg-test-intro-dismiss="true"]').click({ timeout: 1200 });
