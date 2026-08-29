@@ -2850,6 +2850,215 @@ async function measureRememberedTerminalCanvasContrast(page) {
   return measurement;
 }
 
+function exportedDoors(state) {
+  const doors = [];
+  walkJson(state, (value, trail) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const identity = [
+      value.id, value.name, value.type, value.kind, value.label, trail.join('.')
+    ].filter(Boolean).join(' ');
+    if (!/\bdoors?\b/i.test(identity)) return;
+    const position = coordinateOf(value);
+    if (!position) return;
+    const status = String(value.status || value.state || '');
+    const open = value.open === true || /\bopen\b/i.test(status);
+    const locked = value.locked === true || /\blocked\b/i.test(status);
+    doors.push({
+      id: String(value.id || value.name || value.label || `${position.x},${position.y}`),
+      position,
+      open,
+      locked,
+      status
+    });
+  });
+  return [...new Map(doors.map(door =>
+    [`${door.id}|${door.position.x},${door.position.y}`, door])).values()];
+}
+
+async function measureDoorCanvasContrast(page, preferredTransform) {
+  const snapshot = await inspect(page);
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, 'public facility dimensions for door pixel contrast');
+  const rawState = frameState(latestExportFrame(snapshot.exported));
+  requireMeasurement(rawState, 'current exported frame for door pixel contrast');
+  const doors = exportedDoors(rawState);
+  requireMeasurement(doors.length > 0, 'doors in current exported state');
+  const agents = normalizedAgents(agentsOf(snapshot.state));
+  const rawAgents = normalizedAgents(agentsOf(rawState));
+  const knowledge = povKnowledge(snapshot.state, agents.map(agent => agent.id));
+  const remembered = [];
+  const visible = [];
+  for (const agent of agents) {
+    const view = knowledge.find(item => item.id === agent.id);
+    const rawAgent = rawAgents.find(item => item.id === agent.id);
+    const known = view?.known.cells.length ? view.known : rawAgent?.seen;
+    const current = view?.visible;
+    if (!agent.position || !known || !current ||
+        (!current.cells.length && current.count > 0)) continue;
+    for (const door of doors) {
+      const key = `${door.position.x},${door.position.y}`;
+      const candidate = {
+        id: agent.id,
+        agent: agent.position,
+        target: door.position,
+        doorId: door.id,
+        open: door.open,
+        locked: door.locked,
+        known: known.cells.includes(key),
+        visible: current.cells.includes(key)
+      };
+      if (candidate.known && !candidate.visible) remembered.push(candidate);
+      if (candidate.visible && (candidate.open || candidate.locked)) visible.push(candidate);
+    }
+  }
+  remembered.sort((a, b) => {
+    const preferred = candidate =>
+      /d-west-south/i.test(candidate.doorId) ||
+      (candidate.target.x === 6 && candidate.target.y === 8);
+    return Number(preferred(b)) - Number(preferred(a));
+  });
+  requireMeasurement(remembered.length > 0, 'a remembered, currently hidden door');
+  requireMeasurement(visible.length > 0, 'a currently visible open or locked door');
+
+  const measurements = await page.evaluate(({ targets, dimensions, preferredTransform }) => {
+    const grid = document.getElementById('pov-grid');
+    if (!grid) return [];
+    const panels = [...grid.querySelectorAll(
+      '[data-pov-agent], [data-agent-id], .pov-card, .pov-panel, [data-pov]'
+    )].filter(panel => panel.querySelector('canvas'));
+    const identity = panel => [
+      panel.dataset.povAgent, panel.dataset.agentId, panel.dataset.pov,
+      panel.getAttribute('aria-label'), panel.textContent
+    ].filter(Boolean).join(' ');
+    const clusterKey = color =>
+      color.slice(0, 3).map(channel => Math.round(channel / 16) * 16).join(',');
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 :
+          Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color[0]) +
+        0.7152 * channel(color[1]) +
+        0.0722 * channel(color[2]);
+    };
+    const ratio = (a, b) => {
+      const one = luminance(a);
+      const two = luminance(b);
+      return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+    };
+    const dominant = colors => {
+      const groups = new Map();
+      for (const color of colors) {
+        if (color[3] < 20) continue;
+        const key = clusterKey(color);
+        const group = groups.get(key) || { count: 0, total: [0, 0, 0] };
+        group.count++;
+        group.total[0] += color[0];
+        group.total[1] += color[1];
+        group.total[2] += color[2];
+        groups.set(key, group);
+      }
+      return [...groups.values()].map(group => ({
+        count: group.count,
+        color: group.total.map(total => Math.round(total / group.count))
+      })).sort((a, b) => b.count - a.count);
+    };
+    const targetIds = [...new Set(targets.map(target => target.id))];
+    const output = [];
+    for (const target of targets) {
+      const panel = panels.find(item =>
+        new RegExp(target.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          .test(identity(item))) || panels[targetIds.indexOf(target.id)];
+      const canvas = panel?.querySelector('canvas');
+      if (!canvas || !canvas.width || !canvas.height) continue;
+      const scratch = document.createElement('canvas');
+      scratch.width = canvas.width;
+      scratch.height = canvas.height;
+      const context = scratch.getContext('2d', { willReadFrequently: true });
+      if (!context) continue;
+      context.drawImage(canvas, 0, 0);
+      const half = preferredTransform === 'orthogonal' ? {
+        x: scratch.width / dimensions.cols / 2,
+        y: scratch.height / dimensions.rows / 2
+      } : {
+        x: scratch.width / (dimensions.cols + dimensions.rows),
+        y: scratch.height / (dimensions.cols + dimensions.rows)
+      };
+      const center = preferredTransform === 'orthogonal' ? {
+        x: (target.target.x + 0.5) * scratch.width / dimensions.cols,
+        y: (target.target.y + 0.5) * scratch.height / dimensions.rows
+      } : preferredTransform === 'diamond-mirrored' ? {
+        x: (target.target.y - target.target.x + dimensions.cols) * half.x,
+        y: (target.target.x + target.target.y + 1) * half.y
+      } : {
+        x: (target.target.x - target.target.y + dimensions.rows) * half.x,
+        y: (target.target.x + target.target.y + 1) * half.y
+      };
+      const inner = [];
+      const ring = [];
+      for (let gy = -10; gy <= 10; gy++) {
+        for (let gx = -10; gx <= 10; gx++) {
+          const nx = gx / 10;
+          const ny = gy / 10;
+          const distance = preferredTransform === 'orthogonal' ?
+            Math.max(Math.abs(nx), Math.abs(ny)) :
+            Math.abs(nx) + Math.abs(ny);
+          const x = Math.max(0, Math.min(scratch.width - 1,
+            Math.round(center.x + nx * half.x * 0.9)));
+          const y = Math.max(0, Math.min(scratch.height - 1,
+            Math.round(center.y + ny * half.y * 0.9)));
+          const color = [...context.getImageData(x, y, 1, 1).data];
+          if (distance <= 0.50) inner.push(color);
+          if (distance >= 0.72 && distance <= 0.95) ring.push(color);
+        }
+      }
+      const background = dominant(ring)[0];
+      const glyph = dominant(inner).find(group =>
+        background && Math.hypot(
+          group.color[0] - background.color[0],
+          group.color[1] - background.color[1],
+          group.color[2] - background.color[2]
+        ) >= 28);
+      if (!glyph || !background) continue;
+      const lowGlyph = glyph.color.map((channel, index) =>
+        Math.round(channel * 0.1 + background.color[index] * 0.9));
+      output.push(Object.assign({}, target, {
+        transform: preferredTransform,
+        css: {
+          width: canvas.getBoundingClientRect().width,
+          height: canvas.getBoundingClientRect().height
+        },
+        glyph,
+        background,
+        clusterDistance: Math.hypot(
+          glyph.color[0] - background.color[0],
+          glyph.color[1] - background.color[1],
+          glyph.color[2] - background.color[2]
+        ),
+        contrast: ratio(glyph.color, background.color),
+        lowContrastControl: ratio(lowGlyph, background.color)
+      }));
+    }
+    return output;
+  }, {
+    targets: [
+      Object.assign({ mode: 'remembered' }, remembered[0]),
+      Object.assign({ mode: 'visible' }, visible[0])
+    ],
+    dimensions,
+    preferredTransform
+  });
+  const rememberedMeasurement = measurements.find(item => item.mode === 'remembered');
+  const visibleMeasurement = measurements.find(item => item.mode === 'visible');
+  requireMeasurement(rememberedMeasurement, 'remembered door stroke/background clusters');
+  requireMeasurement(visibleMeasurement, 'visible open/locked door stroke/background clusters');
+  return {
+    remembered: rememberedMeasurement,
+    visible: visibleMeasurement
+  };
+}
+
 async function readBoardSemantic(page) {
   return page.locator('#game-board').evaluate(board => {
     const referenced = attribute => String(board.getAttribute(attribute) || '')
@@ -3302,6 +3511,13 @@ async function measureElementContrast(page, selector) {
       visible: true,
       measurable: true,
       selector: css,
+      disabled: Boolean(
+        ('disabled' in element && element.disabled) ||
+        element.getAttribute('aria-disabled') === 'true'
+      ),
+      cursor: style.cursor,
+      opacity: Number(style.opacity),
+      textDecoration: style.textDecorationLine,
       ratio: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
         (Math.min(foregroundLuminance, backgroundLuminance) + 0.05),
       text: String(element.textContent || element.getAttribute('aria-label') || '')
@@ -3310,6 +3526,51 @@ async function measureElementContrast(page, selector) {
       background: `rgb(${Math.round(background.r)}, ${Math.round(background.g)}, ${Math.round(background.b)})`
     };
   }, selector);
+}
+
+async function measureDisabledControlContrast(page, kind) {
+  const marker = await page.evaluate(targetKind => {
+    const controls = [...document.querySelectorAll(
+      'button, input[type="button"], input[type="submit"], [role="button"]'
+    )];
+    let element;
+    if (targetKind === 'fork') {
+      element = document.getElementById('fork-button');
+    } else if (targetKind === 'play') {
+      element = document.getElementById('play-toggle');
+    } else if (targetKind === 'return-live') {
+      element = document.querySelector(
+        '#return-live, #live-button, [data-action="return-live"], [data-action="live"]'
+      ) || controls.find(control => {
+        if (control.id === 'play-toggle') return false;
+        const text = [
+          control.id,
+          control.getAttribute('aria-label'),
+          control.getAttribute('title'),
+          control.textContent,
+          control.value
+        ].filter(Boolean).join(' ');
+        return /\b(return[-_\s]+(?:to[-_\s]+)?live|back[-_\s]+to[-_\s]+live|live[-_\s]+head)\b/i.test(text);
+      });
+    }
+    if (!element) return { found: false };
+    document.querySelectorAll('[data-dogg-test-disabled-contrast]')
+      .forEach(node => node.removeAttribute('data-dogg-test-disabled-contrast'));
+    element.setAttribute('data-dogg-test-disabled-contrast', targetKind);
+    return {
+      found: true,
+      disabled: Boolean(
+        ('disabled' in element && element.disabled) ||
+        element.getAttribute('aria-disabled') === 'true'
+      )
+    };
+  }, kind);
+  requireMeasurement(marker.found, `the ${kind} control for disabled contrast`);
+  const measured = await measureElementContrast(
+    page,
+    `[data-dogg-test-disabled-contrast="${kind}"]`
+  );
+  return Object.assign({ kind }, measured);
 }
 
 async function scanSmallTextContrast(page, stateName) {
@@ -3588,6 +3849,213 @@ async function focusInsideVisibleHelp(page) {
   });
 }
 
+async function auditHelpContainment(page) {
+  const initialScroll = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0
+  }));
+  requireMeasurement(initialScroll.window > 0 || initialScroll.document > 0,
+    'a scrolled short page before opening Help');
+  await page.locator('#help-button').focus();
+  await page.evaluate(position => {
+    document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
+    document.body.style.setProperty('scroll-behavior', 'auto', 'important');
+    window.scrollTo(0, Math.max(position.window, position.document));
+  }, initialScroll);
+  const startScroll = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0
+  }));
+  await page.keyboard.press('h');
+  await poll(() => visibleHelp(page), value => value.count > 0, 2000);
+  const dialogInfo = await page.evaluate(() => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const dialogs = [...document.querySelectorAll(
+      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
+    )].filter(visible).filter(element =>
+      /\b(help|keyboard|controls?|terminals?|objective)\b/i.test(element.textContent || ''));
+    const dialog = dialogs.sort((a, b) =>
+      Number(b.matches('dialog[open], [aria-modal="true"], [role="dialog"]')) -
+      Number(a.matches('dialog[open], [aria-modal="true"], [role="dialog"]')))[0];
+    if (!dialog) return { found: false };
+    dialog.setAttribute('data-dogg-test-help-dialog', 'true');
+    const close = [...dialog.querySelectorAll(
+      'button, [role="button"], input[type="button"], input[type="submit"]'
+    )].find(control => {
+      const semantics = [
+        control.id,
+        control.getAttribute('aria-label'),
+        control.getAttribute('title'),
+        control.textContent,
+        control.value
+      ].filter(Boolean).join(' ');
+      return visible(control) &&
+        (control.id === 'help-close' || /\b(close|dismiss|done|okay|ok)\b|×/i.test(semantics));
+    });
+    if (!close) return { found: false };
+    close.setAttribute('data-dogg-test-help-close-focus', 'true');
+    const rect = dialog.getBoundingClientRect();
+    const points = [
+      { x: 8, y: 8 },
+      { x: innerWidth - 8, y: 8 },
+      { x: 8, y: innerHeight - 8 },
+      { x: innerWidth - 8, y: innerHeight - 8 }
+    ];
+    const backdrop = points.find(point =>
+      !(point.x >= rect.left && point.x <= rect.right &&
+        point.y >= rect.top && point.y <= rect.bottom));
+    const scrollers = [dialog, ...dialog.querySelectorAll('*')].filter(element => {
+      const style = getComputedStyle(element);
+      return visible(element) && element.scrollHeight > element.clientHeight + 1 &&
+        /(auto|scroll)/.test(style.overflowY);
+    }).sort((a, b) =>
+      (a.getBoundingClientRect().width * a.getBoundingClientRect().height) -
+      (b.getBoundingClientRect().width * b.getBoundingClientRect().height));
+    const scroller = scrollers[0];
+    if (scroller) scroller.setAttribute('data-dogg-test-help-scroller', 'true');
+    return {
+      found: true,
+      backdrop,
+      scroller: scroller ? {
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+        rect: {
+          left: scroller.getBoundingClientRect().left,
+          top: scroller.getBoundingClientRect().top,
+          width: scroller.getBoundingClientRect().width,
+          height: scroller.getBoundingClientRect().height
+        }
+      } : null
+    };
+  });
+  requireMeasurement(dialogInfo.found && dialogInfo.backdrop,
+    'visible Help dialog, Close control, and backdrop point');
+  requireMeasurement(dialogInfo.scroller, 'overflowing Help content on the short viewport');
+
+  await page.locator('[data-dogg-test-help-close-focus="true"]').focus();
+  const focusSamples = [];
+  for (const key of [
+    'Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab'
+  ]) {
+    await page.keyboard.press(key);
+    focusSamples.push(await page.evaluate(() => {
+      const dialog = document.querySelector('[data-dogg-test-help-dialog="true"]');
+      return {
+        inside: Boolean(dialog && dialog.contains(document.activeElement)),
+        active: document.activeElement?.id || document.activeElement?.tagName || ''
+      };
+    }));
+  }
+
+  const beforeBackdropWheel = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0
+  }));
+  await page.mouse.move(dialogInfo.backdrop.x, dialogInfo.backdrop.y);
+  for (const delta of [200, 200, 200, 200]) await page.mouse.wheel(0, delta);
+  await sleep(180);
+  const afterBackdropWheel = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0,
+    dialogVisible: Boolean(document.querySelector('[data-dogg-test-help-dialog="true"]'))
+  }));
+
+  const scrollerCenter = {
+    x: Math.max(1, Math.min((await page.viewportSize()).width - 1,
+      dialogInfo.scroller.rect.left + dialogInfo.scroller.rect.width / 2)),
+    y: Math.max(1, Math.min((await page.viewportSize()).height - 1,
+      dialogInfo.scroller.rect.top + dialogInfo.scroller.rect.height / 2))
+  };
+  await page.mouse.move(scrollerCenter.x, scrollerCenter.y);
+  for (const delta of [200, 200, 200]) await page.mouse.wheel(0, delta);
+  await sleep(180);
+  const afterContentWheel = await page.evaluate(() => ({
+    scrollTop: document.querySelector('[data-dogg-test-help-scroller="true"]')?.scrollTop || 0,
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0
+  }));
+
+  await page.locator('[data-dogg-test-help-close-focus="true"]').focus();
+  await page.keyboard.press('h');
+  await poll(() => visibleHelp(page), value => value.count === 0, 2000);
+  const afterH = {
+    scroll: await page.evaluate(() => ({
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0
+    })),
+    focus: await focusHandoffState(page)
+  };
+  await page.keyboard.press('h');
+  await poll(() => visibleHelp(page), value => value.count > 0, 2000);
+  await focusInsideVisibleHelp(page);
+  await page.keyboard.press('Escape');
+  await poll(() => visibleHelp(page), value => value.count === 0, 2000);
+  const afterEscape = {
+    scroll: await page.evaluate(() => ({
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0
+    })),
+    focus: await focusHandoffState(page)
+  };
+  return {
+    startScroll,
+    focusTrapped: focusSamples.every(sample => sample.inside),
+    focusSamples,
+    backdropLocked:
+      beforeBackdropWheel.window === afterBackdropWheel.window &&
+      beforeBackdropWheel.document === afterBackdropWheel.document &&
+      afterBackdropWheel.dialogVisible,
+    contentScrolled: afterContentWheel.scrollTop > dialogInfo.scroller.scrollTop &&
+      afterContentWheel.window === beforeBackdropWheel.window &&
+      afterContentWheel.document === beforeBackdropWheel.document,
+    hRestored: afterH.scroll.window === startScroll.window &&
+      afterH.scroll.document === startScroll.document && afterH.focus.useful,
+    escapeRestored: afterEscape.scroll.window === startScroll.window &&
+      afterEscape.scroll.document === startScroll.document && afterEscape.focus.useful,
+    afterH,
+    afterEscape
+  };
+}
+
+async function auditShortSkipTarget(page) {
+  const skip = page.locator(
+    '.skip-link, a[href="#game-board"], a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
+  ).first();
+  requireMeasurement(await skip.count() === 1, 'the short-screen skip link');
+  await skip.focus();
+  await page.evaluate(() => new Promise(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const before = await skip.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      height: rect.height,
+      width: rect.width,
+      href: element.getAttribute('href'),
+      focused: document.activeElement === element
+    };
+  });
+  requireMeasurement(before.href && before.href.startsWith('#'),
+    'a same-page short-screen skip target');
+  await page.keyboard.press('Enter');
+  await poll(() => page.evaluate(() => ({
+    hash: location.hash,
+    boardFocused: document.activeElement === document.getElementById('game-board') ||
+      Boolean(document.getElementById('game-board')?.contains(document.activeElement))
+  })), value => value.boardFocused, 1500, 25);
+  const after = await page.evaluate(() => ({
+    hash: location.hash,
+    boardFocused: document.activeElement === document.getElementById('game-board') ||
+      Boolean(document.getElementById('game-board')?.contains(document.activeElement))
+  }));
+  return { before, after };
+}
+
 async function deterministicRun(page, seed) {
   await api(page, 'pause');
   await api(page, 'restart', seed);
@@ -3650,6 +4118,17 @@ async function runSuite() {
   result('short intro card scrolls while the dismissed page unlocks',
     shortIntro.cardScrolled && shortIntro.pageUnlocked,
     `card ${shortIntro.card.scrollTop}→${shortIntro.cardAfter.scrollTop} of ${shortIntro.card.scrollHeight}/${shortIntro.card.clientHeight}; page ${shortIntro.card.page}→${shortIntro.pageAfter.document}`);
+  const helpContainment = await auditHelpContainment(firstPaintPage);
+  result('short Help dialog traps focus and separates backdrop/content scrolling',
+    helpContainment.focusTrapped && helpContainment.backdropLocked &&
+      helpContainment.contentScrolled && helpContainment.hRestored &&
+      helpContainment.escapeRestored,
+    `focus ${helpContainment.focusSamples.map(sample => sample.active).join('→')}; backdrop ${helpContainment.backdropLocked}; content ${helpContainment.contentScrolled}; H ${helpContainment.afterH.focus.id || helpContainment.afterH.focus.tag}; Escape ${helpContainment.afterEscape.focus.id || helpContainment.afterEscape.focus.tag}`);
+  const shortSkip = await auditShortSkipTarget(firstPaintPage);
+  result('short-screen skip target is 44px and reaches the board',
+    shortSkip.before.focused && shortSkip.before.height >= 44 &&
+      shortSkip.after.boardFocused,
+    `${shortSkip.before.width.toFixed(1)}x${shortSkip.before.height.toFixed(1)} ${shortSkip.before.href}; hash ${shortSkip.after.hash}`);
   await firstPaintContext.close();
 
   const primaryContext = await browser.newContext({
@@ -4540,6 +5019,10 @@ async function runSuite() {
   }
   const mobilePovMarkerContrast =
     await measureRememberedTerminalCanvasContrast(mobilePage);
+  const mobileDoorContrast = await measureDoorCanvasContrast(
+    mobilePage,
+    mobilePovMarkerContrast.transform
+  );
   for (let batch = 0; batch < 12; batch++) {
     const won = await mobilePage.locator('#objective-value').getAttribute('data-outcome');
     if (won === 'won') break;
@@ -4589,6 +5072,11 @@ async function runSuite() {
     await api(contrastPage, 'pause');
     const selectedForContrast = await hasSelectedAgentControl(contrastPage);
     const neutralContrast = await measureContrast(contrastPage, 'ready', roles);
+    const disabledReturnLive = await measureDisabledControlContrast(
+      contrastPage,
+      'return-live'
+    );
+    const disabledFork = await measureDisabledControlContrast(contrastPage, 'fork');
     const activeSmallText = await scanSmallTextContrast(contrastPage, 'active');
     await api(contrastPage, 'restart', 'ADVERSARY-007');
     await api(contrastPage, 'pause');
@@ -4599,6 +5087,10 @@ async function runSuite() {
       completedContrastState = await inspect(contrastPage, false);
     }
     const povMarkerContrast = await measureRememberedTerminalCanvasContrast(contrastPage);
+    const doorContrast = await measureDoorCanvasContrast(
+      contrastPage,
+      povMarkerContrast.transform
+    );
     for (let batch = 0;
       batch < 12 && !isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state));
       batch++) {
@@ -4607,6 +5099,10 @@ async function runSuite() {
     }
     requireMeasurement(isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state)),
       `${scheme} completed representative state for systematic contrast`);
+    const disabledTerminalPlay = await measureDisabledControlContrast(
+      contrastPage,
+      'play'
+    );
     const completedSmallText = await scanSmallTextContrast(contrastPage, 'completed');
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
@@ -4619,6 +5115,10 @@ async function runSuite() {
       activeSmallText,
       completedSmallText,
       povMarkerContrast,
+      doorContrast,
+      disabledReturnLive,
+      disabledFork,
+      disabledTerminalPlay,
       theme: `${introContrast.theme}|${readyContrast.theme}`
     };
     await contrastContext.close();
@@ -4651,6 +5151,17 @@ async function runSuite() {
       darkSpecificContrast.neutralStatus.text.length > 0 &&
       /\b(cooldown|ready|available|wait|tick|turn)\b|\d/i.test(darkSpecificContrast.selectedMetadata.text),
     `status ${darkSpecificContrast.neutralStatus?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.neutralStatus?.text || 'none'}); metadata ${darkSpecificContrast.selectedMetadata?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.selectedMetadata?.text || 'none'})`);
+  const disabledContrastMeasurements = ['light', 'dark'].flatMap(scheme => [
+    Object.assign({ scheme }, contrastByTheme[scheme].disabledReturnLive),
+    Object.assign({ scheme }, contrastByTheme[scheme].disabledFork),
+    Object.assign({ scheme }, contrastByTheme[scheme].disabledTerminalPlay)
+  ]);
+  result('disabled controls retain 4.5:1 contrast and explicit disabled cues',
+    disabledContrastMeasurements.every(measurement =>
+      measurement.found && measurement.visible && measurement.measurable &&
+      measurement.disabled && measurement.ratio >= 4.5),
+    disabledContrastMeasurements.map(measurement =>
+      `${measurement.scheme}/${measurement.kind} ${measurement.ratio?.toFixed(2) || 'missing'}:1 disabled=${measurement.disabled} cursor=${measurement.cursor}`).join(' | '));
   const systematicScans = ['light', 'dark'].flatMap(scheme => [
     Object.assign({ scheme }, contrastByTheme[scheme].activeSmallText),
     Object.assign({ scheme }, contrastByTheme[scheme].completedSmallText)
@@ -4709,6 +5220,26 @@ async function runSuite() {
       smallestRememberedTerminal.contrast >= 4.5,
     rememberedTerminalMeasurements.map(measurement =>
       `${measurement.mode} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.transform} calibration ${measurement.ownScore.toFixed(1)} contrast ${measurement.contrast.toFixed(2)}:1 distance ${measurement.clusterDistance.toFixed(1)} glyph rgb(${measurement.glyph.color.join(',')}) / cell-bg rgb(${measurement.background.color.join(',')}) low-control ${measurement.lowContrastControl.toFixed(2)}:1`).join(' | '));
+  const doorMeasurements = [
+    { mode: 'light', pair: contrastByTheme.light.doorContrast },
+    { mode: 'dark', pair: contrastByTheme.dark.doorContrast },
+    { mode: 'mobile-light', pair: mobileDoorContrast }
+  ].flatMap(entry => [
+    Object.assign({ theme: entry.mode }, entry.pair.remembered),
+    Object.assign({ theme: entry.mode }, entry.pair.visible)
+  ]);
+  result('POV door strokes retain 4.5:1 contrast in remembered and visible states',
+    doorMeasurements.every(measurement =>
+      measurement.clusterDistance >= 28 &&
+      measurement.glyph.count >= 2 &&
+      measurement.background.count >= 2 &&
+      measurement.contrast >= 4.5 &&
+      measurement.lowContrastControl < 4.5 &&
+      (measurement.mode === 'remembered' ?
+        measurement.known && !measurement.visible :
+        measurement.visible && (measurement.open || measurement.locked))),
+    doorMeasurements.map(measurement =>
+      `${measurement.theme}/${measurement.mode} ${measurement.doorId}@${measurement.target.x},${measurement.target.y} ${measurement.open ? 'open' : measurement.locked ? 'locked' : measurement.status || 'door'} ${measurement.contrast.toFixed(2)}:1 rgb(${measurement.glyph.color.join(',')})/rgb(${measurement.background.color.join(',')}) low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
