@@ -35,6 +35,15 @@
       };
       document.addEventListener("click", earlyStartHandler, true);
       window.__doggEarlyStartHandler = earlyStartHandler;
+      const earlySkipHandler = (event) => {
+        const skip = event.target instanceof Element ? event.target.closest(".skip-link") : null;
+        if (!skip || window.__doggHeist?.ready) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.__doggPendingSkip = true;
+      };
+      document.addEventListener("click", earlySkipHandler, true);
+      window.__doggEarlySkipHandler = earlySkipHandler;
     })();
   </script>
   <meta charset="UTF-8">
@@ -3318,7 +3327,9 @@
       }
 
       function drawKnownStatics(ctx, metrics, state, seen, visible, privateAgentId = null) {
-        drawExtraction(ctx, metrics, state.extraction);
+        if (seen.has(keyOf(state.extraction.x, state.extraction.y))) {
+          drawExtraction(ctx, metrics, state.extraction);
+        }
         state.doors.forEach((door) => {
           const cell = keyOf(door.x, door.y);
           if (seen.has(cell)) drawDoor(ctx, metrics, door, visible.has(cell) ? 1 : 0.45);
@@ -3329,14 +3340,14 @@
           drawDiamond(ctx, metrics, terminal.x, terminal.y, terminal.hacked ? palette["canvas-success"] : palette["canvas-warning"], visible.has(cell) ? 1 : 0.42);
           drawMarkerBadge(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, 0.29);
         });
-        if (seen.has(keyOf(state.core.x, state.core.y)) || !privateAgentId) {
+        if (seen.has(keyOf(state.core.x, state.core.y))) {
           const coreIsRemembered = !visible.has(keyOf(state.core.x, state.core.y));
           drawDiamond(ctx, metrics, state.core.x, state.core.y, palette["canvas-warning"], state.core.acquired || coreIsRemembered ? 0.42 : 1);
           drawMarkerBadge(ctx, metrics, "C", state.core.x, state.core.y, 0.3);
         }
         state.hazards.forEach((hazard) => {
           const discovered = privateAgentId ? hazard.discoveredBy.includes(privateAgentId) : hazard.discoveredBy.length > 0;
-          if (discovered && seen.has(keyOf(hazard.x, hazard.y))) drawHazard(ctx, metrics, hazard, visible.has(keyOf(hazard.x, hazard.y)) ? 1 : 0.4);
+          if (discovered && visible.has(keyOf(hazard.x, hazard.y))) drawHazard(ctx, metrics, hazard);
         });
       }
 
@@ -3363,8 +3374,26 @@
         });
       }
 
-      function boardCursorDescription(state, nextDanger = computeNextDanger(state)) {
+      function sharedKnowledge(state) {
+        const visible = new Set();
+        const seen = new Set();
+        state.agents.filter((agent) => agent.status === "active").forEach((agent) => {
+          visibleCellsForAgent(state, agent).forEach((cell) => visible.add(cell));
+          agent.seen.forEach((cell) => seen.add(cell));
+        });
+        return { visible, seen };
+      }
+
+      function boardCursorDescription(state, nextDanger = computeNextDanger(state), knowledge = sharedKnowledge(state)) {
         const { x, y } = keyboardCursor;
+        const cell = keyOf(x, y);
+        const isSeen = knowledge.seen.has(cell);
+        const isVisible = knowledge.visible.has(cell);
+        const selectedDescription = "Selected agent: " + ROLE[selectedAgentId].name + ".";
+        if (!isSeen) {
+          return "Board cursor [" + x + "," + y + "] at tick " + state.tick + ". Unknown fog. " +
+            "Tile, occupant, objective, and danger status unavailable. " + selectedDescription;
+        }
         const door = doorAt(state, x, y);
         let tileDescription;
         if (tileAt(state, x, y) === "W") {
@@ -3378,18 +3407,25 @@
         const occupants = [];
         state.agents.filter((agent) => agent.status === "active" && agent.x === x && agent.y === y)
           .forEach((agent) => occupants.push(ROLE[agent.id].name));
-        state.guards.filter((guard) => guard.active && guard.x === x && guard.y === y)
-          .forEach((guard) => occupants.push(guard.id));
-        const camera = cameraAt(state, x, y);
-        if (camera?.active) occupants.push(camera.id);
+        if (isVisible) {
+          state.guards.filter((guard) => guard.active && guard.x === x && guard.y === y)
+            .forEach((guard) => occupants.push(guard.id));
+          const camera = cameraAt(state, x, y);
+          if (camera?.active) occupants.push(camera.id);
+          const hazard = hazardAt(state, x, y);
+          if (hazard?.active) occupants.push(hazard.id);
+        }
         const terminal = terminalAt(state, x, y);
         if (terminal) occupants.push((terminal.hacked ? "friendly " : "unhacked ") + terminal.id);
         if (state.core.x === x && state.core.y === y && !state.core.acquired) occupants.push("DOGG core");
         if (isAtExtraction(state, { x, y })) occupants.push("extraction zone");
-        const hazard = hazardAt(state, x, y);
-        if (hazard?.active) occupants.push(hazard.id);
 
-        const cell = keyOf(x, y);
+        if (!isVisible) {
+          return "Board cursor [" + x + "," + y + "] at tick " + state.tick + ". Remembered " +
+            tileDescription + ". " +
+            (occupants.length ? "Known static markers: " + occupants.join(", ") + ". " : "No remembered static marker. ") +
+            "Enemy and danger status unknown outside current team sight. " + selectedDescription;
+        }
         const currentThreat = currentDangerCells(state).has(cell);
         const futureThreat = nextDanger.has(cell);
         return "Board cursor [" + x + "," + y + "] at tick " + state.tick + ". " +
@@ -3397,11 +3433,11 @@
           (occupants.length ? "Occupants: " + occupants.join(", ") + ". " : "No known occupant. ") +
           (currentThreat ? "Inside a current threat zone. " : "Not inside a current threat zone. ") +
           (futureThreat ? "Warning: inside next-tick danger. " : "No next-tick danger predicted. ") +
-          "Selected agent: " + ROLE[selectedAgentId].name + ".";
+          selectedDescription;
       }
 
-      function updateBoardAccessibility(state, nextDanger, announce = false) {
-        const description = boardCursorDescription(state, nextDanger);
+      function updateBoardAccessibility(state, nextDanger, announce = false, knowledge = sharedKnowledge(state)) {
+        const description = boardCursorDescription(state, nextDanger, knowledge);
         elements.board.setAttribute("aria-label", description);
         if (announce || document.activeElement === elements.board) {
           elements.boardCursorLive.textContent = description;
@@ -3435,17 +3471,13 @@
         const canvas = elements.board;
         const metrics = fitCanvas(canvas);
         const ctx = canvas.getContext("2d");
-        const visible = new Set();
-        const seen = new Set();
-        state.agents.filter((agent) => agent.status === "active").forEach((agent) => {
-          visibleCellsForAgent(state, agent).forEach((cell) => visible.add(cell));
-          agent.seen.forEach((cell) => seen.add(cell));
-        });
+        const knowledge = sharedKnowledge(state);
+        const { visible, seen } = knowledge;
         drawFacilityBase(ctx, metrics, state, seen, visible);
         const nextProjection = computeNextProjection(state);
         const nextDanger = nextProjection.danger;
         nextDanger.forEach((cell) => {
-          if (!seen.has(cell)) return;
+          if (!visible.has(cell)) return;
           const [x, y] = cell.split(",").map(Number);
           fillCell(ctx, metrics, x, y, palette.danger, visible.has(cell) ? 0.13 : 0.055);
         });
@@ -3454,7 +3486,9 @@
 
         state.guards.filter((guard) => guard.active && visible.has(keyOf(guard.x, guard.y))).forEach((guard) => {
           const projectedGuard = nextProjection.state.guards.find((candidate) => candidate.id === guard.id);
-          drawArrow(ctx, metrics, guard, projectedGuard || guard, palette["canvas-danger"], 0.58);
+          if (projectedGuard && visible.has(keyOf(projectedGuard.x, projectedGuard.y))) {
+            drawArrow(ctx, metrics, guard, projectedGuard, palette["canvas-danger"], 0.58);
+          }
         });
         state.agents.filter((agent) => agent.status === "active").forEach((agent) => {
           const intent = computeAgentIntent(state, agent);
@@ -3486,7 +3520,7 @@
           ctx.strokeRect(rect.x + 2, rect.y + 2, rect.w - 4, rect.h - 4);
           ctx.restore();
         }
-        updateBoardAccessibility(state, nextDanger);
+        updateBoardAccessibility(state, nextDanger, false, knowledge);
       }
 
       function drawPov(state, agent, canvas) {
@@ -3824,6 +3858,7 @@
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
         completeReadiness();
         focusUsefulControlAfterIntro();
+        consumePendingSkip();
         return true;
       }
 
@@ -3852,6 +3887,7 @@
         persistState();
         completeReadiness();
         if (releasedIntro) focusUsefulControlAfterIntro();
+        if (releasedIntro) consumePendingSkip();
         status("Live policy clock running at " + speedMs + " ms per tick.");
         return true;
       }
@@ -4551,6 +4587,24 @@
         };
       }
 
+      function syncSpeedSelect(value) {
+        const customSelector = 'option[data-custom-speed="true"]';
+        const custom = elements.speed.querySelector(customSelector);
+        const preset = Array.from(elements.speed.options)
+          .find((option) => !option.matches(customSelector) && Number(option.value) === value);
+        if (preset) {
+          custom?.remove();
+          elements.speed.value = preset.value;
+          return;
+        }
+        const option = custom || document.createElement("option");
+        option.dataset.customSpeed = "true";
+        option.value = String(value);
+        option.textContent = "Custom · " + value + " ms";
+        if (!custom) elements.speed.appendChild(option);
+        elements.speed.value = option.value;
+      }
+
       function installImportedRuntime(prepared, options = {}) {
         stopTimer();
         frames = prepared.frames;
@@ -4563,7 +4617,7 @@
         running = prepared.running;
         keyboardCursor = prepared.keyboardCursor;
         nextDangerCache = new WeakMap();
-        elements.speed.value = String(speedMs);
+        syncSpeedSelect(speedMs);
         renderAll();
         if (!options.deferTimer && running && !isViewingHistory() && liveState.outcome === "active") startTimer();
         if (!options.skipPersist) persistState();
@@ -4615,7 +4669,7 @@
         api.ready = snapshot.ready;
         userCommanded = snapshot.userCommanded;
         resumeAfterIntro = snapshot.resumeAfterIntro;
-        elements.speed.value = String(speedMs);
+        syncSpeedSelect(speedMs);
         elements.intro.hidden = snapshot.introHidden;
         elements.appShell.inert = snapshot.appInert;
         if (snapshot.appAriaHidden === null) elements.appShell.removeAttribute("aria-hidden");
@@ -4678,8 +4732,7 @@
           return false;
         }
         speedMs = parsed;
-        const matchingOption = Array.from(elements.speed.options).find((option) => Number(option.value) === speedMs);
-        if (matchingOption) elements.speed.value = String(speedMs);
+        syncSpeedSelect(speedMs);
         if (running) startTimer();
         persistState();
         status("Clock set to " + speedMs + " ms per deterministic tick.");
@@ -4709,6 +4762,7 @@
         });
         return {
           seed: displayed.seed,
+          speedMs,
           tick: displayed.tick,
           viewTick: frame.tick,
           liveTick: live.tick,
@@ -4994,6 +5048,25 @@
         unlockHelpModal();
       }
 
+      function performSkipToBoard() {
+        if (!ready || !elements.intro.hidden) return false;
+        const hash = "#game-board";
+        if (window.location.hash === hash) history.replaceState(history.state, "", hash);
+        else history.pushState(history.state, "", hash);
+        const previousBehavior = document.documentElement.style.scrollBehavior;
+        document.documentElement.style.scrollBehavior = "auto";
+        elements.board.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+        document.documentElement.style.scrollBehavior = previousBehavior;
+        elements.board.focus({ preventScroll: true });
+        return true;
+      }
+
+      function consumePendingSkip() {
+        if (!window.__doggPendingSkip || !ready || !elements.intro.hidden) return false;
+        window.__doggPendingSkip = false;
+        return performSkipToBoard();
+      }
+
       function boardPoint(event) {
         const rect = elements.board.getBoundingClientRect();
         return {
@@ -5141,15 +5214,11 @@
         elements.helpDialog.addEventListener("close", unlockHelpModal);
         elements.skipLink.addEventListener("click", (event) => {
           event.preventDefault();
-          if (!ready) return;
-          const hash = "#game-board";
-          if (window.location.hash === hash) history.replaceState(history.state, "", hash);
-          else history.pushState(history.state, "", hash);
-          const previousBehavior = document.documentElement.style.scrollBehavior;
-          document.documentElement.style.scrollBehavior = "auto";
-          elements.board.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
-          document.documentElement.style.scrollBehavior = previousBehavior;
-          elements.board.focus({ preventScroll: true });
+          if (!ready) {
+            window.__doggPendingSkip = true;
+            return;
+          }
+          performSkipToBoard();
         });
         elements.board.addEventListener("pointerdown", handleBoardPointerDown);
         elements.board.addEventListener("pointermove", handleBoardPointerMove);
@@ -5175,6 +5244,10 @@
         if (window.__doggEarlyStartHandler) {
           document.removeEventListener("click", window.__doggEarlyStartHandler, true);
           delete window.__doggEarlyStartHandler;
+        }
+        if (window.__doggEarlySkipHandler) {
+          document.removeEventListener("click", window.__doggEarlySkipHandler, true);
+          delete window.__doggEarlySkipHandler;
         }
         window.addEventListener("resize", renderAll);
 
