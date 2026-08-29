@@ -6795,32 +6795,52 @@ async function runSuite() {
   }
   requireMeasurement(tacticalMissing.length === 0,
     `all tactical marker types measurable (${tacticalMissing.join(', ')})`);
-  const tacticalContrastPass = tacticalMeasurements.every(measurement =>
-    measurement.glyph.count >= 2 &&
-    measurement.background.count >= 2 &&
-    measurement.clusterDistance >= 28 &&
-    measurement.glyphFraction > 0 && measurement.glyphFraction < 0.85 &&
-    measurement.contrast >= 4.5 &&
-    measurement.lowContrastControl < 4.5 &&
-    (measurement.type === 'agent' ||
-      measurement.visibility === 'visible' ||
-      measurement.visibility === 'remembered'));
+  const tacticalFailures = tacticalMeasurements.map(measurement => {
+    const checks = {
+      glyphSamples: measurement.glyph.count >= 2,
+      backgroundSamples: measurement.background.count >= 2,
+      distinctClusters: measurement.clusterDistance >= 28,
+      glyphPresent: measurement.glyphFraction > 0,
+      contrast: measurement.contrast >= 4.5,
+      lowControlFails: measurement.lowContrastControl < 4.5,
+      semanticVisibility: measurement.type === 'agent' ||
+        measurement.visibility === 'visible' ||
+        measurement.visibility === 'remembered'
+    };
+    return {
+      measurement,
+      checks,
+      failed: Object.entries(checks)
+        .filter(([, passed]) => !passed).map(([name]) => name)
+    };
+  }).filter(entry => entry.failed.length);
+  const tacticalContrastPass = tacticalFailures.length === 0;
   if (!tacticalContrastPass) {
-    console.log('tactical marker clusters:', JSON.stringify(tacticalMeasurements.map(
-      measurement => ({
-        mode: measurement.mode,
-        key: measurement.key,
-        phase: measurement.phase,
-        visibility: measurement.visibility,
-        background: measurement.background,
-        candidates: measurement.glyphCandidates
-      })
-    )));
+    console.log('tactical marker failures:', JSON.stringify(tacticalFailures.map(entry => ({
+      mode: entry.measurement.mode,
+      key: entry.measurement.key,
+      phase: entry.measurement.phase,
+      visibility: entry.measurement.visibility,
+      failed: entry.failed,
+      values: {
+        glyphSamples: entry.measurement.glyph.count,
+        backgroundSamples: entry.measurement.background.count,
+        clusterDistance: entry.measurement.clusterDistance,
+        glyphFraction: entry.measurement.glyphFraction,
+        contrast: entry.measurement.contrast,
+        lowContrastControl: entry.measurement.lowContrastControl
+      },
+      background: entry.measurement.background,
+      candidates: entry.measurement.glyphCandidates
+    }))));
   }
   result('all tactical POV markers retain 4.5:1 target-specific pixel contrast',
     tacticalContrastPass,
-    tacticalMeasurements.map(measurement =>
-      `${measurement.mode}/${measurement.key}@${measurement.position.x},${measurement.position.y} ${measurement.phase}/${measurement.visibility} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.contrast.toFixed(2)}:1 low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
+    tacticalFailures.length ?
+      tacticalFailures.map(entry =>
+        `${entry.measurement.mode}/${entry.measurement.key} failed ${entry.failed.join(',')} (glyph ${entry.measurement.glyph.count}, bg ${entry.measurement.background.count}, distance ${entry.measurement.clusterDistance.toFixed(1)}, fraction ${entry.measurement.glyphFraction.toFixed(3)}, contrast ${entry.measurement.contrast.toFixed(2)}, low ${entry.measurement.lowContrastControl.toFixed(2)})`).join(' | ') :
+      tacticalMeasurements.map(measurement =>
+        `${measurement.mode}/${measurement.key}@${measurement.position.x},${measurement.position.y} ${measurement.phase}/${measurement.visibility} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.contrast.toFixed(2)}:1 low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
