@@ -412,6 +412,10 @@
       font-weight: 750;
     }
 
+    html[data-theme="dark"] .role-pill {
+      color: var(--cp-text-soft);
+    }
+
     .mode-pill.live,
     .outcome-pill.won {
       border-color: var(--cp-success);
@@ -1525,7 +1529,7 @@
       <div>
         <h3>The objective</h3>
         <ol>
-          <li>Hack any two amber terminal nodes to release the vault lattice. Green means a terminal is already friendly.</li>
+          <li>Hack any two terminal nodes to release the vault lattice. Amber marks unhacked terminals; green means hacked.</li>
           <li>Download the amber core in the upper-right vault.</li>
           <li>Return all four active agents to the extraction ring before alarm 100 or tick 180.</li>
         </ol>
