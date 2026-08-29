@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>How to explain this to someone else</title>
-<meta name="description" content="Six words for how AI agents remember, move and change. Read it once, then explain it to somebody.">
+<title>What RAPP is</title>
+<meta name="description" content="You write one file, your AI can do a new thing. The basics of RAPP, and then the plumbing that makes it scale to any device.">
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}
 body{margin:0;background:#07070d;color:#e9e9f2;font:17px/1.7 Georgia,'Times New Roman',serif;padding:0 22px 100px}
@@ -26,10 +26,50 @@ h1{font:600 34px/1.15 Georgia,serif;margin:0 0 12px;letter-spacing:-.01em}
 code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px;padding:1px 6px;color:#c9c9e6}
 </style></head><body><div class="w">
 <header>
-  <h1>Six words</h1>
-  <p class="sub">This is how AI agents remember what happened, move around, and turn into
-  something else. Read it once. Then try to explain it to somebody without looking.</p>
+  <h1>What RAPP is</h1>
+  <p class="sub">You write one file. Your AI can do a new thing. That’s the whole idea, and
+  everything else on this page is in service of it.</p>
 </header>
+
+<div class="word">
+  <h2>An agent</h2>
+  <p class="is">One file. A description of what it does, and one function that does it.</p>
+  <p>No project, no folder, no build. A docstring so a person understands it, a manifest so a
+  machine does, and a <code>perform()</code> that returns a string. That’s an agent.</p>
+  <p class="eg"><b>So</b> teaching your AI to check the tide is one file, and you can send it to
+  someone the way you’d send a photo.</p>
+</div>
+
+<div class="word">
+  <h2>A brainstem</h2>
+  <p class="is">The thing that holds your agents and talks to you.</p>
+  <p>It runs on your own machine, on the AI seat you already pay for. Drop an agent in and it can
+  use it on the next thing you ask. Nothing to deploy, no new bill.</p>
+  <p class="eg"><b>So</b> your AI grows by accumulation, and what it can do is a folder you own.</p>
+</div>
+
+<div class="word">
+  <h2>A registry</h2>
+  <p class="is">Where agents are shared, under whoever wrote them.</p>
+  <p>Someone else already wrote the one you need. You take it, or you publish yours and somebody
+  takes it from you. Same one-file shape either way, which is the only reason that works.</p>
+  <p class="eg"><b>So</b> the thing gets better while you sleep, because other people are using it.</p>
+</div>
+
+<div class="try">
+  <h2>That’s it. That’s the part to teach</h2>
+  <ol>
+    <li><b>One file is one new ability.</b></li>
+    <li><b>Your own machine, your own seat.</b></li>
+    <li><b>Agents are shared, so nobody starts from nothing.</b></li>
+  </ol>
+</div>
+
+<h1 style="margin-top:64px">And this is the plumbing</h1>
+<p class="sub" style="margin-bottom:6px">The words below are how the above scales past one machine
+— to many agents, many devices, real or virtual, all agreeing about what happened. It is genuinely
+plumbing. It is also more fun to name than plumbing usually is, and the names hold up, which is
+why they’re worth knowing once you care how the water gets there.</p>
 
 <div class="word">
   <h2>Frame</h2>
@@ -86,12 +126,14 @@ code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px
 </div>
 
 <div class="try">
-  <h2>Now the actual test</h2>
+  <h2>The actual test</h2>
   <ol>
     <li>Close this page.</li>
-    <li>Explain it to one person. Out loud. Six words, one sentence each.</li>
-    <li>Ask <em>them</em> to explain it back to you.</li>
+    <li>Explain <em>the first three</em> to somebody. Agent, brainstem, registry. That’s RAPP.</li>
+    <li>Ask them to explain it back.</li>
     <li>Whatever they got wrong is what this page got wrong — not what they got wrong.</li>
+    <li>If they ask “but how does that work across devices?”, <em>then</em> the six plumbing words
+        are the answer. Not before.</li>
   </ol>
 </div>
 
