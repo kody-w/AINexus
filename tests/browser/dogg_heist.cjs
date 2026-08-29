@@ -264,6 +264,25 @@ function invalidRoleImport(json) {
   };
 }
 
+function runningImport(json) {
+  const parsed = JSON.parse(json);
+  requireMeasurement(parsed.data && typeof parsed.data === 'object' &&
+    !Array.isArray(parsed.data), 'export data for running-mode mutation');
+  const convention = findChecksumConvention(parsed);
+  const checksumBefore = String(valueAt(parsed, convention.path));
+  requireMeasurement(parsed.data.running !== true, 'a non-running source export');
+  parsed.data.running = true;
+  rewriteChecksum(parsed, convention);
+  const checksumAfter = String(valueAt(parsed, convention.path));
+  requireMeasurement(checksumAfter !== checksumBefore,
+    'running mode covered by the canonical outer checksum');
+  return {
+    json: JSON.stringify(parsed),
+    checksumPath: convention.path.join('.'),
+    checksumScope: convention.scope
+  };
+}
+
 function oversizedImport(json) {
   const parsed = JSON.parse(json);
   const convention = findChecksumConvention(parsed);
@@ -1722,6 +1741,35 @@ async function api(page, method, ...args) {
   return outcome.value;
 }
 
+async function rejectedRunningImport(page, mutatedJson, baseline) {
+  const statusBefore = baseline.dom['status-live'];
+  const logBefore = baseline.dom['event-log'];
+  const outcome = await tryApi(page, 'importState', mutatedJson);
+  await sleep(80);
+  const after = await inspect(page);
+  const stateCall = await tryApi(page, 'state');
+  const statusDelta = after.dom['status-live'] !== statusBefore ?
+    after.dom['status-live'] : '';
+  const logDelta = after.dom['event-log'].startsWith(logBefore) ?
+    after.dom['event-log'].slice(logBefore.length) :
+    after.dom['event-log'] !== logBefore ? after.dom['event-log'] : '';
+  const feedback = `${statusDelta} ${logDelta}`.replace(/\s+/g, ' ').trim();
+  const rejected = explicitImportRejection(outcome) ||
+    /\b(reject|invalid|impossible|running|terminal|history|cursor|outcome|import)\b/i.test(feedback);
+  return {
+    rejected,
+    outcome,
+    after,
+    feedback,
+    stateCallable: !stateCall.threw && stateCall.value &&
+      typeof stateCall.value === 'object',
+    unchanged: after.exportText === baseline.exportText &&
+      after.head === baseline.head &&
+      after.frameCount === baseline.frameCount &&
+      after.tick === baseline.tick
+  };
+}
+
 async function waitForTick(page, minimum, timeout = 6000) {
   return poll(() => inspect(page), state => Number.isFinite(state.tick) && state.tick >= minimum, timeout);
 }
@@ -2493,6 +2541,94 @@ async function measureContrast(page, mode, roles = []) {
   }, { mode, roles });
 }
 
+async function measureElementContrast(page, selector) {
+  return page.evaluate(css => {
+    const element = document.querySelector(css);
+    if (!element) return { found: false, selector: css };
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const visible = !element.hidden && style.display !== 'none' &&
+      style.visibility !== 'hidden' && Number(style.opacity) > 0 &&
+      rect.width > 0 && rect.height > 0;
+    if (!visible) return { found: true, visible: false, selector: css };
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const parse = value => {
+      const match = String(value || '').match(
+        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/i
+      );
+      if (match) {
+        return {
+          r: Number(match[1]),
+          g: Number(match[2]),
+          b: Number(match[3]),
+          a: match[4] === undefined ? 1 : Number(match[4])
+        };
+      }
+      if (!context || !value) return null;
+      try {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = 'rgba(0, 0, 0, 0)';
+        context.fillStyle = value;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+        return { r, g, b, a: a / 255 };
+      } catch (error) {
+        return null;
+      }
+    };
+    const over = (front, back) => {
+      const alpha = front.a + back.a * (1 - front.a);
+      if (!alpha) return { r: 0, g: 0, b: 0, a: 0 };
+      return {
+        r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha,
+        g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha,
+        b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha,
+        a: alpha
+      };
+    };
+    const chain = [];
+    for (let node = element; node; node = node.parentElement) chain.push(node);
+    let background = { r: 255, g: 255, b: 255, a: 1 };
+    for (const node of chain.reverse()) {
+      const next = parse(getComputedStyle(node).backgroundColor);
+      if (next && next.a > 0) background = over(next, background);
+    }
+    const foregroundColor = parse(style.color);
+    if (!foregroundColor) return { found: true, visible: true, measurable: false, selector: css };
+    let opacity = foregroundColor.a;
+    for (let node = element; node; node = node.parentElement) {
+      opacity *= Number(getComputedStyle(node).opacity || 1);
+    }
+    const foreground = over(Object.assign({}, foregroundColor, { a: opacity }), background);
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 :
+          Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color.r) +
+        0.7152 * channel(color.g) +
+        0.0722 * channel(color.b);
+    };
+    const foregroundLuminance = luminance(foreground);
+    const backgroundLuminance = luminance(background);
+    return {
+      found: true,
+      visible: true,
+      measurable: true,
+      selector: css,
+      ratio: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05),
+      text: String(element.textContent || element.getAttribute('aria-label') || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 120),
+      color: style.color,
+      background: `rgb(${Math.round(background.r)}, ${Math.round(background.g)}, ${Math.round(background.b)})`
+    };
+  }, selector);
+}
+
 async function scanSmallTextContrast(page, stateName) {
   return page.evaluate(state => {
     const visible = element => {
@@ -2930,6 +3066,39 @@ async function runSuite() {
     keyStepAfter.tick - keyStepBefore.tick === 1 &&
       keyStepAfter.frameCount - keyStepBefore.frameCount === 1,
     `.: tick ${keyStepBefore.tick}→${keyStepAfter.tick}`);
+
+  await api(page, 'pause');
+  await page.locator('#game-board').focus();
+  const repeatedStepBefore = await inspect(page);
+  const repeatedFocus = [];
+  for (let press = 0; press < 3; press++) {
+    await page.keyboard.press('.');
+    await sleep(60);
+    repeatedFocus.push(await page.evaluate(() => {
+      const element = document.activeElement;
+      const interactive = Boolean(element && element.matches(
+        'button, input, select, textarea, a[href], [contenteditable="true"], [role="button"]'
+      ));
+      const disabled = Boolean(element &&
+        (('disabled' in element && element.disabled) ||
+          element.getAttribute('aria-disabled') === 'true'));
+      const editing = Boolean(element && element.matches(
+        'input:not([type="range"]), select, textarea, [contenteditable="true"]'
+      ));
+      return {
+        id: element?.id || '',
+        tag: element?.tagName || '',
+        blocking: disabled || editing ||
+          (interactive && element?.id !== 'game-board')
+      };
+    }));
+  }
+  const repeatedStepAfter = await inspect(page);
+  result('three repeated step shortcuts advance exactly three times without refocus',
+    repeatedStepAfter.tick - repeatedStepBefore.tick === 3 &&
+      repeatedStepAfter.frameCount - repeatedStepBefore.frameCount === 3 &&
+      repeatedFocus.every(focus => !focus.blocking),
+    `tick +${repeatedStepAfter.tick - repeatedStepBefore.tick}, frames +${repeatedStepAfter.frameCount - repeatedStepBefore.frameCount}; focus ${repeatedFocus.map(focus => `${focus.tag}#${focus.id || '-'}`).join(' → ')}`);
 
   await page.evaluate(() => {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -3456,7 +3625,8 @@ async function runSuite() {
   const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
-    isMobile: true
+    isMobile: true,
+    colorScheme: 'light'
   });
   await serve(mobileContext);
   const mobilePage = await openHeist(mobileContext, '390x844 page', true);
@@ -3549,6 +3719,47 @@ async function runSuite() {
       mobileStepAfter.tick - mobileStepBefore.tick === 1 &&
       mobileStepAfter.frameCount - mobileStepBefore.frameCount === 1,
     `${mobileTarget.dimensions.cols}x${mobileTarget.dimensions.rows} via ${mobileTarget.dimensions.source}; cell ${mobileTarget.renderedCellScale.toFixed(1)}px, control ${mobileTarget.accessibleTargetScale.toFixed(1)}px; ${mobileTarget.target.kind}`);
+
+  await api(mobilePage, 'restart', 'ADVERSARY-000');
+  await api(mobilePage, 'pause');
+  await api(mobilePage, 'setSpeed', 20);
+  let watchSnapshot = await inspect(mobilePage, false);
+  for (let step = 0; step < 35; step++) {
+    const watch = await mobilePage.locator('#alarm-value').getAttribute('data-level');
+    if (watch === 'watch') break;
+    await api(mobilePage, 'step', 1);
+    watchSnapshot = await inspect(mobilePage, false);
+  }
+  const watchLevel = await mobilePage.locator('#alarm-value').getAttribute('data-level');
+  const watchContrast = await measureElementContrast(
+    mobilePage,
+    '#alarm-value[data-level="watch"]'
+  );
+
+  await api(mobilePage, 'restart', 'ADVERSARY-007');
+  await api(mobilePage, 'pause');
+  await api(mobilePage, 'setSpeed', 20);
+  let wonSnapshot = await inspect(mobilePage, false);
+  for (let batch = 0; batch < 12; batch++) {
+    const won = await mobilePage.locator('#objective-value').getAttribute('data-outcome');
+    if (won === 'won') break;
+    await api(mobilePage, 'step', 8);
+    wonSnapshot = await inspect(mobilePage, false);
+  }
+  const wonOutcome = await mobilePage.locator('#objective-value').getAttribute('data-outcome');
+  const wonContrast = await measureElementContrast(
+    mobilePage,
+    '#objective-value[data-outcome="won"]'
+  );
+  const mobileLight = await mobilePage.evaluate(() =>
+    matchMedia('(prefers-color-scheme: light)').matches &&
+    innerWidth === 390 && innerHeight === 844);
+  result('mobile light watch alarm and won objective meet 4.5:1',
+    mobileLight && watchLevel === 'watch' && wonOutcome === 'won' &&
+      watchContrast.found && watchContrast.visible && watchContrast.measurable &&
+      wonContrast.found && wonContrast.visible && wonContrast.measurable &&
+      watchContrast.ratio >= 4.5 && wonContrast.ratio >= 4.5,
+    `watch tick ${watchSnapshot.tick}: ${watchContrast.ratio?.toFixed(2) || 'missing'}:1 "${watchContrast.text || ''}"; won tick ${wonSnapshot.tick}: ${wonContrast.ratio?.toFixed(2) || 'missing'}:1 "${wonContrast.text || ''}"`);
   await mobileContext.close();
 
   const contrastByTheme = {};
@@ -3741,7 +3952,7 @@ async function runSuite() {
   requireMeasurement(historicalFrame, 'a complete prior exported frame to inspect');
   await api(policyPage, 'scrub', historicalFrame.index);
   await sleep(100);
-  const historicalView = await inspect(policyPage, false);
+  const historicalView = await inspect(policyPage);
   const coherence = historyCoherence(
     historicalView.state,
     historicalFrame.projection,
@@ -3753,6 +3964,50 @@ async function runSuite() {
       coherence.objectiveMatch && coherence.povMatch &&
       liveMetadata && liveMetadata.head === terminalSnapshot.head,
     `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; t:${coherence.tickMatch} o:${coherence.outcomeMatch} a:${coherence.agentMatch} obj:${coherence.objectiveMatch} pov:${coherence.povMatch}; raw ${historicalFrame.projection.objective.hacked}/${historicalFrame.projection.objective.required} c${Number(historicalFrame.projection.objective.coreComplete)} x${historicalFrame.projection.objective.extractedAgents}/${historicalFrame.projection.objective.totalAgents}, public ${coherence.publicObjective.terminalsHacked}/${coherence.publicObjective.terminalsRequired} c${Number(coherence.publicObjective.coreAcquired)} x${coherence.publicObjective.extractedAgents}/${coherence.publicObjective.totalAgents}; live ${liveMetadata?.source || 'missing'}`);
+
+  const terminalRunning = runningImport(terminalSnapshot.exportText);
+  const terminalRunningAttempt = await rejectedRunningImport(
+    policyPage,
+    terminalRunning.json,
+    historicalView
+  );
+  const historicalRunning = runningImport(historicalView.exportText);
+  const historicalRunningAttempt = await rejectedRunningImport(
+    policyPage,
+    historicalRunning.json,
+    historicalView
+  );
+  await api(policyPage, 'restart', 'running-import-recovery');
+  await api(policyPage, 'pause');
+  const runningRecoveryBefore = await inspect(policyPage);
+  await api(policyPage, 'step', 1);
+  const runningRecoveryAfter = await inspect(policyPage);
+  result('checksum-valid impossible running modes reject transactionally',
+    terminalRunningAttempt.rejected && terminalRunningAttempt.unchanged &&
+      terminalRunningAttempt.stateCallable &&
+      historicalRunningAttempt.rejected && historicalRunningAttempt.unchanged &&
+      historicalRunningAttempt.stateCallable &&
+      runningRecoveryAfter.tick - runningRecoveryBefore.tick === 1 &&
+      runningRecoveryAfter.frameCount - runningRecoveryBefore.frameCount === 1,
+    `terminal ${terminalRunningAttempt.rejected}/${terminalRunningAttempt.unchanged}; history ${historicalRunningAttempt.rejected}/${historicalRunningAttempt.unchanged}; recovery +${runningRecoveryAfter.tick - runningRecoveryBefore.tick}; ${terminalRunningAttempt.feedback || historicalRunningAttempt.feedback}`);
+
+  await api(policyPage, 'setSpeed', 5000);
+  await api(policyPage, 'pause');
+  const activeRunningBaseline = await inspect(policyPage);
+  const activeRunning = runningImport(activeRunningBaseline.exportText);
+  const activeRunningOutcome = await tryApi(policyPage, 'importState', activeRunning.json);
+  const activeRunningAfter = await inspect(policyPage);
+  const activeRunningFlag = activeRunningAfter.state.running === true ||
+    activeRunningAfter.state.playing === true ||
+    activeRunningAfter.exported?.data?.running === true;
+  await api(policyPage, 'pause');
+  result('checksum-valid active live-head running import remains valid',
+    !activeRunningOutcome.threw && !explicitImportRejection(activeRunningOutcome) &&
+      activeRunningFlag &&
+      activeRunningAfter.head === activeRunningBaseline.head &&
+      activeRunningAfter.frameCount === activeRunningBaseline.frameCount &&
+      activeRunningAfter.tick === activeRunningBaseline.tick,
+    `running ${activeRunningFlag}; tick ${activeRunningBaseline.tick}→${activeRunningAfter.tick}; frames ${activeRunningBaseline.frameCount}→${activeRunningAfter.frameCount}; checksum ${activeRunning.checksumScope}:${activeRunning.checksumPath}`);
   await policyContext.close();
 
   const restoredContext = await browser.newContext({
