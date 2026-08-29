@@ -14,20 +14,24 @@
 
   const hex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 
-  function canonical(v) {
+  // "float in frame" without saying WHICH field is a message that makes you go and look, and the
+  // whole reason the rule exists is that floats do not canonicalise the same way twice. So the
+  // path comes with the complaint.
+  function canonical(v, at) {
+    const where = at || '$';
     if (v === null || typeof v === 'boolean') return JSON.stringify(v);
     if (typeof v === 'number') {
-      if (!Number.isFinite(v)) throw new Error('non-finite number in frame');
-      if (!Number.isInteger(v)) throw new Error('float in frame');
+      if (!Number.isFinite(v)) throw new Error('non-finite number at ' + where);
+      if (!Number.isInteger(v)) throw new Error('float in frame at ' + where + ' (= ' + v + ') — rapp/1 is I-JSON: carry it as an integer in fixed units');
       return JSON.stringify(v);
     }
     if (typeof v === 'string') return JSON.stringify(v);
-    if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
+    if (Array.isArray(v)) return '[' + v.map((x, i) => canonical(x, where + '[' + i + ']')).join(',') + ']';
     if (typeof v === 'object') {
       const keys = Object.keys(v).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-      return '{' + keys.map(k => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}';
+      return '{' + keys.map(k => JSON.stringify(k) + ':' + canonical(v[k], where + '.' + k)).join(',') + '}';
     }
-    throw new Error('non-I-JSON value in frame');
+    throw new Error('non-I-JSON value at ' + where + ' (' + typeof v + ')');
   }
 
   async function H(space, v) {

@@ -31,17 +31,21 @@ class LensGravityAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return "not a tile"
+        # A FRAME HOLDS NO FLOATS. rapp/1 is I-JSON and JCS refuses non-integers, because 0.1
+        # does not canonicalise to the same bytes in every language — which is the whole point of
+        # a hash two machines have to agree on. So gravity is carried in THOUSANDTHS, exactly.
         g = kwargs.get("g")
         g = 0.35 if g is None else max(0.05, min(4.0, float(g)))
+        milli = int(round(g * 1000))
         world = tile.setdefault("world", {})
-        world["gravity"] = round(g, 3)
-        world["step_height"] = round(min(4.0, 0.5 / max(0.08, g)), 3)
-        world["fall_seconds"] = round(min(9.0, 1.2 / max(0.08, g)), 3)
+        world["gravity_milli"] = milli
+        world["step_height_milli"] = int(round(min(4.0, 0.5 / max(0.08, g)) * 1000))
+        world["fall_ms"] = int(round(min(9.0, 1.2 / max(0.08, g)) * 1000))
         if g < 0.4:
             world["feel"] = "everything falls slowly and nobody is in a hurry"
         elif g > 1.8:
             world["feel"] = "walking is work and nobody jumps"
         else:
             world["feel"] = "ordinary weight"
-        tile.setdefault("lenses", []).append({"lens": "LensGravity", "g": world["gravity"]})
+        tile.setdefault("lenses", []).append({"lens": "LensGravity", "gravity_milli": milli})
         return json.dumps(tile)

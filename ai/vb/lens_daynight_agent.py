@@ -8,11 +8,12 @@ this is a starting condition rather than a colour grade.
 import json
 from agents.basic_agent import BasicAgent
 
+# sun in thousandths, because a frame holds no floats
 HOURS = {
-    "dawn":  {"sun": 0.25, "sky": "#2b2350", "fog": 70, "mood": "grey and not yet warm"},
-    "day":   {"sun": 1.0,  "sky": "#0b1030", "fog": 100, "mood": "flat and bright"},
-    "dusk":  {"sun": 0.4,  "sky": "#3a1840", "fog": 60, "mood": "long shadows, everything orange"},
-    "night": {"sun": 0.08, "sky": "#05050c", "fog": 34, "mood": "dark, and sound carries"},
+    "dawn":  {"sun": 250,  "sky": "#2b2350", "fog": 70,  "mood": "grey and not yet warm"},
+    "day":   {"sun": 1000, "sky": "#0b1030", "fog": 100, "mood": "flat and bright"},
+    "dusk":  {"sun": 400,  "sky": "#3a1840", "fog": 60,  "mood": "long shadows, everything orange"},
+    "night": {"sun": 80,   "sky": "#05050c", "fog": 34,  "mood": "dark, and sound carries"},
 }
 
 
@@ -40,7 +41,7 @@ class LensDayNightAgent(BasicAgent):
         h = HOURS[hour]
         world = tile.setdefault("world", {})
         world["hour"] = hour
-        world["sun"] = h["sun"]
+        world["sun_milli"] = h["sun"]
         world["sky"] = h["sky"]
         world["sight"] = h["fog"]
         world["light_mood"] = h["mood"]

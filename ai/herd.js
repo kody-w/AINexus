@@ -867,39 +867,93 @@
   // That only holds while the lenses are PURE. A lens that consults a clock or a random number
   // breaks the one property this is for, so the hash of every stage is kept and a re-run that
   // disagrees is detectable rather than merely disappointing.
-  async function slosh(t, chain, opts) {
-    const o = opts || {};
+  // WHICH WAY THE CUBE IS POINTING. A slosh has a subject and a set of things it passes through,
+  // and NOTHING says the subject must be the world. Pour a tile through lenses and the world
+  // changes; pour an organism through worlds and the creature changes; pour a script through
+  // characters, or a room through hours. Same machinery, and the ORIENTATION is a property of
+  // the frame rather than of the code — so the next frame can be driven by a different
+  // combination of who is going through what, and any agent hot-loaded by then can be the one
+  // doing the pouring.
+  //
+  // A step is: run agent `by`, handing it the subject under one key and the thing under another.
+  // That is the whole vocabulary, and both directions fall out of it.
+  async function slosh(spec, maybeChain, maybeOpts) {
+    // tolerate the two older shapes: slosh(tile, [lenses]) and slosh({subject, steps})
+    let o = maybeOpts || {};
+    let subject, steps, subjectKey, itemKey, kind;
+    if (Array.isArray(maybeChain)) {
+      const t = spec && spec.frame ? spec.frame : spec;
+      subject = JSON.parse(JSON.stringify(t.payload ? t.payload.asserts : t));
+      steps = maybeChain.map(x => (typeof x === 'string'
+        ? { by: x, args: {} }
+        : { by: x.lens || x.by, args: x.args || {} }));
+      subjectKey = 'tile'; itemKey = null; kind = 'world through lenses';
+      o = Object.assign({ from: t }, o);
+    } else {
+      o = Object.assign({}, spec.opts, maybeChain || {});
+      subject = JSON.parse(JSON.stringify(spec.subject || {}));
+      subjectKey = spec.subjectKey || 'subject';
+      itemKey = spec.itemKey || null;
+      kind = spec.kind || 'slosh';
+      steps = (spec.steps || []).map(x => (typeof x === 'string' ? { by: x, args: {} } : x));
+    }
+
     const B = root.NexusBrainstem, F = root.NexusFrames;
-    if (!B) throw new Error('no brainstem: lenses are agents and need somewhere to run');
-    const spec = t && t.frame ? t : { frame: t };
-    let payload = JSON.parse(JSON.stringify(spec.frame.payload.asserts));
-    const steps = [];
-    for (const step of (chain || [])) {
-      const name = typeof step === 'string' ? step : step.lens;
-      const args = Object.assign({}, typeof step === 'string' ? {} : step.args || {},
-                                 { tile: JSON.stringify(payload) });
-      // make sure the lens is actually resident at the moment it is used
+    if (!B) throw new Error('no brainstem: a slosh is agents and needs somewhere to run');
+    const through = [];
+    for (const step of steps) {
+      const name = step.by;
+      const args = Object.assign({}, step.args || {});
+      args[subjectKey] = JSON.stringify(subject);
+      if (itemKey && step.with !== undefined) {
+        const w = step.with && step.with.frame ? step.with.frame.payload.asserts
+                : (step.with && step.with.payload ? step.with.payload.asserts : step.with);
+        args[itemKey] = JSON.stringify(w);
+      }
       if (B.ensureResident) { try { await B.ensureResident([name], o.log); } catch (e) {} }
       let out;
       try { out = await B.callAgent(name, args); }
-      catch (e) { steps.push({ lens: name, error: e.message }); continue; }
-      if (out === null) { steps.push({ lens: name, error: 'no such lens' }); continue; }
-      let next;
-      try { next = JSON.parse(out); } catch (e) { steps.push({ lens: name, error: 'lens did not return a tile' }); continue; }
-      payload = next;
-      const h = F ? await F.H('rapp/1:particle', payload) : null;
-      steps.push({ lens: name, args: typeof step === 'string' ? {} : step.args || {}, after: h && h.slice(0, 16) });
+      catch (e) { through.push({ by: name, error: e.message }); continue; }
+      if (out === null) { through.push({ by: name, error: 'no such agent' }); continue; }
+      let next; try { next = JSON.parse(out); }
+      catch (e) { through.push({ by: name, error: 'did not return a ' + subjectKey }); continue; }
+      subject = next;
+      const h = F ? await F.H('rapp/1:particle', subject) : null;
+      // the ARGUMENTS go in as text. They are provenance, not arithmetic, and a lens argument of
+      // 0.2 is a float that would refuse to hash — the record must never be the thing that
+      // breaks the record.
+      through.push({ by: name, args: JSON.stringify(step.args || {}), after: h && h.slice(0, 16) });
     }
+
     let frame = null;
     if (F) {
-      const stream = spec.frame.stream_id + ':slosh';
-      frame = await F.buildFrame({ kind: 'nexus.tile', streamId: stream, seq: 0,
-        utc: spec.frame.utc, prev: null,
-        payload: { asserts: Object.assign({}, payload, { sloshed_from: spec.frame.frame_hash, through: steps }),
-                   requires: { players: (payload.cast || []).map(c => c.id) } } });
+      const from = o.from || null;
+      frame = await F.buildFrame({
+        kind: 'nexus.slosh', seq: 0, prev: null,
+        streamId: (from && from.stream_id ? from.stream_id : 'rappid:@kody-w/ainexus/slosh') + ':slosh',
+        utc: (from && from.utc) || undefined,
+        payload: { asserts: Object.assign({}, subject, {
+                     sloshed_from: from ? from.frame_hash : null,
+                     orientation: kind, carried_as: subjectKey, through }),
+                   requires: { players: (subject.cast || []).map(c => c.id) } } });
     }
-    return { frame, tile: payload, through: steps, world: payload.world || null,
-             hash: frame && frame.frame_hash };
+    return { frame, tile: subject, subject, through, world: subject.world || null,
+             orientation: kind, hash: frame && frame.frame_hash };
+  }
+
+  // ── the inversion ────────────────────────────────────────────────────────
+  // slosh() pours a tile through lenses and the WORLD changes. Turn it around and pour the
+  // organism through the worlds instead: each tile is a condition, and what comes out is the
+  // next version of that creature — shaped by low gravity, by the dark, by a planet that is no
+  // longer there. Same machinery, opposite subject, and the order of the worlds matters as much
+  // as which worlds they were.
+  async function sloshAgent(organism, tiles, opts) {
+    const o = opts || {};
+    const r = await slosh({ subject: organism, subjectKey: 'organism', itemKey: 'tile',
+                            kind: 'organism through worlds',
+                            steps: (tiles || []).map(t => ({ by: o.agent || 'Adapt', with: t })) }, o);
+    return { organism: r.subject, through: r.through, frame: r.frame,
+             generation: r.subject.generation || r.through.length };
   }
 
   // walk into a tile: it becomes the live starting condition, for people and AIs alike
@@ -946,7 +1000,7 @@
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
                      epoch: () => Object.assign({}, epoch), rewind, replay, fork, lens,
                      // a dimension in one line: where it split, what it wears, what it runs on
-                     wear, tile, enter, slosh, tiles: async (frame, count, opts) => {
+                     wear, tile, enter, slosh, sloshAgent, tiles: async (frame, count, opts) => {
                        const out = []; for (let i = 0; i < (count || 8); i++) out.push(await tile(frame, i, opts)); return out; },
                      seedOf, fromSeed, reseed: (s2) => { dimension.seed = String(s2); seedRng(hashSeed(dimension.seed)); return seedOf(); },
                      lenses: () => Object.keys(LENSES),

@@ -40,9 +40,11 @@
     { url: 'vb/lens_gravity_agent.py', className: 'LensGravityAgent' },
     { url: 'vb/lens_daynight_agent.py', className: 'LensDayNightAgent' },
     { url: 'vb/lens_cataclysm_agent.py', className: 'LensCataclysmAgent' },
+    // the inverse: a world wearing an organism rather than a lens wearing a world
+    { url: 'vb/adapt_agent.py', className: 'AdaptAgent' },
   ];
   const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld',
-                       'LensGravity', 'LensDayNight', 'LensCataclysm'];
+                       'LensGravity', 'LensDayNight', 'LensCataclysm', 'Adapt'];
 
   // ── the ceiling ──────────────────────────────────────────────────────────
   // A herd of players thinking every few seconds, several model round trips each, on somebody
