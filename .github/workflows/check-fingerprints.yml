@@ -45,6 +45,20 @@ jobs:
       - name: every published fingerprint matches its file
         run: python3 tools/check_registries.py
 
+      - name: the registries are what the builders would produce
+        # check_registries.py verifies every ROW against its file, which cannot see a world that
+        # was added and never registered — the forge would simply never offer it, silently. Running
+        # the builders and diffing catches additions, removals and content drift in one move.
+        run: |
+          python3 tools/build_world_registry.py > /dev/null
+          python3 tools/build_agent_registry.py > /dev/null
+          if ! git diff --quiet -- state/worlds.json state/agent_templates.json; then
+            echo "::error::a registry is stale — run tools/build_world_registry.py and tools/build_agent_registry.py and commit the result"
+            git --no-pager diff --stat -- state/worlds.json state/agent_templates.json
+            exit 1
+          fi
+          echo "both registries are up to date"
+
       - name: WEARING.md still describes its own vectors
         run: node tools/check_spec_tables.cjs
 

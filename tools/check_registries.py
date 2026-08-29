@@ -55,6 +55,20 @@ def check(name, path, key, rebuild):
 check("agents", "state/agent_templates.json", "templates", "python3 tools/build_agent_registry.py")
 check("worlds", "state/worlds.json", "worlds", "python3 tools/build_world_registry.py")
 
+# WHAT THIS DOES NOT CHECK, said out loud. Every check above walks the registry ROWS, so a world
+# or agent that was added and never registered passes silently — and an unregistered world is one
+# the forge will simply never offer, with nothing anywhere saying why. Proving that gap: with an
+# unregistered 3D world present, the loop above still printed "every published fingerprint matches
+# its file". The complete check is to run the builders and see whether they change anything:
+#
+#     python3 tools/build_world_registry.py && python3 tools/build_agent_registry.py
+#     git diff --exit-code -- state/worlds.json state/agent_templates.json
+#
+# CI runs exactly that on every push (.github/workflows/check-fingerprints.yml). This tool stays
+# read-only so it is safe to run anywhere, which is precisely why it cannot see that case.
+print("\n(this checks published rows against files; run the builders and diff to catch a world"
+      "\n that was added and never registered — CI does that on every push)")
+
 if bad:
     print(f"\n✗ {bad} registry entries do not describe the files on disk.")
     print("  A stale fingerprint is not cosmetic: hot-loading REFUSES bytes that do not match it,")
