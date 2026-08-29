@@ -294,6 +294,12 @@
       //     doorman uses (ai/copilot_auth.js). No install, no separate meter: it spends the
       //     Copilot seat the person already has, and only while they are here.
       // Neither present means the player runs on its program alone, and says so.
+      // Entered directly (drive.mind() at the tab CLI) there is no live run to belong to,
+      // so this turn IS the operator's action and adopts the current generation. Entered
+      // as a `mind` step it is already inside one, and adopting it again changes nothing.
+      // Either way a later stop bumps the generation and every call below refuses.
+      api._liveTurn = api._epoch;
+      const myTurn = api._epoch;               // the generation this turn belongs to
       const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
@@ -357,7 +363,7 @@
       if (!['look','walk','click','aim','travel','say','ask','press','wait','see','scan','sense','carry'].includes(move.do)) {
         log('refused a move the hands do not have:', move.do); return { words, move: null };
       }
-      if (o.act) await api.run({ steps: [move] });
+      if (o.act) await api.run({ steps: [move] }, null, { turn: myTurn });
       return { words, move };
     },
 
@@ -615,32 +621,38 @@
     async wait(ms) { await sleep(ms | 0); return true; },
 
     // run a program: a list of steps, each a verb above
-    async run(program, onStep) {
+    // `opts.turn` marks a call ISSUED BY a turn — mind() executing the move the model
+    // chose, or vbrainstem executing a tool call. Anything without it is an operator
+    // action: the tower's start button, the per-tab CLI, a view's own program.
+    //
+    // The caller DECLARES which it is; nothing is inferred from _depth. Inferring is
+    // what broke this twice. _depth said "nested" for a turn parked in an
+    // un-timeoutable auth.chat fetch, so every later operator run was silently refused;
+    // and it said "top level" for a drive.mind() typed at the CLI, so the turn's own
+    // first tool call cancelled the turn that issued it. A counter cannot answer
+    // "is the turn that issued this still alive" — only the caller knows.
+    async run(program, onStep, opts) {
       const steps = (program && program.steps) || [];
-      // A nested run must not cancel its parent. mind() runs the move the model
-      // chose by calling run() again; with a bare stop()/_running=false pair that
-      // inner run ended the OUTER program on its way out, so a `minded` player
-      // froze silently after its first thought — and only once a mind had been
-      // granted, which is the moment the whole feature is supposed to start.
-      const nested = api._depth > 0;
-      if (nested) {
-        // A nested run belongs to the turn that issued it. If a stop landed since that
-        // turn began, this inner run is part of work the operator already cancelled, so
-        // it must not run — and above all must not set _running back to true. Re-arming
-        // here is exactly how "Stop everything" was undone mid-turn: the flag went false,
-        // vbrainstem's next tool call re-entered run(), and the player kept walking,
-        // talking and BILLING auth.chat for the rest of its rounds.
-        if (api._epoch !== api._turnEpoch) return 'stopped';
+      if (opts && opts.turn) {
+        // The claim carries the GENERATION it belongs to, not a bare "I am a turn".
+        // A boolean would let a zombie through: a turn parked in auth.chat that wakes
+        // after the operator has already started a different program would claim the
+        // NEW generation and run a step inside someone else's program — two minds
+        // driving one avatar. Naming the generation makes a stale caller answerable.
+        const claim = typeof opts.turn === 'number' ? opts.turn : api._liveTurn;
+        if (claim !== api._epoch) return 'stopped';
       } else {
-        // A top-level run replaces the last one, but it must NOT open a new generation:
-        // an epoch bump means "the operator cancelled", and vbrainstem reads it that way.
-        // Calling stop() here made a turn cancel ITSELF — drive.mind() typed into the tab
-        // CLI runs turn() with nothing on the stack, so each of its tool calls is
-        // top-level, and the first one bumped the epoch out from under the turn that
-        // issued it. The turn then died after a single tool call.
-        api._running = false;                  // cancel whatever was running...
-        api._turnEpoch = api._epoch;           // ...and adopt the current generation
+        // An operator run replaces EVERYTHING, including work parked in an await that
+        // may never settle. Bumping the generation is what tells a parked turn it is
+        // over; clearing the depth is what stops its abandoned frames from being
+        // mistaken for this run's parents.
+        api.stop();
+        api._depth = 0;
+        api._liveTurn = api._epoch;
       }
+      // The generation THIS invocation belongs to. A zombie frame that settles later
+      // must not decrement the counters of the run that replaced it.
+      const gen = api._epoch;
       api._depth = (api._depth || 0) + 1;
       api._running = true;
       try {
@@ -686,10 +698,14 @@
       } while (api._running && program && program.loop);
       return 'done';
       } finally {
-        // in a finally so a thrown step can never strand the counter above zero — a
-        // stranded _depth would make every later top-level run look nested for good
-        api._depth = Math.max(0, (api._depth || 1) - 1);
-        if (api._depth === 0) api._running = false; // only the outermost run ends the run
+        // in a finally so a thrown step can never strand the counter. Only the live
+        // generation owns the counters: a frame abandoned by a stop settles into a
+        // world that has moved on, and touching _depth/_running there would end a run
+        // that replaced it.
+        if (gen === api._epoch) {
+          api._depth = Math.max(0, (api._depth || 1) - 1);
+          if (api._depth === 0) api._running = false; // only the outermost run ends the run
+        }
       }
     },
 
@@ -698,7 +714,9 @@
     // the branch that re-arms _running and cancelled the stop. The depth drains on its
     // own as the stack unwinds.
     stop() { api._running = false; api._epoch = (api._epoch || 0) + 1; return true; },
-    _running: false, _depth: 0, _epoch: 0, _turnEpoch: 0, _filming: false, _shot: null,
+    // _epoch    — bumped by stop(); everything issued before it is void
+    // _liveTurn — the generation the operator program currently on the stack belongs to
+    _running: false, _depth: 0, _epoch: 0, _liveTurn: 0, _filming: false, _shot: null,
   };
 
   window.__autodrive = api;

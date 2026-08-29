@@ -42,60 +42,76 @@ function makeDriver(file) {
   if (!d) { console.log('FAIL: driver did not attach'); process.exit(1); }
   const R = {};
   const step = { do: 'wait', ms: 10 };
+  const TURN = { turn: true };          // a call issued BY a turn declares itself
 
-  // A) a turn's OWN top-level tool calls must not look like an operator cancelling it.
-  //    vbrainstem captures the epoch once, then issues each tool call through drive.run().
+  // A) a turn's own tool calls must not cancel the turn that issued them.
+  //    This is the drive.mind() path: turn() runs with nothing else on the stack and
+  //    issues each tool call itself. Inferring "top level" from a zero depth made the
+  //    first call bump the generation out from under its own turn.
   d.stop();
-  const epoch0 = d._epoch;
-  await d.run({ steps: [step] }, null);
-  await d.run({ steps: [step] }, null);
-  await d.run({ steps: [step] }, null);
-  R.A_turn_survives_own_tool_calls = { epoch0, now: d._epoch, wouldSelfCancel: d._epoch !== epoch0 };
+  d._liveTurn = d._epoch;                          // what mind() does on entry
+  const e0 = d._epoch;
+  const a1 = await d.run({ steps: [step] }, null, { turn: e0 });
+  const a2 = await d.run({ steps: [step] }, null, { turn: e0 });
+  const a3 = await d.run({ steps: [step] }, null, { turn: e0 });
+  R.A_turn_survives_own_tool_calls =
+    { verdicts: [a1, a2, a3], epochUnchanged: d._epoch === e0 };
 
-  // B) a real operator stop must still be visible to that same check
+  // B) a real operator stop must void the turn
   const eB = d._epoch;
   d.stop();
-  R.B_operator_stop_seen = { wouldFire: d._epoch !== eB };
+  R.B_operator_stop_seen = { epochBumped: d._epoch !== eB };
 
-  // C) the nested-after-stop refusal must still hold
-  const outer = d.run({ steps: [{ do: 'wait', ms: 60 }], loop: true }, null);
-  await new Promise((r) => setTimeout(r, 250));
-  const midDepth = d._depth, midRunning = d._running;
-  d.stop();
-  const ran = [];
-  const verdict = await d.run({ steps: [step, step] }, (v) => ran.push(v));
-  R.C_nested_after_stop = { midDepth, midRunning, verdict, stepsRan: ran.length };
-  await Promise.race([outer, new Promise((r) => setTimeout(r, 1500))]);
-  await new Promise((r) => setTimeout(r, 100));
-  R.C_settled = { depth: d._depth, running: d._running };
+  // C) a turn call belonging to a cancelled generation must refuse, and run no steps
+  const ranC = [];
+  const vC = await d.run({ steps: [step, step] }, (v) => ranC.push(v), { turn: eB });
+  R.C_turn_call_after_stop = { verdict: vC, stepsRan: ranC.length, running: d._running };
 
-  // D) restart works after all that
-  d.stop();
-  R.D_restart = await d.run({ steps: [step] }, null);
+  // D) the operator can always start again
+  R.D_operator_restart = await d.run({ steps: [step] }, null);
 
-  // E) a throwing onStep ESCAPES run() (the step's catch calls onStep again, and that
-  //    second throw is not caught). What must still hold is that the finally drained the
-  //    depth — a stranded counter would make every later top-level run look nested for
-  //    the life of the page, and with a bumped epoch that means refuse forever.
-  const before = d._depth;
+  // E) a throwing onStep escapes run(), but must not strand the depth counter —
+  //    a stranded counter is what used to make every later run look nested for good
+  const beforeE = d._depth;
   let escaped = null;
   try { await d.run({ steps: [step] }, () => { throw new Error('onStep blew up'); }); }
   catch (e) { escaped = e.message; }
-  R.E_depth_after_throwing_onStep = { before, after: d._depth, escaped };
+  R.E_depth_after_throwing_onStep = { before: beforeE, after: d._depth, escaped };
 
-  // F) ...and the driver still works afterwards, which is the thing that matters
-  R.F_still_usable_after_throw = await d.run({ steps: [step] }, null);
+  // F) THE CRITICAL: an operator run must work while a turn is PARKED.
+  //    A turn waiting on an un-timeoutable auth.chat fetch holds the depth counter up
+  //    forever. Treating that as "I am nested" made the tower, the per-tab CLI and the
+  //    views' budget silently refuse every new program for the life of the request.
+  d.stop();
+  const parked = d.run({ steps: [{ do: 'wait', ms: 60000 }] }, null);   // never awaited
+  await new Promise((r) => setTimeout(r, 120));
+  const parkedGen = d._epoch;                  // the generation the parked turn belongs to
+  const depthWhileParked = d._depth;
+  // the operator hits Stop while that turn is parked — this is the trigger. The turn
+  // cannot notice: it is suspended inside a fetch with no timeout, so it keeps the
+  // depth counter raised for the whole life of the request.
+  d.stop();
+  const vF = await d.run({ steps: [step] }, null);            // operator, after the stop
+  R.F_operator_run_while_turn_parked =
+    { depthWhileParked, verdict: vF, running: d._running, depth: d._depth };
+
+  // G) ...and that operator run must CANCEL the parked turn, not run beside it:
+  //    two programs driving one avatar is the failure on the other side of F.
+  const staleTurn = await d.run({ steps: [step] }, null, { turn: parkedGen });
+  R.G_operator_run_cancels_parked_turn = { staleTurnVerdict: staleTurn };
+  void parked;                                                 // left parked on purpose
 
   console.log(JSON.stringify(R, null, 1));
   const pass =
-    !R.A_turn_survives_own_tool_calls.wouldSelfCancel &&
-    R.B_operator_stop_seen.wouldFire &&
-    R.C_nested_after_stop.verdict === 'stopped' &&
-    R.C_nested_after_stop.stepsRan === 0 &&
-    R.C_settled.depth === 0 &&
-    R.D_restart === 'done' &&
+    R.A_turn_survives_own_tool_calls.verdicts.every((v) => v === 'done') &&
+    R.A_turn_survives_own_tool_calls.epochUnchanged &&
+    R.B_operator_stop_seen.epochBumped &&
+    R.C_turn_call_after_stop.verdict === 'stopped' &&
+    R.C_turn_call_after_stop.stepsRan === 0 &&
+    R.D_operator_restart === 'done' &&
     R.E_depth_after_throwing_onStep.after === 0 &&
-    R.F_still_usable_after_throw === 'done';
+    R.F_operator_run_while_turn_parked.verdict === 'done' &&
+    R.G_operator_run_cancels_parked_turn.staleTurnVerdict === 'stopped';
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();

@@ -193,13 +193,16 @@
         try {
           if (fname && fname.indexOf('world_') === 0) {
             const verb = fname.slice(6);
-            result = await drive.run({ steps: [Object.assign({ do: verb }, args)] }, null);
+            result = await drive.run({ steps: [Object.assign({ do: verb }, args)] }, null, { turn: epoch0 });
             // the step's own return is more useful to a mind than "done"
             if (verb === 'people') result = JSON.stringify(drive.people());
             else if (verb === 'orbs') result = JSON.stringify(drive.orbs().map(x => ({ name: x.name, distance: x.distance })));
             else if (verb === 'dialogue') result = JSON.stringify(drive.dialogue(args.to));
             else if (verb === 'see' || verb === 'scan') { const s = drive.snapshot(); result = JSON.stringify({ me: s.me, portals: s.portals, players: s.players }); }
-            else result = 'ok';
+            // never launder a refusal into a success: a step run() declined because the
+            // operator stopped must reach the model and the receipt as 'stopped', or the
+            // journal records work that never happened
+            else if (result !== 'stopped') result = 'ok';
           } else {
             const r = await callAgent(fname, args);
             result = r === null ? ('no such tool: ' + fname) : r;
