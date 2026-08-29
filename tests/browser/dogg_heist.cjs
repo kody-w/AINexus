@@ -2123,9 +2123,25 @@ async function auditShortIntroCardAndUnlock(page) {
     };
   });
 
-  const intro = await markIntro(page);
-  requireMeasurement(intro.found, 'the short-screen intro dialog before dismissal');
-  await dismissIntro(page);
+  const autoDismissed = await poll(
+    () => page.evaluate(() => {
+      const overlay = document.getElementById('intro-overlay');
+      const hidden = !overlay || overlay.hidden || overlay.hasAttribute('inert') ||
+        overlay.getAttribute('aria-hidden') === 'true' ||
+        getComputedStyle(overlay).display === 'none' ||
+        getComputedStyle(overlay).visibility === 'hidden' ||
+        Number(getComputedStyle(overlay).opacity) === 0 ||
+        overlay.getBoundingClientRect().width === 0 ||
+        overlay.getBoundingClientRect().height === 0;
+      return {
+        ready: window.__doggHeist?.ready === true,
+        hidden
+      };
+    }),
+    value => value.ready && value.hidden,
+    4200,
+    40
+  );
   await finishHeistBoot(page, 'short-screen unlock page');
   await page.evaluate(() => {
     document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
@@ -2143,6 +2159,7 @@ async function auditShortIntroCardAndUnlock(page) {
   return {
     card,
     cardAfter,
+    autoDismissed,
     pageAfter,
     cardScrolled: cardAfter.scrollTop > card.scrollTop &&
       cardAfter.page === card.page && cardAfter.ready === false,
@@ -5218,9 +5235,10 @@ async function runSuite() {
     firstPaintScroll.totalWheel >= 800 && firstPaintScroll.locked,
     `${firstPaintScroll.setup.readyState}; wheel ${firstPaintScroll.totalWheel}px at ${firstPaintScroll.setup.point.x.toFixed(0)},${firstPaintScroll.setup.point.y.toFixed(0)}; document ${firstPaintScroll.before.document}→${firstPaintScroll.samples.map(sample => sample.document).join('/')}`);
   const shortIntro = await auditShortIntroCardAndUnlock(firstPaintPage);
-  result('short intro card scrolls while the dismissed page unlocks',
-    shortIntro.cardScrolled && shortIntro.pageUnlocked,
-    `card ${shortIntro.card.scrollTop}→${shortIntro.cardAfter.scrollTop} of ${shortIntro.card.scrollHeight}/${shortIntro.card.clientHeight}; page ${shortIntro.card.page}→${shortIntro.pageAfter.document}`);
+  result('short intro card scrolls and normal auto-dismiss unlocks the page',
+    shortIntro.cardScrolled && shortIntro.autoDismissed.ready &&
+      shortIntro.autoDismissed.hidden && shortIntro.pageUnlocked,
+    `card ${shortIntro.card.scrollTop}→${shortIntro.cardAfter.scrollTop} of ${shortIntro.card.scrollHeight}/${shortIntro.card.clientHeight}; auto ready/hidden ${shortIntro.autoDismissed.ready}/${shortIntro.autoDismissed.hidden}; page ${shortIntro.card.page}→${shortIntro.pageAfter.document}`);
   const helpContainment = await auditHelpContainment(firstPaintPage);
   result('short Help dialog traps focus and separates backdrop/content scrolling',
     helpContainment.focusTrapped && helpContainment.backdropLocked &&
