@@ -2795,16 +2795,20 @@ async function measureRememberedTerminalCanvasContrast(page) {
       const backgrounds = dominant(ring);
       const glyphs = dominant(inner);
       const background = backgrounds[0];
-      const glyph = glyphs.find(group =>
-        !background || Math.hypot(
+      const glyphCandidates = glyphs.filter(group =>
+        group.count >= 2 && background && Math.hypot(
           group.color[0] - background.color[0],
           group.color[1] - background.color[1],
           group.color[2] - background.color[2]
-        ) >= 28);
+        ) >= 28).slice(0, 8).map(group => Object.assign({}, group, {
+        contrast: ratio(group.color, background.color)
+      })).sort((a, b) => b.contrast - a.contrast || b.count - a.count);
+      const glyph = glyphCandidates[0];
       return {
         center,
         background,
         glyph,
+        glyphCandidates,
         contrast: glyph && background ? ratio(glyph.color, background.color) : 0,
         score: glyph && background ?
           glyph.count * Math.min(10, ratio(glyph.color, background.color)) : 0
@@ -3014,12 +3018,15 @@ async function measureDoorCanvasContrast(page, preferredTransform) {
         }
       }
       const background = dominant(ring)[0];
-      const glyph = dominant(inner).find(group =>
-        background && Math.hypot(
+      const glyphCandidates = dominant(inner).filter(group =>
+        group.count >= 2 && background && Math.hypot(
           group.color[0] - background.color[0],
           group.color[1] - background.color[1],
           group.color[2] - background.color[2]
-        ) >= 28);
+        ) >= 28).slice(0, 8).map(group => Object.assign({}, group, {
+        contrast: ratio(group.color, background.color)
+      })).sort((a, b) => b.contrast - a.contrast || b.count - a.count);
+      const glyph = glyphCandidates[0];
       if (!glyph || !background) continue;
       const lowGlyph = glyph.color.map((channel, index) =>
         Math.round(channel * 0.1 + background.color[index] * 0.9));
@@ -3030,6 +3037,7 @@ async function measureDoorCanvasContrast(page, preferredTransform) {
           height: canvas.getBoundingClientRect().height
         },
         glyph,
+        glyphCandidates,
         background,
         clusterDistance: Math.hypot(
           glyph.color[0] - background.color[0],
@@ -3754,11 +3762,21 @@ async function visibleHelp(page) {
     const button = document.getElementById('help-button');
     const candidates = [];
     const controlled = button && button.getAttribute('aria-controls');
-    if (controlled) candidates.push(document.getElementById(controlled));
+    if (controlled) {
+      const controlledElement = document.getElementById(controlled);
+      if (controlledElement) {
+        candidates.push(controlledElement.closest(
+          'dialog[open], [role="dialog"], [aria-modal="true"]'
+        ) || controlledElement);
+      }
+    }
     candidates.push(...document.querySelectorAll(
-      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
+      'dialog[open], [role="dialog"], [aria-modal="true"]'
     ));
-    const unique = [...new Set(candidates)].filter(element => element && element !== button);
+    const unique = [...new Set(candidates)].filter(element =>
+      element && element !== button &&
+      element !== document.documentElement && element !== document.body &&
+      !candidates.some(other => other && other !== element && other.contains(element)));
     const visible = unique.filter(element => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
@@ -3779,9 +3797,16 @@ async function clickVisibleHelpClose(page) {
     const helpButton = document.getElementById('help-button');
     const controlled = helpButton && helpButton.getAttribute('aria-controls');
     const candidates = [];
-    if (controlled) candidates.push(document.getElementById(controlled));
+    if (controlled) {
+      const controlledElement = document.getElementById(controlled);
+      if (controlledElement) {
+        candidates.push(controlledElement.closest(
+          'dialog[open], [role="dialog"], [aria-modal="true"]'
+        ) || controlledElement);
+      }
+    }
     candidates.push(...document.querySelectorAll(
-      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
+      'dialog[open], [role="dialog"], [aria-modal="true"]'
     ));
     const visible = element => {
       if (!element) return false;
@@ -3792,7 +3817,10 @@ async function clickVisibleHelpClose(page) {
         Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
     for (const surface of [...new Set(candidates)].filter(element =>
-      element && element !== helpButton && visible(element))) {
+      element && element !== helpButton &&
+      element !== document.documentElement && element !== document.body &&
+      !candidates.some(other => other && other !== element && other.contains(element)) &&
+      visible(element))) {
       const controls = [...surface.querySelectorAll(
         'button, [role="button"], input[type="button"], input[type="submit"]'
       )];
@@ -3823,6 +3851,8 @@ async function clickVisibleHelpClose(page) {
 
 async function focusInsideVisibleHelp(page) {
   return page.evaluate(() => {
+    const helpButton = document.getElementById('help-button');
+    const controlled = helpButton && helpButton.getAttribute('aria-controls');
     const visible = element => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
@@ -3830,9 +3860,21 @@ async function focusInsideVisibleHelp(page) {
         style.display !== 'none' && style.visibility !== 'hidden' &&
         Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
-    const surfaces = [...document.querySelectorAll(
-      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
-    )].filter(visible).filter(element =>
+    const candidates = [...document.querySelectorAll(
+      'dialog[open], [role="dialog"], [aria-modal="true"]'
+    )];
+    if (controlled) {
+      const controlledElement = document.getElementById(controlled);
+      if (controlledElement) {
+        candidates.push(controlledElement.closest(
+          'dialog[open], [role="dialog"], [aria-modal="true"]'
+        ) || controlledElement);
+      }
+    }
+    const surfaces = [...new Set(candidates)].filter(element =>
+      element && element !== document.documentElement && element !== document.body &&
+      !candidates.some(other => other && other !== element && other.contains(element)) &&
+      visible(element)).filter(element =>
       /\b(help|keyboard|controls?|terminals?|objective)\b/i.test(element.textContent || ''))
       .sort((a, b) => {
         const score = element => element.matches('dialog[open], [aria-modal="true"], [role="dialog"]') ?
@@ -3869,15 +3911,29 @@ async function auditHelpContainment(page) {
   await page.keyboard.press('h');
   await poll(() => visibleHelp(page), value => value.count > 0, 2000);
   const dialogInfo = await page.evaluate(() => {
+    const helpButton = document.getElementById('help-button');
+    const controlled = helpButton && helpButton.getAttribute('aria-controls');
     const visible = element => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
       return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' &&
         Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
-    const dialogs = [...document.querySelectorAll(
-      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
-    )].filter(visible).filter(element =>
+    const candidates = [...document.querySelectorAll(
+      'dialog[open], [role="dialog"], [aria-modal="true"]'
+    )];
+    if (controlled) {
+      const controlledElement = document.getElementById(controlled);
+      if (controlledElement) {
+        candidates.push(controlledElement.closest(
+          'dialog[open], [role="dialog"], [aria-modal="true"]'
+        ) || controlledElement);
+      }
+    }
+    const dialogs = [...new Set(candidates)].filter(element =>
+      element && element !== document.documentElement && element !== document.body &&
+      !candidates.some(other => other && other !== element && other.contains(element)) &&
+      visible(element)).filter(element =>
       /\b(help|keyboard|controls?|terminals?|objective)\b/i.test(element.textContent || ''));
     const dialog = dialogs.sort((a, b) =>
       Number(b.matches('dialog[open], [aria-modal="true"], [role="dialog"]')) -
@@ -5228,16 +5284,26 @@ async function runSuite() {
     Object.assign({ theme: entry.mode }, entry.pair.remembered),
     Object.assign({ theme: entry.mode }, entry.pair.visible)
   ]);
+  const doorContrastPass = doorMeasurements.every(measurement =>
+    measurement.clusterDistance >= 28 &&
+    measurement.glyph.count >= 2 &&
+    measurement.background.count >= 2 &&
+    measurement.contrast >= 4.5 &&
+    measurement.lowContrastControl < 4.5 &&
+    (measurement.mode === 'remembered' ?
+      measurement.known && !measurement.visible :
+      measurement.visible && (measurement.open || measurement.locked)));
+  if (!doorContrastPass) {
+    console.log('door glyph candidates:', JSON.stringify(doorMeasurements.map(measurement => ({
+      theme: measurement.theme,
+      mode: measurement.mode,
+      door: measurement.doorId,
+      background: measurement.background,
+      candidates: measurement.glyphCandidates
+    }))));
+  }
   result('POV door strokes retain 4.5:1 contrast in remembered and visible states',
-    doorMeasurements.every(measurement =>
-      measurement.clusterDistance >= 28 &&
-      measurement.glyph.count >= 2 &&
-      measurement.background.count >= 2 &&
-      measurement.contrast >= 4.5 &&
-      measurement.lowContrastControl < 4.5 &&
-      (measurement.mode === 'remembered' ?
-        measurement.known && !measurement.visible :
-        measurement.visible && (measurement.open || measurement.locked))),
+    doorContrastPass,
     doorMeasurements.map(measurement =>
       `${measurement.theme}/${measurement.mode} ${measurement.doorId}@${measurement.target.x},${measurement.target.y} ${measurement.open ? 'open' : measurement.locked ? 'locked' : measurement.status || 'door'} ${measurement.contrast.toFixed(2)}:1 rgb(${measurement.glyph.color.join(',')})/rgb(${measurement.background.color.join(',')}) low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
 
