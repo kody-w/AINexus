@@ -125,13 +125,28 @@
                 this.peer.on('error', (err) => {
                     console.error('Peer error:', err);
 
-                    // Handle specific error types
-                    if (err.type === 'peer-unavailable') {
-                        this.showError('Host not found. Make sure the host is online.');
-                    } else if (err.type === 'network') {
-                        this.showError('Network error. Check your connection.');
+                    // SAY WHICH THING BROKE. The fall-through used to be
+                    // 'Connection error: ' + err.message, and peerjs leaves message EMPTY on the
+                    // most common real failure — so a visitor whose signalling server was down
+                    // read the words "Connection error:" and nothing else, while the peer was
+                    // destroyed, no invite could be minted, and nothing said whether it would
+                    // come back. Observed live: {type:'server-error', message:''}.
+                    const t = err && err.type;
+                    if (t === 'peer-unavailable') {
+                        this.showError('That room is not open — the host may have closed their tab.');
+                    } else if (t === 'network' || t === 'socket-error' || t === 'socket-closed') {
+                        this.showError('Lost the connection to the signalling server. '
+                            + 'Reload to try again — the world itself still works.');
+                    } else if (t === 'server-error' || t === 'unavailable-id') {
+                        this.showError('The signalling server is not answering, so nobody can join '
+                            + 'or be joined right now. This is not your connection and not this world — '
+                            + 'reload in a minute. Everything single-player keeps working.');
+                    } else if (t === 'browser-incompatible') {
+                        this.showError('This browser cannot do peer-to-peer, so multiplayer is unavailable here.');
                     } else {
-                        this.showError('Connection error: ' + err.message);
+                        // Never print an empty reason. If peerjs gives us nothing, say that.
+                        const why = (err && err.message) || (t ? 'reported as "' + t + '"' : 'with no reason given');
+                        this.showError('Multiplayer stopped: ' + why + '. The world itself still works.');
                     }
 
                     this.updateStatus('Error', false);
