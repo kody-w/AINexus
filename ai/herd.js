@@ -772,6 +772,159 @@
   const chainKind = (id) => { const r = players.get(String(id));
     return !r ? 'none' : r.truncated ? 'window' : 'chain'; };
 
+  // ── a frame sharded into a tile ──────────────────────────────────────────
+  // The objection was that a fork only makes NEW content if something new decides what happens
+  // after the split — otherwise it is the same story wearing a different coat. Kody's answer
+  // dissolves it: shard the frame. A tile is derived from a parent frame and an index, wholly
+  // deterministically, and it changes the INITIAL CONDITIONS — who is here, where they stand,
+  // what they are already doing, what the place is like, what is already wrong. Different
+  // starting conditions diverge under the same director, so the continuation is genuinely
+  // different rather than differently lit.
+  //
+  // The decisions stay finite. The starting points stop being finite. tile(F, 7) is the same
+  // tile on every machine forever, because everything in it comes out of sha-shaped arithmetic
+  // over the parent's hash — including the timestamp, so the frame itself is byte-identical.
+  // That is the DOGG bargain again: a small key, a large world.
+  const PLACES = ['by the entrance', 'against the west wall', 'in the middle of the floor',
+                  'near the back', 'up on the high side', 'right by the door'];
+  const MOODS = ['nothing has happened yet', 'something was said earlier and not resolved',
+                 'one of them has just arrived', 'they have been here too long',
+                 'a thing has gone missing', 'someone is about to leave',
+                 'they are waiting for a seventh who has not come', 'the lights just changed'];
+  const LENS_POOL = ['plain', 'nightshift', 'closeup', 'wide', 'quiet'];
+  const INTENT_POOL = ['hold', 'wander', 'follow', 'approach', 'go', 'talk'];
+
+  function tileRng(parentHash, key) {
+    let st = hashSeed(String(parentHash) + ':' + String(key));
+    return () => { st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0; return st / 4294967296; };
+  }
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length) % arr.length];
+
+  // ── WEARING ──────────────────────────────────────────────────────────────
+  // wear(frame, key) -> tile. The key is not an index into a list of prepared tiles; it is the
+  // thing that WEARS the frame down into one. Any key against any full frame, and the same pair
+  // always produces the same tile — the same bytes, on any machine, forever, with nothing
+  // transmitted between them but the key.
+  //
+  // That is the whole trick and it is worth stating plainly: the frame is the record, the key is
+  // small enough to say out loud, and the tile is a complete playable world neither of them
+  // contained on their own.
+  async function wear(frame, key, opts) {
+    const o = opts || {};
+    const index = key === undefined || key === null ? 0 : key;
+    const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
+    const F = root.NexusFrames;
+    const r = tileRng(f.frame_hash, index);
+    const roster = (o.cast && o.cast.length ? o.cast.slice()
+      : (f.payload && f.payload.requires && f.payload.requires.players) || [...players.keys()]);
+    if (!roster.length) throw new Error('a tile needs somebody in it');
+
+    // deterministic draw: who, where, doing what, under what lens, with what already wrong
+    const n = Math.max(2, Math.min(roster.length, 2 + Math.floor(r() * (roster.length - 1))));
+    const shuffled = roster.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {           // Fisher-Yates on the same rng
+      const j = Math.floor(r() * (i + 1));
+      const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
+    }
+    const cast = shuffled.slice(0, n).map(id => ({
+      id,
+      at: { x: Math.round((r() * 2 - 1) * 14), z: Math.round((r() * 2 - 1) * 14) },
+      standing: pick(r, INTENT_POOL),
+      where: pick(r, PLACES),
+    }));
+    const lensName = o.lens || pick(r, LENS_POOL);
+    const mood = pick(r, MOODS);
+
+    // even the stamp is derived, so the same tile is the same BYTES anywhere
+    // even the stamp comes out of the key, so two machines that never spoke agree on the bytes
+    const base = Date.parse(f.utc || '2026-01-01T00:00:00.000Z') || 0;
+    const utc = F ? F.utcNow(new Date(base + (hashSeed(String(index)) % 86400) * 1000)) : undefined;
+
+    const payload = {
+      asserts: { tile: String(index), derived_from: f.frame_hash, of_stream: f.stream_id,
+                 cast, lens: lensName, mood,
+                 // the whole world in one line: which record, worn by which key
+                 seed: String(f.frame_hash).slice(0, 12) + '#' + index },
+      requires: { players: cast.map(c => c.id) },
+    };
+    if (!F) return { payload, deterministic: false };
+    const stream = 'rappid:@kody-w/ainexus/tile:' + String(f.frame_hash).slice(0, 16) + ':' + hashSeed(String(index)).toString(16);
+    const genesis = await F.buildFrame({ kind: 'nexus.tile', streamId: stream, seq: 0, utc, payload, prev: null });
+    return { frame: genesis, seed: payload.asserts.seed, key: String(index), cast, lens: lensName, mood,
+             stream, hash: genesis.frame_hash };
+  }
+
+  // the old name, kept because a tile is what wearing produces
+  const tile = wear;
+
+  // ── sloshing a tile through lenses ───────────────────────────────────────
+  // A lens is just an agent.py: a tile goes in, a tile comes out. Which means lenses COMPOSE —
+  // the output of one is the input of the next — and a tile poured through gravity, then the
+  // hour, then how much of the planet is left, arrives somewhere none of them would have reached
+  // alone. That is the slosh: each stage's exhaust is the next stage's input.
+  //
+  // Every stage is recorded, so the finished world is reproducible from (parent, index, chain).
+  // That only holds while the lenses are PURE. A lens that consults a clock or a random number
+  // breaks the one property this is for, so the hash of every stage is kept and a re-run that
+  // disagrees is detectable rather than merely disappointing.
+  async function slosh(t, chain, opts) {
+    const o = opts || {};
+    const B = root.NexusBrainstem, F = root.NexusFrames;
+    if (!B) throw new Error('no brainstem: lenses are agents and need somewhere to run');
+    const spec = t && t.frame ? t : { frame: t };
+    let payload = JSON.parse(JSON.stringify(spec.frame.payload.asserts));
+    const steps = [];
+    for (const step of (chain || [])) {
+      const name = typeof step === 'string' ? step : step.lens;
+      const args = Object.assign({}, typeof step === 'string' ? {} : step.args || {},
+                                 { tile: JSON.stringify(payload) });
+      // make sure the lens is actually resident at the moment it is used
+      if (B.ensureResident) { try { await B.ensureResident([name], o.log); } catch (e) {} }
+      let out;
+      try { out = await B.callAgent(name, args); }
+      catch (e) { steps.push({ lens: name, error: e.message }); continue; }
+      if (out === null) { steps.push({ lens: name, error: 'no such lens' }); continue; }
+      let next;
+      try { next = JSON.parse(out); } catch (e) { steps.push({ lens: name, error: 'lens did not return a tile' }); continue; }
+      payload = next;
+      const h = F ? await F.H('rapp/1:particle', payload) : null;
+      steps.push({ lens: name, args: typeof step === 'string' ? {} : step.args || {}, after: h && h.slice(0, 16) });
+    }
+    let frame = null;
+    if (F) {
+      const stream = spec.frame.stream_id + ':slosh';
+      frame = await F.buildFrame({ kind: 'nexus.tile', streamId: stream, seq: 0,
+        utc: spec.frame.utc, prev: null,
+        payload: { asserts: Object.assign({}, payload, { sloshed_from: spec.frame.frame_hash, through: steps }),
+                   requires: { players: (payload.cast || []).map(c => c.id) } } });
+    }
+    return { frame, tile: payload, through: steps, world: payload.world || null,
+             hash: frame && frame.frame_hash };
+  }
+
+  // walk into a tile: it becomes the live starting condition, for people and AIs alike
+  async function enter(t, opts) {
+    const o = opts || {};
+    const spec = t && t.frame ? t : { frame: t };
+    const a = spec.frame.payload.asserts;
+    const woke = [];
+    for (const c of (a.cast || [])) {
+      let rec = players.get(c.id);
+      if (!rec && o.join !== false) { await join({ id: c.id, persona: 'You are ' + c.id + ' in the house.' }); rec = players.get(c.id); }
+      if (!rec) continue;
+      rec.standing = { intent: INTENTS[c.standing] ? c.standing : 'hold', target: null, say: null, since: Date.now() };
+      rec.slosh = [];
+      if (rec.drive && rec.drive.place) { try { rec.drive.place(c.at.x, c.at.z); } catch (e) {} }
+      woke.push({ id: c.id, standing: rec.standing.intent, where: c.where });
+    }
+    dimension = { forkedFrom: a.derived_from, lens: a.lens, seed: a.seed };
+    seedRng(hashSeed(dimension.seed));
+    ensembleChain = [spec.frame]; ensemblePrev = spec.frame.payload_hash;
+    epoch = { id: spec.frame.frame_hash, seq: 0, at: Date.now(), virtual: 0 };
+    ledger.tiles = (ledger.tiles || 0) + 1;
+    return { entered: spec.frame.frame_hash, seed: a.seed, lens: a.lens, mood: a.mood, woke };
+  }
+
   // A DIMENSION IN ONE LINE: where it split, what lens it wears, what seed it runs on. Everything
   // after the split re-derives from those three, so a variation is something you can write on a
   // card and hand to somebody rather than a recording you have to ship.
@@ -793,6 +946,8 @@
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
                      epoch: () => Object.assign({}, epoch), rewind, replay, fork, lens,
                      // a dimension in one line: where it split, what it wears, what it runs on
+                     wear, tile, enter, slosh, tiles: async (frame, count, opts) => {
+                       const out = []; for (let i = 0; i < (count || 8); i++) out.push(await tile(frame, i, opts)); return out; },
                      seedOf, fromSeed, reseed: (s2) => { dimension.seed = String(s2); seedRng(hashSeed(dimension.seed)); return seedOf(); },
                      lenses: () => Object.keys(LENSES),
                      cost: () => {

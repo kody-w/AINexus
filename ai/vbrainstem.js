@@ -34,8 +34,15 @@
     { file: 'context_memory_agent.py', className: 'ContextMemoryAgent' },
   ];
   // The world itself, as an agent — same contract, loaded from here rather than from the grail.
-  const LOCAL_AGENTS = [{ url: 'vb/nexus_world_agent.py', className: 'NexusWorldAgent' }];
-  const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld'];
+  const LOCAL_AGENTS = [
+    { url: 'vb/nexus_world_agent.py', className: 'NexusWorldAgent' },
+    // lenses: a tile in, a tile out, pure — so they compose
+    { url: 'vb/lens_gravity_agent.py', className: 'LensGravityAgent' },
+    { url: 'vb/lens_daynight_agent.py', className: 'LensDayNightAgent' },
+    { url: 'vb/lens_cataclysm_agent.py', className: 'LensCataclysmAgent' },
+  ];
+  const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld',
+                       'LensGravity', 'LensDayNight', 'LensCataclysm'];
 
   // ── the ceiling ──────────────────────────────────────────────────────────
   // A herd of players thinking every few seconds, several model round trips each, on somebody
