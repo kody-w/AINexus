@@ -780,7 +780,15 @@
           state.windowed = true;   // and says so, rather than pretending the start was never there
         }
         return f;
-      } catch (e) { return null; }
+      } catch (e) {
+        // SAY SO. herd.js records entry.sealFailed when a seal throws; this copy returned null,
+        // which is indistinguishable from a tick that had nothing to seal — so a moment lost to a
+        // rejected buildFrame looked exactly like an ordinary quiet one. The journal is the only
+        // evidence a player played; a gap in it that announces nothing is the worst kind.
+        state.lastSealError = String((e && e.message) || e).slice(0, 200);
+        state.sealFailures = (state.sealFailures || 0) + 1;
+        return null;
+      }
     }
 
     (async () => {
@@ -805,9 +813,13 @@
                     calls: (r.calls || []).map(c => ({ tool: c.tool, name: c.args && (c.args.portal || c.args.to),
                                                        failed: /failed|no such/.test(c.result) })) };
           entry.frame = await seal(entry, s0);
+          if (!entry.frame && state.lastSealError) entry.sealFailed = state.lastSealError;
         } catch (e) {
           entry = { tick: state.ticks, ms: Date.now() - started, error: e.message };
-          entry.frame = await seal(entry, null);
+          // s0, not null: if the percepts were taken before the mind threw, the position IS
+          // known, and herd's error path records it. Passing null threw away a fact we had.
+          entry.frame = await seal(entry, s0);
+          if (!entry.frame && state.lastSealError) entry.sealFailed = state.lastSealError;
           // A dead credential will not heal by being asked again in six seconds. Stop, and say why.
           if (/sign-in expired|not signed in|no mind/i.test(e.message)) {
             state.stopped = e.message; state.running = false;

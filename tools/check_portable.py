@@ -22,7 +22,12 @@ CODE = {".js", ".cjs", ".mjs", ".py", ".html", ".json", ".yml", ".yaml", ".sh"}
 
 # A path anchored in somebody's home directory or a private temp sandbox. GitHub's own runner
 # path is included because copying one out of a CI log into a file is the same mistake.
-HARDCODED = re.compile(r"""(?:^|['"\s=(])(/Users/[A-Za-z0-9._-]+/|/home/(?!runner/work\b)[A-Za-z0-9._-]+/|/private/tmp/claude-\d+/|/home/runner/work/)""")
+HARDCODED = re.compile(r"""(?:^|['"`,\s=(\[])(/Users/[A-Za-z0-9._-]+/|/home/(?!runner/work\b)[A-Za-z0-9._-]+/|/private/tmp/claude-\d+/|/home/runner/work/)""")
+
+# A $HOME-relative join is fine. The exemption used to skip the whole LINE if it mentioned
+# process.env.HOME — and the resolver line at the top of every suite mentions it, so a literal
+# path added right beside it was matched and then thrown away. Exempt the MATCH, not the line.
+HOME_JOIN = re.compile(r"(?:process\.env\.HOME|os\.environ\s*\[|expanduser)")
 
 # Things that legitimately name a machine path: documentation ABOUT paths, archived captures,
 # and the workflow files that necessarily talk about the runner's own checkout.
@@ -53,8 +58,9 @@ for rel in tracked():
     for n, line in enumerate(text.splitlines(), 1):
         m = HARDCODED.search(line)
         if m:
-            # a $HOME-relative join is fine; a literal one is not
-            if "process.env.HOME" in line or "expanduser" in line or "os.environ" in line:
+            # is THIS match part of a $HOME join, or a literal sitting next to one?
+            before = line[max(0, m.start() - 40):m.start()]
+            if HOME_JOIN.search(before):
                 continue
             bad.append((rel, n, line.strip()[:118]))
 
@@ -63,7 +69,14 @@ for rel in tracked():
 # line stops verifying and reads as a life that keeps restarting. This estate had it in FOUR
 # places (the player chain, the vbrainstem chain, the world chain and the ensemble chain), each
 # found and fixed separately, weeks apart. seq counts the life; the array is just what is kept.
-SEQ_FROM_LENGTH = re.compile(r"seq\s*:\s*[A-Za-z_$][\w.$]*\.length\b")
+# Four spellings, because the first version caught one. `seq: x.length` was how it happened to be
+# written four times in this repo; `const seq = x.length` with the object shorthand is the more
+# natural way it recurs, and neither of those is more correct than the other.
+SEQ_FROM_LENGTH = re.compile(
+    r"seq\s*:\s*[A-Za-z_$][\w.$\[\]']*\.length\b"          # seq: chain.length
+    r"|(?:const|let|var)\s+seq\s*=\s*[A-Za-z_$][\w.$\[\]']*\.length\b"   # const seq = chain.length
+    r"|seq\s*:\s*[A-Za-z_$][\w.$]*\(\)\.length\b"           # seq: frames().length
+)
 seq_bad = []
 for rel in tracked():
     if any(rel.startswith(d) for d in SKIP_DIRS) or Path(rel).suffix.lower() not in {".js", ".cjs", ".mjs"}:
@@ -81,9 +94,10 @@ for rel, n, line in seq_bad:
 if seq_bad:
     print(f"\n  a seq taken from an array length is correct until that array is windowed,"
           f"\n  and then the chain stops verifying. Keep a counter for the line itself.")
-    bad.extend(seq_bad)
 for rel, n, line in bad:
     print(f"  HARDCODED  {rel}:{n}\n             {line}")
+
+bad.extend(seq_bad)          # merged only for the exit code, after each was printed as itself
 
 if bad:
     paths = len(bad) - len(seq_bad)

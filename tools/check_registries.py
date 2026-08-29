@@ -72,10 +72,18 @@ def check_bootstrap():
     if bp.exists():
         pins = {a["file"]: a for a in json.loads(bp.read_text()).get("agents", [])}
 
-    wanted = set(re.findall(r"file:\s*'([A-Za-z0-9_.-]+\.py)'", src))
-    m = re.search(r"BASIC_AGENT_URL\s*=\s*'([^']+)'", src)
-    if m:
-        wanted.add(m.group(1).rsplit("/", 1)[-1])
+    # WHAT MAKES A FETCH CROSS-REPO IS THE URL, NOT A `file:` KEY. Keying on `file:` meant a new
+    # const pointing at raw.githubusercontent.com and handed to grab() added an unpinned
+    # cross-origin fetch that this check said nothing about — while a same-origin `file: 'x.py'`
+    # would have been reported as unpinned. Read the URLs.
+    wanted = set()
+    for u in re.findall(r"https://raw\.githubusercontent\.com/[^'\"\s)]+", src):
+        tail = u.rsplit("/", 1)[-1]
+        if tail.endswith(".py"):
+            wanted.add(tail)
+    # a base URL joined with a list of filenames is the same thing spelled in two pieces
+    if re.search(r"AGENT_BASE\s*=\s*'https://raw\.githubusercontent\.com", src):
+        wanted |= set(re.findall(r"file:\s*'([A-Za-z0-9_.-]+\.py)'", src))
 
     print(f"\ncross-repo bootstrap: {len(wanted)} python files fetched from other repositories")
     for f in sorted(wanted):

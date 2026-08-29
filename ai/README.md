@@ -31,14 +31,14 @@ The ten pages it ships in: `index.html`, `index2.0.html`, `index_heavy.html`,
 `crystal-caverns.html`, `floating-gardens.html`, `galaxy-zoo-world.html`,
 `neon-arcade-world.html`.
 
-Four of them (`index_heavy.html`, `index2.0.html`, `newindex.html`,
-`nexusAIBattles.html`) still carry `this.aiPlayer?.update();` in their own
-`animate()`, from before the script self-drove. That is **not** harmless:
-`update()` steps a fixed amount per *call* (`min(dist, this.speed * 0.016)` —
-a constant, not a measured frame delta), so two calls a frame move the body
-exactly twice as far. Those four walk at ~9 u/s, the other six at ~4.5. It
-converges instead of overshooting, which is why it has gone unseen. The line
-should come out of all four.
+No page needs to call `update()` itself. The script steps the body from its own
+`requestAnimationFrame` loop once it attaches, and `update()` measures elapsed
+time rather than counting calls, so an extra call from a page's `animate()` costs
+about zero seconds. (The four original pages did carry
+`this.aiPlayer?.update();`, and while `update()` still stepped a fixed amount per
+*call* those four walked at twice the speed of the other six — the same mind
+moving at two speeds depending which world it had travelled into. Both halves of
+that are gone: the call was removed from all four, and the step is time-based.)
 
 ## Travelling through a portal
 

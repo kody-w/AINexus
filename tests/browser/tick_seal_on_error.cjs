@@ -43,10 +43,13 @@ const out=await p.evaluate(async()=>{
     return { content:'still here', tool_calls:[] };
   }};
 
-  // the hands. Integers only: rapp/1 is I-JSON and a float in `at` would be refused at the door.
+  // The hands. A drive may report REAL coordinates — nothing obliges one to round — and the seal
+// converts them to integer millimetres, because rapp/1 is I-JSON and a raw float would be
+// refused at the door. That conversion is what keeps the every-tick-seals-a-frame promise
+// true for any drive, so the fixture feeds floats deliberately.
   let handsDie=null;
   const drive={ snapshot:()=>{ if(handsDie) throw new Error(handsDie);
-                               return {me:{x:1,y:0,z:2},world:'Nexus',portals:[],players:[],chat:[]}; },
+                               return {me:{x:1.2345,y:0,z:2.5},world:'Nexus',portals:[],players:[],chat:[]}; },
                 people:()=>[], orbs:()=>[], say:async()=>true, tell:async()=>true, dialogue:()=>[] };
 
   await H.join({ id:'ellis', persona:'You are ellis, an AI player.', drive });
@@ -130,6 +133,14 @@ ok('the whole line still verifies from genesis', out.verified&&out.verified.fram
 ok('the error was not swallowed — serve still reports it', /mind went out mid-thought/.test(String(out.entries.bad1&&out.entries.bad1.error)));
 ok('and serve still returns rather than throwing, exactly as before', out.threw2===null && out.threw3===null);
 ok('sealing the failure did not itself fail', !(out.entries.bad1||{}).sealFailed && !(out.entries.bad2||{}).sealFailed);
+
+// The float the drive reported became integer millimetres. That conversion is the whole reason a
+// tick can be sealed at all when a drive does not round, and nothing asserted it until now.
+{
+  const at = ((out.f || [])[0] || {}).at || {};
+  ok('a real coordinate from the drive is sealed as integer millimetres, not refused as a float',
+     at.x_milli === 1235 && at.z_milli === 2500 && !('x' in at));
+}
 
 console.log('\nerrors:',errs.slice(0,3));
 await b.close(); process.exit(fail?1:0);})();

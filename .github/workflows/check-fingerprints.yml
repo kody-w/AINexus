@@ -49,6 +49,21 @@ jobs:
         # passed anywhere — and stayed green for days because only that laptop ever ran it.
         run: python3 tools/check_portable.py
 
+      - name: every suite is in the inventory
+        # The table in tests/browser/README.md went stale twice: once with five suites missing,
+        # and again with the two written the same night the first gap was fixed. A list humans
+        # maintain and nothing checks is a list that is wrong.
+        run: |
+          missing=""
+          for f in tests/browser/*.cjs; do
+            grep -q "$(basename "$f")" tests/browser/README.md || missing="$missing $(basename "$f")"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::not in tests/browser/README.md:$missing"
+            exit 1
+          fi
+          echo "all $(ls tests/browser/*.cjs | wc -l | tr -d ' ') suites are in the inventory"
+
       - name: every published fingerprint matches its file
         run: python3 tools/check_registries.py
 

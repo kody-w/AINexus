@@ -848,7 +848,9 @@
   }
 
   // The full line if we still hold all of it; otherwise an explicitly-labelled WINDOW, which
-  // verifies internally but is not a chain from genesis and must not be offered as one.
+  // is NOT a chain from genesis and must not be offered as one. It does not verify either:
+  // verifyChain refuses any line whose first frame has a non-null prev, which is exactly what
+  // dropping the oldest frame produces. A window is a readable record, not a provable one.
   function chainOf(id) {
     const r = players.get(String(id));
     if (!r) return '';
