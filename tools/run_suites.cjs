@@ -15,8 +15,20 @@ const fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const DIR = path.join(ROOT, 'tests', 'browser');
 const only = process.argv.slice(2);
-const suites = fs.readdirSync(DIR).filter(f => f.endsWith('.cjs'))
-  .filter(f => !only.length || only.includes(path.basename(f, '.cjs'))).sort();
+const all = fs.readdirSync(DIR).filter(f => f.endsWith('.cjs'));
+const suites = all.filter(f => !only.length || only.includes(path.basename(f, '.cjs'))).sort();
+// A NAME THAT MATCHES NOTHING USED TO PASS GREEN. The CI gate lists ten suites by hand; rename or
+// delete one and the run would report "0 checks across 0 suites ✓" having executed nothing — the
+// exact "a suite that cannot fail" problem this tool exists to end, one level up from the suites.
+if (only.length) {
+  const have = new Set(all.map(f => path.basename(f, '.cjs')));
+  const missing = only.filter(n => !have.has(n));
+  if (missing.length) {
+    console.log('no such suite: ' + missing.join(', ') + '\n  (asked for ' + only.length
+      + ', found ' + suites.length + ' in tests/browser)');
+    process.exit(1);
+  }
+}
 
 // Suites word their checks differently — '  ✓ x', '  ok   x', '  ok x'. The first version of this
 // required TWO spaces after 'ok' and so reported views_live as SILENT when it has five checks. A
@@ -57,7 +69,11 @@ for (const f of suites) {
     // Print the TAIL, not a filter. Filtering for /Error/ once reduced a CI failure to the single
     // line "name: 'Error'" — technically a match, and useless. The last lines are where the reason
     // actually is, and a red run nobody can diagnose is barely better than a red run nobody sees.
-    const failed = out.split('\n').filter(l => BAD.test(l));
+    // BAD is /g, and .test() on a global regex advances lastIndex between calls — so filtering
+    // with it silently kept only every other failure line. Half the reasons a suite went red were
+    // withheld from the log by the very code meant to show them.
+    const B1 = new RegExp(BAD.source, 'm');
+    const failed = out.split('\n').filter(l => B1.test(l));
     for (const line of failed.slice(0, 6)) console.log('      ' + line.trim().slice(0, 160));
     // 8 lines of tail is exactly a node stack trace and nothing else, so a suite that printed
     // WHY it was about to fail had that explanation pushed off the end by the trace itself.

@@ -603,7 +603,11 @@ function fire(x, y) {
   let what = null;
   try { what = d.hover(x, y); } catch (e) {}
   if (what && what.kind === 'person') {
-    if (!facing(what.person || what)) { note('turn to face them first'); return true; }
+    // NOT acted: it refused and said why. Returning true here made the callers print
+    // 'brow → select' and 'dwell → <name>' over a selection that never happened — the exact lie
+    // the return value was added to stop. Returning false also keeps the held brow press alive,
+    // so turning to face them completes the select the person actually intended.
+    if (!facing(what.person || what)) { note('turn to face them first'); return false; }
     openTalk(what); return true;
   }
   if (what && what.kind === 'portal' && what.url) {

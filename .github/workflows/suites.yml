@@ -69,6 +69,15 @@ jobs:
             exit 1
           fi
 
+      - name: the code still produces the published wearing vectors
+        # check_spec_tables.cjs holds WEARING.md to WEARING-VECTORS.json, and nothing held the
+        # CODE to them — so changing the draw order or the keystream in wear() left every gate in
+        # this repo green: the document and the vectors still agreed with each other, and nothing
+        # recomputed a tile. This is the other half, and it is the half that matters.
+        env:
+          PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
+        run: node tools/check_vectors.cjs
+
       - name: run the suites that do not need Pyodide
         env:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/tests

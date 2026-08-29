@@ -297,8 +297,23 @@
         }
         fingerprintsUnavailable = false;
         if (log) log('[vbrainstem] ' + Object.keys(fingerprints).length + ' published fingerprints loaded');
+      } else {
+        // a 503 does not throw — it is a fetch that worked and a server that did not, and it is
+        // just as retryable as a network error
+        fingerprintsTried = false;
+        if (log) log('[vbrainstem] fingerprint list came back ' + r.status
+                     + ' — refusing for now, will try again on the next load');
       }
-    } catch (e) { if (log) log('[vbrainstem] no fingerprint registry: ' + e.message); }
+    } catch (e) {
+      // A BAD MOMENT IS NOT A LIFE SENTENCE. Failing closed is right; latching that failure for
+      // the rest of the page's life is not. One flaky fetch of the list — and it is the first
+      // thing the local-agent loop touches — would refuse all eight agents and every later
+      // hot-load with no way back but a reload. initPyodide one function up resets itself for
+      // exactly this reason. A FETCH failure is retryable; a list that parsed is not re-fetched.
+      fingerprintsTried = false;
+      if (log) log('[vbrainstem] could not read the fingerprint list (' + e.message
+                   + ') — refusing for now, will try again on the next load');
+    }
     return fingerprints;
   }
 

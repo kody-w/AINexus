@@ -118,7 +118,7 @@ for (let index = 0; index < N; index++) {
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/autodrive.js' }).catch(() => {});
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/holo.js' }).catch(() => {});
   await page.waitForFunction(() => !!window.__autodrive && !!window.NexusHolo,
-    { timeout: 30000 }).catch(() => {});
+    null, { timeout: 30000 }).catch(() => {});
   await page.evaluate(who => {
     window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
     window.NexusHolo.attach();
