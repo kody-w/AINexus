@@ -25,7 +25,7 @@ fails twice, then it is real.
 | `overlay.cjs` | portals draw no overlay, a faced person gets a reticle, a distant one stays a dot |
 | `tiles.cjs` | wearing: the same key wears byte-identical tiles from a record, a word is a key, twelve keys give twelve distinct starting conditions |
 | `slosh.cjs` | pouring in both directions — a world through lenses, an organism through worlds — and the order mattering in each |
-| `spiral.cjs` | braiding: how much of a child neither parent had, and whether six routes plaited beat the best single one |
+| `spiral.cjs` | crossing and selecting: how much of a child neither parent had, and whether six routes crossed beat the best single one |
 | `chat_tile.cjs` | a conversation worn into a tile, and its shape in time genuinely changing what is forged from it |
 | `forge.cjs` | worlds adapted from real published ones, sha256-verified, refused on mismatch |
 | `tick_loop.cjs` | a player ticking on its own clock, sealing a rapp/1 frame per tick |

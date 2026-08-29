@@ -42,7 +42,9 @@ const bundle = await p.evaluate(async () => {
   for (const id of CAST) await H.join({ id, persona: 'You are ' + id + '.' });
 
   const parent = await F.buildFrame({
-    kind: 'nexus.ensemble', streamId: 'rappid:@kody-w/ainexus/ensemble:proof', seq: 0,
+    // a registered kind on a conformant body-stream: the record is an organism's biography, and
+    // 'nexus.ensemble' was never a kind — the registry is exact-match (rapp/1 §6.1.1)
+    kind: 'body.pulse', streamId: 'rappid:@kody-w/ainexus:' + 'ab'.repeat(32), seq: 0,
     utc: '2026-08-29T00:00:00.000Z',
     payload: { asserts: { directed: CAST.length, note: 'the one record everything below descends from' },
                requires: { players: CAST } }, prev: null });
