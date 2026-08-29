@@ -4,11 +4,16 @@ name: Suites
 # knocks on a live rate-limited endpoint and a third party's throttle must never be able to turn
 # this red.
 #
-# The two that were excluded here are back. They did not fail for a mysterious environment reason:
-# every timeout I had "set" was being ignored. Playwright's signature is
-# waitForFunction(fn, arg, options) and the options object was going into the ARG slot, so the wait
-# silently used the 30s default — which is why the CI log said 30000ms while the source said 45000.
-# Measured both ways: arg slot fails after 30s, options slot after the 3s asked for.
+# dimension_seed is back, and it was not an environment mystery: it had a hardcoded absolute path
+# to one laptop's scratchpad, so on any other machine every file 404'd and the page loaded with no
+# scripts at all. Its own diagnostic said so the moment the runner stopped truncating it
+# ("scripts":[], readyState complete, no page errors). Proven fixed by running it from a relocated
+# copy of the repo, which is the only honest test of a path.
+#
+# orbs_and_gaze is still out, now with a real mechanism rather than a shrug: in CI the face reader
+# reports a good gaze (ok:true, x:0.5) but the page's own gaze pointer stays at -1, where on a
+# laptop it reaches 1001 — so no reticle is ever drawn and the ring never opens. Something about
+# driving the gaze loop headless on a runner, not the assertions. Still runs in the local sweep.
 #
 # Run everything locally with:
 
@@ -65,5 +70,5 @@ jobs:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
         run: |
           node tools/run_suites.cjs \
-            dialogue_ring dimension_seed holo_calibration orbs_and_gaze overlay \
+            dialogue_ring dimension_seed holo_calibration overlay \
             proof_red tick_loop tiles turn views_live tick_seal_on_error

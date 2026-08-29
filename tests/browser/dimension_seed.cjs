@@ -6,7 +6,7 @@ const _req=(()=>{for(const b of [process.env.PLAYWRIGHT_DIR, require('path').joi
  if(!b)continue; try{const r=createRequire(require('path').join(b,'package.json'));r.resolve('playwright');return r;}catch(e){}}return require;})();
 const { chromium } = _req('playwright');
 const fs=require('fs'),path=require('path');
-const ROOT='/private/tmp/claude-501/-Users-kodywildfeuer/7a8a3dbd-56d0-4e88-820f-d45db068d63d/scratchpad/AINexus';
+const ROOT = path.resolve(__dirname, '..', '..');   // the repo, wherever it is checked out
 const T={'.html':'text/html','.js':'text/javascript','.json':'application/json','.css':'text/css','.webp':'image/webp','.py':'text/plain'};
 (async()=>{
 const b=await chromium.launch(); const ctx=await b.newContext({viewport:{width:900,height:600}});
