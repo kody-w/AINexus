@@ -125,6 +125,34 @@ and ZERO page errors, each carrying exactly the modules it should — frontier a
 frames, autodrive frames (which confirms the new hard dependency introduced by routing program
 verification through `ai/frames.js` resolves for someone arriving fresh).
 
+### D3. The refusals I added broke three real things — found by attacking them
+An agent briefed to break rather than bless the stricter `frames.js`/`wear()` changes found:
+- **`wear()` was dead on every real record.** `sealPulse` writes `requires: {hands, resident,
+  missing}` and never `players`, so the refusal I added fired on EVERY frame the tick loop has ever
+  sealed. No suite caught it because `tiles`, `slosh`, `spiral` and `forge` all hand-build their
+  parent frame. The refusal was right; the producer was wrong. The tick now names its cast.
+- **The error ABOUT a sentence could kill the frame.** `String(e.message).slice(0, 200)` cuts
+  UTF-16 units — land that between the halves of an emoji and §4 refuses the frame, chain length 0.
+  Reachable from a real 400 body. That reopens the exact hole the seal-on-error fix closed: the
+  tick that went wrong is the tick with no record. Fixed in herd via a `clip()` that never splits a
+  pair.
+- **`lines()` and `summon()` stole a beat from an NPC's scene** — asking a scripted mind a question
+  advanced its script, so a dialogue ring made a written character non-deterministic. A forced
+  tool-choice the beat does not name now consumes nothing.
+Also: `scripted(s, {free:false})` was silently dropped, so a mind a caller believed it had marked
+PAID stayed exempt; a non-array `do` was walked by `for…of`; and my comment claiming two players
+cannot share one script object was simply false (they share `ticks`) — corrected rather than
+defended.
+**What survived:** five real sentences in emoji, CJK, RTL, ZWJ sequences, flags and skin tones all
+seal and verify; real player names seal; the no-mind default path is byte-identical; and `spend()`
+cannot be fooled, including by a mind whose ANSWER claims to be free.
+
+### D4. The same clip defect is in two more files — NOT yet fixed
+`ai/vbrainstem.js:976` (live()'s copy of the error seal) and `ai/copilot_auth.js:43` (`clean()`)
+cut the same way. One defect, three files, one fixed — the fifth time tonight that shape has
+appeared. Deliberately left alone for now because another agent has both files open; fixing them
+while it works is the kind of avoidable mistake this log exists to prevent.
+
 ### Still under attack
 Two agents are actively trying to break the remaining calls: the fail-closed behaviours (do they
 RECOVER, or is a capability gone until reload?) and the stricter frames/`wear()` refusals (can a
