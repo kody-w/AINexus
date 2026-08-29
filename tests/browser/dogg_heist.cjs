@@ -418,6 +418,14 @@ function outcomeClass(value) {
   return 'pending';
 }
 
+function topLevelOutcomeOf(state) {
+  if (state && typeof state === 'object' &&
+      Object.prototype.hasOwnProperty.call(state, 'outcome')) {
+    return state.outcome;
+  }
+  return outcomeOf(state);
+}
+
 function objectiveOf(state) {
   const found = findNamedValue(state, [
     'objective', 'objectives', 'missionObjective', 'mission', 'goal', 'goals'
@@ -564,6 +572,34 @@ function completionFlag(value) {
     .test(String(value.status || value.state || value.phase || ''));
 }
 
+function booleanState(value) {
+  if (value === true || value === false) return value;
+  if (typeof value === 'string') {
+    if (/\b(true|yes|acquired|complete|completed|hacked|reached|extracted)\b/i.test(value)) return true;
+    if (/\b(false|no|locked|pending|active|incomplete|unhacked)\b/i.test(value)) return false;
+  }
+  if (value && typeof value === 'object') return completionFlag(value);
+  return undefined;
+}
+
+function progressCount(value) {
+  if (Number.isFinite(Number(value))) return Number(value);
+  if (Array.isArray(value)) return value.length;
+  if (!value || typeof value !== 'object') return undefined;
+  for (const key of [
+    'count', 'done', 'completed', 'extractedAgents', 'agentsExtracted',
+    'agents', 'crew', 'extracted'
+  ]) {
+    if (Number.isFinite(Number(value[key]))) return Number(value[key]);
+    if (Array.isArray(value[key])) return value[key].length;
+  }
+  const booleanValues = Object.values(value);
+  if (booleanValues.length && booleanValues.every(item => typeof item === 'boolean')) {
+    return booleanValues.filter(Boolean).length;
+  }
+  return undefined;
+}
+
 function rawFrameProjection(state) {
   const agents = normalizedAgents(agentsOf(state));
   const terminalContainer = findNamedValue(state, ['terminals'], 6)?.value;
@@ -585,12 +621,20 @@ function rawFrameProjection(state) {
   const core = findNamedValue(state, ['core', 'vaultCore', 'dataCore'], 6)?.value;
   const extraction = findNamedValue(state, ['extraction', 'extract', 'exit'], 6)?.value;
   const hacked = terminals.filter(terminal => terminal.hacked).length;
-  const coreComplete = completionFlag(core);
-  const extractionComplete = completionFlag(extraction);
+  const explicitCoreAcquired = findNamedValue(state, ['coreAcquired'], 6)?.value;
+  const coreComplete = booleanState(explicitCoreAcquired) ?? completionFlag(core);
+  const explicitExtracted = findNamedValue(state, ['extractedAgents', 'agentsExtracted'], 6)?.value;
+  const explicitTotal = findNamedValue(state, ['totalAgents', 'agentTotal'], 6)?.value;
+  let extractedAgents = progressCount(explicitExtracted);
+  if (extractedAgents === undefined) extractedAgents = progressCount(extraction);
+  const totalAgents = progressCount(explicitTotal) ?? agents.length;
+  const extractionComplete = completionFlag(extraction) ||
+    (Number.isFinite(extractedAgents) && totalAgents > 0 && extractedAgents >= totalAgents);
+  if (extractionComplete && extractedAgents === undefined) extractedAgents = totalAgents;
   const stage = extractionComplete ? 'complete' :
     coreComplete ? 'extraction' :
       Number.isFinite(required) && hacked >= required ? 'core' : 'terminals';
-  const explicitOutcome = outcomeOf(state);
+  const explicitOutcome = topLevelOutcomeOf(state);
   return {
     tick: tickOf(state),
     outcome: explicitOutcome === undefined ?
@@ -602,6 +646,8 @@ function rawFrameProjection(state) {
       terminalCount: terminals.length,
       coreComplete,
       extractionComplete,
+      extractedAgents,
+      totalAgents,
       stage
     },
     povs: agents.map(agent => ({ id: agent.id, seen: agent.seen }))
@@ -611,26 +657,56 @@ function rawFrameProjection(state) {
 function publicObjectiveProjection(state, domText = '') {
   const objective = objectiveOf(state);
   const text = `${typeof objective === 'string' ? objective : stable(objective)} ${domText}`;
-  let done;
-  let required;
-  const fraction = text.match(/(\d+)\s*\/\s*(\d+)/);
-  if (fraction) {
-    done = Number(fraction[1]);
-    required = Number(fraction[2]);
+  const field = names => {
+    for (const name of names) {
+      if (objective && typeof objective === 'object' &&
+          Object.prototype.hasOwnProperty.call(objective, name)) return objective[name];
+    }
+    return findNamedValue(objective, names, 5)?.value;
+  };
+  let terminalsHacked = progressCount(field(['terminalsHacked', 'hackedTerminals']));
+  let terminalsRequired = progressCount(field(['terminalsRequired', 'requiredTerminals']));
+  let coreAcquired = booleanState(field(['coreAcquired']));
+  let extractedAgents = progressCount(field(['extractedAgents', 'agentsExtracted']));
+  let totalAgents = progressCount(field(['totalAgents', 'agentTotal']));
+
+  const terminalFraction =
+    text.match(/(?:terminals?|hacks?|hacked)[^\d]{0,30}(\d+)\s*\/\s*(\d+)/i) ||
+    text.match(/(\d+)\s*\/\s*(\d+)[^\n]{0,20}(?:terminals?|hacks?)/i);
+  if (terminalsHacked === undefined && terminalFraction) terminalsHacked = Number(terminalFraction[1]);
+  if (terminalsRequired === undefined && terminalFraction) terminalsRequired = Number(terminalFraction[2]);
+
+  const extractionFraction =
+    text.match(/(?:extract(?:ed|ion)?|crew|agents?)[^\d]{0,30}(\d+)\s*\/\s*(\d+)/i) ||
+    text.match(/(\d+)\s*\/\s*(\d+)[^\n]{0,20}(?:crew|agents?|extract(?:ed|ion)?)/i);
+  if (extractedAgents === undefined && extractionFraction) extractedAgents = Number(extractionFraction[1]);
+  if (totalAgents === undefined && extractionFraction) totalAgents = Number(extractionFraction[2]);
+  if (coreAcquired === undefined &&
+      /\bcore\b.{0,40}\b(acquired|hacked|secured|complete)\b|\b(acquired|hacked|secured|complete)\b.{0,40}\bcore\b/i.test(text)) {
+    coreAcquired = true;
   }
-  walkJson(objective, (value, trail) => {
-    if (!trail.length || !Number.isFinite(Number(value))) return;
-    const key = String(trail[trail.length - 1]);
-    if (done === undefined && /(hacked|done|completed|terminalsHacked)/i.test(key)) done = Number(value);
-    if (required === undefined && /(required|target|terminalsRequired)/i.test(key)) required = Number(value);
-  });
+
   const explicitStage = findNamedValue(objective, ['stage', 'current', 'phase', 'kind'], 4)?.value;
-  const stageText = String(explicitStage || domText || text);
-  const stage = /\b(complete|completed|won|victory)\b/i.test(stageText) ? 'complete' :
-    /\b(extract|extraction|escape|exit)\b/i.test(stageText) ? 'extraction' :
-      /\b(core|vault)\b/i.test(stageText) ? 'core' :
-        /\bterminal\b/i.test(stageText) ? 'terminals' : undefined;
-  return { done, required, stage, text };
+  const stage = Number.isFinite(extractedAgents) && Number.isFinite(totalAgents) &&
+      totalAgents > 0 && extractedAgents >= totalAgents ? 'complete' :
+    coreAcquired === true ? 'extraction' :
+      Number.isFinite(terminalsHacked) && Number.isFinite(terminalsRequired) &&
+        terminalsHacked >= terminalsRequired ? 'core' :
+        explicitStage !== undefined ? (
+          /\b(complete|completed|won|victory)\b/i.test(String(explicitStage)) ? 'complete' :
+            /\b(extract|extraction|escape|exit)\b/i.test(String(explicitStage)) ? 'extraction' :
+              /\b(core|vault)\b/i.test(String(explicitStage)) ? 'core' :
+                /\bterminal\b/i.test(String(explicitStage)) ? 'terminals' : undefined
+        ) : undefined;
+  return {
+    terminalsHacked,
+    terminalsRequired,
+    coreAcquired,
+    extractedAgents,
+    totalAgents,
+    stage,
+    text
+  };
 }
 
 function historyCoherence(publicState, raw, domObjective = '') {
@@ -656,20 +732,32 @@ function historyCoherence(publicState, raw, domObjective = '') {
       stable(rawPov.seen.cells) === stable(shown.seen.cells);
   });
   const objective = publicObjectiveProjection(publicState, domObjective);
-  const objectiveCountMatch = objective.done === undefined || objective.done === raw.objective.hacked;
-  const objectiveRequiredMatch = objective.required === undefined || raw.objective.required === undefined ||
-    objective.required === raw.objective.required;
-  const objectiveStageMatch = objective.stage === undefined || objective.stage === raw.objective.stage;
-  const objectiveCompared = objective.done !== undefined ||
-    (objective.required !== undefined && raw.objective.required !== undefined) ||
-    objective.stage !== undefined;
-  const outcomeMatch = outcomeClass(outcomeOf(publicState)) === outcomeClass(raw.outcome);
+  const terminalCountsMatch =
+    Number.isFinite(objective.terminalsHacked) &&
+    Number.isFinite(objective.terminalsRequired) &&
+    Number.isFinite(raw.objective.required) &&
+    objective.terminalsHacked === raw.objective.hacked &&
+    objective.terminalsRequired === raw.objective.required;
+  const coreMatch = typeof objective.coreAcquired === 'boolean' &&
+    objective.coreAcquired === raw.objective.coreComplete;
+  const extractedMatch = !Number.isFinite(objective.extractedAgents) ||
+    !Number.isFinite(raw.objective.extractedAgents) ||
+    objective.extractedAgents === raw.objective.extractedAgents;
+  const totalAgentsMatch = !Number.isFinite(objective.totalAgents) ||
+    !Number.isFinite(raw.objective.totalAgents) ||
+    objective.totalAgents === raw.objective.totalAgents;
+  const objectiveStageMatch = objective.stage === undefined ||
+    objective.stage === raw.objective.stage;
+  const publicOutcome = topLevelOutcomeOf(publicState);
+  const outcomeMatch = publicOutcome !== undefined && raw.outcome !== undefined ?
+    stable(publicOutcome) === stable(raw.outcome) :
+    outcomeClass(publicOutcome) === outcomeClass(raw.outcome);
   return {
     tickMatch: tickOf(publicState) === raw.tick,
     outcomeMatch,
     agentMatch,
-    objectiveMatch: objectiveCompared &&
-      objectiveCountMatch && objectiveRequiredMatch && objectiveStageMatch,
+    objectiveMatch: terminalCountsMatch && coreMatch &&
+      extractedMatch && totalAgentsMatch && objectiveStageMatch,
     povMatch,
     publicObjective: objective
   };
@@ -3068,7 +3156,7 @@ async function runSuite() {
     coherence.tickMatch && coherence.outcomeMatch && coherence.agentMatch &&
       coherence.objectiveMatch && coherence.povMatch &&
       liveMetadata && liveMetadata.head === terminalSnapshot.head,
-    `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; tick ${coherence.tickMatch}, outcome ${coherence.outcomeMatch}, agents ${coherence.agentMatch}, objective ${coherence.objectiveMatch}, POV ${coherence.povMatch}; live ${liveMetadata?.source || 'missing'} ${String(liveMetadata?.head || '').slice(0, 12)}…`);
+    `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; t:${coherence.tickMatch} o:${coherence.outcomeMatch} a:${coherence.agentMatch} obj:${coherence.objectiveMatch} pov:${coherence.povMatch}; raw ${historicalFrame.projection.objective.hacked}/${historicalFrame.projection.objective.required} c${Number(historicalFrame.projection.objective.coreComplete)} x${historicalFrame.projection.objective.extractedAgents}/${historicalFrame.projection.objective.totalAgents}, public ${coherence.publicObjective.terminalsHacked}/${coherence.publicObjective.terminalsRequired} c${Number(coherence.publicObjective.coreAcquired)} x${coherence.publicObjective.extractedAgents}/${coherence.publicObjective.totalAgents}; live ${liveMetadata?.source || 'missing'}`);
   await policyContext.close();
 
   const deniedContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
