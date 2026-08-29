@@ -102,6 +102,22 @@
       line-height: 1.45;
     }
 
+    body.intro-open {
+      overflow: hidden;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     button,
     select,
     input {
@@ -399,13 +415,13 @@
     .mode-pill.live,
     .outcome-pill.won {
       border-color: var(--cp-success);
-      color: var(--cp-success);
+      color: var(--cp-text);
     }
 
     .mode-pill.history,
     .outcome-pill.active {
       border-color: var(--cp-warning);
-      color: var(--cp-warning);
+      color: var(--cp-text);
     }
 
     .outcome-pill.lost {
@@ -417,6 +433,16 @@
       position: relative;
       padding: 12px;
       background: var(--cp-bg-elevated);
+    }
+
+    .board-viewport {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-radius: 0.625rem;
+      overscroll-behavior-x: contain;
+      scrollbar-color: var(--cp-border-strong) var(--cp-surface-soft);
     }
 
     #game-board {
@@ -648,7 +674,7 @@
       place-items: center;
       border: 2px solid var(--cp-agent);
       border-radius: 50%;
-      color: var(--cp-agent);
+      color: var(--cp-text);
       font-family: Consolas, "Courier New", Courier, monospace;
       font-size: 0.75rem;
       font-weight: 900;
@@ -780,7 +806,7 @@
     }
 
     .pov-name {
-      color: var(--cp-agent);
+      color: var(--cp-text);
       font-size: 0.76rem;
       font-weight: 800;
     }
@@ -825,6 +851,8 @@
       padding: 20px;
       place-items: center;
       background: var(--cp-overlay);
+      overflow: auto;
+      overscroll-behavior: contain;
     }
 
     .intro-overlay[hidden] {
@@ -833,6 +861,8 @@
 
     .intro-card {
       width: min(620px, 100%);
+      max-height: calc(100dvh - 40px);
+      overflow: auto;
       border: 1px solid var(--cp-border-strong);
       border-radius: 16px;
       background: var(--cp-panel-strong);
@@ -858,7 +888,7 @@
 
     .intro-copy p {
       margin: 0 0 18px;
-      color: var(--cp-text-muted);
+      color: var(--cp-text-soft);
     }
 
     .intro-brief {
@@ -1032,6 +1062,15 @@
       }
     }
 
+    @media (max-width: 900px) {
+      #game-board {
+        width: 792px;
+        min-width: 792px;
+        max-width: none;
+        touch-action: pan-x pan-y;
+      }
+    }
+
     @media (max-width: 720px) {
       .app-shell {
         padding-top: 12px;
@@ -1106,6 +1145,18 @@
       .section-heading p {
         margin-top: 3px;
         text-align: left;
+      }
+
+      #pov-grid {
+        display: flex;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+      }
+
+      .pov-card {
+        flex: 0 0 min(320px, 84vw);
+        scroll-snap-align: start;
       }
 
       .help-body,
@@ -1195,6 +1246,33 @@
       }
     }
 
+    @media (max-height: 500px) and (min-width: 721px) {
+      .intro-copy {
+        padding: 18px 24px;
+      }
+
+      .intro-copy h2 {
+        margin-bottom: 6px;
+        font-size: 1.75rem;
+      }
+
+      .intro-copy p {
+        margin-bottom: 10px;
+        font-size: 0.8rem;
+        line-height: 1.35;
+      }
+
+      .intro-brief {
+        gap: 4px;
+        padding: 14px 18px;
+      }
+
+      .brief-beat {
+        font-size: 0.7rem;
+        line-height: 1.3;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       html {
         scroll-behavior: auto;
@@ -1211,10 +1289,10 @@
     }
   </style>
 </head>
-<body>
+<body class="intro-open">
   <a class="skip-link" href="#game-board">Skip to tactical board</a>
 
-  <div class="app-shell">
+  <div class="app-shell" inert aria-hidden="true">
     <header class="topline">
       <div>
         <p class="eyebrow">DOGG / Deterministic Operations Graph Game</p>
@@ -1279,7 +1357,10 @@
           <span class="mode-pill live" id="view-mode">Live head</span>
         </div>
         <div class="board-wrap">
-          <canvas id="game-board" width="900" height="600" tabindex="0" role="application" aria-label="Tactical facility board. Use arrow keys to move the waypoint cursor and Enter to queue a directive."></canvas>
+          <div class="board-viewport" id="board-viewport">
+            <canvas id="game-board" width="900" height="600" tabindex="0" role="application" aria-describedby="board-cursor-live" aria-label="Tactical facility board. Use arrow keys to move the waypoint cursor and Enter to queue a directive."></canvas>
+          </div>
+          <p class="sr-only" id="board-cursor-live" role="status" aria-live="polite"></p>
           <div class="board-tip">
             <span>Tap a floor tile to redirect <strong id="selected-agent-label">Ghost</strong>. Tap an agent to select.</span>
             <span class="legend" aria-label="Board legend">
@@ -1444,7 +1525,7 @@
       <div>
         <h3>The objective</h3>
         <ol>
-          <li>Hack any two green terminal nodes to release the vault lattice.</li>
+          <li>Hack any two amber terminal nodes to release the vault lattice. Green means a terminal is already friendly.</li>
           <li>Download the amber core in the upper-right vault.</li>
           <li>Return all four active agents to the extraction ring before alarm 100 or tick 180.</li>
         </ol>
@@ -1463,7 +1544,7 @@
         <p>Select an agent, then tap a floor tile. On the focused board, move the cursor with <kbd>Arrows</kbd> and queue with <kbd>Enter</kbd>. A directive temporarily outranks that agent’s policy but never bypasses doors, hazards, or detection.</p>
         <h3>Keyboard</h3>
         <p><kbd>Space</kbd> play/pause · <kbd>.</kbd> single tick · <kbd>R</kbd> same seed · <kbd>Shift</kbd>+<kbd>R</kbd> new seed · <kbd>F</kbd> fork inspected frame · <kbd>L</kbd> live head · <kbd>H</kbd> this help.</p>
-        <p>Export contains the complete chain and a checksum. Import validates both before replacing anything. If browser storage is denied, the game remains fully playable and says so.</p>
+        <p>Export contains the complete chain and a checksum. Import validates both before replacing anything; files over 4 MiB are rejected before parsing. If browser storage is denied, the game remains fully playable and says so.</p>
       </div>
     </div>
   </dialog>
@@ -1486,6 +1567,7 @@
       const MAX_TICKS = 180;
       const MIN_SPEED = 10;
       const MAX_SPEED = 10000;
+      const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
       const DEFAULT_SEED = "DOGG-BRAVO-17";
       const AGENT_ORDER = ["ghost", "cipher", "atlas", "spark"];
       const DIRECTIONS = [
@@ -1512,6 +1594,7 @@
       ]);
 
       const elements = {
+        appShell: document.querySelector(".app-shell"),
         play: document.getElementById("play-toggle"),
         step: document.getElementById("step-button"),
         restart: document.getElementById("restart-button"),
@@ -1526,6 +1609,8 @@
         helpDialog: document.getElementById("help-dialog"),
         helpClose: document.getElementById("help-close"),
         board: document.getElementById("game-board"),
+        boardViewport: document.getElementById("board-viewport"),
+        boardCursorLive: document.getElementById("board-cursor-live"),
         povGrid: document.getElementById("pov-grid"),
         statusLive: document.getElementById("status-live"),
         tick: document.getElementById("tick-value"),
@@ -1576,6 +1661,8 @@
       let keyboardCursor = { x: 2, y: 9 };
       let palette = {};
       let lastTickPaint = 0;
+      let boardGesture = null;
+      let nextDangerCache = new WeakMap();
 
       function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -2243,6 +2330,7 @@
         const visible = visibleCellsForAgent(state, agent);
         const allDanger = currentDangerCells(state);
         const knownDanger = new Set(Array.from(allDanger).filter((cell) => visible.has(cell)));
+        const hackedCount = hackedTerminalCount(state);
 
         if (agent.role === "cipher") {
           const adjacentCamera = state.cameras.find((camera) => camera.active && distance(agent, camera) <= 1 && visible.has(keyOf(camera.x, camera.y)));
@@ -2262,11 +2350,11 @@
         }
 
         const terminalHere = terminalAt(state, agent.x, agent.y);
-        if (terminalHere && !terminalHere.hacked) {
+        if (terminalHere && !terminalHere.hacked && hackedCount < state.requiredTerminals) {
           return { type: "hack-terminal", label: "Opening terminal lattice", target: terminalHere, path: [] };
         }
 
-        if (!state.core.acquired && hackedTerminalCount(state) >= state.requiredTerminals && agent.x === state.core.x && agent.y === state.core.y) {
+        if (!state.core.acquired && hackedCount >= state.requiredTerminals && agent.x === state.core.x && agent.y === state.core.y) {
           return { type: "download-core", label: "Downloading DOGG core", target: state.core, path: [] };
         }
 
@@ -2284,19 +2372,21 @@
           return intentFromPath(state, agent, state.extraction, path, agent.carryingCore ? "Exfiltrating the core" : "Regrouping for extraction");
         }
 
-        const nearbyTerminal = closestByPath(
-          state,
-          agent,
-          state.terminals.filter((terminal) => !terminal.hacked && distance(agent, terminal) <= 3),
-          visible,
-          knownDanger
-        );
-        if (nearbyTerminal && agent.role !== "spark") {
-          return intentFromPath(state, agent, nearbyTerminal.target, nearbyTerminal.path, "Assisting terminal breach");
+        if (hackedCount < state.requiredTerminals) {
+          const nearbyTerminal = closestByPath(
+            state,
+            agent,
+            state.terminals.filter((terminal) => !terminal.hacked && distance(agent, terminal) <= 3),
+            visible,
+            knownDanger
+          );
+          if (nearbyTerminal && agent.role !== "spark") {
+            return intentFromPath(state, agent, nearbyTerminal.target, nearbyTerminal.path, "Assisting terminal breach");
+          }
         }
 
         if (agent.role === "cipher") {
-          if (hackedTerminalCount(state) < state.requiredTerminals) {
+          if (hackedCount < state.requiredTerminals) {
             const target = closestByPath(state, agent, state.terminals.filter((terminal) => !terminal.hacked), visible, knownDanger);
             if (target) return intentFromPath(state, agent, target.target, target.path, "Hunting access terminal");
           }
@@ -2305,6 +2395,10 @@
         }
 
         if (agent.role === "ghost") {
+          if (hackedCount >= state.requiredTerminals) {
+            const corePath = findPath(state, agent, state.core, agent, { visible, knownDanger });
+            return intentFromPath(state, agent, state.core, corePath, "Scouting the vault");
+          }
           const frontier = frontierGoal(state, agent, visible, knownDanger);
           if (frontier) return intentFromPath(state, agent, frontier.target, frontier.path, "Mapping unseen corridor");
           const corePath = findPath(state, agent, state.core, agent, { visible, knownDanger });
@@ -2400,7 +2494,7 @@
         }
         if (intent.type === "hack-terminal") {
           const terminal = state.terminals.find((item) => item.id === intent.target.id);
-          if (terminal && !terminal.hacked) {
+          if (terminal && !terminal.hacked && hackedTerminalCount(state) < state.requiredTerminals) {
             terminal.progress = Math.min(terminal.required, terminal.progress + (agent.role === "cipher" ? 2 : 1));
             if (terminal.progress >= terminal.required) {
               terminal.hacked = true;
@@ -2659,44 +2753,49 @@
         }
       }
 
+      function transitionOneTick(state) {
+        const events = [];
+        const alarmDelta = { value: 0 };
+        state.agents.forEach((agent) => {
+          agent.abilityCooldown = Math.max(0, agent.abilityCooldown - 1);
+        });
+
+        unlockVaultIfReady(state, events);
+        const intents = state.agents.map((agent) => ({ agent, intent: computeAgentIntent(state, agent) }));
+        intents.forEach(({ agent, intent }) => resolveAgentIntent(state, agent, intent, events, alarmDelta));
+
+        state.guards.forEach((guard) => resolveGuardTurn(state, guard, events));
+        state.cameras.filter((camera) => camera.active).forEach((camera) => {
+          if ((state.tick + 1) % 2 === 0) camera.dir = (camera.dir + 1) % 4;
+        });
+        resolveCollisions(state, events, alarmDelta);
+        resolveHazards(state, events, alarmDelta);
+        const detections = resolveDetection(state, events, alarmDelta);
+
+        state.lures.forEach((lure) => {
+          lure.ttl -= 1;
+        });
+        state.lures = state.lures.filter((lure) => lure.ttl > 0);
+
+        if (alarmDelta.value > 0) {
+          state.alarm = Math.min(100, state.alarm + Math.min(16, alarmDelta.value));
+        } else if (detections === 0) {
+          state.alarm = Math.max(0, state.alarm - 4);
+        }
+        state.tick += 1;
+        updateKnowledge(state);
+        evaluateOutcome(state, events);
+        if (!events.length) events.push("Quiet tick. Policies advanced without new contact.");
+        state.lastEvents = events.slice();
+        return events;
+      }
+
       function advanceOneTick(options = {}) {
         if (!liveState || liveState.outcome !== "active") {
           stopTimer();
           return false;
         }
-        const events = [];
-        const alarmDelta = { value: 0 };
-        liveState.agents.forEach((agent) => {
-          agent.abilityCooldown = Math.max(0, agent.abilityCooldown - 1);
-        });
-
-        unlockVaultIfReady(liveState, events);
-        const intents = liveState.agents.map((agent) => ({ agent, intent: computeAgentIntent(liveState, agent) }));
-        intents.forEach(({ agent, intent }) => resolveAgentIntent(liveState, agent, intent, events, alarmDelta));
-
-        liveState.guards.forEach((guard) => resolveGuardTurn(liveState, guard, events));
-        liveState.cameras.filter((camera) => camera.active).forEach((camera) => {
-          if ((liveState.tick + 1) % 2 === 0) camera.dir = (camera.dir + 1) % 4;
-        });
-        resolveCollisions(liveState, events, alarmDelta);
-        resolveHazards(liveState, events, alarmDelta);
-        const detections = resolveDetection(liveState, events, alarmDelta);
-
-        liveState.lures.forEach((lure) => {
-          lure.ttl -= 1;
-        });
-        liveState.lures = liveState.lures.filter((lure) => lure.ttl > 0);
-
-        if (alarmDelta.value > 0) {
-          liveState.alarm = Math.min(100, liveState.alarm + Math.min(16, alarmDelta.value));
-        } else if (detections === 0) {
-          liveState.alarm = Math.max(0, liveState.alarm - 4);
-        }
-        liveState.tick += 1;
-        updateKnowledge(liveState);
-        evaluateOutcome(liveState, events);
-        if (!events.length) events.push("Quiet tick. Policies advanced without new contact.");
-        liveState.lastEvents = events.slice();
+        const events = transitionOneTick(liveState);
         sealFrame("tick", events);
         if (liveState.outcome !== "active") stopTimer();
         if (options.paint !== false) renderAll();
@@ -2704,20 +2803,24 @@
         return true;
       }
 
+      function computeNextProjection(state) {
+        const cached = nextDangerCache.get(state);
+        if (cached) return cached;
+        if (state.outcome !== "active") {
+          const sealed = { state, danger: currentDangerCells(state) };
+          nextDangerCache.set(state, sealed);
+          return sealed;
+        }
+        const projected = clone(state);
+        transitionOneTick(projected);
+        const danger = currentDangerCells(projected);
+        const result = { state: projected, danger };
+        nextDangerCache.set(state, result);
+        return result;
+      }
+
       function computeNextDanger(state) {
-        const danger = new Set();
-        state.guards.filter((guard) => guard.active).forEach((guard) => {
-          const intent = predictGuardIntent(state, guard);
-          const projected = { ...guard, x: intent.to.x, y: intent.to.y, dir: directionFromMove(guard, intent.to, guard.dir) };
-          if (projected.stunned === 0) guardVision(state, projected).forEach((cell) => danger.add(cell));
-          danger.add(keyOf(projected.x, projected.y));
-        });
-        state.cameras.filter((camera) => camera.active).forEach((camera) => {
-          const nextDir = (state.tick + 1) % 2 === 0 ? (camera.dir + 1) % 4 : camera.dir;
-          cameraVision(state, camera, nextDir).forEach((cell) => danger.add(cell));
-        });
-        state.hazards.filter((hazard) => hazard.active).forEach((hazard) => danger.add(keyOf(hazard.x, hazard.y)));
-        return danger;
+        return computeNextProjection(state).danger;
       }
 
       function currentFrame() {
@@ -2847,7 +2950,9 @@
           ctx.arc(cx, cy, radius + Math.max(3, metrics.ratio * 2), 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.fillStyle = palette.surface;
+        const brightRoleInLight = document.documentElement.dataset.theme === "light" &&
+          (color === palette["role-cipher"] || color === palette["role-atlas"]);
+        ctx.fillStyle = brightRoleInLight ? palette["canvas-ink"] : palette.surface;
         ctx.font = "900 " + Math.max(7, radius * 0.9) + "px Consolas, 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -2962,6 +3067,7 @@
       }
 
       function drawKnownStatics(ctx, metrics, state, seen, visible, privateAgentId = null) {
+        const objectiveInk = document.documentElement.dataset.theme === "dark" ? palette.surface : palette["canvas-ink"];
         drawExtraction(ctx, metrics, state.extraction);
         state.doors.forEach((door) => {
           const cell = keyOf(door.x, door.y);
@@ -2971,11 +3077,11 @@
           const cell = keyOf(terminal.x, terminal.y);
           if (!seen.has(cell)) return;
           drawDiamond(ctx, metrics, terminal.x, terminal.y, terminal.hacked ? palette.success : palette.warning, visible.has(cell) ? 0.95 : 0.42);
-          drawText(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, palette["canvas-ink"], 0.25);
+          drawText(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, objectiveInk, 0.25);
         });
         if (seen.has(keyOf(state.core.x, state.core.y)) || !privateAgentId) {
           drawDiamond(ctx, metrics, state.core.x, state.core.y, palette.warning, state.core.acquired ? 0.35 : 1);
-          drawText(ctx, metrics, "C", state.core.x, state.core.y, palette["canvas-ink"], 0.28);
+          drawText(ctx, metrics, "C", state.core.x, state.core.y, objectiveInk, 0.28);
         }
         state.hazards.forEach((hazard) => {
           const discovered = privateAgentId ? hazard.discoveredBy.includes(privateAgentId) : hazard.discoveredBy.length > 0;
@@ -3001,6 +3107,72 @@
         });
       }
 
+      function boardCursorDescription(state, nextDanger = computeNextDanger(state)) {
+        const { x, y } = keyboardCursor;
+        const door = doorAt(state, x, y);
+        let tileDescription;
+        if (tileAt(state, x, y) === "W") {
+          tileDescription = "wall, obstructed";
+        } else if (door) {
+          tileDescription = door.kind + " door, " + (door.locked ? "locked and obstructed" : door.open ? "open" : "closed");
+        } else {
+          tileDescription = "floor, traversable";
+        }
+
+        const occupants = [];
+        state.agents.filter((agent) => agent.status === "active" && agent.x === x && agent.y === y)
+          .forEach((agent) => occupants.push(ROLE[agent.id].name));
+        state.guards.filter((guard) => guard.active && guard.x === x && guard.y === y)
+          .forEach((guard) => occupants.push(guard.id));
+        const camera = cameraAt(state, x, y);
+        if (camera?.active) occupants.push(camera.id);
+        const terminal = terminalAt(state, x, y);
+        if (terminal) occupants.push((terminal.hacked ? "friendly " : "unhacked ") + terminal.id);
+        if (state.core.x === x && state.core.y === y && !state.core.acquired) occupants.push("DOGG core");
+        if (isAtExtraction(state, { x, y })) occupants.push("extraction zone");
+        const hazard = hazardAt(state, x, y);
+        if (hazard?.active) occupants.push(hazard.id);
+
+        const cell = keyOf(x, y);
+        const currentThreat = currentDangerCells(state).has(cell);
+        const futureThreat = nextDanger.has(cell);
+        return "Board cursor [" + x + "," + y + "] at tick " + state.tick + ". " +
+          tileDescription + ". " +
+          (occupants.length ? "Occupants: " + occupants.join(", ") + ". " : "No known occupant. ") +
+          (currentThreat ? "Inside a current threat zone. " : "Not inside a current threat zone. ") +
+          (futureThreat ? "Warning: inside next-tick danger. " : "No next-tick danger predicted. ") +
+          "Selected agent: " + ROLE[selectedAgentId].name + ".";
+      }
+
+      function updateBoardAccessibility(state, nextDanger, announce = false) {
+        const description = boardCursorDescription(state, nextDanger);
+        elements.board.setAttribute("aria-label", description);
+        if (announce) elements.boardCursorLive.textContent = description;
+      }
+
+      function povSemanticSummary(state, agent, visible, seen, intent) {
+        const threats = [];
+        state.guards.filter((guard) => guard.active && visible.has(keyOf(guard.x, guard.y)))
+          .forEach((guard) => threats.push(guard.id + (guard.stunned ? " stunned" : "")));
+        state.cameras.filter((camera) => camera.active && visible.has(keyOf(camera.x, camera.y)))
+          .forEach((camera) => threats.push(camera.id));
+        state.hazards.filter((hazard) => hazard.active && visible.has(keyOf(hazard.x, hazard.y)) && hazard.discoveredBy.includes(agent.id))
+          .forEach((hazard) => threats.push(hazard.id));
+
+        const knownTerminals = state.terminals.filter((terminal) => seen.has(keyOf(terminal.x, terminal.y)));
+        const objectiveItems = [
+          knownTerminals.length + " terminal" + (knownTerminals.length === 1 ? "" : "s") + " known",
+          knownTerminals.filter((terminal) => terminal.hacked).length + " friendly",
+          seen.has(keyOf(state.core.x, state.core.y)) ? "core located" : "core not yet located",
+          "extraction location known"
+        ];
+        return ROLE[agent.id].name + " private field of view at tick " + state.tick + ". " +
+          visible.size + " cells visible now; " + seen.size + " cells known of " + (GRID_W * GRID_H) + ". " +
+          "Visible threats: " + (threats.length ? threats.join(", ") : "none") + ". " +
+          "Objective knowledge: " + objectiveItems.join(", ") + ". " +
+          "Intent: " + intent.label + ".";
+      }
+
       function drawMainBoard(state) {
         const canvas = elements.board;
         const metrics = fitCanvas(canvas);
@@ -3012,7 +3184,8 @@
           agent.seen.forEach((cell) => seen.add(cell));
         });
         drawFacilityBase(ctx, metrics, state, seen, visible);
-        const nextDanger = computeNextDanger(state);
+        const nextProjection = computeNextProjection(state);
+        const nextDanger = nextProjection.danger;
         nextDanger.forEach((cell) => {
           if (!seen.has(cell)) return;
           const [x, y] = cell.split(",").map(Number);
@@ -3022,8 +3195,8 @@
         drawThreats(ctx, metrics, state, visible);
 
         state.guards.filter((guard) => guard.active && visible.has(keyOf(guard.x, guard.y))).forEach((guard) => {
-          const intent = predictGuardIntent(state, guard);
-          drawArrow(ctx, metrics, guard, intent.to, palette.danger, 0.58);
+          const projectedGuard = nextProjection.state.guards.find((candidate) => candidate.id === guard.id);
+          drawArrow(ctx, metrics, guard, projectedGuard || guard, palette.danger, 0.58);
         });
         state.agents.filter((agent) => agent.status === "active").forEach((agent) => {
           const intent = computeAgentIntent(state, agent);
@@ -3055,7 +3228,7 @@
           ctx.strokeRect(rect.x + 2, rect.y + 2, rect.w - 4, rect.h - 4);
           ctx.restore();
         }
-        canvas.setAttribute("aria-label", "Tactical facility at viewed tick " + state.tick + ". " + objectiveSummary(state) + ". Selected agent " + ROLE[selectedAgentId].name + ".");
+        updateBoardAccessibility(state, nextDanger);
       }
 
       function drawPov(state, agent, canvas) {
@@ -3075,11 +3248,11 @@
         state.agents.filter((ally) => ally.status === "active" && (ally.id === agent.id || visible.has(keyOf(ally.x, ally.y)))).forEach((ally) => {
           drawCircle(ctx, metrics, ally.x, ally.y, paletteRole(ally.id), ROLE[ally.id].initials.slice(0, 1), ally.id === agent.id);
         });
+        const intent = computeAgentIntent(state, agent);
         if (agent.status === "active") {
-          const intent = computeAgentIntent(state, agent);
           drawArrow(ctx, metrics, agent, intent.to || intent.target, paletteRole(agent.id), 0.9);
-          canvas.setAttribute("aria-label", ROLE[agent.id].name + " private field of view at tick " + state.tick + ". Intent: " + intent.label + ".");
         }
+        canvas.setAttribute("aria-label", povSemanticSummary(state, agent, visible, seen, intent));
       }
 
       function paletteRole(agentId) {
@@ -3230,14 +3403,40 @@
         api.ready = true;
       }
 
+      function activateIntroModal() {
+        elements.intro.hidden = false;
+        elements.appShell.inert = true;
+        elements.appShell.setAttribute("aria-hidden", "true");
+        document.body.classList.add("intro-open");
+        window.setTimeout(() => elements.introStart.focus(), 0);
+      }
+
+      function releaseIntroModal() {
+        elements.intro.hidden = true;
+        elements.appShell.inert = false;
+        elements.appShell.removeAttribute("aria-hidden");
+        document.body.classList.remove("intro-open");
+      }
+
+      function handleIntroKeydown(event) {
+        if (elements.intro.hidden) return;
+        if (event.key === "Tab") {
+          event.preventDefault();
+          elements.introStart.focus({ preventScroll: true });
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+        }
+      }
+
       function dismissIntro(shouldPlay) {
         if (introTimer !== null) {
           window.clearTimeout(introTimer);
           introTimer = null;
         }
-        elements.intro.hidden = true;
+        releaseIntroModal();
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
         completeReadiness();
+        if (!elements.helpDialog.open) elements.play.focus({ preventScroll: true });
       }
 
       function playGame(markCommand = true) {
@@ -3250,8 +3449,14 @@
           toast("This branch is sealed. Restart or inspect another frame.", "error");
           return false;
         }
+        if (!elements.intro.hidden) {
+          if (introTimer !== null) {
+            window.clearTimeout(introTimer);
+            introTimer = null;
+          }
+          releaseIntroModal();
+        }
         running = true;
-        elements.intro.hidden = true;
         startTimer();
         renderAll();
         persistState();
@@ -3420,6 +3625,7 @@
         const agent = state.agents.find((item) => item.id === agentId);
         keyboardCursor = { x: agent.x, y: agent.y };
         renderAll();
+        updateBoardAccessibility(state, computeNextDanger(state), true);
         persistState();
         status(ROLE[agentId].name + " selected. Tap a floor tile to queue one waypoint.");
         return true;
@@ -3449,43 +3655,284 @@
         return JSON.stringify(payload);
       }
 
+      function isRecord(value) {
+        return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function requireRecord(value, label) {
+        if (!isRecord(value)) throw new Error(label + " must be an object.");
+      }
+
+      function requireString(value, label, minLength = 0, maxLength = 500) {
+        if (typeof value !== "string" || value.length < minLength || value.length > maxLength) {
+          throw new Error(label + " must be a string between " + minLength + " and " + maxLength + " characters.");
+        }
+      }
+
+      function requireBoolean(value, label) {
+        if (typeof value !== "boolean") throw new Error(label + " must be boolean.");
+      }
+
+      function requireInteger(value, label, minimum, maximum) {
+        if (!Number.isInteger(value) || value < minimum || value > maximum) {
+          throw new Error(label + " must be an integer from " + minimum + " to " + maximum + ".");
+        }
+      }
+
+      function requireArray(value, label, minimum, maximum) {
+        if (!Array.isArray(value) || value.length < minimum || value.length > maximum) {
+          throw new Error(label + " must contain between " + minimum + " and " + maximum + " entries.");
+        }
+      }
+
+      function requirePosition(value, label, facility, requireFloor = true) {
+        requireRecord(value, label);
+        requireInteger(value.x, label + ".x", 0, GRID_W - 1);
+        requireInteger(value.y, label + ".y", 0, GRID_H - 1);
+        if (requireFloor && facility.tiles[value.y][value.x] === "W") {
+          throw new Error(label + " must occupy a traversable tile.");
+        }
+      }
+
+      function requireUniqueStrings(values, label, allowedValues = null) {
+        const seen = new Set();
+        values.forEach((value, index) => {
+          requireString(value, label + "[" + index + "]", 1, 80);
+          if (seen.has(value)) throw new Error(label + " contains duplicate value " + value + ".");
+          if (allowedValues && !allowedValues.has(value)) throw new Error(label + " contains unknown value " + value + ".");
+          seen.add(value);
+        });
+      }
+
+      function parseKnownCell(cell, label) {
+        requireString(cell, label, 3, 5);
+        const match = /^(\d+),(\d+)$/.exec(cell);
+        if (!match) throw new Error(label + " is not a valid cell coordinate.");
+        const x = Number(match[1]);
+        const y = Number(match[2]);
+        if (!inBounds(x, y) || keyOf(x, y) !== cell) throw new Error(label + " is outside the facility.");
+      }
+
+      function validateStateShape(state, frameIndex) {
+        const label = "Frame " + frameIndex + " state";
+        requireRecord(state, label);
+        if (state.schema !== STATE_SCHEMA) throw new Error(label + " schema is invalid.");
+        requireString(state.seed, label + ".seed", 1, 80);
+        requireInteger(state.tick, label + ".tick", 0, MAX_TICKS);
+        requireString(state.branchId, label + ".branchId", 4, 32);
+        if (!/^B\d+-[A-F0-9]{7}$/.test(state.branchId)) throw new Error(label + ".branchId has an invalid format.");
+        requireInteger(state.alarm, label + ".alarm", 0, 100);
+        if (!["active", "won", "lost"].includes(state.outcome)) throw new Error(label + ".outcome is invalid.");
+        requireString(state.outcomeReason, label + ".outcomeReason", 0, 240);
+        requireInteger(state.requiredTerminals, label + ".requiredTerminals", 1, 4);
+        if (state.requiredTerminals !== REQUIRED_TERMINALS) throw new Error(label + ".requiredTerminals is incompatible.");
+        requireInteger(state.maxTicks, label + ".maxTicks", MAX_TICKS, MAX_TICKS);
+        requireInteger(state.directiveSerial, label + ".directiveSerial", 0, 1000000);
+
+        requireRecord(state.stats, label + ".stats");
+        requireInteger(state.stats.detections, label + ".stats.detections", 0, 1000000);
+        requireInteger(state.stats.hacks, label + ".stats.hacks", 0, 4);
+        requireInteger(state.stats.forks, label + ".stats.forks", 0, 1000000);
+        requireArray(state.lastEvents, label + ".lastEvents", 0, 32);
+        state.lastEvents.forEach((event, index) => requireString(event, label + ".lastEvents[" + index + "]", 1, 600));
+
+        requireRecord(state.facility, label + ".facility");
+        requireInteger(state.facility.width, label + ".facility.width", GRID_W, GRID_W);
+        requireInteger(state.facility.height, label + ".facility.height", GRID_H, GRID_H);
+        requireArray(state.facility.tiles, label + ".facility.tiles", GRID_H, GRID_H);
+        state.facility.tiles.forEach((row, y) => {
+          requireArray(row, label + ".facility.tiles[" + y + "]", GRID_W, GRID_W);
+          row.forEach((tile, x) => {
+            if (tile !== "F" && tile !== "W") throw new Error(label + ".facility.tiles[" + y + "][" + x + "] is invalid.");
+          });
+        });
+        const facility = state.facility;
+        const agentIds = new Set(AGENT_ORDER);
+
+        requireArray(state.agents, label + ".agents", 4, 4);
+        const observedAgentIds = state.agents.map((agent, index) => {
+          requireRecord(agent, label + ".agents[" + index + "]");
+          requireString(agent.id, label + ".agents[" + index + "].id", 1, 20);
+          if (!agentIds.has(agent.id)) throw new Error(label + " contains unknown agent " + agent.id + ".");
+          if (agent.role !== agent.id || !ROLE[agent.role]) throw new Error(label + " agent " + agent.id + " has an invalid role.");
+          requirePosition(agent, label + ".agents[" + index + "]", facility);
+          if (!["active", "captured"].includes(agent.status)) throw new Error(label + " agent " + agent.id + " has an invalid status.");
+          requireInteger(agent.abilityCooldown, label + " agent " + agent.id + " cooldown", 0, 100);
+          requireBoolean(agent.carryingCore, label + " agent " + agent.id + " carryingCore");
+          requireString(agent.lastIntent, label + " agent " + agent.id + " lastIntent", 1, 180);
+          if (agent.directive !== null) {
+            requirePosition(agent.directive, label + " agent " + agent.id + " directive", facility);
+            requireInteger(agent.directive.serial, label + " agent " + agent.id + " directive serial", 1, state.directiveSerial);
+          }
+          requireArray(agent.seen, label + " agent " + agent.id + " seen", 0, GRID_W * GRID_H);
+          requireUniqueStrings(agent.seen, label + " agent " + agent.id + " seen");
+          agent.seen.forEach((cell, cellIndex) => parseKnownCell(cell, label + " agent " + agent.id + " seen[" + cellIndex + "]"));
+          for (let cellIndex = 1; cellIndex < agent.seen.length; cellIndex += 1) {
+            if (agent.seen[cellIndex - 1] >= agent.seen[cellIndex]) throw new Error(label + " agent " + agent.id + " seen cells are not sorted.");
+          }
+          return agent.id;
+        });
+        requireUniqueStrings(observedAgentIds, label + ".agent ids", agentIds);
+        if (observedAgentIds.slice().sort().join(",") !== AGENT_ORDER.slice().sort().join(",")) throw new Error(label + " crew is incomplete.");
+
+        requireArray(state.doors, label + ".doors", 7, 7);
+        const doorIds = [];
+        state.doors.forEach((door, index) => {
+          requireRecord(door, label + ".doors[" + index + "]");
+          requireString(door.id, label + ".doors[" + index + "].id", 1, 80);
+          doorIds.push(door.id);
+          requirePosition(door, label + ".doors[" + index + "]", facility);
+          if (!["standard", "security", "vault"].includes(door.kind)) throw new Error(label + " door " + door.id + " has an invalid kind.");
+          requireBoolean(door.open, label + " door " + door.id + " open");
+          requireBoolean(door.locked, label + " door " + door.id + " locked");
+          if (door.open && door.locked) throw new Error(label + " door " + door.id + " cannot be both open and locked.");
+        });
+        requireUniqueStrings(doorIds, label + ".door ids");
+
+        requireArray(state.terminals, label + ".terminals", 4, 4);
+        const terminalIds = [];
+        state.terminals.forEach((terminal, index) => {
+          requireRecord(terminal, label + ".terminals[" + index + "]");
+          requireString(terminal.id, label + ".terminals[" + index + "].id", 1, 80);
+          terminalIds.push(terminal.id);
+          requirePosition(terminal, label + ".terminals[" + index + "]", facility);
+          requireInteger(terminal.required, label + " terminal " + terminal.id + " required", 1, 10);
+          requireInteger(terminal.progress, label + " terminal " + terminal.id + " progress", 0, terminal.required);
+          requireBoolean(terminal.hacked, label + " terminal " + terminal.id + " hacked");
+          if (terminal.hacked !== (terminal.progress >= terminal.required)) throw new Error(label + " terminal " + terminal.id + " progress disagrees with hacked state.");
+        });
+        requireUniqueStrings(terminalIds, label + ".terminal ids");
+
+        requireRecord(state.core, label + ".core");
+        requirePosition(state.core, label + ".core", facility);
+        requireInteger(state.core.required, label + ".core.required", 1, 10);
+        requireInteger(state.core.progress, label + ".core.progress", 0, state.core.required);
+        requireBoolean(state.core.acquired, label + ".core.acquired");
+        if (state.core.carrier !== null && !agentIds.has(state.core.carrier)) throw new Error(label + ".core.carrier is invalid.");
+        const carriers = state.agents.filter((agent) => agent.carryingCore);
+        if (state.core.acquired) {
+          if (state.core.progress !== state.core.required || carriers.length !== 1 || carriers[0].id !== state.core.carrier) {
+            throw new Error(label + " acquired core state is inconsistent.");
+          }
+        } else if (state.core.carrier !== null || carriers.length || state.core.progress >= state.core.required) {
+          throw new Error(label + " unacquired core state is inconsistent.");
+        }
+
+        requireArray(state.cameras, label + ".cameras", 4, 4);
+        const cameraIds = [];
+        state.cameras.forEach((camera, index) => {
+          requireRecord(camera, label + ".cameras[" + index + "]");
+          requireString(camera.id, label + ".cameras[" + index + "].id", 1, 80);
+          cameraIds.push(camera.id);
+          requirePosition(camera, label + ".cameras[" + index + "]", facility);
+          requireInteger(camera.dir, label + " camera " + camera.id + " dir", 0, 3);
+          requireBoolean(camera.active, label + " camera " + camera.id + " active");
+        });
+        requireUniqueStrings(cameraIds, label + ".camera ids");
+
+        requireArray(state.guards, label + ".guards", 3, 3);
+        const guardIds = [];
+        state.guards.forEach((guard, index) => {
+          requireRecord(guard, label + ".guards[" + index + "]");
+          requireString(guard.id, label + ".guards[" + index + "].id", 1, 80);
+          guardIds.push(guard.id);
+          requirePosition(guard, label + ".guards[" + index + "]", facility);
+          requireInteger(guard.dir, label + " guard " + guard.id + " dir", 0, 3);
+          requireArray(guard.patrol, label + " guard " + guard.id + " patrol", 2, 16);
+          guard.patrol.forEach((point, pointIndex) => {
+            requireArray(point, label + " guard " + guard.id + " patrol[" + pointIndex + "]", 2, 2);
+            requirePosition({ x: point[0], y: point[1] }, label + " guard " + guard.id + " patrol[" + pointIndex + "]", facility);
+          });
+          requireInteger(guard.patrolIndex, label + " guard " + guard.id + " patrolIndex", 0, guard.patrol.length - 1);
+          requireInteger(guard.stunned, label + " guard " + guard.id + " stunned", 0, 20);
+          requireInteger(guard.alert, label + " guard " + guard.id + " alert", 0, 20);
+          if (guard.target !== null) requirePosition(guard.target, label + " guard " + guard.id + " target", facility);
+          requireBoolean(guard.active, label + " guard " + guard.id + " active");
+        });
+        requireUniqueStrings(guardIds, label + ".guard ids");
+
+        requireArray(state.hazards, label + ".hazards", 6, 6);
+        const hazardIds = [];
+        state.hazards.forEach((hazard, index) => {
+          requireRecord(hazard, label + ".hazards[" + index + "]");
+          requireString(hazard.id, label + ".hazards[" + index + "].id", 1, 80);
+          hazardIds.push(hazard.id);
+          requirePosition(hazard, label + ".hazards[" + index + "]", facility);
+          requireBoolean(hazard.active, label + " hazard " + hazard.id + " active");
+          requireArray(hazard.discoveredBy, label + " hazard " + hazard.id + " discoveredBy", 0, 4);
+          requireUniqueStrings(hazard.discoveredBy, label + " hazard " + hazard.id + " discoveredBy", agentIds);
+        });
+        requireUniqueStrings(hazardIds, label + ".hazard ids");
+
+        requireArray(state.lures, label + ".lures", 0, 4);
+        state.lures.forEach((lure, index) => {
+          requireRecord(lure, label + ".lures[" + index + "]");
+          requirePosition(lure, label + ".lures[" + index + "]", facility);
+          requireInteger(lure.ttl, label + ".lures[" + index + "].ttl", 1, 20);
+          if (!agentIds.has(lure.owner)) throw new Error(label + ".lures[" + index + "].owner is invalid.");
+        });
+
+        requireRecord(state.extraction, label + ".extraction");
+        requirePosition(state.extraction, label + ".extraction", facility);
+        requireInteger(state.extraction.radius, label + ".extraction.radius", 0, 4);
+        requireArray(state.decoyPosts, label + ".decoyPosts", 1, 8);
+        state.decoyPosts.forEach((post, index) => requirePosition(post, label + ".decoyPosts[" + index + "]", facility));
+
+        if (state.outcome === "won" && (!state.core.acquired || !state.agents.every((agent) => agent.status === "active" && isAtExtraction(state, agent)))) {
+          throw new Error(label + " claims a win without complete extraction.");
+        }
+        if (state.outcome === "lost" && !state.outcomeReason) throw new Error(label + " lost outcome requires a reason.");
+      }
+
       function verifyFrames(candidateFrames) {
-        if (!Array.isArray(candidateFrames) || candidateFrames.length < 1 || candidateFrames.length > 5000) {
-          return { valid: false, reason: "Frame collection must contain between 1 and 5000 frames." };
+        try {
+          requireArray(candidateFrames, "Frame collection", 1, 5000);
+          let previousHash = null;
+          let previousFrame = null;
+          let seed = null;
+          for (let index = 0; index < candidateFrames.length; index += 1) {
+            const frame = candidateFrames[index];
+            requireRecord(frame, "Frame " + index);
+            if (frame.schema !== FRAME_SCHEMA) throw new Error("Frame " + index + " schema is invalid.");
+            if (!["genesis", "tick", "directive", "fork"].includes(frame.kind)) throw new Error("Frame " + index + " kind is invalid.");
+            requireInteger(frame.tick, "Frame " + index + " tick", 0, MAX_TICKS);
+            requireString(frame.branchId, "Frame " + index + " branchId", 4, 32);
+            requireString(frame.parentHash, "Frame " + index + " parentHash", 64, 64);
+            requireString(frame.hash, "Frame " + index + " hash", 64, 64);
+            if (!/^[a-f0-9]{64}$/.test(frame.parentHash) || !/^[a-f0-9]{64}$/.test(frame.hash)) {
+              throw new Error("Frame " + index + " contains a malformed hash.");
+            }
+            requireArray(frame.events, "Frame " + index + " events", 0, 32);
+            frame.events.forEach((event, eventIndex) => requireString(event, "Frame " + index + " event " + eventIndex, 1, 600));
+            validateStateShape(frame.state, index);
+
+            if (index === 0) {
+              if (frame.kind !== "genesis" || frame.tick !== 0) throw new Error("Frame 0 must be the tick-zero genesis frame.");
+              seed = frame.state.seed;
+              const genesisParent = sha256("DOGG_HEIST_GENESIS|" + seed);
+              if (frame.parentHash !== genesisParent) throw new Error("Genesis parent hash is invalid.");
+            } else {
+              if (frame.parentHash !== previousHash) throw new Error("Frame " + index + " does not point to its actual parent.");
+              const expectedTick = frame.kind === "tick" ? previousFrame.tick + 1 : previousFrame.tick;
+              if (frame.tick !== expectedTick) throw new Error("Frame " + index + " tick does not match its frame kind.");
+              if (frame.kind === "fork" && frame.branchId === previousFrame.branchId) throw new Error("Frame " + index + " fork did not mint a new branch.");
+              if (frame.kind !== "fork" && frame.branchId !== previousFrame.branchId) throw new Error("Frame " + index + " changed branch without a fork.");
+            }
+            if (frame.state.seed !== seed || frame.branchId !== frame.state.branchId || frame.tick !== frame.state.tick) {
+              throw new Error("Frame " + index + " metadata disagrees with its state.");
+            }
+            if (stableStringify(frame.events) !== stableStringify(frame.state.lastEvents)) {
+              throw new Error("Frame " + index + " events disagree with the sealed state.");
+            }
+            const expectedHash = sha256(stableStringify(frameMaterial(frame)));
+            if (expectedHash !== frame.hash) throw new Error("Frame " + index + " hash verification failed.");
+            previousHash = frame.hash;
+            previousFrame = frame;
+          }
+          return { valid: true, reason: "Chain verified.", seed };
+        } catch (error) {
+          return { valid: false, reason: error.message };
         }
-        let previousHash = null;
-        let previousTick = -1;
-        let seed = null;
-        for (let index = 0; index < candidateFrames.length; index += 1) {
-          const frame = candidateFrames[index];
-          if (!frame || frame.schema !== FRAME_SCHEMA || typeof frame.hash !== "string" || frame.hash.length !== 64) {
-            return { valid: false, reason: "Frame " + index + " has an invalid schema or hash." };
-          }
-          if (!frame.state || frame.state.schema !== STATE_SCHEMA || !Number.isInteger(frame.tick) || frame.tick < previousTick) {
-            return { valid: false, reason: "Frame " + index + " has an invalid state or tick." };
-          }
-          if (index === 0) {
-            seed = frame.state.seed;
-            const genesisParent = sha256("DOGG_HEIST_GENESIS|" + seed);
-            if (frame.parentHash !== genesisParent) return { valid: false, reason: "Genesis parent hash is invalid." };
-          } else if (frame.parentHash !== previousHash) {
-            return { valid: false, reason: "Frame " + index + " does not point to its actual parent." };
-          }
-          if (frame.state.seed !== seed || frame.branchId !== frame.state.branchId || frame.tick !== frame.state.tick) {
-            return { valid: false, reason: "Frame " + index + " metadata disagrees with its state." };
-          }
-          if (!Array.isArray(frame.state.agents) || frame.state.agents.length !== 4 || frame.state.facility?.width !== GRID_W || frame.state.facility?.height !== GRID_H) {
-            return { valid: false, reason: "Frame " + index + " is not a complete DOGG facility state." };
-          }
-          const agentIds = frame.state.agents.map((agent) => agent.id).sort().join(",");
-          if (agentIds !== "atlas,cipher,ghost,spark") return { valid: false, reason: "Frame " + index + " has an invalid crew." };
-          if (frame.state.agents.some((agent) => !inBounds(agent.x, agent.y))) return { valid: false, reason: "Frame " + index + " contains an out-of-bounds agent." };
-          const expectedHash = sha256(stableStringify(frameMaterial(frame)));
-          if (expectedHash !== frame.hash) return { valid: false, reason: "Frame " + index + " hash verification failed." };
-          previousHash = frame.hash;
-          previousTick = frame.tick;
-        }
-        return { valid: true, reason: "Chain verified.", seed };
       }
 
       function verifyChain(showResult = false) {
@@ -3498,26 +3945,65 @@
         return result.valid;
       }
 
+      function utf8ByteLengthCapped(text, cap) {
+        let bytes = 0;
+        for (let index = 0; index < text.length; index += 1) {
+          const code = text.charCodeAt(index);
+          if (code <= 0x7f) bytes += 1;
+          else if (code <= 0x7ff) bytes += 2;
+          else if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length && text.charCodeAt(index + 1) >= 0xdc00 && text.charCodeAt(index + 1) <= 0xdfff) {
+            bytes += 4;
+            index += 1;
+          } else bytes += 3;
+          if (bytes > cap) return bytes;
+        }
+        return bytes;
+      }
+
+      function importText(json) {
+        let text;
+        if (typeof json === "string") {
+          text = json;
+        } else {
+          try {
+            text = JSON.stringify(json);
+          } catch (error) {
+            throw new Error("Import value could not be serialized: " + error.message);
+          }
+        }
+        if (typeof text !== "string") throw new Error("Import must be a JSON string or serializable object.");
+        if (utf8ByteLengthCapped(text, MAX_IMPORT_BYTES) > MAX_IMPORT_BYTES) {
+          throw new Error("Import exceeds the 4 MiB safety limit.");
+        }
+        return text;
+      }
+
       function validateImport(json) {
+        const text = importText(json);
         let payload;
         try {
-          payload = typeof json === "string" ? JSON.parse(json) : clone(json);
+          payload = JSON.parse(text);
         } catch (error) {
           throw new Error("JSON could not be parsed: " + error.message);
         }
-        if (!payload || payload.format !== FORMAT || payload.version !== APP_VERSION || !payload.data) {
+        requireRecord(payload, "Import");
+        if (payload.format !== FORMAT || payload.version !== APP_VERSION || !payload.data) {
           throw new Error("File is not a Tick/Tock DOGG Heist export.");
         }
+        requireString(payload.checksum, "Import checksum", 64, 64);
+        if (!/^[a-f0-9]{64}$/.test(payload.checksum)) throw new Error("Import checksum is malformed.");
         if (sha256(stableStringify(payload.data)) !== payload.checksum) {
           throw new Error("Export checksum does not match. The file is corrupt or modified.");
         }
         const data = payload.data;
-        if (typeof data.seed !== "string" || !ROLE[data.selectedAgentId] || !Number.isInteger(data.viewIndex) || !Number.isInteger(data.branchCounter)) {
-          throw new Error("Export metadata is malformed.");
-        }
-        if (!Number.isFinite(data.speedMs) || data.speedMs < MIN_SPEED || data.speedMs > MAX_SPEED || typeof data.running !== "boolean") {
-          throw new Error("Export clock state is malformed.");
-        }
+        requireRecord(data, "Export data");
+        requireString(data.seed, "Export seed", 1, 80);
+        if (!ROLE[data.selectedAgentId]) throw new Error("Export selected agent is invalid.");
+        requireInteger(data.viewIndex, "Export timeline cursor", 0, 4999);
+        requireInteger(data.branchCounter, "Export branch counter", 0, 1000000);
+        requireInteger(data.newSeedCounter, "Export new-seed counter", 0, 1000000);
+        requireInteger(data.speedMs, "Export clock speed", MIN_SPEED, MAX_SPEED);
+        requireBoolean(data.running, "Export running state");
         const verification = verifyFrames(data.frames);
         if (!verification.valid) throw new Error(verification.reason);
         if (verification.seed !== data.seed) throw new Error("Export seed disagrees with the frame chain.");
@@ -3525,38 +4011,135 @@
         return data;
       }
 
-      function applyImportedData(data, options = {}) {
+      function prepareImportedRuntime(data, options = {}) {
+        const importedFrames = data.frames.map((frame) => deepFreeze(clone(frame)));
+        const importedLiveState = clone(importedFrames[importedFrames.length - 1].state);
+        const importedSelected = importedFrames[data.viewIndex].state.agents.find((agent) => agent.id === data.selectedAgentId);
+        if (!importedSelected) throw new Error("Selected agent is absent from the inspected frame.");
+        return {
+          frames: importedFrames,
+          liveState: importedLiveState,
+          viewIndex: data.viewIndex,
+          selectedAgentId: data.selectedAgentId,
+          branchCounter: data.branchCounter,
+          newSeedCounter: data.newSeedCounter,
+          speedMs: data.speedMs,
+          running: options.forcePaused ? false : data.running,
+          keyboardCursor: { x: importedSelected.x, y: importedSelected.y }
+        };
+      }
+
+      function installImportedRuntime(prepared, options = {}) {
         stopTimer();
-        frames = data.frames.map((frame) => deepFreeze(clone(frame)));
-        liveState = clone(frames[frames.length - 1].state);
-        viewIndex = data.viewIndex;
-        selectedAgentId = data.selectedAgentId;
-        branchCounter = data.branchCounter;
-        newSeedCounter = Number.isInteger(data.newSeedCounter) ? data.newSeedCounter : 0;
-        speedMs = Math.round(data.speedMs);
+        frames = prepared.frames;
+        liveState = prepared.liveState;
+        viewIndex = prepared.viewIndex;
+        selectedAgentId = prepared.selectedAgentId;
+        branchCounter = prepared.branchCounter;
+        newSeedCounter = prepared.newSeedCounter;
+        speedMs = prepared.speedMs;
+        running = prepared.running;
+        keyboardCursor = prepared.keyboardCursor;
+        nextDangerCache = new WeakMap();
         elements.speed.value = String(speedMs);
-        running = options.forcePaused ? false : data.running;
-        const selected = currentFrame().state.agents.find((agent) => agent.id === selectedAgentId);
-        keyboardCursor = { x: selected.x, y: selected.y };
         renderAll();
-        if (running && !isViewingHistory() && liveState.outcome === "active") startTimer();
+        if (!options.deferTimer && running && !isViewingHistory() && liveState.outcome === "active") startTimer();
         if (!options.skipPersist) persistState();
       }
 
+      function applyImportedData(data, options = {}) {
+        const prepared = prepareImportedRuntime(data, options);
+        installImportedRuntime(prepared, options);
+      }
+
+      function captureRuntimeSnapshot() {
+        return {
+          frames,
+          liveState,
+          viewIndex,
+          selectedAgentId,
+          branchCounter,
+          newSeedCounter,
+          speedMs,
+          running,
+          keyboardCursor: { ...keyboardCursor },
+          ready,
+          userCommanded,
+          resumeAfterIntro,
+          introHidden: elements.intro.hidden,
+          introTimerActive: introTimer !== null,
+          appInert: elements.appShell.inert,
+          appAriaHidden: elements.appShell.getAttribute("aria-hidden"),
+          bodyIntroOpen: document.body.classList.contains("intro-open")
+        };
+      }
+
+      function restoreRuntimeSnapshot(snapshot) {
+        stopTimer();
+        frames = snapshot.frames;
+        liveState = snapshot.liveState;
+        viewIndex = snapshot.viewIndex;
+        selectedAgentId = snapshot.selectedAgentId;
+        branchCounter = snapshot.branchCounter;
+        newSeedCounter = snapshot.newSeedCounter;
+        speedMs = snapshot.speedMs;
+        running = snapshot.running;
+        keyboardCursor = snapshot.keyboardCursor;
+        ready = snapshot.ready;
+        api.ready = snapshot.ready;
+        userCommanded = snapshot.userCommanded;
+        resumeAfterIntro = snapshot.resumeAfterIntro;
+        elements.speed.value = String(speedMs);
+        elements.intro.hidden = snapshot.introHidden;
+        elements.appShell.inert = snapshot.appInert;
+        if (snapshot.appAriaHidden === null) elements.appShell.removeAttribute("aria-hidden");
+        else elements.appShell.setAttribute("aria-hidden", snapshot.appAriaHidden);
+        document.body.classList.toggle("intro-open", snapshot.bodyIntroOpen);
+        nextDangerCache = new WeakMap();
+        renderAll();
+        if (running && !isViewingHistory() && liveState.outcome === "active") startTimer();
+        if (snapshot.introTimerActive && !snapshot.introHidden && introTimer === null) {
+          introTimer = window.setTimeout(() => {
+            introTimer = null;
+            if (!userCommanded) dismissIntro(resumeAfterIntro);
+          }, 2800);
+        }
+      }
+
       function importState(json, options = {}) {
-        userCommanded = true;
-        if (!options.keepIntro) dismissIntro(false);
+        let data;
         try {
-          const data = validateImport(json);
-          applyImportedData(data, options);
-          if (!options.silent) toast("Import verified. " + frames.length + " frames restored exactly.", "success");
-          return true;
+          data = validateImport(json);
         } catch (error) {
           console.error("DOGG import rejected:", error);
           if (!options.silent) toast("Import rejected: " + error.message, "error");
           else status("Saved operation rejected: " + error.message, "error");
           return false;
         }
+
+        const snapshot = captureRuntimeSnapshot();
+        try {
+          const prepared = prepareImportedRuntime(data, options);
+          userCommanded = true;
+          installImportedRuntime(prepared, { ...options, deferTimer: true, skipPersist: true });
+          if (!options.keepIntro && !elements.intro.hidden) dismissIntro(false);
+          if (running && !isViewingHistory() && liveState.outcome === "active") startTimer();
+          if (!options.skipPersist) persistState();
+        } catch (error) {
+          try {
+            restoreRuntimeSnapshot(snapshot);
+          } catch (restoreError) {
+            console.error("DOGG rollback failed:", restoreError);
+            status("Import failed and rollback could not render: " + restoreError.message, "error");
+          }
+          console.error("DOGG import transaction rolled back:", error);
+          if (!options.silent) toast("Import rejected: " + error.message + ". Previous line restored.", "error");
+          else status("Saved operation rejected: " + error.message + ". Previous line restored.", "error");
+          return false;
+        }
+
+        if (!options.silent) toast("Import verified. " + frames.length + " frames restored exactly.", "success");
+        return true;
       }
 
       function setSpeed(value) {
@@ -3596,12 +4179,13 @@
           };
         });
         return {
-          seed: live.seed,
-          tick: live.tick,
+          seed: displayed.seed,
+          tick: displayed.tick,
           viewTick: frame.tick,
+          liveTick: live.tick,
           running,
           viewingHistory: isViewingHistory(),
-          outcome: live.outcome,
+          outcome: displayed.outcome,
           frameCount: frames.length,
           currentFrame: {
             index: viewIndex,
@@ -3612,9 +4196,19 @@
             parentHash: frame.parentHash,
             isLive: !isViewingHistory()
           },
-          branchId: live.branchId,
+          branchId: displayed.branchId,
           headHash: headFrame().hash,
-          alarm: live.alarm,
+          liveHeadHash: headFrame().hash,
+          liveBranchId: live.branchId,
+          liveOutcome: live.outcome,
+          live: {
+            tick: live.tick,
+            branchId: live.branchId,
+            headHash: headFrame().hash,
+            outcome: live.outcome,
+            alarm: live.alarm
+          },
+          alarm: displayed.alarm,
           facilityWidth,
           facilityHeight,
           totalCellCount,
@@ -3624,7 +4218,7 @@
             totalCellCount
           },
           povs,
-          agents: live.agents.map((agent) => ({
+          agents: displayed.agents.map((agent) => ({
             id: agent.id,
             role: agent.role,
             x: agent.x,
@@ -3634,22 +4228,22 @@
             abilityCooldown: agent.abilityCooldown,
             carryingCore: agent.carryingCore,
             seenCount: agent.seen.length,
-            intent: computeAgentIntent(live, agent).label
+            intent: computeAgentIntent(displayed, agent).label
           })),
           objective: {
-            summary: objectiveSummary(live),
-            terminalsHacked: hackedTerminalCount(live),
-            terminalsRequired: live.requiredTerminals,
-            coreProgress: live.core.progress,
-            coreRequired: live.core.required,
-            coreAcquired: live.core.acquired,
-            extractedAgents: extractionCount(live),
-            totalAgents: live.agents.length
+            summary: objectiveSummary(displayed),
+            terminalsHacked: hackedTerminalCount(displayed),
+            terminalsRequired: displayed.requiredTerminals,
+            coreProgress: displayed.core.progress,
+            coreRequired: displayed.core.required,
+            coreAcquired: displayed.core.acquired,
+            extractedAgents: extractionCount(displayed),
+            totalAgents: displayed.agents.length
           },
-          core: clone(live.core),
+          core: clone(displayed.core),
           extraction: {
-            ...clone(live.extraction),
-            agentsPresent: live.agents.filter((agent) => isAtExtraction(live, agent)).map((agent) => agent.id)
+            ...clone(displayed.extraction),
+            agentsPresent: displayed.agents.filter((agent) => isAtExtraction(displayed, agent)).map((agent) => agent.id)
           },
           storageAvailable,
           ready
@@ -3753,9 +4347,47 @@
         const point = boardPoint(event);
         keyboardCursor = point;
         const state = currentFrame().state;
+        updateBoardAccessibility(state, computeNextDanger(state), true);
         const clickedAgent = agentAt(state, point.x, point.y);
         if (clickedAgent) selectAgent(clickedAgent.id);
         else queueDirective(selectedAgentId, point.x, point.y);
+      }
+
+      function handleBoardPointerDown(event) {
+        boardGesture = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          scrollLeft: elements.boardViewport.scrollLeft,
+          moved: false
+        };
+      }
+
+      function handleBoardPointerMove(event) {
+        if (!boardGesture || boardGesture.pointerId !== event.pointerId) return;
+        const distanceMoved = Math.hypot(event.clientX - boardGesture.x, event.clientY - boardGesture.y);
+        const scrollMoved = Math.abs(elements.boardViewport.scrollLeft - boardGesture.scrollLeft);
+        if (distanceMoved > 9 || scrollMoved > 4) boardGesture.moved = true;
+      }
+
+      function handleBoardPointerUp(event) {
+        if (!boardGesture || boardGesture.pointerId !== event.pointerId) {
+          handleBoardPointer(event);
+          return;
+        }
+        const distanceMoved = Math.hypot(event.clientX - boardGesture.x, event.clientY - boardGesture.y);
+        const scrollMoved = Math.abs(elements.boardViewport.scrollLeft - boardGesture.scrollLeft);
+        const wasPan = boardGesture.moved || distanceMoved > 9 || scrollMoved > 4;
+        boardGesture = null;
+        if (wasPan) {
+          status("Board panned. No directive was queued.");
+          return;
+        }
+        handleBoardPointer(event);
+      }
+
+      function cancelBoardGesture() {
+        boardGesture = null;
       }
 
       function handleBoardKey(event) {
@@ -3770,6 +4402,7 @@
           keyboardCursor.x = Math.max(0, Math.min(GRID_W - 1, keyboardCursor.x + moves[event.key].x));
           keyboardCursor.y = Math.max(0, Math.min(GRID_H - 1, keyboardCursor.y + moves[event.key].y));
           drawMainBoard(currentFrame().state);
+          updateBoardAccessibility(currentFrame().state, computeNextDanger(currentFrame().state), true);
         } else if (event.key === "Enter") {
           event.preventDefault();
           queueDirective(selectedAgentId, keyboardCursor.x, keyboardCursor.y);
@@ -3777,15 +4410,21 @@
       }
 
       function handleGlobalKey(event) {
+        if (!elements.intro.hidden) return;
         if (
           event.target instanceof HTMLInputElement ||
           event.target instanceof HTMLSelectElement ||
           event.target instanceof HTMLTextAreaElement ||
-          event.target instanceof HTMLButtonElement ||
-          event.target instanceof HTMLAnchorElement
+          event.target.isContentEditable
         ) return;
-        if (elements.helpDialog.open && event.key.toLowerCase() !== "h") return;
         const key = event.key.toLowerCase();
+        if (key === "h") {
+          event.preventDefault();
+          elements.helpDialog.open ? closeHelp() : openHelp();
+          return;
+        }
+        if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) return;
+        if (elements.helpDialog.open && event.key.toLowerCase() !== "h") return;
         if (event.code === "Space") {
           event.preventDefault();
           togglePlay();
@@ -3804,9 +4443,6 @@
         } else if (key === "l") {
           event.preventDefault();
           returnLive();
-        } else if (key === "h") {
-          event.preventDefault();
-          elements.helpDialog.open ? closeHelp() : openHelp();
         }
       }
 
@@ -3823,6 +4459,11 @@
         elements.importFile.addEventListener("change", () => {
           const file = elements.importFile.files?.[0];
           if (!file) return;
+          if (file.size > MAX_IMPORT_BYTES) {
+            elements.importFile.value = "";
+            toast("Import rejected before reading: files over 4 MiB are not accepted.", "error");
+            return;
+          }
           const reader = new FileReader();
           reader.addEventListener("load", () => importState(String(reader.result)));
           reader.addEventListener("error", () => toast("Import file could not be read: " + (reader.error?.message || "unknown file error"), "error"));
@@ -3831,8 +4472,12 @@
         });
         elements.help.addEventListener("click", openHelp);
         elements.helpClose.addEventListener("click", closeHelp);
-        elements.board.addEventListener("pointerup", handleBoardPointer);
+        elements.board.addEventListener("pointerdown", handleBoardPointerDown);
+        elements.board.addEventListener("pointermove", handleBoardPointerMove);
+        elements.board.addEventListener("pointerup", handleBoardPointerUp);
+        elements.board.addEventListener("pointercancel", cancelBoardGesture);
         elements.board.addEventListener("keydown", handleBoardKey);
+        elements.board.addEventListener("focus", () => updateBoardAccessibility(currentFrame().state, computeNextDanger(currentFrame().state), true));
         elements.agentList.addEventListener("click", (event) => {
           const button = event.target.closest(".agent-button");
           if (button) selectAgent(button.dataset.agentId);
@@ -3842,6 +4487,7 @@
           dismissIntro(true);
         });
         window.addEventListener("keydown", handleGlobalKey);
+        document.addEventListener("keydown", handleIntroKeydown, true);
         window.addEventListener("resize", renderAll);
 
         const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -3886,6 +4532,7 @@
           resumeAfterIntro = true;
         }
         wireEvents();
+        activateIntroModal();
         renderAll();
         status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
         introTimer = window.setTimeout(() => {
@@ -3901,7 +4548,7 @@
         ready = false;
         api.ready = false;
         console.error("DOGG Heist initialization failed:", error);
-        elements.intro.hidden = true;
+        releaseIntroModal();
         status("Initialization failed: " + error.message, "error");
         toast("DOGG Heist could not initialize: " + error.message, "error");
       }
