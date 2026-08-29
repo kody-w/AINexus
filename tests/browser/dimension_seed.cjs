@@ -19,7 +19,22 @@ await p.goto('https://kody-w.github.io/AINexus/frontier.html',{timeout:60000});
 // WAIT FOR THE MODULE, don't guess at it. A fixed 3s holds on a fast laptop and does not on a CI
 // runner, where this failed with "Cannot read properties of undefined (reading 'leave')" — the
 // page was simply still loading. A test that races the thing it is testing reports the race.
-await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames,{timeout:45000});
+try {
+  await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames,{timeout:45000});
+} catch (e) {
+  // Say WHY, rather than only that it timed out. This passes locally and times out on a CI
+  // runner, and a timeout with no state is a dead end for whoever reads the log next.
+  const d = await p.evaluate(()=>({
+    herd: typeof window.NexusHerd, frames: typeof window.NexusFrames,
+    dialogue: typeof window.NexusDialogue, auth: typeof window.NexusAuth,
+    brainstem: typeof window.NexusBrainstem, three: typeof window.THREE,
+    scripts: [...document.querySelectorAll('script[src]')].map(x=>x.getAttribute('src')),
+    readyState: document.readyState,
+  })).catch(()=>null);
+  console.log('the modules never arrived:', JSON.stringify(d));
+  console.log('page errors:', JSON.stringify(errs.slice(0,5)));
+  throw e;
+}
 const out=await p.evaluate(async()=>{
   const H=window.NexusHerd;
   const walk=[];
