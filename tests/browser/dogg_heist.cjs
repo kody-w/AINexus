@@ -1151,6 +1151,33 @@ async function finishHeistBoot(page, label, viewportCheck = false) {
 async function auditIntroGate(page) {
   const intro = await markIntro(page);
   requireMeasurement(intro.found, 'the cold briefing modal');
+  const forceTop = () => page.evaluate(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const originals = [root, body].filter(Boolean).map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    originals.forEach(({ element }) =>
+      element.style.setProperty('scroll-behavior', 'auto', 'important'));
+    window.scrollTo(0, 0);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    originals.forEach(({ element, value, priority }) => {
+      if (value) element.style.setProperty('scroll-behavior', value, priority);
+      else element.style.removeProperty('scroll-behavior');
+    });
+  });
+  await forceTop();
+  await poll(
+    () => page.evaluate(() => ({
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0
+    })),
+    position => position.window === 0 && position.document === 0,
+    1000,
+    20
+  );
   const before = await page.evaluate(async () => {
     const dialog = document.querySelector('[data-dogg-test-intro="true"]');
     const api = window.__doggHeist;
@@ -1172,6 +1199,18 @@ async function auditIntroGate(page) {
     if (!hadTabindex) dialog.setAttribute('tabindex', '-1');
     dialog.focus();
     const play = document.getElementById('play-toggle');
+    const rect = dialog.getBoundingClientRect();
+    const points = [
+      { x: 8, y: 8 },
+      { x: innerWidth - 8, y: 8 },
+      { x: 8, y: innerHeight - 8 },
+      { x: innerWidth - 8, y: innerHeight - 8 }
+    ];
+    const overlayPoint = points.find(point =>
+      point.x < rect.left || point.x > rect.right ||
+      point.y < rect.top || point.y > rect.bottom) ||
+      { x: Math.max(1, Math.min(innerWidth - 1, rect.left + 2)),
+        y: Math.max(1, Math.min(innerHeight - 1, rect.top + 2)) };
     return {
       ready: api?.ready,
       tick,
@@ -1184,6 +1223,7 @@ async function auditIntroGate(page) {
       ].join('|'),
       scrollY,
       scrollable: document.documentElement.scrollHeight > innerHeight + 10,
+      overlayPoint,
       hadTabindex,
       tabindex
     };
@@ -1209,8 +1249,27 @@ async function auditIntroGate(page) {
   await page.evaluate(() => document.querySelector('[data-dogg-test-intro="true"]')?.focus());
   await page.keyboard.press('.');
   await page.keyboard.press('Space');
-  await page.mouse.wheel(0, 700);
+  await forceTop();
+  const wheelBefore = await page.evaluate(() => ({
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0,
+    body: document.body.scrollTop || 0
+  }));
+  await page.mouse.move(before.overlayPoint.x, before.overlayPoint.y);
+  await page.mouse.wheel(0, 800);
   await sleep(350);
+  const wheelAfter = await page.evaluate(() => {
+    const dialog = document.querySelector('[data-dogg-test-intro="true"]');
+    const style = dialog && getComputedStyle(dialog);
+    const rect = dialog && dialog.getBoundingClientRect();
+    return {
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0,
+      body: document.body.scrollTop || 0,
+      modalVisible: Boolean(dialog && !dialog.hidden && style.display !== 'none' &&
+        style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0)
+    };
+  });
   const after = await page.evaluate(async beforeTabindex => {
     const dialog = document.querySelector('[data-dogg-test-intro="true"]');
     const api = window.__doggHeist;
@@ -1255,8 +1314,49 @@ async function auditIntroGate(page) {
     activationBlocked: before.tick === after.tick &&
       (before.frameCount === undefined || before.frameCount === after.frameCount) &&
       before.playing === after.playing && before.playControl === after.playControl,
-    scrollBlocked: before.scrollY === after.scrollY
+    scrollBlocked: wheelBefore.window === wheelAfter.window &&
+      wheelBefore.document === wheelAfter.document &&
+      wheelBefore.body === wheelAfter.body &&
+      wheelAfter.modalVisible,
+    wheelBefore,
+    wheelAfter
   };
+}
+
+async function focusHandoffState(page) {
+  await page.evaluate(() => new Promise(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  return page.evaluate(() => {
+    const element = document.activeElement;
+    if (!element) return { useful: false, id: '', label: 'none' };
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+      Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    const enabled = !element.disabled && element.getAttribute('aria-disabled') !== 'true';
+    const interactive = element.matches(
+      'button, input, select, textarea, a[href], [role="button"], [role="grid"], [role="gridcell"], [tabindex]:not([tabindex="-1"])'
+    );
+    const hiddenIntro = Boolean(element.closest(
+      '[data-dogg-test-intro], [id*="intro" i], [class*="intro" i], [id*="brief" i], [class*="brief" i]'
+    ));
+    const label = [
+      element.getAttribute('aria-label'),
+      element.getAttribute('title'),
+      element.textContent
+    ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    return {
+      useful: element !== document.body && element !== document.documentElement &&
+        visible && enabled && interactive && !hiddenIntro && label.length > 0,
+      id: element.id || '',
+      label: label.slice(0, 100),
+      visible,
+      enabled,
+      interactive,
+      hiddenIntro,
+      tag: element.tagName
+    };
+  });
 }
 
 async function installInspector(page) {
@@ -1499,7 +1599,7 @@ async function auditReachability(page, ids = REQUIRED_IDS) {
       for (const id of requested) {
         const element = document.getElementById(id);
         if (!element) {
-          output.push({ id, exists: false, visible: false, reachable: false });
+          output.push({ id, exists: false, visible: false, reachable: false, width: 0, height: 0 });
           continue;
         }
         element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
@@ -1521,6 +1621,8 @@ async function auditReachability(page, ids = REQUIRED_IDS) {
           exists: true,
           visible: visible(element),
           reachable,
+          width: rect.width,
+          height: rect.height,
           disabled: 'disabled' in element ? Boolean(element.disabled) : false
         });
       }
@@ -1903,6 +2005,27 @@ async function readPovSemanticLabels(page) {
   });
 }
 
+async function ensureSelectedAgent(page) {
+  const selection = await page.evaluate(() => {
+    const grid = document.getElementById('pov-grid');
+    if (!grid) return { selected: false, marked: false };
+    const selected = grid.querySelector(
+      '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
+    );
+    if (selected) return { selected: true, marked: false };
+    const candidate = grid.querySelector(
+      '[data-agent-id], [data-pov-agent], .agent-card, .pov-card, .pov-panel, button'
+    );
+    if (!candidate) return { selected: false, marked: false };
+    candidate.setAttribute('data-dogg-test-select-agent', 'true');
+    return { selected: false, marked: true };
+  });
+  if (selection.marked) await page.locator('[data-dogg-test-select-agent="true"]').click();
+  return page.evaluate(() => Boolean(document.getElementById('pov-grid')?.querySelector(
+    '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
+  )));
+}
+
 async function measureMobileTargeting(page) {
   return page.evaluate(async () => {
     const state = await Promise.resolve(window.__doggHeist.state());
@@ -2186,10 +2309,37 @@ async function measureContrast(page, mode, roles = []) {
       const identity = `${element.id} ${element.className}`;
       return { element, score: /active|status-live|live-status/i.test(identity) ? 20 : 1 };
     }).sort((a, b) => b.score - a.score);
+    const neutralStatusElement = document.getElementById('status-live');
+    const neutralStatus = neutralStatusElement && visible(neutralStatusElement) ?
+      measurement(neutralStatusElement) : null;
+    const povGrid = document.getElementById('pov-grid');
+    const selectedMarker = povGrid && povGrid.querySelector(
+      '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
+    );
+    const selectedAgent = selectedMarker &&
+      (selectedMarker.closest(
+        '[data-agent-id], [data-pov-agent], .agent-card, .pov-card, .pov-panel'
+      ) || selectedMarker);
+    const metadataCandidates = selectedAgent ? [...selectedAgent.querySelectorAll(
+      '[data-cooldown], [aria-label*="cooldown" i], [class*="cooldown" i], [id*="cooldown" i], [class*="meta" i], [data-meta], small'
+    )].filter(element => visible(element) &&
+      String(element.textContent || element.getAttribute('aria-label') || '').trim() &&
+      !/\brole\b/i.test(`${element.id} ${element.className}`))
+      .map(element => {
+        const identity = [
+          element.id, element.className, element.getAttribute('data-cooldown'),
+          element.getAttribute('aria-label')
+        ].filter(Boolean).join(' ');
+        const score = /cooldown/i.test(identity) ? 20 : /meta/i.test(identity) ? 10 : 1;
+        return { element, score };
+      }).sort((a, b) => b.score - a.score) : [];
     return {
       theme,
       roles: roleMeasurements.filter(Boolean),
-      status: statusCandidates.length ? measurement(statusCandidates[0].element) : null
+      status: statusCandidates.length ? measurement(statusCandidates[0].element) : null,
+      neutralStatus,
+      selectedMetadata: metadataCandidates.length ?
+        measurement(metadataCandidates[0].element) : null
     };
   }, { mode, roles });
 }
@@ -2341,6 +2491,7 @@ async function runSuite() {
   const introDismissal = await dismissIntro(page);
   await finishHeistBoot(page, 'primary cold boot');
   const readyAfterIntro = await page.evaluate(() => window.__doggHeist.ready === true);
+  const activeLineFocus = await focusHandoffState(page);
   const postIntroScrollable = await page.evaluate(() =>
     document.documentElement.scrollHeight > innerHeight + 10);
   result('intro modal traps focus and gates the hidden runtime',
@@ -2349,6 +2500,10 @@ async function runSuite() {
       (introGate.before.scrollable || postIntroScrollable) &&
       readyAfterIntro,
     `${introDismissal}; focus trapped ${introGate.focusTrapped}; tick held ${introGate.before.tick}; scroll ${introGate.before.scrollY}`);
+  result('intro overlay blocks a real wheel from scrolling the document',
+    introGate.scrollBlocked && introGate.wheelBefore.window === 0 &&
+      introGate.wheelBefore.document === 0 && introGate.wheelAfter.modalVisible,
+    `mouse at ${introGate.before.overlayPoint.x},${introGate.before.overlayPoint.y}; window ${introGate.wheelBefore.window}→${introGate.wheelAfter.window}, document ${introGate.wheelBefore.document}→${introGate.wheelAfter.document}`);
 
   const reach = await auditReachability(page);
   const coldContextDependent = new Set(['fork-button', 'step-button']);
@@ -2972,6 +3127,32 @@ async function runSuite() {
       mobileLayout.bodyWidth <= mobileLayout.innerWidth + 1 &&
       mobileBad.length === 0,
     `${mobileLayout.documentWidth}/${mobileLayout.innerWidth}px; ${mobileBad.length ? `blocked: ${mobileBad.map(item => item.id).join(', ')}` : `${mobileReach.length} reachable`}`);
+  const mobilePrimaryIds = new Set([
+    'play-toggle', 'step-button', 'restart-button', 'speed-select', 'timeline',
+    'fork-button', 'export-button', 'import-button', 'help-button'
+  ]);
+  const mobileTimelineHitHeight = await mobilePage.evaluate(() => {
+    const timeline = document.getElementById('timeline');
+    if (!timeline) return 0;
+    const candidates = [
+      timeline,
+      timeline.closest('label'),
+      ...document.querySelectorAll('label[for="timeline"]')
+    ].filter(Boolean);
+    return Math.max(...candidates.map(element => element.getBoundingClientRect().height));
+  });
+  const mobilePrimaryTargets = mobileReach.filter(item => mobilePrimaryIds.has(item.id))
+    .map(item => Object.assign({}, item, {
+      effectiveHeight: item.id === 'timeline' ?
+        Math.max(item.height, mobileTimelineHitHeight) : item.height
+    }));
+  const shortestMobileTarget = mobilePrimaryTargets.length ?
+    Math.min(...mobilePrimaryTargets.map(item => item.effectiveHeight)) : 0;
+  result('mobile primary controls expose 44px hit targets',
+    mobilePrimaryTargets.length === mobilePrimaryIds.size &&
+      mobilePrimaryTargets.every(item =>
+        item.exists && item.visible && item.reachable && item.effectiveHeight >= 44),
+    `minimum ${shortestMobileTarget.toFixed(1)}px; ${mobilePrimaryTargets.map(item => `${item.id}:${item.effectiveHeight.toFixed(1)}`).join(', ')}`);
 
   await api(mobilePage, 'pause');
   const mobileTarget = await measureMobileTargeting(mobilePage);
@@ -3050,10 +3231,15 @@ async function runSuite() {
     await waitForTick(contrastPage, contrastState.tick + 1, 3000);
     const readyContrast = await measureContrast(contrastPage, 'ready', roles);
     await api(contrastPage, 'pause');
+    const selectedForContrast = await ensureSelectedAgent(contrastPage);
+    const neutralContrast = await measureContrast(contrastPage, 'ready', roles);
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
       roles: readyContrast.roles,
       status: readyContrast.status,
+      neutralStatus: neutralContrast.neutralStatus,
+      selectedMetadata: neutralContrast.selectedMetadata,
+      selectedForContrast,
       theme: `${introContrast.theme}|${readyContrast.theme}`
     };
     await contrastContext.close();
@@ -3074,6 +3260,17 @@ async function runSuite() {
     }) &&
       contrastByTheme.light.theme !== contrastByTheme.dark.theme,
     `minimum ${contrastMinimum.toFixed(2)}:1; light ${contrastByTheme.light.theme}; dark ${contrastByTheme.dark.theme}`);
+  const darkSpecificContrast = contrastByTheme.dark;
+  result('dark neutral status and selected-agent metadata meet 4.5:1',
+    darkSpecificContrast.selectedForContrast &&
+      darkSpecificContrast.neutralStatus && darkSpecificContrast.selectedMetadata &&
+      darkSpecificContrast.neutralStatus.ratio >= 4.5 &&
+      darkSpecificContrast.selectedMetadata.ratio >= 4.5 &&
+      parseFloat(darkSpecificContrast.neutralStatus.fontSize) < 24 &&
+      parseFloat(darkSpecificContrast.selectedMetadata.fontSize) < 24 &&
+      darkSpecificContrast.neutralStatus.text.length > 0 &&
+      /\b(cooldown|ready|available|wait|tick|turn)\b|\d/i.test(darkSpecificContrast.selectedMetadata.text),
+    `status ${darkSpecificContrast.neutralStatus?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.neutralStatus?.text || 'none'}); metadata ${darkSpecificContrast.selectedMetadata?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.selectedMetadata?.text || 'none'})`);
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
@@ -3129,6 +3326,8 @@ async function runSuite() {
   requireMeasurement(isTerminalOutcome(outcomeOf(terminalSnapshot.state)),
     'a deterministic win/loss for history coherence');
   terminalSnapshot = await inspect(policyPage);
+  await sleep(100);
+  const terminalStorageState = await policyContext.storageState();
   const frameBundle = exportedFrames(terminalSnapshot.exported);
   const inspectedFrames = frameBundle.frames.map((frame, index) => {
     const state = frameState(frame);
@@ -3158,6 +3357,35 @@ async function runSuite() {
       liveMetadata && liveMetadata.head === terminalSnapshot.head,
     `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; t:${coherence.tickMatch} o:${coherence.outcomeMatch} a:${coherence.agentMatch} obj:${coherence.objectiveMatch} pov:${coherence.povMatch}; raw ${historicalFrame.projection.objective.hacked}/${historicalFrame.projection.objective.required} c${Number(historicalFrame.projection.objective.coreComplete)} x${historicalFrame.projection.objective.extractedAgents}/${historicalFrame.projection.objective.totalAgents}, public ${coherence.publicObjective.terminalsHacked}/${coherence.publicObjective.terminalsRequired} c${Number(coherence.publicObjective.coreAcquired)} x${coherence.publicObjective.extractedAgents}/${coherence.publicObjective.totalAgents}; live ${liveMetadata?.source || 'missing'}`);
   await policyContext.close();
+
+  const restoredContext = await browser.newContext({
+    viewport: { width: 1000, height: 720 },
+    storageState: terminalStorageState
+  });
+  await serve(restoredContext);
+  const restoredPage = await navigateHeist(restoredContext, 'restored terminal focus page');
+  const restoredIntro = await markIntro(restoredPage);
+  requireMeasurement(restoredIntro.found && restoredIntro.ready === false,
+    'the pre-ready intro over a restored terminal line');
+  let restoredVia = 'storage';
+  let restoredPlayDisabledBefore = await restoredPage.locator('#play-toggle').isDisabled();
+  if (!restoredPlayDisabledBefore) {
+    restoredVia = 'pre-ready import';
+    await tryApi(restoredPage, 'importState', terminalSnapshot.exportText);
+    await sleep(100);
+    restoredPlayDisabledBefore = await restoredPage.locator('#play-toggle').isDisabled();
+  }
+  await dismissIntro(restoredPage);
+  await finishHeistBoot(restoredPage, 'restored terminal focus page');
+  const restoredFocus = await focusHandoffState(restoredPage);
+  const restoredLine = await inspect(restoredPage, false);
+  const restoredPlayDisabledAfter = await restoredPage.locator('#play-toggle').isDisabled();
+  result('intro dismissal hands focus to a useful enabled control on active and terminal lines',
+    activeLineFocus.useful && restoredFocus.useful &&
+      restoredPlayDisabledBefore && restoredPlayDisabledAfter &&
+      isTerminalOutcome(topLevelOutcomeOf(restoredLine.state)),
+    `${restoredVia}; active ${activeLineFocus.tag}#${activeLineFocus.id} "${activeLineFocus.label}"; terminal ${restoredFocus.tag}#${restoredFocus.id} "${restoredFocus.label}"; play disabled ${restoredPlayDisabledBefore}/${restoredPlayDisabledAfter}`);
+  await restoredContext.close();
 
   const deniedContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
   await deniedContext.addInitScript(() => {
