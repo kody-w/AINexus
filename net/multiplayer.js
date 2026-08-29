@@ -30,6 +30,34 @@
     const REPO_OWNER = global.NEXUS_REPO_OWNER || 'kody-w';
     const REPO_NAME = global.NEXUS_REPO_NAME || 'AINexus';
 
+    // Parsed once, used by every Peer this page makes — a host on one broker and
+    // a guest on another are two networks that can never meet.
+    function brokerOptions() {
+        let raw = '';
+        try {
+            raw = new URLSearchParams(location.search).get('broker')
+               || (typeof window !== 'undefined' && window.NEXUS_BROKER)
+               || localStorage.getItem('nexus-broker') || '';
+        } catch (e) { raw = ''; }
+        raw = String(raw || '').trim();
+        if (!raw) return undefined;                       // the cloud, unchanged
+        try {
+            const u = new URL(raw.includes('://') ? raw : 'https://' + raw);
+            const opts = { host: u.hostname, secure: u.protocol === 'https:' };
+            if (u.port) opts.port = +u.port;
+            if (u.pathname && u.pathname !== '/') opts.path = u.pathname;
+            // a broker on localhost is almost always plain http
+            if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname) && !raw.includes('://')) {
+                opts.secure = false;
+            }
+            console.info('[nexus] signalling broker:', opts);
+            return opts;
+        } catch (e) {
+            console.warn('[nexus] unusable broker "' + raw + '" — using the default cloud');
+            return undefined;
+        }
+    }
+
     class MultiplayerManager {
         constructor(worldInstance) {
             this.world = worldInstance;
@@ -48,6 +76,19 @@
             this.initializePeer();
         }
 
+        // ── which signalling broker? ────────────────────────────────────────
+        // The default is PeerJS's free cloud, which is fine until it is not:
+        // on some networks the HTTPS endpoint answers 200 while the WEBSOCKET
+        // upgrade is refused (measured: 403 on upgrade, 200 on GET, and a
+        // minimal two-peer test failing with PeerJS 'network' in 2s). A room
+        // cannot form and nothing in the app is wrong.
+        //
+        // So the broker is configurable, and pointing at one you run is the
+        // answer for any room you actually depend on:
+        //     npx peerjs --port 9000 --key peerjs
+        //     ...then open the world with ?broker=localhost:9000
+        // Accepted as ?broker=host:port/path, or window.NEXUS_BROKER, or
+        // localStorage 'nexus-broker'. Empty/absent = the cloud, as before.
         initializePeer() {
             // Secure invite: #join=<hostId>.<token>. A URL fragment is never sent to a web
             // server by the browser — but that alone does not keep the secret off the network:
@@ -85,7 +126,7 @@
                 if (hostId) {
                     // Joining someone's world
                     this.roomId = hostId;
-                    this.peer = new Peer();
+                    this.peer = new Peer(undefined, brokerOptions());
 
                     this.peer.on('open', (id) => {
                         console.log('My peer ID:', id);
@@ -105,7 +146,7 @@
                     const rnd = new Uint8Array(16);
                     crypto.getRandomValues(rnd);
                     this.roomSecret = btoa(String.fromCharCode(...rnd)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                    this.peer = new Peer();
+                    this.peer = new Peer(undefined, brokerOptions());
 
                     this.peer.on('open', (id) => {
                         this.roomId = id;
