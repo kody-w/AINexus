@@ -92,6 +92,29 @@
     ticks: r.ticks, acts: r.acts, frames: r.chain.length, hands: !!r.drive,
     sleeping: !!r.sleeping, idle: r.idle || 0 }));
 
+  // ── one tick, one frame — including the ticks that went wrong ────────────
+  // The seal used to live INSIDE the try that wraps the turn, so a tick whose body threw
+  // incremented rec.ticks and sealed nothing: the counter moved, the chain did not, and the
+  // moment vanished. That is the same hole as a deleted quiet tick, only worse — the moments
+  // most worth having a record of are exactly the ones that went wrong. Both paths now come
+  // through here, so neither can drift away from the other the way vbrainstem's copy did.
+  //
+  // Throws on failure; the caller records that as sealFailed rather than losing the tick.
+  async function sealPulse(rec, F, payload) {
+    // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
+    // Sharing one body-stream put two biographies in one book with colliding seq numbers.
+    if (!rec.streamId) rec.streamId = await F.mintRappid('kody-w', 'nexus-player');
+    const f = await F.buildFrame({ kind: 'body.pulse', streamId: rec.streamId, seq: rec.seq++,
+                                   payload, prev: rec.prev });
+    rec.chain.push(f); rec.prev = f.payload_hash; remember(f, rec.id);
+    // DROPPING THE OLDEST FRAME BREAKS THE LINE. The window that was meant to bound memory
+    // was quietly destroying the genesis link and freezing seq at 500, so after a long
+    // session the exported chain no longer verified at all — a bounded log pretending to
+    // be a chain. seq is now its own counter, and a window says out loud that it is one.
+    if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
+    return f;
+  }
+
   // one player's turn on the shared brainstem — the collapse
   async function serve(id, opts) {
     const rec = players.get(String(id));
@@ -102,9 +125,9 @@
     if (!drive) throw new Error(rec.id + ' has no hands');
     rec.ticks++;
     const started = Date.now();
-    let entry;
+    let entry, s0 = null;
     try {
-      const s0 = (o.vision !== false && drive.sense) ? drive.sense({ width: 320, send: true }) : drive.snapshot();
+      s0 = (o.vision !== false && drive.sense) ? drive.sense({ width: 320, send: true }) : drive.snapshot();
       const r = await B.turn({
         percepts: { me: s0.me, world: s0.world, portals: s0.portals, players: s0.players,
                     room: s0.room, chat: (s0.chat || []).slice(-4),
@@ -121,36 +144,43 @@
                 calls: (r.calls || []).map(c => ({ tool: c.tool, failed: /failed|no such/.test(c.result) })) };
       if (F) {
         try {
-          // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
-          // Sharing one body-stream put two biographies in one book with colliding seq numbers.
-          if (!rec.streamId) rec.streamId = await root.NexusFrames.mintRappid('kody-w', 'nexus-player');
-          const f = await F.buildFrame({ kind: 'body.pulse', streamId: rec.streamId, seq: rec.seq++,
-            payload: { asserts: { tick: rec.ticks, player: rec.id, said: r.words || '',
-                                  called: entry.calls.map(c => c.tool + (c.failed ? ' ✗' : '')),
-                                  at: (s0 && s0.me) || {},
-                                  // the slot this turn held on the shared brainstem: two frames
-                                  // claiming one slot, anywhere in the herd, is a race made visible
-                                  slot: typeof r.slot === 'number' ? r.slot : -1 },
-                       // what had to be true for this tick: whose hands, and which agents were
-                       // actually answering in the runtime at the moment the call went out
-                       requires: { hands: rec.id,
-                                   resident: ((r.residency && r.residency.resident) || []).slice(0, 12),
-                                   missing: ((r.residency && r.residency.missing) || []).slice(0, 6) },
-                       // a capability that was invented a second ago must never look, to anyone
-                       // reading this line later, like one that has worked in six universes
-                       summoned: ((r.summoned) || []).map(x => x.got + ':' + x.via).slice(0, 4) },
-            prev: rec.prev });
-          rec.chain.push(f); rec.prev = f.payload_hash; remember(f, rec.id);
-          // DROPPING THE OLDEST FRAME BREAKS THE LINE. The window that was meant to bound memory
-          // was quietly destroying the genesis link and freezing seq at 500, so after a long
-          // session the exported chain no longer verified at all — a bounded log pretending to
-          // be a chain. seq is now its own counter, and a window says out loud that it is one.
-          if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
+          const f = await sealPulse(rec, F,
+            { asserts: { tick: rec.ticks, player: rec.id, said: r.words || '',
+                         called: entry.calls.map(c => c.tool + (c.failed ? ' ✗' : '')),
+                         at: (s0 && s0.me) || {},
+                         // the slot this turn held on the shared brainstem: two frames
+                         // claiming one slot, anywhere in the herd, is a race made visible
+                         slot: typeof r.slot === 'number' ? r.slot : -1 },
+              // what had to be true for this tick: whose hands, and which agents were
+              // actually answering in the runtime at the moment the call went out
+              requires: { hands: rec.id,
+                          resident: ((r.residency && r.residency.resident) || []).slice(0, 12),
+                          missing: ((r.residency && r.residency.missing) || []).slice(0, 6) },
+              // a capability that was invented a second ago must never look, to anyone
+              // reading this line later, like one that has worked in six universes
+              summoned: ((r.summoned) || []).map(x => x.got + ':' + x.via).slice(0, 4) });
           entry.frame = f.frame_hash;
         } catch (e) { entry.sealFailed = e.message; }
       }
     } catch (e) {
       entry = { player: rec.id, tick: rec.ticks, ms: Date.now() - started, error: e.message };
+      // THE TICK STILL HAPPENED. Same kind, same stream, same counter — the failure goes in the
+      // payload rather than deleting the moment from the line. Nothing here changes what serve
+      // returns or what it rethrows: sealing is in addition to the existing behaviour.
+      if (F) {
+        try {
+          const f = await sealPulse(rec, F,
+            { asserts: { tick: rec.ticks, player: rec.id, said: '', called: [],
+                         at: (s0 && s0.me) || {},
+                         slot: -1,                    // a tick that threw held no slot to claim
+                         // what went wrong, in the frame, where a reader of the line will find it
+                         error: String((e && e.message) || e).slice(0, 200) },
+              // resident/missing are unknown on this path and are therefore not claimed: a
+              // record that guesses is not a record. The one thing we know is whose hands.
+              requires: { hands: rec.id } });
+          entry.frame = f.frame_hash;
+        } catch (e2) { entry.sealFailed = e2.message; }
+      }
     }
     rec.journal.push(entry);
     if (rec.journal.length > 200) rec.journal.shift();
