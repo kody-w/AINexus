@@ -28,7 +28,8 @@ code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px
 <header>
   <h1>What RAPP is</h1>
   <p class="sub">You write one file. Your AI can do a new thing. That’s the whole idea, and
-  everything else on this page is in service of it.</p>
+  everything else on this page is in service of it.<br>
+  <span style="color:#7d7da0">RAPP — Rapid Agent Prototype Platform.</span></p>
 </header>
 
 <div class="word">
@@ -56,6 +57,20 @@ code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px
   <p class="eg"><b>So</b> the thing gets better while you sleep, because other people are using it.</p>
 </div>
 
+<div class="word">
+  <h2>The obvious worry</h2>
+  <p class="is">You are about to run a stranger’s file on your own machine. Ask about that.</p>
+  <p>It is the right question and it deserves a straight answer rather than a reassuring one.
+  An agent is one readable file — you can look at it, which is the first defence and the reason
+  the one-file rule exists at all. Beyond that: agents fetched from a registry are checked
+  against a published fingerprint and <em>refused</em> if the bytes do not match, rather than
+  repaired or run with a warning. But a file that matches its fingerprint is still a file that
+  does what it says, and what it says might be something you did not want. Read it, or run it
+  somewhere you do not mind losing.</p>
+  <p class="eg"><b>The honest version:</b> this is the same trust you extend to any package you
+  install, with one advantage — it is short enough to actually read.</p>
+</div>
+
 <div class="try">
   <h2>That’s it. That’s the part to teach</h2>
   <ol>
@@ -71,6 +86,16 @@ many agents, many devices, real or virtual, all agreeing about what happened. Th
 pipework. The format calls a stream of these “an organism’s biography”, and it means it: what
 follows is a skeleton, a pulse, a way of having offspring, and a way of being in the room from
 somewhere else.</p>
+
+<div class="word">
+  <h2>The join</h2>
+  <p class="is">Every time an agent’s <code>perform()</code> runs, that is one moment — and the
+  moment gets written down as a frame.</p>
+  <p>That is the whole bridge, and it is the sentence the rest of this page hangs from. Your
+  tide-checking file runs; a frame says it ran, what it saw, and what it depended on. Six of
+  those in a row is a life. Everything below is what becomes possible once moments are written
+  down instead of forgotten.</p>
+</div>
 
 <div class="word">
   <h2>Frame</h2>
@@ -93,30 +118,39 @@ somewhere else.</p>
 
 <div class="word">
   <h2>Wear</h2>
-  <p class="is">A key you can say out loud wears a frame down into a smaller world.</p>
-  <p>Give the same frame and the same key to two computers that have never met, and they build
-  exactly the same place. Nothing travelled between them except the words.</p>
-  <p class="eg"><b>Like</b> a seed — the actual kind. Small, dry, unimpressive, and a whole
-  living thing is folded up inside it. <code>the-night-the-power-went</code> fits in a text
-  message and grows the same world every time you plant it.</p>
+  <p class="is">A key you can say out loud wears a frame down into a smaller world — a
+  <b>tile</b>.</p>
+  <p>A <b>tile</b> is what’s left when the wearing is done: a small, complete, particular place,
+  carved out of a big general record. Give the same frame and the same key to two computers that
+  have never met and they carve exactly the same tile. Nothing travelled between them except the
+  words — which is what it’s <em>for</em>: sending somebody a whole situation in a text message
+  that arrives identical on their machine, with neither of you uploading anything.</p>
+  <p class="eg"><b>Like</b> Michelangelo and the block of marble. The David was already in
+  there; the work was taking away everything that wasn’t him. A frame is the block. The key is
+  which figure you’re carving toward. What’s left standing is the tile — and unlike marble, the
+  same block and the same key give the same statue to everyone, every time, forever.</p>
 </div>
 
 <div class="word">
   <h2>Slosh</h2>
   <p class="is">Pour one thing through another and it comes out changed.</p>
-  <p>Pour a world through “low gravity” and things drift. Pour a <em>creature</em> through that
-  world and the creature gets a longer reach. Same machinery, and which one is being poured is
-  your choice.</p>
+  <p>Pour a world through “low gravity” and things in it start to drift. Pour a <em>creature</em>
+  through that same world and the creature comes out with a longer reach. It is one operation,
+  and which of the two is being changed is your choice — that is what it is <em>for</em>:
+  building up a situation, or a character, one condition at a time instead of specifying it
+  all at once.</p>
   <p class="eg"><b>Like</b> eating. What passes through changes what it passes through, and
   which of the two is the food depends on the day.</p>
 </div>
 
 <div class="word">
   <h2>Braid</h2>
-  <p class="is">Do it several ways at once, then plait the results together.</p>
-  <p>Mixing two things once gets you mostly a blend. Mixing them six different ways and combining
-  the results gets you something neither one had — because a braid keeps what’s
-  <em>furthest</em> from where you started, instead of averaging it away.</p>
+  <p class="is">Try the same mix many different ways, then keep what came out <em>least</em>
+  like either parent.</p>
+  <p>Mixing two things once gets you a blend — mostly one, a bit of the other. So do it a dozen
+  ways at once and let each attempt go somewhere different. Then, wherever the attempts
+  disagree, keep the answer <em>furthest</em> from where you started. Averaging them would undo
+  the whole point.</p>
   <p class="eg"><b>Like</b> having children rather than making copies. Two parents, many
   attempts, and the one that walks away is nobody’s duplicate.</p>
 </div>
@@ -138,8 +172,10 @@ somewhere else.</p>
     <li>Explain <em>the first three</em> to somebody. Agent, brainstem, registry. That’s RAPP.</li>
     <li>Ask them to explain it back.</li>
     <li>Whatever they got wrong is what this page got wrong — not what they got wrong.</li>
-    <li>If they ask “but how does that work across devices?”, <em>then</em> the second six are
-        the answer. Not before.</li>
+    <li>Then teach <em>the join</em> — a <code>perform()</code> runs, a frame says it ran. One
+        sentence, and it is what makes the rest of this page one thing instead of two.</li>
+    <li>The other six are how that works once there is more than one machine. Not optional,
+        just later.</li>
   </ol>
 </div>
 
