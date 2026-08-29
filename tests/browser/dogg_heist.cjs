@@ -2005,25 +2005,13 @@ async function readPovSemanticLabels(page) {
   });
 }
 
-async function ensureSelectedAgent(page) {
-  const selection = await page.evaluate(() => {
-    const grid = document.getElementById('pov-grid');
-    if (!grid) return { selected: false, marked: false };
-    const selected = grid.querySelector(
-      '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
-    );
-    if (selected) return { selected: true, marked: false };
-    const candidate = grid.querySelector(
-      '[data-agent-id], [data-pov-agent], .agent-card, .pov-card, .pov-panel, button'
-    );
-    if (!candidate) return { selected: false, marked: false };
-    candidate.setAttribute('data-dogg-test-select-agent', 'true');
-    return { selected: false, marked: true };
+async function hasSelectedAgentControl(page) {
+  return page.evaluate(() => {
+    const list = document.getElementById('agent-list');
+    if (!list) return false;
+    return Boolean(list.querySelector('[aria-pressed="true"]') ||
+      list.querySelector('.agent-button.selected'));
   });
-  if (selection.marked) await page.locator('[data-dogg-test-select-agent="true"]').click();
-  return page.evaluate(() => Boolean(document.getElementById('pov-grid')?.querySelector(
-    '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
-  )));
 }
 
 async function measureMobileTargeting(page) {
@@ -2312,34 +2300,24 @@ async function measureContrast(page, mode, roles = []) {
     const neutralStatusElement = document.getElementById('status-live');
     const neutralStatus = neutralStatusElement && visible(neutralStatusElement) ?
       measurement(neutralStatusElement) : null;
-    const povGrid = document.getElementById('pov-grid');
-    const selectedMarker = povGrid && povGrid.querySelector(
-      '[aria-selected="true"], [data-selected="true"], .selected, .is-selected, .active, [data-active="true"]'
+    const agentList = document.getElementById('agent-list');
+    const selectedAgent = agentList && (
+      agentList.querySelector('[aria-pressed="true"]') ||
+      agentList.querySelector('.agent-button.selected')
     );
-    const selectedAgent = selectedMarker &&
-      (selectedMarker.closest(
-        '[data-agent-id], [data-pov-agent], .agent-card, .pov-card, .pov-panel'
-      ) || selectedMarker);
-    const metadataCandidates = selectedAgent ? [...selectedAgent.querySelectorAll(
-      '[data-cooldown], [aria-label*="cooldown" i], [class*="cooldown" i], [id*="cooldown" i], [class*="meta" i], [data-meta], small'
-    )].filter(element => visible(element) &&
-      String(element.textContent || element.getAttribute('aria-label') || '').trim() &&
-      !/\brole\b/i.test(`${element.id} ${element.className}`))
-      .map(element => {
-        const identity = [
-          element.id, element.className, element.getAttribute('data-cooldown'),
-          element.getAttribute('aria-label')
-        ].filter(Boolean).join(' ');
-        const score = /cooldown/i.test(identity) ? 20 : /meta/i.test(identity) ? 10 : 1;
-        return { element, score };
-      }).sort((a, b) => b.score - a.score) : [];
+    const selectedContainer = selectedAgent &&
+      (selectedAgent.closest('[data-agent-id], .agent-item, li') || selectedAgent);
+    const cooldown = selectedAgent && (
+      selectedAgent.querySelector('.agent-cooldown[data-agent-cooldown]') ||
+      selectedContainer.querySelector('.agent-cooldown[data-agent-cooldown]')
+    );
     return {
       theme,
       roles: roleMeasurements.filter(Boolean),
       status: statusCandidates.length ? measurement(statusCandidates[0].element) : null,
       neutralStatus,
-      selectedMetadata: metadataCandidates.length ?
-        measurement(metadataCandidates[0].element) : null
+      selectedControlFound: Boolean(selectedAgent && visible(selectedAgent)),
+      selectedMetadata: cooldown && visible(cooldown) ? measurement(cooldown) : null
     };
   }, { mode, roles });
 }
@@ -3231,13 +3209,14 @@ async function runSuite() {
     await waitForTick(contrastPage, contrastState.tick + 1, 3000);
     const readyContrast = await measureContrast(contrastPage, 'ready', roles);
     await api(contrastPage, 'pause');
-    const selectedForContrast = await ensureSelectedAgent(contrastPage);
+    const selectedForContrast = await hasSelectedAgentControl(contrastPage);
     const neutralContrast = await measureContrast(contrastPage, 'ready', roles);
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
       roles: readyContrast.roles,
       status: readyContrast.status,
       neutralStatus: neutralContrast.neutralStatus,
+      selectedControlFound: neutralContrast.selectedControlFound,
       selectedMetadata: neutralContrast.selectedMetadata,
       selectedForContrast,
       theme: `${introContrast.theme}|${readyContrast.theme}`
@@ -3263,6 +3242,7 @@ async function runSuite() {
   const darkSpecificContrast = contrastByTheme.dark;
   result('dark neutral status and selected-agent metadata meet 4.5:1',
     darkSpecificContrast.selectedForContrast &&
+      darkSpecificContrast.selectedControlFound &&
       darkSpecificContrast.neutralStatus && darkSpecificContrast.selectedMetadata &&
       darkSpecificContrast.neutralStatus.ratio >= 4.5 &&
       darkSpecificContrast.selectedMetadata.ratio >= 4.5 &&
