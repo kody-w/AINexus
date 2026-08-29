@@ -103,7 +103,15 @@ const frame = $('f'), cursor = $('cursor');
 let drive = null, hands = null, running = false, prev = null, lastAct = 0, lastHover = 0, rec = null;
 
 const params = new URLSearchParams(location.search);
-const world = params.get('world') || 'index.html';
+// A world is chosen from a list, never taken as a URL. This sink predates the
+// sign-in work, but that work put a GitHub token in localStorage on this origin,
+// which turns "frames an arbitrary URL" into "a link steals your token": a
+// javascript: URL in a frame inherits the embedder's origin. Same fix as views.html.
+const WORLDS = ['index.html', 'crystal-caverns.html', 'floating-gardens.html',
+                'neon-arcade-world.html', 'ancient-library-world.html',
+                'galaxy-zoo-world.html'];
+const wantWorld = params.get('world') || 'index.html';
+const world = WORLDS.includes(wantWorld) ? wantWorld : 'index.html';
 let joinFrag = location.hash && location.hash.includes('#join=') ? location.hash : '';
 if (!joinFrag) { try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
   if (r && Date.now() - r.at < 6 * 3600e3) joinFrag = '#join=' + r.id + '.' + r.secret; } catch (e) {} }

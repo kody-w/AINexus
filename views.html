@@ -36,9 +36,28 @@ const HOLD = +(params.get('hold') || 2400);      // how long each player holds t
 const FPS = +(params.get('fps') || 8);
 const BASE = MANIFEST.replace(/[^/]*$/, '');     // shots are named relative to their manifest
 const LIVE = +(params.get('live') || 0);         // ?live=4 — a running herd instead of a recording
-const WORLD = params.get('world') || 'index.html';
+// A world is CHOSEN FROM A LIST, never taken as a URL. ?world=javascript:… would
+// otherwise navigate a frame that inherits this origin, and this origin now holds
+// a GitHub token in localStorage under `rapp_settings`. A link would be enough to
+// steal it. The tower was never exposed because its worlds come from a <select>;
+// this page took a string, so it gets the same fixed list.
+const WORLDS = ['index.html', 'crystal-caverns.html', 'floating-gardens.html',
+                'neon-arcade-world.html', 'ancient-library-world.html',
+                'galaxy-zoo-world.html'];
+const wantWorld = params.get('world') || 'index.html';
+const WORLD = WORLDS.includes(wantWorld) ? wantWorld : null;
 const PROG = params.get('program') || 'minded';
 const BUDGET = +(params.get('turns') || 200);
+
+// Text is text. Anything that came from a URL or a downloaded file is written
+// with textContent, never concatenated into innerHTML.
+function blank(msg) {
+  const d = document.createElement('div');
+  d.className = 'blank';
+  d.textContent = msg;
+  $('stage').textContent = '';
+  $('stage').appendChild(d);
+}
 
 function layout(n) {
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
@@ -60,9 +79,10 @@ function layout(n) {
 // same ai/program_chain.js the control tower uses. A recording could not lie
 // about what a player saw; neither can this.
 async function runLive(n) {
+  if (!WORLD) { blank('unknown world — pick one of: ' + WORLDS.join(', ')); return; }
   let loaded;
   try { loaded = await window.ProgramChain.loadProgram(PROG); }
-  catch (e) { $('stage').innerHTML = '<div class="blank">refused: ' + e.message + '</div>'; return; }
+  catch (e) { blank('refused: ' + e.message); return; }
 
   layout(n);
   // The invite must be #join=<hostId>.<token> — net/multiplayer.js matches
@@ -74,8 +94,10 @@ async function runLive(n) {
   for (let i = 0; i < n; i++) {
     const persona = loaded.prog.name + '-' + (i + 1);
     const c = document.createElement('div'); c.className = 'cell';
-    c.innerHTML = '<span class="tag">' + persona + '</span>' +
-                  '<iframe title="' + persona + '"></iframe><div class="doing">opening…</div>';
+    const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = persona;
+    const fr = document.createElement('iframe'); fr.title = persona;
+    const dg = document.createElement('div'); dg.className = 'doing'; dg.textContent = 'opening…';
+    c.appendChild(tag); c.appendChild(fr); c.appendChild(dg);
     $('stage').appendChild(c);
     cells.push({ rec: { id: persona, label: persona }, el: c,
                  frame: c.querySelector('iframe'), doing: c.querySelector('.doing'), turns: 0 });
@@ -169,8 +191,12 @@ async function runLive(n) {
 (async () => {
   if (LIVE > 0) { await runLive(Math.min(LIVE, 9)); return; }
   let m;
-  try { m = await (await fetch(MANIFEST, { cache: 'no-cache' })).json(); }
-  catch (e) { $('stage').innerHTML = '<div class="blank">no recording at ' + MANIFEST + '</div>'; return; }
+  try {
+    const r = await fetch(MANIFEST, { cache: 'no-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    m = await r.json();
+  }
+  catch (e) { blank('no recording at ' + MANIFEST); return; }
   const players = m.players || [];
   const frames = m.frames || 0;
   layout(players.length);
@@ -178,8 +204,11 @@ async function runLive(n) {
 
   const cells = players.map(p => {
     const c = document.createElement('div'); c.className = 'cell';
-    c.innerHTML = `<span class="tag">${p.label || p.id}</span><img alt="${p.id}'s view">` +
-                  `<div class="doing"></div>`;
+    const tag = document.createElement('span'); tag.className = 'tag';
+    tag.textContent = p.label || p.id || '';
+    const im = document.createElement('img'); im.alt = (p.id || '') + "'s view";
+    const dg = document.createElement('div'); dg.className = 'doing';
+    c.appendChild(tag); c.appendChild(im); c.appendChild(dg);
     $('stage').appendChild(c);
     return { rec: p, el: c, img: c.querySelector('img'), doing: c.querySelector('.doing') };
   });

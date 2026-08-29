@@ -276,6 +276,43 @@ $('signin').onclick = async () => {
 };
 paintMind();
 
+// ── the whole run, described by the URL ─────────────────────────────────────
+// So it can be handed to someone as one link and simply watched:
+//   ?broker=localhost:9000&players=3&program=minded&turns=40&autostart=1
+// Every control still works by hand; these only preset them. autostart waits for
+// the DOM and the auth module, then presses Open the room for you.
+(function applyUrlSettings() {
+  const setVal = (id, key, min, max) => {
+    const v = params.get(key);
+    if (v === null) return;
+    const n = +v;
+    if (!isFinite(n)) return;
+    $(id).value = Math.max(min, Math.min(max, n));
+  };
+  setVal('n', 'players', 1, 6);
+  setVal('budget', 'turns', 1, 500);
+  setVal('tick', 'tick', 0, 60);
+  const prog = params.get('program');
+  if (prog && PROGRAMS.includes(prog)) $('prog').value = prog;
+  const world = params.get('world');
+  if (world) {
+    const opt = [...$('world').options].find(o => o.value === world || o.textContent.trim() === world);
+    if (opt) $('world').value = opt.value;
+  }
+  if (params.get('broker')) {
+    const b = document.createElement('span');
+    b.className = 'dim';
+    b.style.cssText = 'font:12px ui-monospace,monospace;color:#8a8aa8;margin-left:8px';
+    b.textContent = 'broker ' + params.get('broker');
+    $('mind').after(b);
+  }
+})();
+
+if (params.get('autostart') === '1' || params.get('autostart') === 'true') {
+  // give copilot_auth a moment to land so the mind lamp is honest before we start
+  setTimeout(() => { try { paintMind(); } catch (e) {} $('start').click(); }, 600);
+}
+
 $('me').onclick = () => window.open('spectate.html', '_blank');
 $('start').onclick = boot;
 $('killall').onclick = () => {
