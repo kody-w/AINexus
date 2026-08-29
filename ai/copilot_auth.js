@@ -168,18 +168,68 @@
   // The credential cannot buy a thought, so stop presenting it as a mind — and say WHICH failure
   // it was. 401 is a dead token; 403 is a live account Copilot will not serve, and telling that
   // person their sign-in expired sends them round the whole sign-in loop again for nothing.
-  function dead(status) {
-    signOut();
-    return new Error(status === 403 ? 'GitHub will not serve Copilot to that account — signed out'
-                                    : 'sign-in expired — grant a mind again');
+  // 401 AND 403 ARE NOT THE SAME ANSWER, AND ONLY ONE OF THEM IS ABOUT THE CREDENTIAL.
+  //
+  //   401 — GitHub says this token is not valid. That is an answer ABOUT the credential, so sign
+  //         out at once: keeping a dead token means retrying it forever against a live endpoint.
+  //
+  //   403 — "you are not allowed", which GitHub says for an account with no Copilot — and which a
+  //         Cloudflare worker, a WAF, a rate limiter or a deploy blip says too. This request goes
+  //         through a worker, so a 403 is at least as likely to be about the road as about the
+  //         traveller. Wiping the credential on one costs the visitor the whole device-code flow
+  //         again, and that flow is itself rate limited.
+  //
+  // A real "no Copilot for this account" repeats every single time. A blip does not. So the first
+  // 403 refuses the call and KEEPS the credential; a second consecutive one signs out. Any success
+  // clears the count, so an occasional 403 never accumulates into a sign-out over a long session.
+  // GitHub SAYS which one it is, and the brainstem already reads it. rapp_brainstem/brainstem.py
+  // carries the rule in as many words — "Token exchange failed — NEVER delete the token file" —
+  // and decides by looking for error_details.notification_id == 'no_copilot_access'. That is a fact
+  // from GitHub rather than a guess from a status code, so this reads the same signal. The
+  // consecutive-refusal count below is only the fallback for when the body does not carry it,
+  // which it will not when a proxy answers instead of GitHub.
+  function saysNoCopilot(body) {
+    if (!body) return false;
+    try {
+      const d = typeof body === 'string' ? JSON.parse(body) : body;
+      const det = (d && (d.error_details || d.details)) || {};
+      if (det.notification_id === 'no_copilot_access') return true;
+      return /no_copilot_access/.test(String(body));
+    } catch (e) { return /no_copilot_access/.test(String(body)); }
+  }
+
+  let refusals = 0;
+  function dead(status, body) {
+    if (status === 401) {
+      refusals = 0;
+      signOut();
+      const e = new Error('sign-in expired — grant a mind again'); e.code = 'signed-out'; return e;
+    }
+    // GitHub naming the account outright is not a blip, and does not need a second opinion
+    if (saysNoCopilot(body)) {
+      refusals = 0;
+      signOut();
+      const e = new Error('GitHub will not serve Copilot to that account — signed out'); e.code = 'signed-out'; return e;
+    }
+    refusals++;
+    if (refusals >= 2) {
+      refusals = 0;
+      signOut();
+      const e2 = new Error('GitHub will not serve Copilot to that account — signed out'); e2.code = 'signed-out'; return e2;
+    }
+    // deliberately NOT 'sign-in expired': the callers stop a loop on that wording, and this is a
+    // refusal we expect to survive. Say what happened and keep the seat.
+    return new Error('Copilot refused that request (403). Keeping your sign-in — if the next one '
+                     + 'is refused too, it is the account and not a blip, and you will be signed out.');
   }
 
   async function exchange() {
     const ghu = getToken();
     if (!ghu) throw new Error('not signed in');
     const r = await fetch(AUTH_WORKER_URL + '/api/copilot/token', { headers: { Authorization: 'Bearer ' + ghu } });
-    if (r.status === 401 || r.status === 403) throw dead(r.status);
+    if (r.status === 401 || r.status === 403) throw dead(r.status, await r.text().catch(() => ''));
     if (!r.ok) throw new Error('copilot exchange ' + r.status + ': ' + clean(await r.text()));
+    refusals = 0;                     // a served request proves the credential is fine
     const d = await r.json().catch(() => ({}));
     if (!d.token) throw new Error('Copilot returned no token');
     // The endpoint is checked on the way IN as well as on the way out: a host that never lands in
@@ -217,18 +267,29 @@
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
       body: JSON.stringify(body),
     });
-    if (r.status === 401 || r.status === 403) throw dead(r.status);
+    if (r.status === 401 || r.status === 403) throw dead(r.status, await r.text().catch(() => ''));
     if (!r.ok) throw new Error('copilot chat ' + r.status + ': ' + clean(await r.text()));
+    refusals = 0;                     // a served request proves the credential is fine
     const d = await r.json().catch(() => ({}));
     const msg = (d.choices && d.choices[0] && d.choices[0].message) || {};
     return o.raw ? msg : (msg.content || '');
   }
 
   // the true answer: can this credential actually buy a thought right now?
+  // THREE ANSWERS, NOT TWO. This runs on every page load, and it used to return `false` for any
+  // failure at all — so one slow or unreachable request told a person their sign-in had expired
+  // when it had not. They then went and did the device flow again, which is itself rate limited,
+  // and that is what "I can't stay signed in" looks like from the inside.
+  //   true  — asked, and the credential works
+  //   false — asked, and the credential is genuinely finished (it has already been signed out)
+  //   null  — could NOT ask. Says nothing about the credential, so nothing may be concluded.
   async function verify() {
     if (!hasToken()) return false;
     try { await ensureToken(); return true; }
-    catch (e) { return false; }
+    catch (e) {
+      if (e && e.code === 'signed-out') return false;   // the credential itself was refused
+      return null;                                       // the road was out; the seat is untouched
+    }
   }
 
   function signOut() { saveSettings({ ghuToken: null, copilotToken: null, copilotExpiresAt: 0 }); pending = null; }

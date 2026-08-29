@@ -339,10 +339,22 @@ async function mindState() {
   if (!window.NexusAuth) { el.textContent = 'grant a mind'; return false; }
   if (!NexusAuth.hasToken()) { el.textContent = 'grant a mind'; el.classList.remove('on'); return false; }
   el.textContent = 'checking sign-in…';
+  // COULD NOT ASK IS NOT THE SAME AS EXPIRED, and this runs on every page load. Telling somebody
+  // their sign-in expired because one request did not get through sends them back through the
+  // device flow — which is rate limited — for a credential that was fine the whole time. That is
+  // what "I can't stay signed in" is, from the user's side. null means unknown: keep the seat,
+  // keep the button on, and say the true thing.
   const ok = await NexusAuth.verify();
+  if (ok === null) {
+    el.textContent = 'mind granted ✓';
+    el.classList.add('on');
+    note('could not reach the sign-in service just now — your sign-in is kept, and players will '
+       + 'try again on their next thought');
+    return true;
+  }
   el.textContent = ok ? 'mind granted ✓' : 'sign in again';
   el.classList.toggle('on', ok);
-  if (!ok) note('the saved sign-in has expired — press sign in again to grant a mind');
+  if (!ok) note('that sign-in is finished — press sign in again to grant a mind');
   return ok;
 }
 mindState();
