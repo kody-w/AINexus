@@ -103,6 +103,35 @@ Stated in words, deliberately, with no exploit written.
 
 ---
 
+## DE-RISK LOG
+
+A night of 207 commits touched every module here. These are the calls that could plausibly have
+made things worse, and what was actually measured about each — kept separate from the findings
+because they are not defects, they are decisions somebody may want to overrule.
+
+### D1. `look()` clamping — measured, and NOT a behaviour change in practice
+`CALL.look` used `a.dx | 0`, which truncated to int32. Replaced with rounding and a clamp. The
+worry was that anything tuned against the old behaviour would now feel different.
+**Measured in a real world page with a real camera:** `look(60,0)` — the exact value autodrive
+calibrates with — turns yaw 0 → -0.24rad, and `look(-60,0)` returns to precisely 0 with no drift.
+`60 | 0` is 60, so every value the existing code actually used is unchanged. The only values that
+behave differently are those below 1, which previously did nothing at all. Strictly additive.
+
+### D2. A cold first visit — every page, nothing remembered
+The realest check that a night of changes broke nothing: a brand-new browser profile per page, no
+localStorage, no sign-in, no brainstem, nothing cached.
+**Measured:** index, frontier, learn, proof, house, views and autodrive all load with visible text
+and ZERO page errors, each carrying exactly the modules it should — frontier all six, proof only
+frames, autodrive frames (which confirms the new hard dependency introduced by routing program
+verification through `ai/frames.js` resolves for someone arriving fresh).
+
+### Still under attack
+Two agents are actively trying to break the remaining calls: the fail-closed behaviours (do they
+RECOVER, or is a capability gone until reload?) and the stricter frames/`wear()` refusals (can a
+real player say a real sentence that now kills their tick?). Anything they find lands above.
+
+---
+
 ## CLOSED
 
 ### C5. A fatal peer error left a destroyed peer nobody rebuilt
