@@ -1483,6 +1483,26 @@ async function auditSlowStreamFirstPaint(browser) {
       '.skip-link, a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
     ).first();
     requireMeasurement(await skip.count() === 1, 'the streamed skip link');
+    const begin = await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const controls = card ? [...card.querySelectorAll(
+        'button, [role="button"], input[type="button"], input[type="submit"]'
+      )] : [];
+      const chosen = controls.find(control => {
+        const text = [
+          control.id,
+          control.getAttribute('aria-label'),
+          control.getAttribute('title'),
+          control.textContent,
+          control.value
+        ].filter(Boolean).join(' ');
+        return /\b(begin|start|enter|continue|deploy|ready)\b/i.test(text);
+      });
+      if (!chosen) return { found: false };
+      chosen.setAttribute('data-dogg-test-stream-begin', 'true');
+      return { found: true };
+    });
+    requireMeasurement(begin.found, 'the streamed Begin control');
     const before = await page.evaluate(() => ({
       hash: location.hash,
       ready: window.__doggHeist?.ready,
@@ -1490,49 +1510,177 @@ async function auditSlowStreamFirstPaint(browser) {
       active: document.activeElement?.id || document.activeElement?.tagName || ''
     }));
     const parserSamples = [];
-    for (let index = 0; index < 6; index++) {
+    for (let index = 0; index < 10; index++) {
       await page.keyboard.press('Tab');
       const afterTab = await page.evaluate(() => {
         const card = document.querySelector('.intro-card');
         return {
           inside: Boolean(card && card.contains(document.activeElement)),
+          begin: document.activeElement?.hasAttribute('data-dogg-test-stream-begin') || false,
           active: document.activeElement?.id || document.activeElement?.tagName || '',
           hash: location.hash,
           ready: window.__doggHeist?.ready,
           cardVisible: Boolean(card && getComputedStyle(card).display !== 'none')
         };
       });
-      await page.keyboard.press('Enter');
-      await sleep(20);
-      const afterEnter = await page.evaluate(() => {
-        const card = document.querySelector('.intro-card');
-        return {
-          inside: Boolean(card && card.contains(document.activeElement)),
-          active: document.activeElement?.id || document.activeElement?.tagName || '',
-          hash: location.hash,
-          ready: window.__doggHeist?.ready,
-          cardVisible: Boolean(card && getComputedStyle(card).display !== 'none')
-        };
-      });
-      parserSamples.push({ afterTab, afterEnter });
+      parserSamples.push(afterTab);
+      if (afterTab.begin) break;
+    }
+    requireMeasurement(parserSamples.some(sample => sample.begin),
+      'Tab reaching Begin while the final script is delayed');
+    const acknowledgementBefore = await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const beginControl = document.querySelector('[data-dogg-test-stream-begin="true"]');
+      const play = document.getElementById('play-toggle');
+      let state;
+      try {
+        state = window.__doggHeist?.state?.();
+      } catch (error) {}
+      return {
+        hash: location.hash,
+        ready: window.__doggHeist?.ready,
+        tick: state?.tick,
+        running: state?.running ?? state?.playing,
+        play: [
+          play?.getAttribute('aria-pressed'),
+          play?.textContent
+        ].join('|'),
+        signature: JSON.stringify({
+          cardText: card?.textContent,
+          cardData: card ? Object.assign({}, card.dataset) : null,
+          beginText: beginControl?.textContent,
+          beginAria: beginControl ? {
+            label: beginControl.getAttribute('aria-label'),
+            busy: beginControl.getAttribute('aria-busy'),
+            pressed: beginControl.getAttribute('aria-pressed'),
+            disabled: beginControl.getAttribute('aria-disabled'),
+            nativeDisabled: beginControl.disabled
+          } : null,
+          beginData: beginControl ? Object.assign({}, beginControl.dataset) : null,
+          htmlData: Object.assign({}, document.documentElement.dataset),
+          bodyData: Object.assign({}, document.body.dataset),
+          pendingGlobals: Object.fromEntries(Object.keys(window)
+            .filter(key => /^__.*(?:pending|queued?|start)/i.test(key))
+            .map(key => [key, ['string', 'number', 'boolean'].includes(typeof window[key]) ?
+              window[key] : typeof window[key]])),
+          live: document.getElementById('status-live')?.textContent
+        })
+      };
+    });
+    await page.keyboard.press('Enter');
+    let acknowledgementAfter;
+    try {
+      acknowledgementAfter = await poll(
+        () => page.evaluate(() => {
+          const card = document.querySelector('.intro-card');
+          const beginControl = document.querySelector('[data-dogg-test-stream-begin="true"]');
+          const play = document.getElementById('play-toggle');
+          let state;
+          try {
+            state = window.__doggHeist?.state?.();
+          } catch (error) {}
+          return {
+            hash: location.hash,
+            ready: window.__doggHeist?.ready,
+            tick: state?.tick,
+            running: state?.running ?? state?.playing,
+            play: [
+              play?.getAttribute('aria-pressed'),
+              play?.textContent
+            ].join('|'),
+            inside: Boolean(card && card.contains(document.activeElement)),
+            cardVisible: Boolean(card && getComputedStyle(card).display !== 'none'),
+            signature: JSON.stringify({
+              cardText: card?.textContent,
+              cardData: card ? Object.assign({}, card.dataset) : null,
+              beginText: beginControl?.textContent,
+              beginAria: beginControl ? {
+                label: beginControl.getAttribute('aria-label'),
+                busy: beginControl.getAttribute('aria-busy'),
+                pressed: beginControl.getAttribute('aria-pressed'),
+                disabled: beginControl.getAttribute('aria-disabled'),
+                nativeDisabled: beginControl.disabled
+              } : null,
+              beginData: beginControl ? Object.assign({}, beginControl.dataset) : null,
+              htmlData: Object.assign({}, document.documentElement.dataset),
+              bodyData: Object.assign({}, document.body.dataset),
+              pendingGlobals: Object.fromEntries(Object.keys(window)
+                .filter(key => /^__.*(?:pending|queued?|start)/i.test(key))
+                .map(key => [key, ['string', 'number', 'boolean'].includes(typeof window[key]) ?
+                  window[key] : typeof window[key]])),
+              live: document.getElementById('status-live')?.textContent
+            })
+          };
+        }),
+        value => value.signature !== acknowledgementBefore.signature,
+        700,
+        20
+      );
+    } catch (error) {
+      acknowledgementAfter = await page.evaluate(() => ({
+        hash: location.hash,
+        ready: window.__doggHeist?.ready,
+        inside: Boolean(document.querySelector('.intro-card')?.contains(document.activeElement)),
+        cardVisible: Boolean(document.querySelector('.intro-card')),
+        signature: ''
+      }));
     }
     const skipBlocked = await skip.evaluate(element =>
       element.tabIndex < 0 || element.getAttribute('aria-disabled') === 'true' ||
       Boolean(element.closest('[inert], [aria-hidden="true"]')));
     const parserHeld = before.ready !== true &&
       parserSamples.every(sample =>
-        sample.afterTab.inside && sample.afterEnter.inside &&
-        sample.afterTab.hash === before.hash && sample.afterEnter.hash === before.hash &&
-        sample.afterTab.ready !== true && sample.afterEnter.ready !== true &&
-        sample.afterTab.cardVisible && sample.afterEnter.cardVisible);
+        sample.inside && sample.hash === before.hash &&
+        sample.ready !== true && sample.cardVisible) &&
+      acknowledgementAfter.inside && acknowledgementAfter.cardVisible &&
+      acknowledgementAfter.hash === acknowledgementBefore.hash &&
+      acknowledgementAfter.ready !== true &&
+      acknowledgementAfter.tick === acknowledgementBefore.tick &&
+      acknowledgementAfter.running === acknowledgementBefore.running &&
+      acknowledgementAfter.play === acknowledgementBefore.play;
+    const acknowledged =
+      acknowledgementAfter.signature &&
+      acknowledgementAfter.signature !== acknowledgementBefore.signature;
 
     releaseStream();
     await navigation;
-    await waitForHeistSurface(page);
-    const intro = await markIntro(page);
-    requireMeasurement(intro.found, 'intro remains after the delayed script arrives');
-    await dismissIntro(page);
-    await finishHeistBoot(page, 'slow-stream page');
+    const queuedReady = await poll(
+      () => page.evaluate(async () => {
+        const api = window.__doggHeist;
+        let state = {};
+        try {
+          state = api && typeof api.state === 'function' ?
+            await Promise.resolve(api.state()) : {};
+        } catch (error) {}
+        const card = document.querySelector('.intro-card');
+        const style = card && getComputedStyle(card);
+        const rect = card && card.getBoundingClientRect();
+        return {
+          ready: api?.ready,
+          tick: Number(state.tick ?? state.currentTick ?? state.liveTick),
+          running: Boolean(state.running ?? state.playing),
+          introVisible: Boolean(card && !card.hidden && style.display !== 'none' &&
+            style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0)
+        };
+      }),
+      value => value.ready === true && !value.introVisible &&
+        Number.isFinite(value.tick),
+      5000,
+      25
+    );
+    const queuedAdvanced = await poll(
+      () => page.evaluate(async () => {
+        const state = await Promise.resolve(window.__doggHeist.state());
+        return {
+          tick: Number(state.tick ?? state.currentTick ?? state.liveTick),
+          running: Boolean(state.running ?? state.playing)
+        };
+      }),
+      value => value.running && value.tick > queuedReady.tick,
+      5000,
+      40
+    );
+    await page.evaluate(() => window.__doggHeist.pause());
 
     const href = await skip.getAttribute('href');
     requireMeasurement(href && href.startsWith('#'), 'a same-page skip target');
@@ -1555,6 +1703,11 @@ async function auditSlowStreamFirstPaint(browser) {
     }, href);
     return {
       parserHeld,
+      acknowledged,
+      acknowledgementBefore,
+      acknowledgementAfter,
+      queuedReady,
+      queuedAdvanced,
       skipBlocked,
       before,
       parserSamples,
@@ -3290,6 +3443,58 @@ async function readBoardSemantic(page) {
   });
 }
 
+async function readBoardAccessibilitySnapshot(page) {
+  const state = await inspect(page, false);
+  const aria = await page.locator('#game-board').evaluate(board => {
+    const ids = String(board.getAttribute('aria-describedby') || '')
+      .split(/\s+/).filter(Boolean);
+    const selected = document.querySelector(
+      '#agent-list [aria-pressed="true"], #agent-list .agent-button.selected'
+    );
+    const selectedName = selected && (
+      selected.querySelector('.agent-name, .agent-label, [data-agent-name]')?.textContent ||
+      selected.getAttribute('data-agent-id') ||
+      selected.getAttribute('aria-label') ||
+      selected.textContent
+    );
+    return {
+      label: String(board.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim(),
+      describedBy: ids,
+      description: ids.map(id => document.getElementById(id)?.textContent || '')
+        .join(' ').replace(/\s+/g, ' ').trim(),
+      selectedName: String(selectedName || '').replace(/\s+/g, ' ').trim(),
+      focusOnBoard: document.activeElement === board,
+      activeId: document.activeElement?.id || ''
+    };
+  });
+  return Object.assign({ tick: state.tick, head: state.head, frameCount: state.frameCount }, aria);
+}
+
+function boardAccessibilityConsistent(snapshot) {
+  if (!snapshot.label || !snapshot.description || !snapshot.selectedName ||
+      !snapshot.describedBy.length) return false;
+  const tickPattern = new RegExp(`\\b(?:tick|turn)\\s*#?\\s*${snapshot.tick}\\b`, 'i');
+  const escapedName = snapshot.selectedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const selectedPattern = new RegExp(escapedName, 'i');
+  const labelCoordinate = coordinateFromBoardText(snapshot.label);
+  const descriptionCoordinate = coordinateFromBoardText(snapshot.description);
+  const coordinateConsistent = !labelCoordinate ||
+    (descriptionCoordinate &&
+      labelCoordinate.x === descriptionCoordinate.x &&
+      labelCoordinate.y === descriptionCoordinate.y);
+  const ignored = new Set([
+    'board', 'game', 'arrow', 'arrows', 'keys', 'press', 'use', 'move',
+    'cursor', 'selected', 'current'
+  ]);
+  const labelTokens = snapshot.label.toLowerCase().match(/[a-z]{4,}/g) || [];
+  const semanticToken = labelTokens.find(token =>
+    !ignored.has(token) && snapshot.description.toLowerCase().includes(token));
+  return tickPattern.test(snapshot.description) &&
+    selectedPattern.test(snapshot.description) &&
+    coordinateConsistent &&
+    Boolean(labelCoordinate || semanticToken);
+}
+
 async function readPovSemanticLabels(page) {
   return page.evaluate(() => {
     const grid = document.getElementById('pov-grid');
@@ -4311,6 +4516,61 @@ async function auditShortSkipTarget(page) {
   return { before, after };
 }
 
+async function auditImmediateLandscapeSkip(page) {
+  await page.evaluate(() => {
+    const roots = [document.documentElement, document.body].filter(Boolean);
+    const originals = roots.map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    roots.forEach(element => element.style.setProperty('scroll-behavior', 'auto', 'important'));
+    window.scrollTo(0, 0);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    originals.forEach(({ element, value, priority }) => {
+      if (value) element.style.setProperty('scroll-behavior', value, priority);
+      else element.style.removeProperty('scroll-behavior');
+    });
+  });
+  const skip = page.locator(
+    '.skip-link, a[href="#game-board"], a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
+  ).first();
+  requireMeasurement(await skip.count() === 1, 'the 836x224 skip link');
+  await skip.focus();
+  const before = await page.evaluate(() => ({
+    hash: location.hash,
+    window: scrollY,
+    document: document.scrollingElement?.scrollTop || 0,
+    viewport: { width: innerWidth, height: innerHeight }
+  }));
+  requireMeasurement(before.window === 0 && before.document === 0,
+    'the landscape skip starting at scrollY 0');
+  await page.keyboard.press('Enter');
+  const after = await page.evaluate(() => new Promise(resolve => {
+    requestAnimationFrame(() => {
+      const board = document.getElementById('game-board');
+      const rect = board?.getBoundingClientRect();
+      resolve({
+        hash: location.hash,
+        boardFocused: document.activeElement === board ||
+          Boolean(board?.contains(document.activeElement)),
+        boardIntersects: Boolean(rect && rect.right > 0 && rect.left < innerWidth &&
+          rect.bottom > 0 && rect.top < innerHeight),
+        boardRect: rect ? {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom
+        } : null,
+        documentWidth: document.documentElement.scrollWidth,
+        bodyWidth: document.body.scrollWidth,
+        viewport: { width: innerWidth, height: innerHeight }
+      });
+    });
+  }));
+  return { before, after };
+}
+
 async function deterministicRun(page, seed) {
   await api(page, 'pause');
   await api(page, 'restart', seed);
@@ -4350,10 +4610,13 @@ async function runSuite() {
 
   const slowStream = await auditSlowStreamFirstPaint(browser);
   result('slow-stream parser delay keeps focus and skip action inside intro',
-    slowStream.parserHeld &&
+    slowStream.parserHeld && slowStream.acknowledged &&
+      slowStream.queuedReady.ready === true &&
+      slowStream.queuedAdvanced.running &&
+      slowStream.queuedAdvanced.tick > slowStream.queuedReady.tick &&
       slowStream.skipAfter.hash === slowStream.href &&
       slowStream.skipAfter.targetExists,
-    `parser tabs ${slowStream.parserSamples.map(sample => sample.afterTab.active).join('→')}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
+    `parser tabs ${slowStream.parserSamples.map(sample => sample.active).join('→')}; ack ${slowStream.acknowledged}; queued tick ${slowStream.queuedReady.tick}→${slowStream.queuedAdvanced.tick}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
 
   const firstPaintContext = await browser.newContext({
     viewport: { width: 390, height: 420 },
@@ -4385,6 +4648,29 @@ async function runSuite() {
       shortSkip.after.boardFocused,
     `${shortSkip.before.width.toFixed(1)}x${shortSkip.before.height.toFixed(1)} ${shortSkip.before.href}; hash ${shortSkip.after.hash}`);
   await firstPaintContext.close();
+
+  const immediateSkipContext = await browser.newContext({
+    viewport: { width: 836, height: 224 },
+    screen: { width: 836, height: 224 },
+    hasTouch: true,
+    isMobile: true
+  });
+  await serve(immediateSkipContext);
+  const immediateSkipPage = await openHeist(
+    immediateSkipContext,
+    '836x224 immediate skip page'
+  );
+  const immediateSkip = await auditImmediateLandscapeSkip(immediateSkipPage);
+  result('836x224 skip reaches the focused visible board within one frame',
+    immediateSkip.before.viewport.width === 836 &&
+      immediateSkip.before.viewport.height === 224 &&
+      immediateSkip.after.hash === '#game-board' &&
+      immediateSkip.after.boardFocused &&
+      immediateSkip.after.boardIntersects &&
+      immediateSkip.after.documentWidth <= immediateSkip.after.viewport.width + 1 &&
+      immediateSkip.after.bodyWidth <= immediateSkip.after.viewport.width + 1,
+    `hash ${immediateSkip.after.hash}; focused ${immediateSkip.after.boardFocused}; rect ${JSON.stringify(immediateSkip.after.boardRect)}; width ${Math.max(immediateSkip.after.documentWidth, immediateSkip.after.bodyWidth)}/${immediateSkip.after.viewport.width}`);
+  await immediateSkipContext.close();
 
   const primaryContext = await browser.newContext({
     viewport: { width: 1100, height: 800 },
@@ -4670,6 +4956,56 @@ async function runSuite() {
       coordinateContext.test(boardSemanticAfter.text) && tileContext.test(boardSemanticAfter.text) &&
       boardStateAfter.tick === boardStateBefore.tick && boardStateAfter.head === boardStateBefore.head,
     `${boardSemanticBefore.text.slice(0, 70)} → ${boardSemanticAfter.text.slice(0, 100)}`);
+
+  await page.locator('#game-board').focus();
+  const describedInitial = await readBoardAccessibilitySnapshot(page);
+  requireMeasurement(describedInitial.selectedName,
+    'the selected agent named in the board accessibility state');
+  await page.keyboard.press('.');
+  await sleep(100);
+  const describedAfterStep = await readBoardAccessibilitySnapshot(page);
+  const otherAgent = await page.evaluate(() => {
+    const list = document.getElementById('agent-list');
+    const selected = list?.querySelector(
+      '[aria-pressed="true"], .agent-button.selected'
+    );
+    const candidate = [...(list?.querySelectorAll(
+      '.agent-button, button, [role="button"]'
+    ) || [])].find(element => element !== selected && !element.disabled &&
+      element.getAttribute('aria-disabled') !== 'true');
+    if (!candidate) return false;
+    candidate.setAttribute('data-dogg-test-other-agent', 'true');
+    return true;
+  });
+  requireMeasurement(otherAgent, 'another selectable agent for board description');
+  await page.locator('[data-dogg-test-other-agent="true"]').click();
+  await page.locator('#game-board').focus();
+  const describedAfterAgent = await readBoardAccessibilitySnapshot(page);
+  const describedLiveTick = describedAfterAgent.tick;
+  const describedScrubTick = Math.max(0, describedLiveTick - 1);
+  await api(page, 'scrub', describedScrubTick);
+  await page.locator('#game-board').focus();
+  const describedAfterScrub = await readBoardAccessibilitySnapshot(page);
+  const staleTick = (description, tick) =>
+    new RegExp(`\\b(?:tick|turn)\\s*#?\\s*${tick}\\b`, 'i').test(description);
+  const staleName = new RegExp(
+    describedInitial.selectedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    'i'
+  );
+  result('board accessible description follows tick, agent, and scrub renders',
+    describedInitial.focusOnBoard && boardAccessibilityConsistent(describedInitial) &&
+      describedAfterStep.focusOnBoard && boardAccessibilityConsistent(describedAfterStep) &&
+      describedAfterStep.tick - describedInitial.tick === 1 &&
+      !staleTick(describedAfterStep.description, describedInitial.tick) &&
+      describedAfterAgent.focusOnBoard && boardAccessibilityConsistent(describedAfterAgent) &&
+      describedAfterAgent.selectedName !== describedInitial.selectedName &&
+      !staleName.test(describedAfterAgent.description) &&
+      describedAfterScrub.focusOnBoard && boardAccessibilityConsistent(describedAfterScrub) &&
+      describedAfterScrub.tick === describedScrubTick &&
+      !staleTick(describedAfterScrub.description, describedLiveTick),
+    `tick ${describedInitial.tick}→${describedAfterStep.tick}; agent ${describedInitial.selectedName}→${describedAfterAgent.selectedName}; scrub ${describedLiveTick}→${describedAfterScrub.tick}`);
+  await api(page, 'scrub', describedLiveTick);
+  await api(page, 'pause');
 
   const povSemanticLabels = await readPovSemanticLabels(page);
   const agentNames = different.agents.flatMap(agent => [
