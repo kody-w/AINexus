@@ -3720,17 +3720,19 @@ async function runSuite() {
       mobileStepAfter.frameCount - mobileStepBefore.frameCount === 1,
     `${mobileTarget.dimensions.cols}x${mobileTarget.dimensions.rows} via ${mobileTarget.dimensions.source}; cell ${mobileTarget.renderedCellScale.toFixed(1)}px, control ${mobileTarget.accessibleTargetScale.toFixed(1)}px; ${mobileTarget.target.kind}`);
 
-  await api(mobilePage, 'restart', 'ADVERSARY-000');
+  await api(mobilePage, 'restart', 'WATCH-000');
   await api(mobilePage, 'pause');
   await api(mobilePage, 'setSpeed', 20);
   let watchSnapshot = await inspect(mobilePage, false);
-  for (let step = 0; step < 35; step++) {
-    const watch = await mobilePage.locator('#alarm-value').getAttribute('data-level');
-    if (watch === 'watch') break;
+  let watchLevel;
+  while (watchSnapshot.tick <= 50) {
+    watchLevel = await mobilePage.locator('#alarm-value').getAttribute('data-level');
+    if (watchLevel === 'watch' || watchSnapshot.tick === 50) break;
     await api(mobilePage, 'step', 1);
     watchSnapshot = await inspect(mobilePage, false);
   }
-  const watchLevel = await mobilePage.locator('#alarm-value').getAttribute('data-level');
+  requireMeasurement(watchLevel === 'watch',
+    `WATCH-000 reaching alarm watch by tick 50 (last tick ${watchSnapshot.tick}, level ${watchLevel})`);
   const watchContrast = await measureElementContrast(
     mobilePage,
     '#alarm-value[data-level="watch"]'
