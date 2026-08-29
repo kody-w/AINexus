@@ -13,7 +13,7 @@
         if (!start) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        start.focus();
+        (start.disabled ? document.querySelector(".intro-card") : start)?.focus();
       };
       document.addEventListener("keydown", earlyIntroKeyGuard, true);
       document.addEventListener("keyup", earlyIntroKeyGuard, true);
@@ -23,10 +23,15 @@
         if (!start || window.__doggHeist?.ready) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        window.__doggPendingStart = true;
-        start.textContent = "Preparing operation…";
-        start.setAttribute("aria-busy", "true");
-        start.setAttribute("aria-label", "Preparing operation; start request queued");
+        if (!window.__doggPendingStart) {
+          window.__doggPendingStart = true;
+          window.__doggPendingStartAt = Date.now();
+          start.disabled = true;
+          start.textContent = "Preparing operation…";
+          start.setAttribute("aria-busy", "true");
+          start.setAttribute("aria-label", "Preparing operation; start request queued");
+          document.querySelector(".intro-card")?.focus();
+        }
       };
       document.addEventListener("click", earlyStartHandler, true);
       window.__doggEarlyStartHandler = earlyStartHandler;
@@ -1614,7 +1619,7 @@
   </div>
 
   <div class="intro-overlay" id="intro-overlay" role="dialog" aria-modal="true" aria-labelledby="intro-title">
-    <div class="intro-card">
+    <div class="intro-card" tabindex="-1">
       <div class="intro-grid">
         <div class="intro-copy">
           <p class="eyebrow">Operation begins in one breath</p>
@@ -1660,7 +1665,7 @@
         <p>Select an agent, then tap a floor tile. On the focused board, move the cursor with <kbd>Arrows</kbd> and queue with <kbd>Enter</kbd>. A directive temporarily outranks that agent’s policy but never bypasses doors, hazards, or detection.</p>
         <h3>Keyboard</h3>
         <p><kbd>Space</kbd> play/pause · <kbd>.</kbd> single tick · <kbd>R</kbd> same seed · <kbd>Shift</kbd>+<kbd>R</kbd> new seed · <kbd>F</kbd> fork inspected frame · <kbd>L</kbd> live head · <kbd>H</kbd> this help.</p>
-        <p>Export contains the complete chain and a checksum. Import validates both before replacing anything; files over 4 MiB are rejected before parsing. If browser storage is denied, the game remains fully playable and says so.</p>
+        <p>Export contains the complete chain and a checksum. A line holds up to 1,000 directives and 1,200 total frames; files over 8 MiB are rejected before parsing. If browser storage is denied, the game remains fully playable and says so.</p>
       </div>
     </div>
   </dialog>
@@ -1683,7 +1688,10 @@
       const MAX_TICKS = 180;
       const MIN_SPEED = 10;
       const MAX_SPEED = 10000;
-      const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
+      const MAX_DIRECTIVE_FRAMES = 1000;
+      const MAX_CHAIN_FRAMES = 1200;
+      const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
+      const START_SHIELD_MS = 380;
       const DEFAULT_SEED = "DOGG-BRAVO-17";
       const AGENT_ORDER = ["ghost", "cipher", "atlas", "spark"];
       const DIRECTIONS = [
@@ -1774,6 +1782,7 @@
       let storageAvailable = false;
       let storageFailureShown = false;
       let introTimer = null;
+      let startRequestTimer = null;
       let userCommanded = false;
       let resumeAfterIntro = true;
       let keyboardCursor = { x: 2, y: 9 };
@@ -2152,7 +2161,33 @@
         };
       }
 
+      function frameCapacityError(kind, candidateFrames = frames) {
+        if (candidateFrames.length + 1 > MAX_CHAIN_FRAMES) {
+          return "Timeline limit reached (" + MAX_CHAIN_FRAMES.toLocaleString() + " frames). Export, fork from earlier history, or restart.";
+        }
+        if (kind === "directive") {
+          const directiveCount = candidateFrames.reduce((count, frame) => count + Number(frame.kind === "directive"), 0);
+          if (directiveCount + 1 > MAX_DIRECTIVE_FRAMES) {
+            return "Directive limit reached (" + MAX_DIRECTIVE_FRAMES.toLocaleString() + "). Fork away old directives, export, or restart.";
+          }
+        }
+        return "";
+      }
+
+      function ensureFrameCapacity(kind, haltClock = false) {
+        const message = frameCapacityError(kind);
+        if (!message) return true;
+        if (haltClock) {
+          running = false;
+          stopTimer();
+        }
+        toast(message, "error");
+        return false;
+      }
+
       function sealFrame(kind, events) {
+        const capacityError = frameCapacityError(kind);
+        if (capacityError) throw new Error(capacityError);
         const parentHash = frames.length
           ? frames[frames.length - 1].hash
           : sha256("DOGG_HEIST_GENESIS|" + liveState.seed);
@@ -2918,6 +2953,7 @@
           stopTimer();
           return false;
         }
+        if (!ensureFrameCapacity("tick", true)) return false;
         const events = transitionOneTick(liveState);
         sealFrame("tick", events);
         if (liveState.outcome !== "active") stopTimer();
@@ -3630,7 +3666,9 @@
         document.documentElement.classList.add("intro-open");
         document.body.classList.add("intro-open");
         addIntroScrollGuards();
-        window.setTimeout(() => elements.introStart.focus(), 0);
+        window.setTimeout(() => {
+          (elements.introStart.disabled ? elements.introCard : elements.introStart).focus();
+        }, 0);
       }
 
       function releaseIntroModal() {
@@ -3658,18 +3696,57 @@
         if (elements.intro.hidden) return;
         if (event.key === "Tab") {
           event.preventDefault();
-          elements.introStart.focus({ preventScroll: true });
+          (elements.introStart.disabled ? elements.introCard : elements.introStart).focus({ preventScroll: true });
         } else if (event.key === "Escape") {
           event.preventDefault();
         }
       }
 
-      function consumePendingStart() {
-        if (!window.__doggPendingStart) return false;
+      function clearPendingStartState() {
+        if (startRequestTimer !== null) {
+          window.clearTimeout(startRequestTimer);
+          startRequestTimer = null;
+        }
         window.__doggPendingStart = false;
+        delete window.__doggPendingStartAt;
         elements.introStart.removeAttribute("aria-busy");
+      }
+
+      function acknowledgeStartRequest() {
+        if (elements.intro.hidden) return false;
+        if (!window.__doggPendingStart) {
+          window.__doggPendingStart = true;
+          window.__doggPendingStartAt = Date.now();
+        }
+        elements.introStart.disabled = true;
+        elements.introStart.textContent = "Preparing operation…";
+        elements.introStart.setAttribute("aria-busy", "true");
+        elements.introStart.setAttribute("aria-label", "Preparing operation; start request queued");
+        elements.introCard.focus({ preventScroll: true });
+        return true;
+      }
+
+      function finishStartRequest() {
+        if (!window.__doggPendingStart || elements.intro.hidden) return;
+        clearPendingStartState();
         userCommanded = true;
         dismissIntro(true);
+      }
+
+      function schedulePendingStart() {
+        if (!window.__doggPendingStart || elements.intro.hidden) return false;
+        acknowledgeStartRequest();
+        if (startRequestTimer === null) {
+          const requestedAt = Number(window.__doggPendingStartAt) || Date.now();
+          const remaining = Math.max(0, START_SHIELD_MS - (Date.now() - requestedAt));
+          startRequestTimer = window.setTimeout(finishStartRequest, remaining);
+        }
+        return true;
+      }
+
+      function requestStart() {
+        if (!acknowledgeStartRequest()) return false;
+        schedulePendingStart();
         return true;
       }
 
@@ -3680,6 +3757,7 @@
           window.clearTimeout(introTimer);
           introTimer = null;
         }
+        clearPendingStartState();
         releaseIntroModal();
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
         completeReadiness();
@@ -3703,6 +3781,7 @@
             window.clearTimeout(introTimer);
             introTimer = null;
           }
+          clearPendingStartState();
           releaseIntroModal();
         }
         running = true;
@@ -3824,8 +3903,14 @@
         stopTimer();
         const selectedFrame = currentFrame();
         const abandoned = frames.length - viewIndex - 1;
+        const retainedFrames = frames.slice(0, viewIndex + 1);
+        const capacityError = frameCapacityError("fork", retainedFrames);
+        if (capacityError) {
+          toast(capacityError, "error");
+          return false;
+        }
         const transition = createForkTransition(selectedFrame, branchCounter + 1, abandoned);
-        frames = frames.slice(0, viewIndex + 1);
+        frames = retainedFrames;
         branchCounter += 1;
         liveState = transition.state;
         sealFrame("fork", transition.events);
@@ -3871,6 +3956,7 @@
           toast("Historical frames cannot accept directives. Fork or return live.", "error");
           return false;
         }
+        if (!ensureFrameCapacity("directive")) return false;
         let transition;
         try {
           transition = applyDirectiveTransition(liveState, agentId, x, y);
@@ -3995,7 +4081,7 @@
         requireInteger(state.requiredTerminals, label + ".requiredTerminals", 1, 4);
         if (state.requiredTerminals !== REQUIRED_TERMINALS) throw new Error(label + ".requiredTerminals is incompatible.");
         requireInteger(state.maxTicks, label + ".maxTicks", MAX_TICKS, MAX_TICKS);
-        requireInteger(state.directiveSerial, label + ".directiveSerial", 0, 1000000);
+        requireInteger(state.directiveSerial, label + ".directiveSerial", 0, MAX_DIRECTIVE_FRAMES);
 
         requireRecord(state.stats, label + ".stats");
         requireInteger(state.stats.detections, label + ".stats.detections", 0, 1000000);
@@ -4237,15 +4323,22 @@
 
       function verifyFrames(candidateFrames) {
         try {
-          requireArray(candidateFrames, "Frame collection", 1, 5000);
+          requireArray(candidateFrames, "Frame collection", 1, MAX_CHAIN_FRAMES);
           let previousHash = null;
           let previousFrame = null;
           let seed = null;
+          let directiveFrames = 0;
           for (let index = 0; index < candidateFrames.length; index += 1) {
             const frame = candidateFrames[index];
             requireRecord(frame, "Frame " + index);
             if (frame.schema !== FRAME_SCHEMA) throw new Error("Frame " + index + " schema is invalid.");
             if (!["genesis", "tick", "directive", "fork"].includes(frame.kind)) throw new Error("Frame " + index + " kind is invalid.");
+            if (frame.kind === "directive") {
+              directiveFrames += 1;
+              if (directiveFrames > MAX_DIRECTIVE_FRAMES) {
+                throw new Error("Frame collection exceeds the " + MAX_DIRECTIVE_FRAMES.toLocaleString() + "-directive limit.");
+              }
+            }
             requireInteger(frame.tick, "Frame " + index + " tick", 0, MAX_TICKS);
             requireString(frame.branchId, "Frame " + index + " branchId", 4, 32);
             requireString(frame.parentHash, "Frame " + index + " parentHash", 64, 64);
@@ -4273,6 +4366,9 @@
             }
             if (frame.state.seed !== seed || frame.branchId !== frame.state.branchId || frame.tick !== frame.state.tick) {
               throw new Error("Frame " + index + " metadata disagrees with its state.");
+            }
+            if (frame.state.directiveSerial !== directiveFrames) {
+              throw new Error("Frame " + index + " directive serial disagrees with its chain history.");
             }
             if (stableStringify(frame.events) !== stableStringify(frame.state.lastEvents)) {
               throw new Error("Frame " + index + " events disagree with the sealed state.");
@@ -4325,7 +4421,7 @@
         }
         if (typeof text !== "string") throw new Error("Import must be a JSON string or serializable object.");
         if (utf8ByteLengthCapped(text, MAX_IMPORT_BYTES) > MAX_IMPORT_BYTES) {
-          throw new Error("Import exceeds the 4 MiB safety limit.");
+          throw new Error("Import exceeds the 8 MiB safety limit.");
         }
         return text;
       }
@@ -4351,7 +4447,7 @@
         requireRecord(data, "Export data");
         requireString(data.seed, "Export seed", 1, 80);
         if (!ROLE[data.selectedAgentId]) throw new Error("Export selected agent is invalid.");
-        requireInteger(data.viewIndex, "Export timeline cursor", 0, 4999);
+        requireInteger(data.viewIndex, "Export timeline cursor", 0, MAX_CHAIN_FRAMES - 1);
         requireInteger(data.branchCounter, "Export branch counter", 0, 1000000);
         requireInteger(data.newSeedCounter, "Export new-seed counter", 0, 1000000);
         requireInteger(data.speedMs, "Export clock speed", MIN_SPEED, MAX_SPEED);
@@ -4965,7 +5061,7 @@
           if (!file) return;
           if (file.size > MAX_IMPORT_BYTES) {
             elements.importFile.value = "";
-            toast("Import rejected before reading: files over 4 MiB are not accepted.", "error");
+            toast("Import rejected before reading: files over 8 MiB are not accepted.", "error");
             return;
           }
           const reader = new FileReader();
@@ -5004,8 +5100,7 @@
           if (button) selectAgent(button.dataset.agentId);
         });
         elements.introStart.addEventListener("click", () => {
-          userCommanded = true;
-          dismissIntro(true);
+          requestStart();
         });
         window.addEventListener("keydown", handleGlobalKey);
         document.addEventListener("keydown", handleIntroKeydown, true);
@@ -5066,7 +5161,7 @@
         activateIntroModal();
         renderAll();
         status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
-        if (!consumePendingStart()) {
+        if (!schedulePendingStart()) {
           introTimer = window.setTimeout(() => {
             introTimer = null;
             if (!userCommanded) dismissIntro(resumeAfterIntro);
