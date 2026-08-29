@@ -90,7 +90,8 @@ async function runLive(n) {
     }
     const invite = i === 0 ? '#ai=views'
                            : '#join=' + room.id + '.' + room.secret + '&ai=views';
-    c.frame.src = WORLD + '?player=' + (i + 1) + invite +
+    const brokerQ = params.get('broker') ? '&broker=' + encodeURIComponent(params.get('broker')) : '';
+    c.frame.src = WORLD + '?player=' + (i + 1) + brokerQ + invite +
                   '&as=' + encodeURIComponent('🤖 ' + persona + ' (AI)');
     await new Promise(res => {
       const t = setTimeout(res, 30000);

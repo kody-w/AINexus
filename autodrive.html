@@ -57,6 +57,7 @@ const PROGRAMS = ['wanderer', 'greeter', 'pilgrim', 'minded', 'camera'];
 const tabs = [];
 let room = null;
 
+const params = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
 PROGRAMS.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; $('prog').appendChild(o); });
 
@@ -144,7 +145,10 @@ async function boot() {
     const invite = (i === 0) ? '#ai=autodrive'
                              : '#join=' + room.id + '.' + room.secret + '&ai=autodrive';
     const asName = encodeURIComponent('🤖 ' + persona + ' (AI)');
-    frame.src = world + '?player=' + (i + 1) + invite + (invite.includes('#') ? '&' : '#') + 'as=' + asName;
+    // carry the broker choice into the world: a tower on one broker opening
+    // worlds on another is a room nobody can reach
+    const brokerQ = params.get('broker') ? '&broker=' + encodeURIComponent(params.get('broker')) : '';
+    frame.src = world + '?player=' + (i + 1) + brokerQ + invite + (invite.includes('#') ? '&' : '#') + 'as=' + asName;
     await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('frame never loaded')), 45000);
       frame.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
