@@ -632,8 +632,14 @@
         // talking and BILLING auth.chat for the rest of its rounds.
         if (api._epoch !== api._turnEpoch) return 'stopped';
       } else {
-        api.stop();                            // a top-level run replaces the last one...
-        api._turnEpoch = api._epoch;           // ...and is itself the newest generation
+        // A top-level run replaces the last one, but it must NOT open a new generation:
+        // an epoch bump means "the operator cancelled", and vbrainstem reads it that way.
+        // Calling stop() here made a turn cancel ITSELF — drive.mind() typed into the tab
+        // CLI runs turn() with nothing on the stack, so each of its tool calls is
+        // top-level, and the first one bumped the epoch out from under the turn that
+        // issued it. The turn then died after a single tool call.
+        api._running = false;                  // cancel whatever was running...
+        api._turnEpoch = api._epoch;           // ...and adopt the current generation
       }
       api._depth = (api._depth || 0) + 1;
       api._running = true;
