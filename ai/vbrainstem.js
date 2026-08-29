@@ -821,12 +821,17 @@
   };
 
   async function lines(opts) {
-    const o = opts || {}, auth = root.NexusAuth;
+    // THE FOURTH PLACE THAT REACHED PAST ITS CALLER FOR A SEAT. turn() and join() took a handed
+    // mind, live() dropped it, summon() reached around it, and this one — which offers a person
+    // the things they might say — could not be given one at all. So an NPC could act and speak but
+    // never propose its own lines, and every ring cost the visitor's seat even when the mind
+    // behind it was free.
+    const o = opts || {}, auth = o.mind || root.NexusAuth;
     if (!auth || !auth.signedIn()) return null;
     const who = o.who || {};
     const recent = (o.chat || []).slice(-4).map(c => (c.from === String(who.id).slice(0, 6) ? 'them: ' : 'you: ') + c.text);
     const near = (o.portals || []).slice().sort((a, b) => (a.distance || 0) - (b.distance || 0))[0];
-    spend();
+    spend(auth);          // a free mind spends none of the seat, here as anywhere else
     const msg = await auth.chat([
       { role: 'system', content: (o.persona || 'You are a visitor in a shared 3D world of portals.')
         + ' Offer things to say that fit THIS moment — not greetings if you are already talking, not '

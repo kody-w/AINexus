@@ -88,7 +88,32 @@ for rel in tracked():
         if SEQ_FROM_LENGTH.search(line):
             seq_bad.append((rel, n, line.strip()[:118]))
 
+# RULE 3: a function that is handed options must not reach past its caller for the ambient mind.
+# A mind is a contract, and a caller may hand one over — a scripted mind for an NPC, or one for a
+# different player entirely. Reading root.NexusAuth instead means the handed mind is ignored: the
+# NPC falls through to "not signed in", or worse, quietly spends a seat it was never given. This
+# estate made that exact mistake FOUR times in one file — turn() and join() took the mind, live()
+# dropped it, summon() reached around it, and lines() could not be given one at all — and each was
+# found separately, by something different, days apart.
+AMBIENT_MIND = re.compile(r"=\s*root\.NexusAuth\b")
+mind_bad = []
+for rel in tracked():
+    if any(rel.startswith(d) for d in SKIP_DIRS) or Path(rel).suffix.lower() not in {".js", ".cjs", ".mjs"}:
+        continue
+    f = ROOT / rel
+    if not f.exists():
+        continue
+    for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+        if AMBIENT_MIND.search(line) and "o.mind ||" not in line and "opts.mind" not in line:
+            mind_bad.append((rel, n, line.strip()[:118]))
+
 print(f"{checked} source files checked for machine-specific paths")
+for rel, n, line in mind_bad:
+    print(f"  AMBIENT MIND     {rel}:{n}\n                   {line}")
+if mind_bad:
+    print("\n  a handed mind must win over the ambient one, or an NPC silently falls through to"
+          "\n  'not signed in' — or spends a seat nobody gave it.")
+    bad.extend(mind_bad)
 for rel, n, line in seq_bad:
     print(f"  SEQ FROM LENGTH  {rel}:{n}\n                   {line}")
 if seq_bad:
@@ -100,12 +125,14 @@ for rel, n, line in bad:
 bad.extend(seq_bad)          # merged only for the exit code, after each was printed as itself
 
 if bad:
-    paths = len(bad) - len(seq_bad)
+    paths = len(bad) - len(seq_bad) - len(mind_bad)
     parts = []
     if paths:
         parts.append(f"{paths} hardcoded path(s), which work here and nowhere else")
     if seq_bad:
         parts.append(f"{len(seq_bad)} seq(s) taken from an array length, which work until the chain is windowed")
+    if mind_bad:
+        parts.append(f"{len(mind_bad)} reach(es) past a caller for the ambient mind, which ignore the one handed in")
     print(f"\n✗ " + "; and ".join(parts) + ".")
     print("  Both are the worst kind of green: correct on the machine and the day they were written.")
     sys.exit(1)
