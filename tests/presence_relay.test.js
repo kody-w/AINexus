@@ -174,16 +174,53 @@ shapes.handlePeerData('HOST0001', { type: 'playerUpdate', from: '9a1f4c2e-77b0-4
                                     username: 'real', position: { x:0, y:0, z:0 } }, shapeConn);
 R['6_implausible_ids_refused'] = { known: [...shapes.players.keys()].sort(), threw };
 
-// ── 7. a prune releases the GPU, not just the scene slot ────────────────────
-// First-sight creation turned the 5s prune into a remove/recreate cycle: a peer whose tab is
-// backgrounded stops sending (rAF is suspended), is pruned, and is rebuilt when it returns.
-// Without disposal every one of those round trips leaks a full avatar's worth of GPU memory.
+// ── 7. the prune must not invent a departure, and must release the GPU when it is real ──
+// First-sight creation put RELAYED bodies — ones this peer holds no channel to — into the same
+// map as wired ones. They then fell through both guards (`conn` undefined), so five seconds of
+// silence deleted a peer the HOST could still see: "Player left" for somebody who never left,
+// the avatar rebuilt when their tab came back, and their chat under a raw id in between. A
+// backgrounded tab stops the sender's frame loop entirely, so five seconds of relay silence is
+// routine. Liveness of a relayed body is the host's to report, and it does report it
+// ('playerLeft', case 4). When the prune IS right, it has to release the GPU too: without
+// disposal every remove/recreate round trip leaks a full avatar's worth.
 const pruner = makePeer(MP, { id: 'GUEST005', isHost: false });
 pruner.createPlayerAvatar('GUEST006', { username: 'stalled' });
 disposals.length = 0;
 pruner.players.get('GUEST006').lastUpdate = Date.now() - 6000;
 pruner.update();
-R['7_prune_disposes'] = { stillKnown: [...pruner.players.keys()], disposed: disposals.slice().sort() };
+const survivedShortSilence = pruner.players.has('GUEST006');
+
+// past the grace, with still nothing relaying it, the body does go — and is disposed
+// guarded so a revision that already pruned it reports a FAILED assertion rather than a
+// stack trace — an A/B that crashes tells you nothing about which behaviour was wrong
+if (pruner.players.has('GUEST006')) pruner.players.get('GUEST006').lastUpdate = Date.now() - 120000;
+pruner.update();
+R['7_prune_disposes'] = {
+  relayedBodySurvivesShortSilence: survivedShortSilence,
+  stillKnown: [...pruner.players.keys()],
+  disposed: disposals.slice().sort(),
+};
+
+// ── 7b. a body whose CHANNEL is gone is a different thing, and the count must follow ──
+// updatePlayerCount is the union of connections and players, so refreshing it BEFORE
+// removePlayer recounts the body that is about to go and then never counts again.
+const closed = makePeer(MP, { id: 'GUEST007', isHost: true });
+let seenCounts = [];
+closed.updatePlayerCount = function () {
+  const seen = new Set([...this.connections.keys(), ...this.players.keys()]);
+  seenCounts.push(seen.size + 1);
+};
+closed.createPlayerAvatar('GUEST008', { username: 'live' });
+closed.createPlayerAvatar('GUEST009', { username: 'dead' });
+closed.connections.set('GUEST008', { peer: 'GUEST008', open: true, send: () => {} });
+closed.connections.set('GUEST009', { peer: 'GUEST009', open: false, send: () => {} });
+closed.players.get('GUEST009').lastUpdate = Date.now() - 6000;
+seenCounts = [];
+closed.update();
+R['7b_dead_channel_pruned_and_counted'] = {
+  stillKnown: [...closed.players.keys()].sort(),
+  countAfter: seenCounts.length ? seenCounts[seenCounts.length - 1] : null,
+};
 
 // ── 8. a prune must not tear down geometry three.js shares page-wide ────────
 // The nametag sprite's quad is not ours to release: every other player's nametag and
@@ -192,6 +229,67 @@ R['8_shared_sprite_geometry_survives'] = {
   disposedSharedQuad: disposals.includes('SpriteSharedGeometry'),
   ourSpriteMaterialDisposed: disposals.includes('SpriteMaterial'),
   ourCanvasTextureDisposed: disposals.includes('CanvasTexture'),
+};
+
+// ── 9. what the host passes on is bounded, whatever arrives ────────────────
+// The relay is the amplifier. peerjs opens these channels with serialization 'json' and
+// refuses to send any frame at or above its 16300-byte chunk limit — it raises MessageToBig
+// on that DataConnection, and conn.on('error') here treats that as the peer being gone. A
+// relayed frame that crosses the limit therefore evicts every OTHER member of the room, and
+// permanently, since the door check drops the messages of anyone no longer in `connections`.
+// So the host must forward a frame it BUILT from the fields the room reads, never the frame
+// it received: extra keys ride along unnoticed and a long name is enough on its own.
+const relay = makePeer(MP, { id: 'HOST0002', isHost: true });
+const sent = [];
+for (const id of ['GUEST010', 'GUEST011']) {
+  relay.connections.set(id, { peer: id, open: true, send: (m) => sent.push({ to: id, m }) });
+  relay.createPlayerAvatar(id, { username: id });
+}
+const hostile = {
+  type: 'playerUpdate',
+  username: 'A'.repeat(16186),                       // a frame just under the limit going IN
+  position: { x: 1, y: 2, z: 3, pad: 'B'.repeat(4000) },
+  rotation: { x: 0, y: 0.5, z: 0 },
+  extra: 'C'.repeat(4000),
+};
+relay.handlePeerData('GUEST010', hostile, relay.connections.get('GUEST010'));
+const relayedFrames = sent.filter(x => x.m && x.m.type === 'playerUpdate');
+const biggest = relayedFrames.reduce((n, x) => Math.max(n, Buffer.byteLength(JSON.stringify(x.m), 'utf8')), 0);
+R['9_relay_is_bounded'] = {
+  recipients: relayedFrames.map(x => x.to),
+  biggestRelayedFrame: biggest,
+  underPeerjsChunkLimit: biggest < 16300,
+  keysForwarded: relayedFrames.length ? Object.keys(relayedFrames[0].m).sort() : [],
+  padStrippedFromPosition: relayedFrames.length ? !('pad' in (relayedFrames[0].m.position || {})) : false,
+  roomIntact: relay.connections.size === 2,
+};
+
+// a position that is not three real numbers is not forwarded as one
+sent.length = 0;
+relay.handlePeerData('GUEST010', { type: 'playerUpdate', username: 'ok',
+                                   position: { x: 1, y: NaN, z: 3 } }, relay.connections.get('GUEST010'));
+R['9b_nonfinite_position_dropped'] = {
+  forwardedPosition: sent.length ? ('position' in sent[0].m) : null,
+};
+
+// ── 10. the relay budget sits above the rate this class itself sends at ────
+// broadcastPlayerUpdate sends every `updateInterval` ms with no dirty check, so a stationary
+// peer sends as fast as a moving one. A budget under that does not throttle smoothly: the
+// window is over ALLOWED timestamps, so it passes a burst and then blocks solid until the
+// oldest token ages out — seconds at a time with no relayed motion, while the host, wired
+// directly, sees nothing wrong.
+const budget = makePeer(MP, { id: 'HOST0003', isHost: true });
+budget.connections.set('GUEST012', { peer: 'GUEST012', open: true, send: () => {} });
+budget.connections.set('GUEST013', { peer: 'GUEST013', open: true, send: (m) => { if (m.type === 'playerUpdate') passed++; } });
+budget.createPlayerAvatar('GUEST012', { username: 'mover' });
+let passed = 0;
+const HZ = Math.round(1000 / (budget.updateInterval || 50));       // what this class sends at
+for (let i = 0; i < HZ * 5; i++) {                                  // five seconds of it
+  budget.handlePeerData('GUEST012', { type: 'playerUpdate', username: 'mover',
+                                      position: { x: i, y: 0, z: 0 } }, budget.connections.get('GUEST012'));
+}
+R['10_budget_clears_our_own_send_rate'] = {
+  sendRateHz: HZ, offeredIn5s: HZ * 5, relayed: passed, everyOneRelayed: passed === HZ * 5,
 };
 
 console.log(JSON.stringify(R, null, 1));
@@ -207,11 +305,21 @@ const pass =
   R['5_mint_is_capped'].bodies <= 64 && R['5_mint_is_capped'].warnings === 1 &&
   R['6_implausible_ids_refused'].threw === null &&
   R['6_implausible_ids_refused'].known.join(',') === '9a1f4c2e-77b0-4f31-8c6d-0e2b5a9d1f77,HOST0001' &&
+  R['7_prune_disposes'].relayedBodySurvivesShortSilence === true &&
   R['7_prune_disposes'].stillKnown.length === 0 &&
+  R['7b_dead_channel_pruned_and_counted'].stillKnown.join(',') === 'GUEST008' &&
+  R['7b_dead_channel_pruned_and_counted'].countAfter === 2 &&
   R['7_prune_disposes'].disposed.join(',') ===
     'CanvasTexture,CylinderGeometry,MeshStandardMaterial,PointLight,SphereGeometry,SpriteMaterial' &&
   R['8_shared_sprite_geometry_survives'].disposedSharedQuad === false &&
   R['8_shared_sprite_geometry_survives'].ourSpriteMaterialDisposed === true &&
-  R['8_shared_sprite_geometry_survives'].ourCanvasTextureDisposed === true;
+  R['8_shared_sprite_geometry_survives'].ourCanvasTextureDisposed === true &&
+  R['9_relay_is_bounded'].underPeerjsChunkLimit === true &&
+  R['9_relay_is_bounded'].recipients.join(',') === 'GUEST011' &&
+  R['9_relay_is_bounded'].keysForwarded.join(',') === 'from,position,rotation,type,username' &&
+  R['9_relay_is_bounded'].padStrippedFromPosition === true &&
+  R['9_relay_is_bounded'].roomIntact === true &&
+  R['9b_nonfinite_position_dropped'].forwardedPosition === false &&
+  R['10_budget_clears_our_own_send_rate'].everyOneRelayed === true;
 console.log(pass ? 'ALL PASS' : 'FAIL');
 process.exit(pass ? 0 : 1);

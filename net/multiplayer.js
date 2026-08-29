@@ -38,6 +38,23 @@
     // texture, all resident on the GPU. A host looping `from:'x'+i` spends nothing and
     // takes the guest's tab with it, so there is a ceiling far above any real room.
     const MAX_PLAYER_BODIES = 64;
+    const MAX_NAME = 40;                 // what uniqueName/display already truncate to
+    // Above the 20/s this class sends at (updateInterval = 50), so an honest peer never
+    // trips it, while a peer sending far faster than its own loop can still be cut off.
+    const PRESENCE_BUDGET = 150;         // per 5000ms = 30/s
+    // Relayed bodies are fed by the host, not by a channel we hold. Their liveness is the
+    // HOST's to report (it sends 'playerLeft'), so silence here needs a long grace: a
+    // backgrounded tab stops the sender's frame loop entirely, and reaping on five seconds
+    // announced departures that never happened.
+    const RELAY_GRACE = 90000;
+    // Only the three numbers the room reads, and only if they are real numbers. This is what
+    // bounds the size of anything the host passes on.
+    function vec3(v) {
+        if (!v || typeof v !== 'object') return null;
+        const x = v.x, y = v.y, z = v.z;
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+        return { x, y, z };
+    }
 
     class MultiplayerManager {
         constructor(worldInstance) {
@@ -534,14 +551,37 @@
                     // The room is a star: every joiner is wired only to the host. Presence has
                     // to be passed on for the same reason chat does, and on the same budget —
                     // it is the host's uplink either way.
-                    if (this.isHost && this.allowRate(peerId, 'presence', 40, 5000)) {
-                        this.connections.forEach((c, id) => {
-                            if (id === peerId) return;
-                            try {
-                                c.send({ type: 'playerUpdate', from: peerId, username: data.username,
-                                         position: data.position, rotation: data.rotation });
-                            } catch (e) {}
-                        });
+                    //
+                    // The budget has to sit ABOVE the rate this class itself sends at, or the
+                    // fix delivers guests who are visible and frozen. broadcastPlayerUpdate
+                    // sends every `updateInterval` ms with no dirty check, so a stationary peer
+                    // sends as fast as a moving one; and allowRate's window is over ALLOWED
+                    // timestamps, so a budget under the send rate does not throttle smoothly —
+                    // it passes a burst and then blocks solid until the oldest token ages out.
+                    // At 40/5s against a 20/s sender that was ~3s of every 5 with no relayed
+                    // motion at all: Alice walks, freezes for three seconds, teleports. The
+                    // host, wired directly, sees none of it.
+                    //
+                    // The host also forwards a frame IT builds, out of the fields the room
+                    // actually reads — never the frame it received. Extra keys ride along
+                    // unnoticed, and peerjs refuses to send any json frame at or above its
+                    // 16300-byte chunk limit: it raises MessageToBig on that DataConnection,
+                    // and conn.on('error') here treats that as the peer being gone. So one
+                    // oversize relayed frame evicted every OTHER member of the room, and
+                    // permanently — the door check drops their later messages once they are
+                    // out of `connections`. A clamped frame cannot reach that size.
+                    if (this.isHost && this.allowRate(peerId, 'presence', PRESENCE_BUDGET, 5000)) {
+                        const relayed = { type: 'playerUpdate', from: peerId };
+                        if (typeof data.username === 'string') relayed.username = data.username.slice(0, MAX_NAME);
+                        const pos = vec3(data.position), rot = vec3(data.rotation);
+                        if (pos) relayed.position = pos;
+                        if (rot) relayed.rotation = rot;
+                        // a snapshot: a send that fails fires that connection's error handler
+                        // synchronously, which deletes from the very map being walked
+                        for (const [id, c] of [...this.connections]) {
+                            if (id === peerId) continue;
+                            try { c.send(relayed); } catch (e) {}
+                        }
                     }
                     break;
                 }
@@ -983,14 +1023,30 @@
             // A channel that died without ever saying 'close' is the other half, and it is why
             // this looks at `conn.open` rather than merely at the map: a member whose data
             // channel is gone must stop being counted, not just stop being drawn.
+            //
+            // A body with NO connection at all is the case this class did not have before the
+            // relay existed, and it fell through both guards: `conn` was undefined, so the
+            // liveness check could not apply and the count was never refreshed. A guest then
+            // announced "Player left" for a peer the HOST could still see, deleted its avatar,
+            // and re-minted the whole body when that peer came back — every cycle burning a
+            // canvas, texture, material and nametag, and leaving its chat under a raw id.
+            //
+            // updatePlayerCount also has to run AFTER removePlayer, not before: the count is
+            // the union of connections and players, so counting first counts the body that is
+            // about to go and then never counts again.
             const now = Date.now();
-            this.players.forEach((player, peerId) => {
-                if (now - player.lastUpdate <= 5000) return;
+            for (const [peerId, player] of [...this.players]) {
+                const silent = now - player.lastUpdate;
                 const conn = this.connections.get(peerId);
-                if (conn && conn.open !== false) return;
-                if (conn) { this.connections.delete(peerId); this.updatePlayerCount(); }
-                this.removePlayer(peerId);
-            });
+                if (conn) {
+                    if (conn.open !== false || silent <= 5000) continue;   // an open channel: silence is not absence
+                    this.connections.delete(peerId);
+                    this.removePlayer(peerId);
+                    this.updatePlayerCount();
+                    continue;
+                }
+                if (silent > RELAY_GRACE) { this.removePlayer(peerId); this.updatePlayerCount(); }
+            }
         }
     }
 

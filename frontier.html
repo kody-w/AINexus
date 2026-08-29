@@ -115,6 +115,13 @@ const params = new URLSearchParams(location.search);
 // a list, because the list is 60-odd files and would rot the moment one is added.
 const WORLD_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/;
 const askedWorld = params.get('world');
+// Every assignment to the frame goes through here, so the rule cannot be enforced at one
+// door and forgotten at another — which is exactly what happened the first time.
+function setFrame(url, suffix) {
+  if (typeof url !== 'string' || !WORLD_SHAPE.test(url) || url.includes('..')) return false;
+  frame.src = url + (suffix || '');
+  return true;
+}
 const world = (askedWorld && WORLD_SHAPE.test(askedWorld) && !askedWorld.includes('..'))
   ? askedWorld : 'index.html';
 let joinFrag = location.hash && location.hash.includes('#join=') ? location.hash : '';
@@ -630,7 +637,14 @@ function fire(x, y) {
     const room = (location.hash && location.hash.includes('#join=')) ? location.hash : (() => {
       try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
         return r && Date.now() - r.at < 6 * 3600e3 ? '#join=' + r.id + '.' + r.secret : ''; } catch (e) { return ''; } })();
-    frame.src = what.url + (what.url.includes('?') ? '&' : '?') + 'from=frontier' + room;
+    // The same shape rule the ?world= sink applies. This is the OTHER assignment to the
+    // token-bearing page's iframe, and its url comes out of the world document — a portal
+    // orb carries whatever userData.url the imported world set. Guarding one sink and not
+    // the other guards nothing.
+    if (!setFrame(what.url, (what.url.includes('?') ? '&' : '?') + 'from=frontier' + room)) {
+      note('that portal does not name a world this page will open');
+      return true;
+    }
     hot = null; drive = null;
     return true;
   }
