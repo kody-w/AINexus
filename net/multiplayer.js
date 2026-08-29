@@ -58,6 +58,25 @@
         }
     }
 
+    // A guest learns who an update is about from `data.from`, a field the HOST fills in —
+    // and a host is only ever "whoever sent me a link". Two things bound what that can cost.
+    // First: the id has to look like a peer id. Every id that legitimately reaches this code
+    // was minted by the broker (PeerJS hands out UUIDs) or is a room id copied from one, so
+    // it lives in [A-Za-z0-9_-]. Anything else is not a peer that exists anywhere; it is a
+    // map key somebody is inventing.
+    const PEER_ID_SHAPE = /^[A-Za-z0-9_-]{1,64}$/;
+    function isPlausiblePeerId(id) {
+        return typeof id === 'string' && PEER_ID_SHAPE.test(id);
+    }
+
+    // Second: a ceiling on how many bodies one receiver will ever mint. Each avatar is a
+    // Group carrying its own geometries, material, a PointLight and a 256x64 canvas texture,
+    // all of it resident on the GPU; a host looping `from:'x'+i` up to 50000 spends nothing
+    // and takes the guest's tab with it. 64 is far above any room this has ever held — a
+    // PeerJS star saturates the host's uplink around a dozen guests, long before this — and
+    // far below the point where the allocations hurt.
+    const MAX_PLAYER_BODIES = 64;
+
     class MultiplayerManager {
         constructor(worldInstance) {
             this.world = worldInstance;
@@ -420,6 +439,11 @@
                     // author, so `from` is ignored; a joiner hears about everyone except the
                     // host second-hand and has to take the host's stamp, exactly as for chat.
                     const who = this.isHost ? peerId : (data.from || peerId);
+                    // On the host `who` is the connection itself and cannot be anything else.
+                    // On a guest it is whatever the host typed, and it is about to be used as
+                    // a map key and a scene identity — so it stops here unless it could be a
+                    // real peer id.
+                    if (!isPlausiblePeerId(who)) break;
                     const mineId = this.peer && this.peer.id;
                     if (who === mineId) break;                    // never grow a body for myself
                     if (data.username) {
@@ -429,7 +453,10 @@
                             known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
-                                if (old) known.avatar.remove(old);
+                                // The discarded sprite owns a canvas texture of its own, and a
+                                // rename is not rare — nothing stops a host claiming a new name
+                                // on every update, which is a texture per message.
+                                if (old) { known.avatar.remove(old); this.disposeAvatar(old); }
                                 const tag = this.createNameTag(who, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
@@ -439,8 +466,21 @@
                     // it and it has no body. Give it one the first time it is heard from —
                     // without this two joiners stay permanently invisible to each other.
                     if (!this.players.has(who)) {
-                        this.createPlayerAvatar(who, { username: data.username });
-                        this.updatePlayerCount();
+                        if (this.players.size >= MAX_PLAYER_BODIES) {
+                            // Said once, not once per message: the flood that reaches this
+                            // arrives as fast as the channel will carry it, and a warn per
+                            // message is its own way to hang the tab. Everything else in the
+                            // case still runs — a host must keep relaying for the peers it
+                            // does know about.
+                            if (!this.mintCapReported) {
+                                this.mintCapReported = true;
+                                console.warn('[nexus] refusing to build more than ' + MAX_PLAYER_BODIES +
+                                             ' player bodies — this room is claiming more members than a room can have');
+                            }
+                        } else {
+                            this.createPlayerAvatar(who, { username: data.username });
+                            this.updatePlayerCount();
+                        }
                     }
                     if (data.position) this.updatePlayerPosition(who, data.position, data.rotation);
                     // The room is a star: every joiner is wired only to the host. Presence has
@@ -614,8 +654,11 @@
             const targetPos = new THREE.Vector3(position.x, position.y, position.z);
             player.avatar.position.lerp(targetPos, 0.3);
 
-            // Update rotation
-            player.avatar.rotation.y = rotation.y;
+            // The caller checks that `position` arrived; nothing ever checked that `rotation`
+            // did. On a guest this message is relayed, so its shape is the host's choice and
+            // not the sender's — a field that simply isn't there has to mean "unchanged"
+            // rather than a throw halfway through the presence loop.
+            if (rotation && typeof rotation.y === 'number') player.avatar.rotation.y = rotation.y;
 
             player.lastUpdate = Date.now();
         }
@@ -771,10 +814,39 @@
             return `${adj}${noun}${Math.floor(Math.random() * 100)}`;
         }
 
+        // Everything under an avatar group is minted per avatar in createPlayerAvatar: its own
+        // CylinderGeometry and SphereGeometry, one MeshStandardMaterial worn by both the body
+        // and the head (hence the seen-set — the same object is reached twice), the PointLight,
+        // and the 256x64 CanvasTexture behind the nametag's SpriteMaterial. Nothing here is
+        // shared with another player, and none of it leaves the GPU when the group leaves the
+        // scene. That was survivable while removal was one-way. It stopped being survivable
+        // when first sight started rebuilding bodies: a backgrounded tab suspends rAF and so
+        // stops sending at all, gets pruned at 5 seconds, and is rebuilt the moment it comes
+        // back — every round trip leaking a full set.
+        disposeAvatar(avatar) {
+            if (!avatar || typeof avatar.traverse !== 'function') return;
+            const seen = new Set();
+            const release = (thing) => {
+                if (!thing || seen.has(thing)) return;
+                seen.add(thing);
+                if (thing.map) release(thing.map);      // the canvas texture under a SpriteMaterial
+                if (typeof thing.dispose === 'function') {
+                    try { thing.dispose(); } catch (e) {}
+                }
+            };
+            avatar.traverse((obj) => {
+                release(obj.geometry);
+                if (Array.isArray(obj.material)) obj.material.forEach(release);
+                else release(obj.material);
+                if (obj.isLight || obj.type === 'PointLight') release(obj);
+            });
+        }
+
         removePlayer(peerId) {
             const player = this.players.get(peerId);
             if (player) {
                 this.world.scene.remove(player.avatar);
+                this.disposeAvatar(player.avatar);
                 this.players.delete(peerId);
                 this.showNotification(`Player left: ${player.username}`);
                 this.updatePlayerCount();

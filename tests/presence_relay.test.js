@@ -22,13 +22,26 @@ class Obj3D {
   traverse(fn) { fn(this); this.children.forEach(c => c.traverse && c.traverse(fn)); }
   getObjectByName(n) { let hit = null; this.traverse(o => { if (!hit && o.name === n) hit = o; }); return hit; }
 }
+// GPU-resident things are stubbed as objects that remember they were released, because the
+// leak this file guards against is invisible from the scene graph: removing a group from the
+// scene is exactly as observable as removing one AND disposing what it held.
+const disposals = [];
+function releasable(tag) {
+  return class {
+    constructor(opts) { this.__tag = tag; if (opts && opts.map) this.map = opts.map; }
+    dispose() { disposals.push(tag); }
+  };
+}
 const THREE = {
   Group: class extends Obj3D { constructor() { super('Group'); } },
-  Mesh: class extends Obj3D { constructor() { super('Mesh'); } },
-  Sprite: class extends Obj3D { constructor() { super('Sprite'); } },
-  PointLight: class extends Obj3D { constructor() { super('PointLight'); } },
-  CylinderGeometry: class {}, SphereGeometry: class {},
-  MeshStandardMaterial: class {}, SpriteMaterial: class {}, CanvasTexture: class {},
+  // the stub has to CARRY geometry/material, or a traversal looking for them finds an
+  // avatar that appears to own nothing and a leak passes as a clean teardown
+  Mesh: class extends Obj3D { constructor(geometry, material) { super('Mesh'); this.geometry = geometry; this.material = material; } },
+  Sprite: class extends Obj3D { constructor(material) { super('Sprite'); this.material = material; } },
+  PointLight: class extends Obj3D { constructor() { super('PointLight'); } dispose() { disposals.push('PointLight'); } },
+  CylinderGeometry: releasable('CylinderGeometry'), SphereGeometry: releasable('SphereGeometry'),
+  MeshStandardMaterial: releasable('MeshStandardMaterial'), SpriteMaterial: releasable('SpriteMaterial'),
+  CanvasTexture: releasable('CanvasTexture'),
   Vector3: class { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } },
 };
 
@@ -120,6 +133,52 @@ R['3_counts_the_room'] = counts;
 host.relayDeparture('GUEST001');
 R['4_departure_relayed'] = { g2_knows_after: [...g2.players.keys()].sort() };
 
+// ── 5. a host cannot mint an unbounded crowd in a guest's tab ───────────────
+// `from` is the host's word, and a room is just a link somebody sent you. Every accepted
+// name costs the guest a Group with two geometries, a material, a light and a 256x64
+// texture, so a loop of 50000 of them is a tab that never comes back.
+const flood = makePeer(MP, { id: 'GUEST003', isHost: false });
+flood.createPlayerAvatar('HOST0001', {});
+const floodConn = { peer: 'HOST0001', open: true, send: () => {} };
+const realWarn = console.warn;
+let warns = 0;
+console.warn = (...a) => { if (String(a[0]).includes('player bodies')) warns++; };
+for (let i = 1; i <= 500; i++) {
+  flood.handlePeerData('HOST0001', { type: 'playerUpdate', from: 'x' + i, username: 'a',
+                                     position: { x:0, y:0, z:0 }, rotation: { y:0 } }, floodConn);
+}
+console.warn = realWarn;
+R['5_mint_is_capped'] = { claimed: 500, bodies: flood.players.size, warnings: warns };
+
+// ── 6. an id that no broker could have minted is not an identity ────────────
+// Anything that reaches this code was handed out by the signalling server or copied from a
+// room id, so it lives in [A-Za-z0-9_-]. A shape outside that is a map key being invented.
+const shapes = makePeer(MP, { id: 'GUEST004', isHost: false });
+shapes.createPlayerAvatar('HOST0001', {});
+const shapeConn = { peer: 'HOST0001', open: true, send: () => {} };
+let threw = null;
+for (const bad of ['bad id', '../../etc/passwd', 'x'.repeat(65), '<script>', 123, {}, null, true]) {
+  try {
+    shapes.handlePeerData('HOST0001', { type: 'playerUpdate', from: bad, username: 'a',
+                                        position: { x:0, y:0, z:0 }, rotation: { y:0 } }, shapeConn);
+  } catch (e) { threw = String(e && e.message); }
+}
+// ...and a well-shaped one still gets its body, so the check is a filter and not a wall
+shapes.handlePeerData('HOST0001', { type: 'playerUpdate', from: '9a1f4c2e-77b0-4f31-8c6d-0e2b5a9d1f77',
+                                    username: 'real', position: { x:0, y:0, z:0 } }, shapeConn);
+R['6_implausible_ids_refused'] = { known: [...shapes.players.keys()].sort(), threw };
+
+// ── 7. a prune releases the GPU, not just the scene slot ────────────────────
+// First-sight creation turned the 5s prune into a remove/recreate cycle: a peer whose tab is
+// backgrounded stops sending (rAF is suspended), is pruned, and is rebuilt when it returns.
+// Without disposal every one of those round trips leaks a full avatar's worth of GPU memory.
+const pruner = makePeer(MP, { id: 'GUEST005', isHost: false });
+pruner.createPlayerAvatar('GUEST006', { username: 'stalled' });
+disposals.length = 0;
+pruner.players.get('GUEST006').lastUpdate = Date.now() - 6000;
+pruner.update();
+R['7_prune_disposes'] = { stillKnown: [...pruner.players.keys()], disposed: disposals.slice().sort() };
+
 console.log(JSON.stringify(R, null, 1));
 const pass =
   R['1_host_label_replaced_not_stacked'].spriteCount === 1 &&
@@ -128,6 +187,13 @@ const pass =
   R['2_guest_sees_other_guest'].g1_knows.join(',') === 'GUEST002,HOST0001' &&
   R['2_guest_sees_other_guest'].g2_names.join(',') === 'Nova (AI),one (AI)' &&
   R['3_counts_the_room'].host === 3 && R['3_counts_the_room'].g1 === 3 && R['3_counts_the_room'].g2 === 3 &&
-  R['4_departure_relayed'].g2_knows_after.join(',') === 'HOST0001';
+  R['4_departure_relayed'].g2_knows_after.join(',') === 'HOST0001' &&
+  R['5_mint_is_capped'].bodies < R['5_mint_is_capped'].claimed &&
+  R['5_mint_is_capped'].bodies <= 64 && R['5_mint_is_capped'].warnings === 1 &&
+  R['6_implausible_ids_refused'].threw === null &&
+  R['6_implausible_ids_refused'].known.join(',') === '9a1f4c2e-77b0-4f31-8c6d-0e2b5a9d1f77,HOST0001' &&
+  R['7_prune_disposes'].stillKnown.length === 0 &&
+  R['7_prune_disposes'].disposed.join(',') ===
+    'CanvasTexture,CylinderGeometry,MeshStandardMaterial,PointLight,SphereGeometry,SpriteMaterial';
 console.log(pass ? 'ALL PASS' : 'FAIL');
 process.exit(pass ? 0 : 1);
