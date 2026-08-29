@@ -30,6 +30,38 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const log = (...a) => { try { console.log('[drive]', ...a); } catch (e) {} };
 
+  // ── bounds ────────────────────────────────────────────────────────────────
+  // Every number below arrives from a language model, so it is an ARGUMENT, not a fact. Left
+  // unbounded they are not exotic bugs but the ordinary ones: walk(600000) holds a key down for
+  // ten minutes, wait(600000) sits on the tick for ten minutes, and scan(100000) is four hours
+  // of screenshots — each of them silent, and none of them stoppable. So a verb takes the
+  // biggest number a person could plausibly have meant, says out loud what it did with the
+  // rest, and gets on with it. A refusal a mind can read beats a page that stops answering.
+  const MAX_WALK_MS = 5000, MAX_WAIT_MS = 30000, MAX_SCAN = 16, MAX_LOOK = 2000;
+  const num = (v, lo, hi, dflt) => {
+    const n = typeof v === 'number' ? v : (v === undefined || v === null || v === '' ? NaN : Number(v));
+    if (!isFinite(n)) return dflt;
+    return Math.max(lo, Math.min(hi, Math.round(n)));
+  };
+  const capped = (v, lo, hi, dflt, what) => {
+    const n = num(v, lo, hi, dflt);
+    if (isFinite(Number(v)) && Math.round(Number(v)) !== n) log(what + ' ' + v + ' capped to ' + n);
+    return n;
+  };
+
+  // A stop has to be able to reach a wait that is ALREADY running, so the hands never sleep in
+  // one long block: they sleep in slices and each slice checks whether the generation they
+  // belong to is still the current one. Whatever the operator stopped stops at the next slice —
+  // and the key it was holding down comes back up.
+  async function rest(ms, gen) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (api._gen !== gen) return false;
+      await sleep(Math.min(100, end - Date.now()));
+    }
+    return api._gen === gen;
+  }
+
   // ── mirror this frame's console to the tower ──────────────────────────────
   ['log', 'warn', 'error'].forEach(level => {
     const orig = console[level].bind(console);
@@ -80,7 +112,11 @@
   const nskey = k => 'nexus:' + me() + ':' + k;
 
   function sloshGuard(payload) {
-    const text = JSON.stringify(payload || {});
+    let text;
+    // a function, a symbol, a circular object: JSON has nothing to hand a portal, and the
+    // undefined it returns used to explode one line later on `.length` of undefined
+    try { text = JSON.stringify(payload || {}); } catch (e) { throw new Error('carry refused: ' + e.message); }
+    if (typeof text !== 'string') throw new Error('carry refused: that is not something a portal can carry');
     if (text.length > CARRY_MAX) throw new Error('carry refused: ' + text.length + 'B over the ' + CARRY_MAX + 'B limit');
     if (SECRET_SHAPES.test(text)) throw new Error('carry refused: that looks like a credential — secrets never slosh');
     return text;
@@ -152,20 +188,31 @@
         w.isPointerLocked = true;
         if (!api._tookPointer) { api._tookPointer = true; log('holding the pointer (the page turns only when the mouse is captured)'); }
       }
-      mouse('mousemove', { movementX: dx | 0, movementY: dy | 0 });
+      mouse('mousemove', { movementX: capped(dx, -MAX_LOOK, MAX_LOOK, 0, 'look dx'),
+                           movementY: capped(dy, -MAX_LOOK, MAX_LOOK, 0, 'look dy') });
       await sleep(30);
       return api.snapshot().me;
     },
 
     async walk(dir, ms) {
-      const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
-      key(k, true); await sleep(Math.max(50, ms | 0)); key(k, false); await sleep(40);
+      const k = { forward: 'w', back: 's', left: 'a', right: 'd', w: 'w', a: 'a', s: 's', d: 'd' }[
+        typeof dir === 'string' ? dir.toLowerCase() : dir];
+      // An unknown direction used to become a keystroke of its very own — "[object Object]"
+      // down, "[object Object]" up, nobody listening — and then the snapshot came back as
+      // though the player had walked. A direction the hands do not have is a refusal.
+      if (!k) { log('refused: walk needs forward|back|left|right, not ' + JSON.stringify(dir)); return false; }
+      const gen = api._gen;
+      key(k, true);
+      const whole = await rest(capped(ms, 50, MAX_WALK_MS, 600, 'walk ms'), gen);
+      key(k, false); await sleep(40);            // the key comes up whatever happened
+      if (!whole) log('walk cut short — stopped mid-stride');
       return api.snapshot().me;
     },
 
     async click(x, y) {
       if (api._filming) { log('refused: a camera does not click — it would step through a portal mid-shot'); return false; }
-      const o = { clientX: x === undefined ? innerWidth / 2 : x, clientY: y === undefined ? innerHeight / 2 : y };
+      const o = { clientX: isFinite(Number(x)) ? Number(x) : innerWidth / 2,
+                  clientY: isFinite(Number(y)) ? Number(y) : innerHeight / 2 };
       mouse('mousedown', o); mouse('mouseup', o); mouse('click', o); await sleep(60); return true;
     },
 
@@ -187,8 +234,12 @@
 
     async aim(name) {
       const w = W(); if (!w) return false;
-      const p = (w.portalIndex || []).find(p => p.name.toLowerCase().includes(String(name).toLowerCase()));
-      if (!p) { log('no portal called', name); return false; }
+      if (name === undefined || name === null || String(name) === '') { log('refused: aim needs the name of a portal'); return false; }
+      // a portal with no name in the world's own index used to throw here and take the step
+      // with it; a nameless door is simply not the one that was asked for
+      const needle = String(name).toLowerCase();
+      const p = (w.portalIndex || []).find(p => String((p && p.name) || '').toLowerCase().includes(needle));
+      if (!p) { log('no portal called', String(name).slice(0, 60)); return false; }
       const wrap = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
       const want = () => { const c = w.camera.position; return Math.atan2(p.x - c.x, p.z - c.z); };
 
@@ -220,21 +271,53 @@
         } catch (e) {}
       }
       await api.walk('forward', 900);
+      // THE CROSSHAIR IS THE TRUTH. This world enters a portal from a centre-screen raycast, so
+      // a click with nothing under the crosshair opens nothing — and travel used to log
+      // "entered <name>" for it and hand back true, which is the receipt lying about the one
+      // move that changes worlds. Ask the page's own question before claiming its answer.
+      const under = api._crosshair();
+      if (under.checked && !under.portal) {
+        log('did not enter', name, '— the crosshair is on nothing, so the click opens no door');
+        return false;
+      }
       await api.click();
-      log('entered', name, api._carry ? '(carrying ' + Object.keys(api._carry).join(',') + ')' : '');
+      log('entered', name, under.checked ? '' : '(unverified — this world exposes no raycaster)',
+          api._carry ? '(carrying ' + Object.keys(api._carry).join(',') + ')' : '');
       return true;
+    },
+
+    // what the centre of the screen is actually on — the page's own question, asked the page's
+    // own way, so the answer is the one its click handler is about to get
+    _crosshair() {
+      const w = W();
+      if (!w || !w.raycaster || !w.portals || !w.camera || !window.THREE) return { checked: false, portal: null };
+      try {
+        w.raycaster.setFromCamera(new window.THREE.Vector2(0, 0), w.camera);
+        const hit = w.raycaster.intersectObjects(w.portals, true)[0];
+        let o = hit && hit.object;
+        while (o && !(o.userData && o.userData.url) && o.parent) o = o.parent;
+        const ud = (o && o.userData) || {};
+        return { checked: true, portal: ud.url ? (ud.name || 'portal') : null,
+                 distance: hit ? Math.round(hit.distance) : null };
+      } catch (e) { return { checked: false, portal: null }; }
     },
 
     // the in-world AI chat: type in the real input, press Enter on it
     async ask(text) {
       const el = document.getElementById('ai-chat-input');
       if (!el) { log('no ai chat on this page'); return false; }
+      const line = String(text === undefined || text === null ? '' : text);
+      if (!line.trim()) { log('refused: ask needs something to ask'); return false; }
       const box = document.getElementById('ai-chat-interface');
       if (box && getComputedStyle(box).display === 'none') { const b = document.querySelector('[onclick*="aiManager"],.ai-chat-toggle'); b && b.click(); await sleep(200); }
-      el.focus(); el.value = String(text);
+      el.focus(); el.value = line;
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', bubbles: true, cancelable: true }));
       await sleep(120);
+      // A page that takes a message clears its own input. Still holding what we typed means the
+      // chat was closed or busy and NOTHING WAS ASKED — and reporting true for that is how a
+      // player spends its next turn waiting for an answer that was never coming.
+      if (el.value === line) { log('the chat did not take it — nothing was asked'); return false; }
       return true;
     },
 
@@ -244,7 +327,9 @@
       let sent = 0;
       mp.connections && mp.connections.forEach(c => { try { c.send({ type: 'chat', message: String(text) }); sent++; } catch (e) {} });
       try { mp.displayChat(mp.peer && mp.peer.id || 'me', String(text)); } catch (e) {}
-      log('said to', sent, 'peer(s):', text);
+      // "said to 0 peer(s)" reads like a delivery. Nobody heard it, and the line should say so.
+      if (!sent) log('said it to nobody — no peer is connected:', String(text).slice(0, 60));
+      else log('said to', sent, 'peer(s):', text);
       return sent;
     },
 
@@ -258,19 +343,25 @@
       const cvs = (w && w.renderer && w.renderer.domElement) || document.querySelector('canvas');
       if (!cvs) { log('nothing to see: no canvas'); return null; }
       try { w && w.renderer && w.scene && w.camera && w.renderer.render(w.scene, w.camera); } catch (e) {}
-      let uri;
+      // a width of -5 or 1e9 is a number a model picked, and a canvas sized from it is either a
+      // throw or an allocation nobody meant; the quality has a legal range too
+      const want = num(o.width, 16, 4096, 512);
+      const q = (typeof o.quality === 'number' && isFinite(o.quality) && o.quality > 0 && o.quality <= 1) ? o.quality : 0.8;
+      let uri, wide;
       try {
-        if (o.width && cvs.width > o.width) {
-          const h = Math.round(cvs.height * (o.width / cvs.width));
-          const off = document.createElement('canvas'); off.width = o.width; off.height = h;
-          off.getContext('2d').drawImage(cvs, 0, 0, o.width, h);
-          uri = off.toDataURL(o.format, o.quality);
+        if (cvs.width > want) {
+          const h = Math.max(1, Math.round(cvs.height * (want / cvs.width)));
+          const off = document.createElement('canvas'); off.width = want; off.height = h;
+          off.getContext('2d').drawImage(cvs, 0, 0, want, h);
+          uri = off.toDataURL(o.format, q); wide = want;
         } else {
-          uri = cvs.toDataURL(o.format, o.quality);
+          uri = cvs.toDataURL(o.format, q); wide = cvs.width;
         }
       } catch (e) { log('vision failed:', e.message); return null; }
       const blank = uri.length < 900;                    // an all-black frame compresses to nothing
-      const shot = { uri, bytes: uri.length, w: o.width, blank, at: new Date().toISOString(), world: document.title };
+      // the width it ACTUALLY is, not the width that was asked for — the mind is told this
+      // number in its percepts, and "1000000000px wide" was never a picture anyone took
+      const shot = { uri, bytes: uri.length, w: wide, blank, at: new Date().toISOString(), world: document.title };
       if (o.send !== false) { try { parent.postMessage({ __autodrive: 'vision', shot }, '*'); } catch (e) {} }
       log('saw', Math.round(uri.length / 1024) + 'KB' + (blank ? ' (looks blank — is anything rendered?)' : ''));
       return shot;
@@ -278,9 +369,15 @@
 
     // look around and bring back several frames — a turn of the head, not one glance
     async scan(steps, degPerStep) {
-      const n = Math.max(1, steps | 0 || 4), d = degPerStep || 90;
+      // scan(100000) is four hours of screenshots posted at the parent, and the loop below used
+      // to take every one of them: the number of glances is a turn of the head, not a budget.
+      const n = capped(steps, 1, MAX_SCAN, 4, 'scan steps'), d = num(degPerStep, 1, 180, 90);
+      const gen = api._gen;
       const shots = [];
-      for (let i = 0; i < n; i++) { shots.push(api.see({ send: true })); await api.look(d * 2.2, 0); await sleep(120); }
+      for (let i = 0; i < n; i++) {
+        if (api._gen !== gen) { log('scan cut short — stopped after', shots.length, 'of', n); break; }
+        shots.push(api.see({ send: true })); await api.look(d * 2.2, 0); await sleep(120);
+      }
       return shots.map(s => s && s.bytes);
     },
 
@@ -301,6 +398,16 @@
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
       if (!secret && !viaCopilot) { log('no mind granted (no brainstem, not signed in) — running on the program alone'); return null; }
+      // A mind is asked WHERE it lives by whatever ran this step, and the brainstem secret rides
+      // on that request — so the address is not a free argument. The brainstem is a thing on
+      // this machine; anywhere else is not a mind, it is somewhere to post a key to.
+      if (secret && !/^(https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?)(\/|$)/.test(String(o.url))) {
+        log('refused: a brainstem lives on this machine — not sending the key to ' + String(o.url).slice(0, 60));
+        return null;
+      }
+      // the generation this thought belongs to: if the operator stops while the model is still
+      // thinking, everything below is a message from before the stop and must not become an act
+      const gen = api._gen;
       // THE BEST MIND AVAILABLE, IN ORDER — and the order is: a local brainstem first, because
       // it is the operator's own with its real senses and memory; otherwise the vbrainstem,
       // where the model calls the verbs directly instead of describing them for us to parse.
@@ -319,6 +426,7 @@
           // If it already spoke through a tool, saying the same thing again is the player
           // repeating itself to the room.
           const spokeAlready = (r.calls || []).some(c => c.tool === 'world_say' || c.tool === 'world_tell');
+          if (api._gen !== gen) { log('the mind answered after a stop — nothing said, nothing done'); return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem', dropped: true }; }
           if (r.words && !spokeAlready) await api.say(r.words.slice(0, 240));
           return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
         } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
@@ -357,6 +465,10 @@
         return null;
       }
       const words = reply.split('|||NEXUS|||')[0].trim();
+      // A MODEL IS SLOWER THAN A KILL SWITCH. Everything from here down is a message written
+      // before the operator stopped, so speaking it or acting on it is the driver carrying out
+      // an order that was cancelled while it was in the post.
+      if (api._gen !== gen) { log('the mind answered after a stop — nothing said, nothing done'); return { words, move: null, dropped: true }; }
       if (words) await api.say(words.slice(0, 240));
       let move = null;
       try { const m = String(block).match(/\{[\s\S]*\}/); if (m) move = JSON.parse(m[0]); } catch (e) {}
@@ -364,8 +476,17 @@
       if (!['look','walk','click','aim','travel','say','ask','press','wait','see','scan','sense','carry'].includes(move.do)) {
         log('refused a move the hands do not have:', move.do); return { words, move: null };
       }
-      if (o.act) await api.run({ steps: [move] });
-      return { words, move };
+      if (!o.act) return { words, move, acted: false };
+      if (api._gen !== gen) { log('the mind answered after a stop — the move is dropped'); return { words, move, acted: false, dropped: true }; }
+      // NOT api.run(). A nested run stopped the program that was running this very step and
+      // then reported 'stopped', so any program with a mind in it silently ended at its first
+      // thought — and the move the hands actually made never reached the journal, because the
+      // nested run carried no onStep. One step, dispatched here, reported to whoever is watching.
+      let out = null, failed = null;
+      try { out = await api._do(move); }
+      catch (e) { failed = String((e && e.message) || e); log('the move failed', move.do, failed); }
+      if (typeof o.onStep === 'function') { try { o.onStep(move.do, failed ? { error: failed } : out, failed || undefined); } catch (e) {} }
+      return { words, move, out, acted: !failed };
     },
 
     // ── camera operator: holds good views, and cannot fall into a portal ─────
@@ -375,6 +496,11 @@
     // cannot wander through a doorway mid-shot.
     async camera(opts) {
       const o = Object.assign({ radius: 30, height: 10, hold: 7000, shots: 0, film: true }, opts || {});
+      // hold:0 is not a fast cut, it is a new shot every animation frame with a screenshot
+      // behind each one; radius and shots are somebody's numbers too
+      o.hold = num(o.hold, 1200, 120000, 7000);
+      o.radius = num(o.radius, 1, 5000, 30);
+      o.shots = num(o.shots, 0, 500, 0);
       const w = W(); if (!w || !w.camera) { log('no camera to operate'); return false; }
       if (api._filming) return true;
       api._filming = true;
@@ -406,12 +532,15 @@
         if (!api._filming) return;
         const now = performance.now();
         if (now > until) {
-          const sh = shots[i % shots.length]; i++; until = now + o.hold;
+          // A SHOT IS A COMPOSITION HELD, not a picture saved. Counting only saved pictures
+          // meant `camera({shots: 3, film: false})` never reached its own limit and filmed for
+          // as long as the tab was open — the one arrangement where the ceiling was needed most.
+          if (o.shots && taken >= o.shots) { log('that was the last of', o.shots, 'shots'); api.cut(); return; }
+          const sh = shots[i % shots.length]; i++; taken++; until = now + o.hold;
           api._shot = sh.name;
           angle += 1.7 + Math.random();                 // cut to a genuinely different angle
           fresh = true;                                 // SNAP on a cut — never swoop through bad framing
           log('shot:', sh.name);
-          if (o.shots && taken >= o.shots) { api.cut(); return; }
         }
         const sh = shots[(i - 1) % shots.length];
         angle += sh.drift || 0.00012;                    // a slow push, never a shake
@@ -421,7 +550,7 @@
         if (fresh) {                                    // the cut lands instantly, then the shot breathes
           cam.position.set(want.x, want.y, want.z);
           fresh = false;
-          if (o.film) { setTimeout(() => { if (api._filming) { api.see({ width: 640, send: true }); taken++; } }, 260); }
+          if (o.film) { setTimeout(() => { if (api._filming) api.see({ width: 640, send: true }); }, 260); }
         } else if (cam.position.lerp) {
           cam.position.lerp(want, 0.06);
         } else {
@@ -454,8 +583,18 @@
       api._filming = false;
       const w = W();
       if (w && api._saved) { w.updateMovement = api._saved.updateMovement; if (api._saved.updateHover && w.updateHover) w.updateHover = api._saved.updateHover; }
-      if (api._tookPointer && w) { w.isPointerLocked = false; api._tookPointer = false; }
+      api._unhand();
       log('cut — camera down, movement and the pointer restored');
+      return true;
+    },
+
+    // give the pointer back. look() tells the page it is holding the mouse so the world will
+    // turn at all, and only cut() ever let go — so after any look, a page nobody was driving
+    // still believed it was captured, and a person's cursor spun the camera.
+    _unhand() {
+      const w = W();
+      if (!api._tookPointer || !w) return false;
+      w.isPointerLocked = false; api._tookPointer = false;
       return true;
     },
 
@@ -563,6 +702,9 @@
     //     pointer cannot click a portal it is merely hovering. The driver turns to face
     //     what the finger picked and then clicks, which is what a person does too.
     hover(px, py) {
+      // elementFromPoint throws on a point that is not a number, and a fingertip is a number
+      // somebody else measured
+      if (!isFinite(Number(px)) || !isFinite(Number(py))) { log('refused: hover needs a point on the screen'); return { kind: 'nothing' }; }
       const el = document.elementFromPoint(px, py);
       const cvs = (() => { const w = W(); return (w && w.renderer && w.renderer.domElement) || document.querySelector('canvas'); })();
       if (el && el !== cvs && (el.closest('button, a, input, [onclick], [role=button]'))) {
@@ -618,42 +760,70 @@
       return what;
     },
 
-    async press(selector) { const el = document.querySelector(selector); if (!el) return false; el.click(); await sleep(80); return true; },
-    async wait(ms) { await sleep(ms | 0); return true; },
+    async press(selector) {
+      // querySelector THROWS on a string that is not a selector, and a model writes the string
+      let el = null;
+      try { el = selector === undefined || selector === null ? null : document.querySelector(String(selector)); }
+      catch (e) { log('refused: not a selector —', String(selector).slice(0, 60)); return false; }
+      if (!el) { log('nothing matches', String(selector).slice(0, 60)); return false; }
+      el.click(); await sleep(80); return true;
+    },
+    async wait(ms) {
+      // waits in slices, so the operator's stop reaches a wait that has already begun
+      const whole = await rest(capped(ms, 0, MAX_WAIT_MS, 1000, 'wait ms'), api._gen);
+      if (!whole) log('wait cut short — stopped');
+      return true;
+    },
+
+    // ONE place where a verb becomes an action, so every door into the hands — a program, a
+    // mind's move, the console — meets the same arguments, the same bounds, the same refusals.
+    async _do(s, onStep) {
+      const verb = s && s.do;
+      return verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
+        : verb === 'walk' ? await api.walk(s.dir || 'forward', s.ms || 600)
+        : verb === 'click' ? await api.click(s.x, s.y)
+        : verb === 'aim' ? await api.aim(s.portal)
+        : verb === 'travel' ? await api.travel(s.portal)
+        : verb === 'ask' ? await api.ask(s.text)
+        : verb === 'say' ? await api.say(s.text)
+        : verb === 'press' ? await api.press(s.selector)
+        : verb === 'wait' ? await api.wait(s.ms || 1000)
+        : verb === 'see' ? api.see(s)
+        : verb === 'sense' ? api.sense(s)
+        : verb === 'carry' ? api.carry(s.payload || {})
+        // the mind's own move is journalled through the same onStep as any other step: it is a
+        // real action, it belongs on the receipt, and it costs a turn against the budget
+        : verb === 'mind' ? await api.mind(Object.assign({}, s, { onStep }))
+        : verb === 'camera' ? await api.camera(s)
+        : verb === 'cut' ? api.cut()
+        : verb === 'pick' ? await api.pick(s.x, s.y)
+        : verb === 'hover' ? api.hover(s.x, s.y)
+        : verb === 'orbs' ? api.orbs()
+        : verb === 'people' ? api.people()
+        : verb === 'tell' ? await api.tell(s.to, s.text)
+        : verb === 'dialogue' ? api.dialogue(s.to)
+        : verb === 'scan' ? await api.scan(s.steps, s.deg)
+        : (log('unknown step', verb), null);
+    },
 
     // run a program: a list of steps, each a verb above
     async run(program, onStep) {
-      const steps = (program && program.steps) || [];
-      api.stop();
+      const steps = program && program.steps;
+      // a program is a LIST. `steps: {}` used to throw "steps is not iterable" out of run and
+      // leave _running true forever — a driver that reports it is playing and never will be —
+      // while a program that is not an object at all ran nothing and reported 'done' for it
+      if (!Array.isArray(steps)) { log('refused: a program is a list of steps'); return 'refused'; }
+      if (program && program.loop && !steps.length) { log('refused: an empty program cannot loop'); return 'refused'; }
+      api._halt();                        // end whatever was running; the camera is not ours to cut
       api._running = true;
+      const gen = api._gen;               // this run's generation — a stop bumps it
+      try {
       do {
         for (const s of steps) {
-          if (!api._running) return 'stopped';
-          const verb = s.do;
+          if (!api._running || api._gen !== gen) return 'stopped';
+          const verb = s && s.do;
           try {
-            const out = verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
-              : verb === 'walk' ? await api.walk(s.dir || 'forward', s.ms || 600)
-              : verb === 'click' ? await api.click(s.x, s.y)
-              : verb === 'aim' ? await api.aim(s.portal)
-              : verb === 'travel' ? await api.travel(s.portal)
-              : verb === 'ask' ? await api.ask(s.text)
-              : verb === 'say' ? await api.say(s.text)
-              : verb === 'press' ? await api.press(s.selector)
-              : verb === 'wait' ? await api.wait(s.ms || 1000)
-              : verb === 'see' ? api.see(s)
-              : verb === 'sense' ? api.sense(s)
-              : verb === 'carry' ? api.carry(s.payload || {})
-              : verb === 'mind' ? await api.mind(s)
-              : verb === 'camera' ? await api.camera(s)
-              : verb === 'cut' ? api.cut()
-              : verb === 'pick' ? await api.pick(s.x, s.y)
-              : verb === 'hover' ? api.hover(s.x, s.y)
-              : verb === 'orbs' ? api.orbs()
-              : verb === 'people' ? api.people()
-              : verb === 'tell' ? await api.tell(s.to, s.text)
-              : verb === 'dialogue' ? api.dialogue(s.to)
-              : verb === 'scan' ? await api.scan(s.steps, s.deg)
-              : (log('unknown step', verb), null);
+            const out = await api._do(s, onStep);
             onStep && onStep(verb, out);
           } catch (e) {
             // A FAILING STEP STILL COSTS A TURN. Counting only the steps that succeed lets a
@@ -665,13 +835,33 @@
             onStep && onStep(verb, { error: String(e && e.message || e) }, e);
           }
         }
-      } while (api._running && program && program.loop);
-      api._running = false;
+        // A LOOP THAT NEVER AWAITS NEVER ENDS. Every verb here can be synchronous — see, orbs,
+        // hover, an unknown step — and a do-while over synchronous verbs is a tight loop on the
+        // one thread the page has: the tab freezes solid, and the kill switch can never arrive
+        // because the click that would call stop() is queued behind a loop that never yields.
+        // One yield per lap costs nothing and keeps the stop reachable.
+        await sleep(0);
+      } while (api._running && api._gen === gen && program && program.loop);
+      } finally { if (api._gen === gen) api._running = false; }
       return 'done';
     },
 
-    stop() { api._running = false; return true; },
-    _running: false, _filming: false, _shot: null,
+    // end the program, and nothing else: a new program replaces the old one, but it is not the
+    // operator's kill switch, so a camera the operator put up stays up.
+    _halt() { api._running = false; api._gen++; return true; },
+
+    // THE KILL SWITCH, and a stop that leaves one clock running is not a stop. It ends the
+    // program, retires the generation everything in flight belongs to (a walk mid-stride, a
+    // wait, a scan, a mind still waiting on a model), puts the camera down — which is its own
+    // requestAnimationFrame loop AND the reason the world's legs are stubbed out — and hands
+    // the pointer back.
+    stop() {
+      api._halt();
+      api.cut();
+      api._unhand();
+      return true;
+    },
+    _running: false, _filming: false, _shot: null, _gen: 0,
   };
 
   window.__autodrive = api;
