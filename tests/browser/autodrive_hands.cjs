@@ -82,8 +82,14 @@ ok('a walk already in stride is ended by a stop, and the key comes back up',
 ok('a direction the hands do not have is refused, not dispatched as a keystroke',
    args.nonsense === false && args.dispatched === 0);
 ok('wait(600000) is bounded', args.longWait < 35000);
-ok('scan(100000) is a turn of the head, not four hours of screenshots',
-   args.glances <= 16 && args.longScan < 15000);
+// THE CAP IS THE INVARIANT; THE CLOCK IS THE MACHINE. MAX_SCAN is 16, so the glance count is an
+// exact property of the code and travels anywhere. How long 16 screenshots take is a property of
+// the hardware — this asserted under 15s and a CI runner needed longer, failing a suite over the
+// runner's speed rather than the cap. The time bound stays only wide enough to prove the claim in
+// the sentence: 100000 requested steps would be hours, so finishing at all is the evidence.
+ok('scan(100000) is a turn of the head, not four hours of screenshots — 16 glances, capped',
+   args.glances <= 16 && args.longScan < 120000);
+console.log('  · ' + args.longScan + 'ms for those 16 glances is the machine, not the cap: reported, not asserted');
 ok('look(1e9) is a flick of the wrist, not four million radians', Math.abs(args.look.yaw) < 100);
 
 // ── 2. the kill switch ───────────────────────────────────────────────────────
