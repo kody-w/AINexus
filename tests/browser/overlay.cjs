@@ -15,6 +15,12 @@ const { chromium } = _req('playwright');
 const fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');   // the repo, wherever it is checked out
 const T = { '.html':'text/html','.js':'text/javascript','.json':'application/json','.css':'text/css' };
+// What the overlay draws over a live world is a design decision with a history: orbs belong over
+// PEOPLE, portals label themselves and must not be ringed a second time, and only the person you
+// are actually turned toward is offered. A screenshot proves none of that, so the counts behind
+// the screenshot are asserted here and this suite exits non-zero when they change.
+let pass = 0, fail = 0;
+const ok = (what, cond) => { console.log((cond ? '  ok   ' : '  FAIL ') + what); cond ? pass++ : fail++; };
 (async () => {
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport:{width:1280,height:820} });
@@ -40,19 +46,48 @@ await p.evaluate(() => {
 });
 await p.waitForTimeout(900);
 await p.screenshot({ path:'/tmp/look1.png' });
-console.log('overlay now draws:', await p.evaluate(() => ({
+const drawn = await p.evaluate(() => ({
   portalCircles: [...document.querySelectorAll('#orbs circle')].filter(c=>!c.classList.contains('person')&&!c.classList.contains('opt')).length,
   reticles: document.querySelectorAll('#orbs path.tick').length,
   idleDots: document.querySelectorAll('#orbs circle.person.idle').length,
   labels: [...document.querySelectorAll('#orbs text')].map(t=>t.textContent).filter(Boolean),
-  hudCollapsed: document.getElementById('hud').classList.contains('min') })));
+  hudCollapsed: document.getElementById('hud').classList.contains('min') }));
+console.log('overlay now draws:', drawn);
 await p.mouse.move(660,430); await p.waitForTimeout(250); await p.mouse.click(660,430); await p.waitForTimeout(600);
 await p.screenshot({ path:'/tmp/look2.png' });
-console.log('after facing + selecting them:', await p.evaluate(() => ({
+const talk = await p.evaluate(() => ({
   options: document.querySelectorAll('#orbs circle.opt').length,
-  ring: [...document.querySelectorAll('#orbs text.opt')].map(t=>t.textContent).filter(t=>isNaN(+t)) })));
+  ring: [...document.querySelectorAll('#orbs text.opt')].map(t=>t.textContent).filter(t=>isNaN(+t)) }));
+console.log('after facing + selecting them:', talk);
 // someone off to the side cannot be engaged
 await p.mouse.move(1140,300); await p.waitForTimeout(200);
+const aside = await p.evaluate(() => ({
+  target: document.getElementById('target').textContent,
+  options: document.querySelectorAll('#orbs circle.opt').length,
+  reticles: document.querySelectorAll('#orbs path.tick').length }));
+console.log('hovering the one off to the side:', aside);
 console.log('errors:', errs.slice(0,3));
+
+console.log('\nchecks:');
+ok('a reticle finds the one person you are turned toward, and only that one', drawn.reticles === 1);
+ok('the other, off at the edge of vision, stays a quiet marker with nothing to select',
+   drawn.idleDots === 1 && drawn.labels.length === 1);
+ok('the AI is labelled, by the name it gave, marked as an AI',
+   drawn.labels.length === 1 && /greeter-1/.test(drawn.labels[0]) && /^🤖/.test(drawn.labels[0]));
+ok('PORTALS ARE NOT ORBS — the world labels its own doors and we do not ring them again',
+   drawn.portalCircles === 0);
+ok('the HUD is out of the way of the world behind it', drawn.hudCollapsed === true);
+ok('facing them and selecting opens a ring of things to say', talk.options >= 3 && talk.options === talk.ring.length);
+ok('the ring reads that this one is an AI — it asks what it is here to do, not whether it is a person',
+   talk.ring.includes('what') && !talk.ring.includes('who'));
+ok('the ring is generated from the room: a portal is near, so going through it together is offered',
+   talk.ring.includes('go'));
+ok('and it always ends with a way out', talk.ring[talk.ring.length-1] === 'leave');
+ok('the reticle gives way to the conversation rather than sitting under it', aside.reticles === 0);
+ok('while a conversation is open, someone off to the side cannot be engaged — the options are the only targets',
+   /talking to/.test(aside.target) && !/Bo/.test(aside.target) && aside.options === talk.options);
+ok('no page errors', errs.length === 0);
+console.log('\n' + pass + ' passed, ' + fail + ' failed');
 await b.close();
+process.exit(fail ? 1 : 0);
 })();
