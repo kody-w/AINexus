@@ -286,7 +286,7 @@
     // reply comes back on two channels — words for the room, and the NEXUS sense's JSON
     // block for the hands (ai/senses/nexus_sense.py). Words are said, the move is made.
     // Without a grant it does nothing and says so: a mindless player is honest, not fake.
-    async mind(opts) {
+    async mind(opts, inheritedGen) {
       const o = Object.assign({ url: 'http://localhost:7071/chat', vision: true, act: true }, opts || {});
       // TWO DOORS TO A MIND, and a player will take whichever is open.
       //   · a brainstem on this machine — the real thing, with its senses and its memory
@@ -294,12 +294,16 @@
       //     doorman uses (ai/copilot_auth.js). No install, no separate meter: it spends the
       //     Copilot seat the person already has, and only while they are here.
       // Neither present means the player runs on its program alone, and says so.
-      // Entered directly (drive.mind() at the tab CLI) there is no live run to belong to,
-      // so this turn IS the operator's action and adopts the current generation. Entered
-      // as a `mind` step it is already inside one, and adopting it again changes nothing.
-      // Either way a later stop bumps the generation and every call below refuses.
-      api._liveTurn = api._epoch;
-      const myTurn = api._epoch;               // the generation this turn belongs to
+      // A turn belongs to the generation of whatever INVOKED it. Reading one off the clock
+      // instead re-stamped a `mind` step that was executing inside an already-voided frame
+      // with the live generation, which made both speech gates below unreachable in the one
+      // case they exist for: a resurrected program spoke, and billed, while the tower
+      // reported it stopped. As a step, the generation is handed in. Entered directly
+      // (drive.mind() at the tab CLI) there is no caller to inherit from, so the turn IS
+      // the operator's action and adopts the current generation.
+      const myTurn = typeof inheritedGen === 'number' ? inheritedGen : api._epoch;
+      if (typeof inheritedGen !== 'number') api._liveTurn = api._epoch;
+      if (myTurn !== api._epoch) { log('turn belongs to a stopped generation — not thinking'); return null; }
       const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
@@ -672,7 +676,13 @@
       try {
       do {
         for (const s of steps) {
-          if (!api._running) return 'stopped';
+          // `_running` is ONE global flag, so it answers "is anything running", not "am I
+          // still the thing that should be running". A frame parked in an await when the
+          // operator stopped belongs to a voided generation — and the next operator run
+          // sets _running back to true, which used to wake that zombie and let it step and
+          // loop beside the program that replaced it. The finally below already knows to
+          // ask `gen === api._epoch`; the loop has to ask it too.
+          if (!api._running || gen !== api._epoch) return 'stopped';
           const verb = s.do;
           try {
             const out = verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
@@ -687,7 +697,7 @@
               : verb === 'see' ? api.see(s)
               : verb === 'sense' ? api.sense(s)
               : verb === 'carry' ? api.carry(s.payload || {})
-              : verb === 'mind' ? await api.mind(s)
+              : verb === 'mind' ? await api.mind(s, gen)
               : verb === 'camera' ? await api.camera(s)
               : verb === 'cut' ? api.cut()
               : verb === 'pick' ? await api.pick(s.x, s.y)
@@ -709,7 +719,7 @@
             onStep && onStep(verb, { error: String(e && e.message || e) }, e);
           }
         }
-      } while (api._running && program && program.loop);
+      } while (api._running && gen === api._epoch && program && program.loop);
       return 'done';
       } finally {
         // in a finally so a thrown step can never strand the counter. Only the live

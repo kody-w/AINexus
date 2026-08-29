@@ -387,6 +387,13 @@ $('mind').onclick = async () => {
   }
   mindGen++;                         // this press invalidates any verify() still in flight
   NexusAuth.signOut();               // clear any dead credential before asking for a fresh one
+  // The note pane holds the LAST attempt's terminal message — "that code expired" — and
+  // stop() is its only other writer, so without this it sits under the brand-new code and
+  // tells the visitor the digits they are being asked to type are already dead.
+  $('signin-note').textContent = '';
+  // ...and the button was left mid-sentence at "checking sign-in…" by any verify() this
+  // press just orphaned; nothing else repaints it on this path.
+  $('mind').textContent = 'signing in…';
   signingIn = true;
   try {
     let { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();

@@ -361,8 +361,19 @@ $('signin').onclick = async () => {
     mindGen++;                       // this press invalidates any verify() still in flight
     A.signOut();                     // clear any dead credential before asking for a fresh one
     const d = await A.startDeviceLogin();
-    $('code').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
-      '" target="_blank" rel="noopener">github.com/login/device</a>';
+    // Built as nodes, not markup. user_code and verification_uri arrive as JSON from the
+    // auth worker, and concatenating them into an href is the one shape that would let a
+    // compromised worker put script into a page that holds a live credential. frontier
+    // already builds this with textContent and a hard-coded destination; so does this now.
+    const code = $('code');
+    code.textContent = 'enter ';
+    const b = document.createElement('b'); b.textContent = d.user_code; code.appendChild(b);
+    code.appendChild(document.createTextNode(' at '));
+    const a = document.createElement('a');
+    a.href = 'https://github.com/login/device';   // the flow's only destination, not the worker's to choose
+    a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = 'github.com/login/device';
+    code.appendChild(a);
     $('mind').textContent = 'mind: waiting for you to authorise…';
     // RFC 8628: poll at the interval the server gave, lengthen it on slow_down,
     // and stop when the code expires. A fixed 5s that ignores both will get

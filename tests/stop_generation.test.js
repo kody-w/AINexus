@@ -112,6 +112,44 @@ function makeDriver(file) {
   R.G_operator_run_cancels_parked_turn = { staleTurnVerdict: staleTurn };
   void parked;                                                 // left parked on purpose
 
+  // I) A KILLED PROGRAM MUST STAY DEAD once a later operator run re-arms the global
+  //    _running flag. The step loop used to ask only "is anything running", which the new
+  //    run answers yes to — so the zombie woke, finished its steps and re-entered its own
+  //    loop, acting beside the program that replaced it.
+  d.stop();
+  let zombieSteps = 0;
+  const zombie = d.run({ steps: [{ do: 'wait', ms: 300 }], loop: true }, () => { zombieSteps++; });
+  await new Promise((r) => setTimeout(r, 100));      // parked inside the wait
+  d.stop();                                          // the operator kills it
+  const atKill = zombieSteps;
+  // The later operator run must still be IN FLIGHT when the zombie's wait resolves —
+  // that is the whole trigger. _running is one global flag, so a live run answers "yes"
+  // to a question the dead frame had no business asking. An awaited run that has already
+  // finished leaves _running false and hides the bug completely.
+  let liveSteps = 0;
+  const live = d.run({ steps: [{ do: 'wait', ms: 250 }], loop: true }, () => { liveSteps++; });
+  await new Promise((r) => setTimeout(r, 1600));     // room for several more loop turns
+  d.stop();                                          // retire the live program
+  void live;
+  // The step already IN FLIGHT when the kill landed has to finish — an awaited sleep
+  // cannot be un-awaited — so exactly one more callback is correct and expected. What
+  // must not happen is the frame going round again.
+  R.I_killed_program_stays_dead =
+    { atKill, after: zombieSteps, extra: zombieSteps - atKill, liveSteps,
+      resumed: (zombieSteps - atKill) > 1 };
+  void zombie;
+
+  // J) a `mind` step carried inside an already-voided frame must refuse, rather than
+  //    re-stamping itself with the live generation and speaking from the dead
+  d.stop();
+  const staleGen = d._epoch - 1;
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...a) => { logs.push(a.join(' ')); };
+  try { await d.mind({}, staleGen); } finally { console.log = origLog; }
+  R.J_mind_refuses_an_inherited_stale_generation =
+    { refused: logs.some((l) => /stopped generation/.test(l)) };
+
   console.log(JSON.stringify(R, null, 1));
   const pass =
     R['0_generation_zero_is_a_real_claim'].freshEpoch === 0 &&
@@ -125,7 +163,9 @@ function makeDriver(file) {
     R.D_operator_restart === 'done' &&
     R.E_depth_after_throwing_onStep.after === 0 &&
     R.F_operator_run_while_turn_parked.verdict === 'done' &&
-    R.G_operator_run_cancels_parked_turn.staleTurnVerdict === 'stopped';
+    R.G_operator_run_cancels_parked_turn.staleTurnVerdict === 'stopped' &&
+    R.I_killed_program_stays_dead.resumed === false &&
+    R.J_mind_refuses_an_inherited_stale_generation.refused === true;
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();
