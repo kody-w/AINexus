@@ -2634,6 +2634,9 @@ async function measureRememberedTerminalCanvasContrast(page) {
           id: agent.id,
           agent: agent.position,
           terminal: terminal.position,
+          remembered: true,
+          currentlyVisible: false,
+          terminalHacked: terminal.hacked === true,
           knownCount: known.count,
           visibleCount: visible.count
         });
@@ -2819,15 +2822,26 @@ async function measureRememberedTerminalCanvasContrast(page) {
     return {
       agentId: chosen.candidate.id,
       terminal: chosen.candidate.terminal,
+      remembered: chosen.candidate.remembered,
+      currentlyVisible: chosen.candidate.currentlyVisible,
+      terminalHacked: chosen.candidate.terminalHacked,
       knownCount: chosen.candidate.knownCount,
       visibleCount: chosen.candidate.visibleCount,
       css: { width: chosen.rect.width, height: chosen.rect.height },
       backing: { width: scratch.width, height: scratch.height },
       transform: calibrated.transform.name,
       ownScore: calibrated.own.score,
+      ownContrast: calibrated.own.contrast,
+      ownGlyphCount: calibrated.own.glyph?.count || 0,
+      ownBackgroundCount: calibrated.own.background?.count || 0,
       center: terminal.center,
       glyph: terminal.glyph,
       background: terminal.background,
+      clusterDistance: Math.hypot(
+        terminal.glyph.color[0] - terminal.background.color[0],
+        terminal.glyph.color[1] - terminal.background.color[1],
+        terminal.glyph.color[2] - terminal.background.color[2]
+      ),
       contrast: terminal.contrast,
       lowContrastControl: ratio(lowGlyph, terminal.background.color)
     };
@@ -4680,13 +4694,21 @@ async function runSuite() {
     .sort((a, b) => a.css.width * a.css.height - b.css.width * b.css.height)[0];
   result('remembered hacked-terminal glyph has 4.5:1 canvas contrast',
     rememberedTerminalMeasurements.every(measurement =>
+      measurement.remembered === true &&
+      measurement.currentlyVisible === false &&
+      measurement.terminalHacked === true &&
       measurement.knownCount > 0 &&
-      /diamond/.test(measurement.transform) &&
+      measurement.ownScore >= 8 &&
+      measurement.ownGlyphCount >= 2 &&
+      measurement.ownBackgroundCount >= 2 &&
+      measurement.clusterDistance >= 28 &&
+      measurement.glyph.count >= 2 &&
+      measurement.background.count >= 2 &&
       measurement.contrast >= 4.5 &&
       measurement.lowContrastControl < 4.5) &&
       smallestRememberedTerminal.contrast >= 4.5,
     rememberedTerminalMeasurements.map(measurement =>
-      `${measurement.mode} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.transform} ${measurement.contrast.toFixed(2)}:1 glyph rgb(${measurement.glyph.color.join(',')}) / diamond rgb(${measurement.background.color.join(',')}) low-control ${measurement.lowContrastControl.toFixed(2)}:1`).join(' | '));
+      `${measurement.mode} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.transform} calibration ${measurement.ownScore.toFixed(1)} contrast ${measurement.contrast.toFixed(2)}:1 distance ${measurement.clusterDistance.toFixed(1)} glyph rgb(${measurement.glyph.color.join(',')}) / cell-bg rgb(${measurement.background.color.join(',')}) low-control ${measurement.lowContrastControl.toFixed(2)}:1`).join(' | '));
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
