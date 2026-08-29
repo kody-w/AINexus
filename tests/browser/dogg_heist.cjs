@@ -7,6 +7,7 @@ const { createRequire } = require('module');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const http = require('http');
 
 const localRequire = (() => {
   for (const base of [
@@ -301,6 +302,288 @@ function oversizedImport(json) {
     json: output,
     bytes: Buffer.byteLength(output, 'utf8'),
     checksumPath: convention.path.join('.')
+  };
+}
+
+function frameHashConvention(exported) {
+  const bundle = exportedFrames(exported);
+  const frames = bundle.frames;
+  requireMeasurement(frames.length >= 3, 'a multi-tick frame chain');
+  const hashKeys = Object.keys(frames[0]).filter(key =>
+    /(hash|digest|seal)$/i.test(key) && hashBody(frames[0][key]));
+  for (const hashKey of hashKeys) {
+    if (!frames.every(frame => frame && typeof frame === 'object' && hashBody(frame[hashKey]))) {
+      continue;
+    }
+    const keys = Object.keys(frames[0]).filter(key => key !== hashKey &&
+      frames.every(frame => Object.prototype.hasOwnProperty.call(frame, key)));
+    const parentKeys = keys.filter(key => /^(?:parent|parentHash|prev|prevHash|previousHash)$/i.test(key));
+    const tickKeys = keys.filter(key => /^(?:tick|seq|index)$/i.test(key));
+    const stateKeys = keys.filter(key => /^(?:state|snapshot|payload|data|world)$/i.test(key));
+    if (!parentKeys.length || !tickKeys.length || !stateKeys.length) continue;
+    const candidateSets = [];
+    if (keys.length <= 13) {
+      const limit = 1 << keys.length;
+      for (let mask = 1; mask < limit; mask++) {
+        const selected = keys.filter((_, index) => mask & (1 << index));
+        if (!selected.some(key => parentKeys.includes(key)) ||
+            !selected.some(key => tickKeys.includes(key)) ||
+            !selected.some(key => stateKeys.includes(key))) continue;
+        candidateSets.push(selected);
+      }
+    } else {
+      candidateSets.push(keys);
+      for (const parentKey of parentKeys) {
+        for (const tickKey of tickKeys) {
+          for (const stateKey of stateKeys) {
+            candidateSets.push([parentKey, tickKey, stateKey]);
+            for (const eventKey of keys.filter(key => /event|action|intent/i.test(key))) {
+              candidateSets.push([parentKey, tickKey, stateKey, eventKey]);
+            }
+          }
+        }
+      }
+    }
+    candidateSets.sort((a, b) => b.length - a.length);
+    for (const selectedKeys of candidateSets) {
+      const matches = frames.every(frame => {
+        const material = Object.fromEntries(selectedKeys.map(key => [key, frame[key]]));
+        return canonicalSha256(material) === hashBody(frame[hashKey]).hex;
+      });
+      if (!matches) continue;
+      const parentKey = parentKeys.find(key => selectedKeys.includes(key) &&
+        frames.slice(1).every((frame, index) => {
+          const parent = hashBody(frame[key]);
+          const prior = hashBody(frames[index][hashKey]);
+          return parent && prior && parent.hex === prior.hex;
+        }));
+      if (!parentKey) continue;
+      return {
+        framesPath: bundle.trail,
+        hashKey,
+        parentKey,
+        selectedKeys,
+        hashPrefix: hashBody(frames[0][hashKey]).prefix
+      };
+    }
+  }
+  throw new Error('cannot measure the documented canonical frame/hash material');
+}
+
+function formatHashLike(hex, sample) {
+  const parsed = hashBody(sample);
+  return (parsed?.prefix || '') + hex;
+}
+
+function verifyRehashedFrames(exported, convention) {
+  const frames = valueAt(exported, convention.framesPath);
+  return frames.every((frame, index) => {
+    const material = Object.fromEntries(
+      convention.selectedKeys.map(key => [key, frame[key]])
+    );
+    const validHash = canonicalSha256(material) === hashBody(frame[convention.hashKey])?.hex;
+    const validParent = index === 0 || (
+      hashBody(frame[convention.parentKey])?.hex ===
+      hashBody(frames[index - 1][convention.hashKey])?.hex
+    );
+    return validHash && validParent;
+  });
+}
+
+function rehashFrameDescendants(exported, convention, fromIndex) {
+  const frames = valueAt(exported, convention.framesPath);
+  const oldHead = frames[frames.length - 1][convention.hashKey];
+  for (let index = fromIndex; index < frames.length; index++) {
+    const frame = frames[index];
+    if (index > 0) {
+      frame[convention.parentKey] = formatHashLike(
+        hashBody(frames[index - 1][convention.hashKey]).hex,
+        frame[convention.parentKey]
+      );
+    }
+    const material = Object.fromEntries(
+      convention.selectedKeys.map(key => [key, frame[key]])
+    );
+    frame[convention.hashKey] = convention.hashPrefix + canonicalSha256(material);
+  }
+  const newHead = frames[frames.length - 1][convention.hashKey];
+  walkJson(exported, (value, trail) => {
+    if (!trail.length || typeof value !== 'string') return;
+    if (trail.length >= convention.framesPath.length &&
+        convention.framesPath.every((part, index) => trail[index] === part)) return;
+    const key = String(trail[trail.length - 1]);
+    if (!/head/i.test(key) || hashBody(value)?.hex !== hashBody(oldHead)?.hex) return;
+    parentAt(exported, trail)[trail[trail.length - 1]] = formatHashLike(
+      hashBody(newHead).hex,
+      value
+    );
+  });
+  requireMeasurement(verifyRehashedFrames(exported, convention),
+    'every mutated frame hash and descendant parent link recomputed');
+  return { oldHead, newHead };
+}
+
+function stateAgentEntries(state) {
+  const container = agentsOf(state);
+  return collectionEntries(container).map(({ key, value }) => ({
+    key,
+    agent: value,
+    id: String(value?.id ?? value?.agentId ?? value?.callsign ?? value?.name ?? key)
+  })).filter(entry => entry.agent && typeof entry.agent === 'object');
+}
+
+function setCoordinate(value, coordinate) {
+  if (!value || typeof value !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(value, 'x') &&
+      Object.prototype.hasOwnProperty.call(value, 'y')) {
+    value.x = coordinate.x;
+    value.y = coordinate.y;
+    return true;
+  }
+  for (const key of ['position', 'pos', 'location', 'cell', 'tile', 'at', 'coordinate']) {
+    if (value[key] && typeof value[key] === 'object' &&
+        setCoordinate(value[key], coordinate)) return true;
+  }
+  return false;
+}
+
+function traversableCells(state) {
+  const candidates = [];
+  walkJson(state, (value, trail) => {
+    const context = trail.join('.');
+    if (Array.isArray(value) && value.length && value.every(row => Array.isArray(row))) {
+      const cells = [];
+      value.forEach((row, y) => row.forEach((cell, x) => {
+        const text = typeof cell === 'string' ? cell :
+          cell && typeof cell === 'object' ?
+            `${cell.type || ''} ${cell.kind || ''} ${cell.status || ''} ${cell.state || ''}` : '';
+        const explicit = cell && typeof cell === 'object' ?
+          cell.traversable ?? cell.walkable ?? cell.passable : undefined;
+        const blocked = explicit === false ||
+          /\b(wall|void|blocked|impassable|closed|obstacle)\b/i.test(text) ||
+          cell === '#';
+        if (!blocked && (explicit === true || typeof cell === 'string' ||
+            (cell && typeof cell === 'object'))) cells.push({ x, y });
+      }));
+      if (cells.length) {
+        candidates.push({
+          cells,
+          score: (/facility|map|grid|board|layout/i.test(context) ? 30 : 0) + cells.length,
+          source: context
+        });
+      }
+    }
+    if (Array.isArray(value) && /cells|tiles/i.test(context)) {
+      const cells = value.map(cell => {
+        const coordinate = coordinateOf(cell);
+        if (!coordinate) return null;
+        const text = `${cell.type || ''} ${cell.kind || ''} ${cell.status || ''} ${cell.state || ''}`;
+        const explicit = cell.traversable ?? cell.walkable ?? cell.passable;
+        if (explicit === false || /\b(wall|void|blocked|impassable|closed|obstacle)\b/i.test(text)) {
+          return null;
+        }
+        return coordinate;
+      }).filter(Boolean);
+      if (cells.length) candidates.push({ cells, score: 20 + cells.length, source: context });
+    }
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  requireMeasurement(candidates.length > 0, 'public traversable facility cells');
+  return candidates[0];
+}
+
+function mutateAgentTeleport(exported, frameIndex) {
+  const convention = frameHashConvention(exported);
+  const frames = valueAt(exported, convention.framesPath);
+  const state = frameState(frames[frameIndex]);
+  requireMeasurement(state, `raw state in frame ${frameIndex}`);
+  const agents = stateAgentEntries(state);
+  requireMeasurement(agents.length > 0, `an agent in frame ${frameIndex}`);
+  const chosen = agents.find(entry => coordinateOf(entry.agent)) || agents[0];
+  const from = coordinateOf(chosen.agent);
+  requireMeasurement(from, `agent ${chosen.id} position in frame ${frameIndex}`);
+  const occupied = new Set(agents.map(entry => coordinateOf(entry.agent))
+    .filter(Boolean).map(position => `${position.x},${position.y}`));
+  const traversable = traversableCells(state);
+  const target = traversable.cells.filter(cell =>
+    !occupied.has(`${cell.x},${cell.y}`) &&
+    Math.abs(cell.x - from.x) + Math.abs(cell.y - from.y) >= 4)
+    .sort((a, b) =>
+      (Math.abs(b.x - from.x) + Math.abs(b.y - from.y)) -
+      (Math.abs(a.x - from.x) + Math.abs(a.y - from.y)))[0];
+  requireMeasurement(target, `a far traversable cell for ${chosen.id}`);
+  requireMeasurement(setCoordinate(chosen.agent, target),
+    `writable ${chosen.id} coordinates`);
+  const heads = rehashFrameDescendants(exported, convention, frameIndex);
+  return {
+    convention,
+    frameIndex,
+    detail: `${chosen.id} ${from.x},${from.y}→${target.x},${target.y} via ${traversable.source}`,
+    heads
+  };
+}
+
+function mutateImpossibleFixtureJump(exported, frameIndex) {
+  const convention = frameHashConvention(exported);
+  const frames = valueAt(exported, convention.framesPath);
+  const state = frameState(frames[frameIndex]);
+  requireMeasurement(state, `raw state in frame ${frameIndex}`);
+  let mutation;
+  walkJson(state, (value, trail) => {
+    if (mutation || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const identity = [
+      value.id, value.name, value.type, value.kind, value.label, trail.join('.')
+    ].filter(Boolean).join(' ');
+    if (/\bterminals?\b/i.test(identity)) {
+      if (value.hacked === false) {
+        value.hacked = true;
+        mutation = `${trail.join('.')}.hacked false→true`;
+      } else if (value.isHacked === false) {
+        value.isHacked = true;
+        mutation = `${trail.join('.')}.isHacked false→true`;
+      } else if (typeof value.status === 'string' &&
+          /\b(unhacked|locked|inactive|ready)\b/i.test(value.status)) {
+        const before = value.status;
+        value.status = 'hacked';
+        mutation = `${trail.join('.')}.status ${before}→hacked`;
+      }
+    }
+    if (!mutation && /\bdoors?\b/i.test(identity)) {
+      if (value.open === false) {
+        value.open = true;
+        mutation = `${trail.join('.')}.open false→true`;
+      } else if (typeof value.status === 'string' && /\b(closed|locked)\b/i.test(value.status)) {
+        const before = value.status;
+        value.status = 'open';
+        mutation = `${trail.join('.')}.status ${before}→open`;
+      }
+    }
+  });
+  requireMeasurement(mutation, 'an unhacked terminal or closed door in tick-1 state');
+  const heads = rehashFrameDescendants(exported, convention, frameIndex);
+  return { convention, frameIndex, detail: mutation, heads };
+}
+
+function fullyRehashedSemanticMutation(json, kind) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const bundle = exportedFrames(parsed);
+  const frameIndex = bundle.frames.findIndex(frame => tickOf(frameState(frame)) === 1);
+  const selectedIndex = frameIndex >= 1 ? frameIndex : 1;
+  const mutation = kind === 'teleport' ?
+    mutateAgentTeleport(parsed, selectedIndex) :
+    mutateImpossibleFixtureJump(parsed, selectedIndex);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(hashBody(valueAt(parsed, checksumConvention.path))?.hex ===
+    canonicalSha256(checksumMaterial(parsed, checksumConvention)),
+  'outer checksum after fully rehashed semantic mutation');
+  return {
+    json: JSON.stringify(parsed),
+    detail: mutation.detail,
+    frameIndex: selectedIndex,
+    checksumPath: checksumConvention.path.join('.'),
+    frameHashKey: mutation.convention.hashKey,
+    parentKey: mutation.convention.parentKey
   };
 }
 
@@ -1054,6 +1337,138 @@ async function serve(context) {
   });
 }
 
+async function auditSlowStreamFirstPaint(browser) {
+  const html = fs.readFileSync(ARTIFACT, 'utf8');
+  const scripts = [...html.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/gi)];
+  requireMeasurement(scripts.length > 0, 'a final application script to delay');
+  const applicationScript = [...scripts].reverse().find(match =>
+    /__doggHeist/.test(match[0])) || scripts[scripts.length - 1];
+  const splitAt = applicationScript.index;
+  const prefix = html.slice(0, splitAt);
+  const suffix = html.slice(splitAt);
+  requireMeasurement(/intro-card/i.test(prefix) && /app-shell/i.test(prefix) &&
+    /skip/i.test(prefix), 'intro, app shell, and skip markup before the final script');
+
+  let releaseStream;
+  let prefixArrived;
+  const prefixSent = new Promise(resolve => { prefixArrived = resolve; });
+  const release = new Promise(resolve => { releaseStream = resolve; });
+  const server = http.createServer(async (request, response) => {
+    response.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+    response.write(prefix);
+    prefixArrived();
+    await release;
+    response.end(suffix);
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  const address = server.address();
+  const context = await browser.newContext({ viewport: { width: 900, height: 620 } });
+  const page = await context.newPage();
+  watchPage(page, 'slow-stream first paint');
+  let navigation;
+  try {
+    navigation = page.goto(`http://127.0.0.1:${address.port}/dogg-heist.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
+    });
+    await prefixSent;
+    await page.locator('.intro-card').waitFor({ state: 'visible', timeout: 3000 });
+    const skip = page.locator(
+      '.skip-link, a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
+    ).first();
+    requireMeasurement(await skip.count() === 1, 'the streamed skip link');
+    const before = await page.evaluate(() => ({
+      hash: location.hash,
+      ready: window.__doggHeist?.ready,
+      cardVisible: Boolean(document.querySelector('.intro-card')),
+      active: document.activeElement?.id || document.activeElement?.tagName || ''
+    }));
+    const parserSamples = [];
+    for (let index = 0; index < 6; index++) {
+      await page.keyboard.press('Tab');
+      const afterTab = await page.evaluate(() => {
+        const card = document.querySelector('.intro-card');
+        return {
+          inside: Boolean(card && card.contains(document.activeElement)),
+          active: document.activeElement?.id || document.activeElement?.tagName || '',
+          hash: location.hash,
+          ready: window.__doggHeist?.ready,
+          cardVisible: Boolean(card && getComputedStyle(card).display !== 'none')
+        };
+      });
+      await page.keyboard.press('Enter');
+      await sleep(20);
+      const afterEnter = await page.evaluate(() => {
+        const card = document.querySelector('.intro-card');
+        return {
+          inside: Boolean(card && card.contains(document.activeElement)),
+          active: document.activeElement?.id || document.activeElement?.tagName || '',
+          hash: location.hash,
+          ready: window.__doggHeist?.ready,
+          cardVisible: Boolean(card && getComputedStyle(card).display !== 'none')
+        };
+      });
+      parserSamples.push({ afterTab, afterEnter });
+    }
+    const skipBlocked = await skip.evaluate(element =>
+      element.tabIndex < 0 || element.getAttribute('aria-disabled') === 'true' ||
+      Boolean(element.closest('[inert], [aria-hidden="true"]')));
+    const parserHeld = before.ready !== true &&
+      parserSamples.every(sample =>
+        sample.afterTab.inside && sample.afterEnter.inside &&
+        sample.afterTab.hash === before.hash && sample.afterEnter.hash === before.hash &&
+        sample.afterTab.ready !== true && sample.afterEnter.ready !== true &&
+        sample.afterTab.cardVisible && sample.afterEnter.cardVisible);
+
+    releaseStream();
+    await navigation;
+    await waitForHeistSurface(page);
+    const intro = await markIntro(page);
+    requireMeasurement(intro.found, 'intro remains after the delayed script arrives');
+    await dismissIntro(page);
+    await finishHeistBoot(page, 'slow-stream page');
+
+    const href = await skip.getAttribute('href');
+    requireMeasurement(href && href.startsWith('#'), 'a same-page skip target');
+    await skip.focus();
+    await page.keyboard.press('Enter');
+    await poll(
+      () => page.evaluate(() => location.hash),
+      hash => hash === href,
+      1500,
+      25
+    );
+    const skipAfter = await page.evaluate(expected => {
+      const target = document.querySelector(expected);
+      return {
+        hash: location.hash,
+        targetExists: Boolean(target),
+        focusedTarget: Boolean(target &&
+          (document.activeElement === target || target.contains(document.activeElement)))
+      };
+    }, href);
+    return {
+      parserHeld,
+      skipBlocked,
+      before,
+      parserSamples,
+      href,
+      skipAfter
+    };
+  } finally {
+    if (releaseStream) releaseStream();
+    await context.close().catch(() => {});
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
 function watchPage(page, label) {
   page.on('pageerror', error => pageErrors.push(`${label}: ${error.message}`));
 }
@@ -1741,7 +2156,12 @@ async function api(page, method, ...args) {
   return outcome.value;
 }
 
-async function rejectedRunningImport(page, mutatedJson, baseline) {
+async function rejectedTransactionalImport(
+  page,
+  mutatedJson,
+  baseline,
+  rejectionPattern = /\b(reject|invalid|impossible|transition|teleport|terminal|door|running|history|cursor|outcome|import)\b/i
+) {
   const statusBefore = baseline.dom['status-live'];
   const logBefore = baseline.dom['event-log'];
   const outcome = await tryApi(page, 'importState', mutatedJson);
@@ -1755,7 +2175,7 @@ async function rejectedRunningImport(page, mutatedJson, baseline) {
     after.dom['event-log'] !== logBefore ? after.dom['event-log'] : '';
   const feedback = `${statusDelta} ${logDelta}`.replace(/\s+/g, ' ').trim();
   const rejected = explicitImportRejection(outcome) ||
-    /\b(reject|invalid|impossible|running|terminal|history|cursor|outcome|import)\b/i.test(feedback);
+    rejectionPattern.test(feedback);
   return {
     rejected,
     outcome,
@@ -2165,6 +2585,255 @@ function canvasSampleDelta(before, after) {
     changedRatio: changed / before.colors.length,
     meanDistance: distance / before.colors.length
   };
+}
+
+function povKnowledge(state, agentIds) {
+  const container = povsOf(state);
+  return collectionEntries(container).map(({ key, value }, index) => {
+    const view = value && typeof value === 'object' ? value : {};
+    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ??
+      (key.match(/^\d+$/) ? agentIds[index] : key) ?? key);
+    return {
+      id,
+      known: normalizedCells(
+        view.knownCells ?? view.seen ?? view.seenCells ?? view.known ?? view.cells
+      ),
+      visible: normalizedCells(
+        view.visibleCells ?? view.visible ?? view.currentlyVisible ?? view.inSight
+      )
+    };
+  });
+}
+
+async function measureRememberedTerminalCanvasContrast(page) {
+  const snapshot = await inspect(page);
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, 'public facility dimensions for POV pixel contrast');
+  const policy = policyState(snapshot);
+  const hackedTerminals = policy.terminals.filter(terminal => terminal.hacked);
+  requireMeasurement(hackedTerminals.length > 0, 'a hacked terminal in current exported state');
+  const agents = normalizedAgents(agentsOf(snapshot.state));
+  const knowledge = povKnowledge(snapshot.state, agents.map(agent => agent.id));
+  const rawState = frameState(latestExportFrame(snapshot.exported));
+  const rawAgents = rawState ? normalizedAgents(agentsOf(rawState)) : [];
+  const candidates = [];
+  for (const agent of agents) {
+    const view = knowledge.find(item => item.id === agent.id);
+    const rawAgent = rawAgents.find(item => item.id === agent.id);
+    const known = view?.known.cells.length ? view.known : rawAgent?.seen;
+    const visible = view?.visible;
+    const visibleMembershipKnown = visible &&
+      (visible.cells.length > 0 || visible.count === 0);
+    if (!known || !visibleMembershipKnown || !agent.position) continue;
+    for (const terminal of hackedTerminals) {
+      const key = `${terminal.position.x},${terminal.position.y}`;
+      const knownHere = known.cells.includes(key);
+      const visibleHere = visible.cells.includes(key);
+      if (knownHere && !visibleHere) {
+        candidates.push({
+          id: agent.id,
+          agent: agent.position,
+          terminal: terminal.position,
+          knownCount: known.count,
+          visibleCount: visible.count
+        });
+      }
+    }
+  }
+  requireMeasurement(candidates.length > 0,
+    'a hacked terminal known but not currently visible in a POV');
+
+  const measurement = await page.evaluate(({ candidates, dimensions }) => {
+    const grid = document.getElementById('pov-grid');
+    if (!grid) return null;
+    const panels = [...grid.querySelectorAll(
+      '[data-pov-agent], [data-agent-id], .pov-card, .pov-panel, [data-pov]'
+    )].filter(panel => {
+      const style = getComputedStyle(panel);
+      const rect = panel.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0 &&
+        panel.querySelector('canvas');
+    });
+    const identity = panel => [
+      panel.dataset.povAgent,
+      panel.dataset.agentId,
+      panel.dataset.pov,
+      panel.getAttribute('aria-label'),
+      panel.getAttribute('title'),
+      panel.textContent
+    ].filter(Boolean).join(' ');
+    const entries = [];
+    for (const candidate of candidates) {
+      let panel = panels.find(item =>
+        new RegExp(candidate.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          .test(identity(item)));
+      if (!panel) {
+        const index = candidates.findIndex(item => item.id === candidate.id);
+        panel = panels[index];
+      }
+      const canvas = panel?.querySelector('canvas');
+      if (!canvas || !canvas.width || !canvas.height) continue;
+      const rect = canvas.getBoundingClientRect();
+      entries.push({ candidate, panel, canvas, rect, area: rect.width * rect.height });
+    }
+    entries.sort((a, b) => a.area - b.area);
+    const chosen = entries[0];
+    if (!chosen) return null;
+    const scratch = document.createElement('canvas');
+    scratch.width = chosen.canvas.width;
+    scratch.height = chosen.canvas.height;
+    const context = scratch.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+    context.drawImage(chosen.canvas, 0, 0);
+
+    const pixel = (x, y) => [...context.getImageData(
+      Math.max(0, Math.min(scratch.width - 1, Math.round(x))),
+      Math.max(0, Math.min(scratch.height - 1, Math.round(y))),
+      1,
+      1
+    ).data];
+    const clusterKey = color =>
+      color.slice(0, 3).map(channel => Math.round(channel / 16) * 16).join(',');
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 :
+          Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color[0]) +
+        0.7152 * channel(color[1]) +
+        0.0722 * channel(color[2]);
+    };
+    const ratio = (a, b) => {
+      const one = luminance(a);
+      const two = luminance(b);
+      return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+    };
+    const dominant = colors => {
+      const groups = new Map();
+      for (const color of colors) {
+        if (color[3] < 20) continue;
+        const key = clusterKey(color);
+        const group = groups.get(key) || { count: 0, total: [0, 0, 0] };
+        group.count++;
+        group.total[0] += color[0];
+        group.total[1] += color[1];
+        group.total[2] += color[2];
+        groups.set(key, group);
+      }
+      return [...groups.values()].map(group => ({
+        count: group.count,
+        color: group.total.map(total => Math.round(total / group.count))
+      })).sort((a, b) => b.count - a.count);
+    };
+    const transforms = [
+      {
+        name: 'orthogonal',
+        center: point => ({
+          x: (point.x + 0.5) * scratch.width / dimensions.cols,
+          y: (point.y + 0.5) * scratch.height / dimensions.rows
+        }),
+        half: {
+          x: scratch.width / dimensions.cols / 2,
+          y: scratch.height / dimensions.rows / 2
+        }
+      },
+      {
+        name: 'diamond',
+        center: point => {
+          const halfX = scratch.width / (dimensions.cols + dimensions.rows);
+          const halfY = scratch.height / (dimensions.cols + dimensions.rows);
+          return {
+            x: (point.x - point.y + dimensions.rows) * halfX,
+            y: (point.x + point.y + 1) * halfY
+          };
+        },
+        half: {
+          x: scratch.width / (dimensions.cols + dimensions.rows),
+          y: scratch.height / (dimensions.cols + dimensions.rows)
+        }
+      },
+      {
+        name: 'diamond-mirrored',
+        center: point => {
+          const halfX = scratch.width / (dimensions.cols + dimensions.rows);
+          const halfY = scratch.height / (dimensions.cols + dimensions.rows);
+          return {
+            x: (point.y - point.x + dimensions.cols) * halfX,
+            y: (point.x + point.y + 1) * halfY
+          };
+        },
+        half: {
+          x: scratch.width / (dimensions.cols + dimensions.rows),
+          y: scratch.height / (dimensions.cols + dimensions.rows)
+        }
+      }
+    ];
+    const sample = (transform, point) => {
+      const center = transform.center(point);
+      const inner = [];
+      const ring = [];
+      for (let gy = -10; gy <= 10; gy++) {
+        for (let gx = -10; gx <= 10; gx++) {
+          const nx = gx / 10;
+          const ny = gy / 10;
+          const distance = transform.name === 'orthogonal' ?
+            Math.max(Math.abs(nx), Math.abs(ny)) :
+            Math.abs(nx) + Math.abs(ny);
+          const color = pixel(
+            center.x + nx * transform.half.x * 0.9,
+            center.y + ny * transform.half.y * 0.9
+          );
+          if (distance <= 0.50) inner.push(color);
+          if (distance >= 0.72 && distance <= 0.95) ring.push(color);
+        }
+      }
+      const backgrounds = dominant(ring);
+      const glyphs = dominant(inner);
+      const background = backgrounds[0];
+      const glyph = glyphs.find(group =>
+        !background || Math.hypot(
+          group.color[0] - background.color[0],
+          group.color[1] - background.color[1],
+          group.color[2] - background.color[2]
+        ) >= 28);
+      return {
+        center,
+        background,
+        glyph,
+        contrast: glyph && background ? ratio(glyph.color, background.color) : 0,
+        score: glyph && background ?
+          glyph.count * Math.min(10, ratio(glyph.color, background.color)) : 0
+      };
+    };
+    const calibrated = transforms.map(transform => ({
+      transform,
+      own: sample(transform, chosen.candidate.agent)
+    })).sort((a, b) => b.own.score - a.own.score)[0];
+    if (!calibrated || calibrated.own.score <= 0) return null;
+    const terminal = sample(calibrated.transform, chosen.candidate.terminal);
+    if (!terminal.glyph || !terminal.background) return null;
+    const lowGlyph = terminal.glyph.color.map((channel, index) =>
+      Math.round(channel * 0.1 + terminal.background.color[index] * 0.9));
+    return {
+      agentId: chosen.candidate.id,
+      terminal: chosen.candidate.terminal,
+      knownCount: chosen.candidate.knownCount,
+      visibleCount: chosen.candidate.visibleCount,
+      css: { width: chosen.rect.width, height: chosen.rect.height },
+      backing: { width: scratch.width, height: scratch.height },
+      transform: calibrated.transform.name,
+      ownScore: calibrated.own.score,
+      center: terminal.center,
+      glyph: terminal.glyph,
+      background: terminal.background,
+      contrast: terminal.contrast,
+      lowContrastControl: ratio(lowGlyph, terminal.background.color)
+    };
+  }, { candidates, dimensions });
+  requireMeasurement(measurement, 'target-specific POV canvas glyph/background clusters');
+  return measurement;
 }
 
 async function readBoardSemantic(page) {
@@ -2942,6 +3611,13 @@ async function runSuite() {
   requireMeasurement(fs.existsSync(ARTIFACT), `${ARTIFACT} (DOGG_HEIST_ROOT=${ROOT})`);
   browser = await chromium.launch();
 
+  const slowStream = await auditSlowStreamFirstPaint(browser);
+  result('slow-stream parser delay keeps focus and skip action inside intro',
+    slowStream.parserHeld &&
+      slowStream.skipAfter.hash === slowStream.href &&
+      slowStream.skipAfter.targetExists,
+    `parser tabs ${slowStream.parserSamples.map(sample => sample.afterTab.active).join('→')}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
+
   const firstPaintContext = await browser.newContext({
     viewport: { width: 390, height: 420 },
     hasTouch: true,
@@ -2985,6 +3661,48 @@ async function runSuite() {
     introGate.scrollBlocked && introGate.wheelBefore.window === 0 &&
       introGate.wheelBefore.document === 0 && introGate.wheelAfter.modalVisible,
     `mouse at ${introGate.before.overlayPoint.x},${introGate.before.overlayPoint.y}; window ${introGate.wheelBefore.window}→${introGate.wheelAfter.window}, document ${introGate.wheelBefore.document}→${introGate.wheelAfter.document}`);
+
+  await api(page, 'pause');
+  requireMeasurement(activeLineFocus.id === 'play-toggle',
+    `intro focus handoff to Play (received ${activeLineFocus.tag}#${activeLineFocus.id})`);
+  const playFocusBefore = await inspect(page);
+  const playFocusSamples = [];
+  for (let press = 0; press < 3; press++) {
+    await page.keyboard.press('.');
+    await sleep(60);
+    playFocusSamples.push(await page.evaluate(() => ({
+      id: document.activeElement?.id || '',
+      disabled: Boolean(document.activeElement &&
+        (('disabled' in document.activeElement && document.activeElement.disabled) ||
+          document.activeElement.getAttribute('aria-disabled') === 'true'))
+    })));
+  }
+  const playFocusAfter = await inspect(page);
+  await page.keyboard.press('h');
+  const playHelpOpened = await poll(() => visibleHelp(page), value => value.count > 0, 2000);
+  await page.keyboard.press('Escape');
+  await poll(() => visibleHelp(page), value => value.count === 0, 2000);
+  const focusAfterHelp = await page.evaluate(() => document.activeElement?.id || '');
+  await api(page, 'setSpeed', 140);
+  await api(page, 'pause');
+  const nativeSpaceBefore = await inspect(page);
+  await page.keyboard.press('Space');
+  const nativeSpacePlayed = await waitForTick(page, nativeSpaceBefore.tick + 1, 4000);
+  await page.keyboard.press('Space');
+  const nativeSpaceHeld = await inspect(page);
+  await sleep(450);
+  const nativeSpaceHeldAfter = await inspect(page);
+  await api(page, 'pause');
+  result('Play focus preserves repeated and non-native global shortcuts',
+    playFocusAfter.tick - playFocusBefore.tick === 3 &&
+      playFocusAfter.frameCount - playFocusBefore.frameCount === 3 &&
+      playFocusSamples.every(sample =>
+        sample.id === 'play-toggle' && !sample.disabled) &&
+      playHelpOpened.count > 0 && focusAfterHelp === 'play-toggle' &&
+      nativeSpacePlayed.tick > nativeSpaceBefore.tick &&
+      nativeSpaceHeldAfter.tick === nativeSpaceHeld.tick &&
+      nativeSpaceHeldAfter.frameCount === nativeSpaceHeld.frameCount,
+    `dots +${playFocusAfter.tick - playFocusBefore.tick}; focus ${playFocusSamples.map(sample => sample.id).join('→')}; H help ${playHelpOpened.count}; Space ${nativeSpaceBefore.tick}→${nativeSpacePlayed.tick} held ${nativeSpaceHeld.tick}`);
 
   const reach = await auditReachability(page);
   const coldContextDependent = new Set(['fork-button', 'step-button']);
@@ -3365,6 +4083,28 @@ async function runSuite() {
       apiForked.frameCount < apiForkFuture.frameCount,
     `branch ${apiForkOldBranch}→${apiForked.branch}; frames ${apiForkFuture.frameCount}→${apiForked.frameCount}`);
 
+  const forkDirectiveAgent = apiForked.agents[0];
+  const forkDirectiveFrom = forkDirectiveAgent && coordinateOf(forkDirectiveAgent.state);
+  const forkRawState = frameState(latestExportFrame(apiForked.exported));
+  const forkTraversable = forkRawState && traversableCells(forkRawState);
+  const forkOccupied = new Set(apiForked.agents.map(agent => coordinateOf(agent.state))
+    .filter(Boolean).map(position => `${position.x},${position.y}`));
+  const forkDirectiveAt = forkTraversable && forkDirectiveFrom &&
+    forkTraversable.cells.filter(cell =>
+      !forkOccupied.has(`${cell.x},${cell.y}`) &&
+      (cell.x !== forkDirectiveFrom.x || cell.y !== forkDirectiveFrom.y))
+      .sort((a, b) =>
+        (Math.abs(a.x - forkDirectiveFrom.x) + Math.abs(a.y - forkDirectiveFrom.y)) -
+        (Math.abs(b.x - forkDirectiveFrom.x) + Math.abs(b.y - forkDirectiveFrom.y)))[0];
+  requireMeasurement(forkDirectiveAgent && forkDirectiveFrom && forkDirectiveAt,
+    'an agent position for a valid post-fork directive');
+  const forkDirectiveResult = await api(
+    page,
+    'queueDirective',
+    forkDirectiveAgent.id,
+    forkDirectiveAt.x,
+    forkDirectiveAt.y
+  );
   await api(page, 'step', 1);
   await api(page, 'pause');
   const roundTripSource = await inspect(page);
@@ -3396,12 +4136,50 @@ async function runSuite() {
       roundTripped.frameCount === roundTripSource.frameCount &&
       roundTripped.tick === roundTripSource.tick,
     `tick ${roundTripped.tick}; ${roundTripped.frameCount} frames; head ${roundTripped.head.slice(0, 12)}…`);
+  const forkDirectiveAccepted = forkDirectiveResult !== false &&
+    !(forkDirectiveResult && typeof forkDirectiveResult === 'object' &&
+      (forkDirectiveResult.ok === false || forkDirectiveResult.accepted === false));
+  result('a valid directive-bearing fork export still imports',
+    forkDirectiveAccepted &&
+      roundTripped.exportText === roundTripSource.exportText &&
+      roundTripped.branch === apiForked.branch &&
+      roundTripped.head === roundTripSource.head,
+    `${forkDirectiveAgent.id} ${forkDirectiveFrom.x},${forkDirectiveFrom.y}→${forkDirectiveAt.x},${forkDirectiveAt.y}; branch ${roundTripped.branch}; ${roundTripped.frameCount} frames`);
 
   const roundTripVerification = await tryApi(roundTripPage, 'verifyChain');
   result('the imported fresh-context chain still verifies',
     verificationPassed(roundTripVerification),
     verificationPassed(roundTripVerification) ? 'verified' :
       (roundTripVerification.error || JSON.stringify(roundTripVerification.value)));
+
+  const semanticBaseline = await inspect(roundTripPage);
+  const teleportMutation = fullyRehashedSemanticMutation(
+    semanticBaseline.exportText,
+    'teleport'
+  );
+  const teleportAttempt = await rejectedTransactionalImport(
+    roundTripPage,
+    teleportMutation.json,
+    semanticBaseline
+  );
+  const fixtureMutation = fullyRehashedSemanticMutation(
+    semanticBaseline.exportText,
+    'fixture'
+  );
+  const fixtureAttempt = await rejectedTransactionalImport(
+    roundTripPage,
+    fixtureMutation.json,
+    semanticBaseline
+  );
+  const semanticRecoveryBefore = await inspect(roundTripPage);
+  await api(roundTripPage, 'step', 1);
+  const semanticRecoveryAfter = await inspect(roundTripPage);
+  result('fully rehashed impossible transitions reject transactionally',
+    teleportAttempt.rejected && teleportAttempt.unchanged && teleportAttempt.stateCallable &&
+      fixtureAttempt.rejected && fixtureAttempt.unchanged && fixtureAttempt.stateCallable &&
+      semanticRecoveryAfter.tick - semanticRecoveryBefore.tick === 1 &&
+      semanticRecoveryAfter.frameCount - semanticRecoveryBefore.frameCount === 1,
+    `frame ${teleportMutation.frameIndex} ${teleportMutation.detail}; ${fixtureMutation.detail}; ${teleportMutation.frameHashKey}/${teleportMutation.parentKey}; recovery +${semanticRecoveryAfter.tick - semanticRecoveryBefore.tick}`);
 
   const corruption = mutateExportedHash(downloadedText);
   const beforeCorruption = await inspect(roundTripPage);
@@ -3742,6 +4520,12 @@ async function runSuite() {
   await api(mobilePage, 'pause');
   await api(mobilePage, 'setSpeed', 20);
   let wonSnapshot = await inspect(mobilePage, false);
+  while (wonSnapshot.tick < 13) {
+    await api(mobilePage, 'step', 1);
+    wonSnapshot = await inspect(mobilePage, false);
+  }
+  const mobilePovMarkerContrast =
+    await measureRememberedTerminalCanvasContrast(mobilePage);
   for (let batch = 0; batch < 12; batch++) {
     const won = await mobilePage.locator('#objective-value').getAttribute('data-outcome');
     if (won === 'won') break;
@@ -3796,6 +4580,11 @@ async function runSuite() {
     await api(contrastPage, 'pause');
     await api(contrastPage, 'setSpeed', 20);
     let completedContrastState = await inspect(contrastPage, false);
+    while (completedContrastState.tick < 13) {
+      await api(contrastPage, 'step', 1);
+      completedContrastState = await inspect(contrastPage, false);
+    }
+    const povMarkerContrast = await measureRememberedTerminalCanvasContrast(contrastPage);
     for (let batch = 0;
       batch < 12 && !isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state));
       batch++) {
@@ -3815,6 +4604,7 @@ async function runSuite() {
       selectedForContrast,
       activeSmallText,
       completedSmallText,
+      povMarkerContrast,
       theme: `${introContrast.theme}|${readyContrast.theme}`
     };
     await contrastContext.close();
@@ -3881,6 +4671,22 @@ async function runSuite() {
       systematicCoverageMissing.length ?
         `unmeasured required text: ${systematicCoverageMissing.join(', ')}` :
         `worst ${systematicWorst?.scheme}/${systematicWorst?.state} ${systematicWorst?.ratio.toFixed(2)}:1 ${systematicWorst?.selector} "${systematicWorst?.text}" across ${systematicScans.reduce((sum, scan) => sum + scan.count, 0)} labels`);
+  const rememberedTerminalMeasurements = [
+    Object.assign({ mode: 'light' }, contrastByTheme.light.povMarkerContrast),
+    Object.assign({ mode: 'dark' }, contrastByTheme.dark.povMarkerContrast),
+    Object.assign({ mode: 'mobile-light' }, mobilePovMarkerContrast)
+  ];
+  const smallestRememberedTerminal = [...rememberedTerminalMeasurements]
+    .sort((a, b) => a.css.width * a.css.height - b.css.width * b.css.height)[0];
+  result('remembered hacked-terminal glyph has 4.5:1 canvas contrast',
+    rememberedTerminalMeasurements.every(measurement =>
+      measurement.knownCount > 0 &&
+      /diamond/.test(measurement.transform) &&
+      measurement.contrast >= 4.5 &&
+      measurement.lowContrastControl < 4.5) &&
+      smallestRememberedTerminal.contrast >= 4.5,
+    rememberedTerminalMeasurements.map(measurement =>
+      `${measurement.mode} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.transform} ${measurement.contrast.toFixed(2)}:1 glyph rgb(${measurement.glyph.color.join(',')}) / diamond rgb(${measurement.background.color.join(',')}) low-control ${measurement.lowContrastControl.toFixed(2)}:1`).join(' | '));
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
@@ -3968,13 +4774,13 @@ async function runSuite() {
     `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; t:${coherence.tickMatch} o:${coherence.outcomeMatch} a:${coherence.agentMatch} obj:${coherence.objectiveMatch} pov:${coherence.povMatch}; raw ${historicalFrame.projection.objective.hacked}/${historicalFrame.projection.objective.required} c${Number(historicalFrame.projection.objective.coreComplete)} x${historicalFrame.projection.objective.extractedAgents}/${historicalFrame.projection.objective.totalAgents}, public ${coherence.publicObjective.terminalsHacked}/${coherence.publicObjective.terminalsRequired} c${Number(coherence.publicObjective.coreAcquired)} x${coherence.publicObjective.extractedAgents}/${coherence.publicObjective.totalAgents}; live ${liveMetadata?.source || 'missing'}`);
 
   const terminalRunning = runningImport(terminalSnapshot.exportText);
-  const terminalRunningAttempt = await rejectedRunningImport(
+  const terminalRunningAttempt = await rejectedTransactionalImport(
     policyPage,
     terminalRunning.json,
     historicalView
   );
   const historicalRunning = runningImport(historicalView.exportText);
-  const historicalRunningAttempt = await rejectedRunningImport(
+  const historicalRunningAttempt = await rejectedTransactionalImport(
     policyPage,
     historicalRunning.json,
     historicalView
