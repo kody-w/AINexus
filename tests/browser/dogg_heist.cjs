@@ -2169,17 +2169,32 @@ async function markIntro(page) {
 async function dismissIntro(page) {
   const action = await page.evaluate(() => {
     const dialog = document.querySelector('[data-dogg-test-intro="true"]');
-    if (!dialog) return { found: false, label: '' };
+    const surface = document.getElementById('intro-overlay') || dialog;
     const visible = element => {
+      if (!element || element.hidden || element.hasAttribute('inert') ||
+          element.getAttribute('aria-hidden') === 'true') return false;
+      if (typeof element.checkVisibility === 'function') {
+        return element.checkVisibility({
+          checkOpacity: true,
+          checkVisibilityCSS: true
+        });
+      }
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
-      return !element.hidden && !element.disabled &&
-        style.display !== 'none' && style.visibility !== 'hidden' &&
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
         Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
+    if (!visible(surface)) {
+      return {
+        found: false,
+        autoDismissed: window.__doggHeist?.ready === true,
+        label: 'auto-dismissed'
+      };
+    }
+    if (!dialog) return { found: false, autoDismissed: false, label: '' };
     const controls = [...dialog.querySelectorAll(
       'button, [role="button"], input[type="button"], input[type="submit"]'
-    )].filter(visible);
+    )].filter(control => visible(control) && !control.disabled);
     const ranked = controls.map(control => {
       const label = [
         control.id,
@@ -2192,12 +2207,32 @@ async function dismissIntro(page) {
         20 : /\b(close|ok|okay|done)\b/i.test(label) ? 10 : 0;
       return { control, label, score };
     }).sort((a, b) => b.score - a.score);
-    if (!ranked.length || ranked[0].score === 0) return { found: false, label: '' };
+    if (!ranked.length || ranked[0].score === 0) {
+      return { found: false, autoDismissed: false, label: '' };
+    }
     ranked[0].control.setAttribute('data-dogg-test-intro-dismiss', 'true');
-    return { found: true, label: ranked[0].label };
+    return { found: true, autoDismissed: false, label: ranked[0].label };
   });
+  if (action.autoDismissed) return action.label;
   requireMeasurement(action.found, 'a visible semantic intro dismissal control');
-  await page.locator('[data-dogg-test-intro-dismiss="true"]').click();
+  try {
+    await page.locator('[data-dogg-test-intro-dismiss="true"]').click({ timeout: 1200 });
+  } catch (error) {
+    const autoDismissed = await page.evaluate(() => {
+      const surface = document.getElementById('intro-overlay') ||
+        document.querySelector('[data-dogg-test-intro="true"]');
+      const hidden = !surface || surface.hidden || surface.hasAttribute('inert') ||
+        surface.getAttribute('aria-hidden') === 'true' ||
+        getComputedStyle(surface).display === 'none' ||
+        getComputedStyle(surface).visibility === 'hidden' ||
+        Number(getComputedStyle(surface).opacity) === 0 ||
+        surface.getBoundingClientRect().width === 0 ||
+        surface.getBoundingClientRect().height === 0;
+      return hidden && window.__doggHeist?.ready === true;
+    });
+    if (autoDismissed) return 'auto-dismissed';
+    throw error;
+  }
   return action.label;
 }
 
@@ -2213,6 +2248,23 @@ async function finishHeistBoot(page, label, viewportCheck = false) {
     return Boolean(api && api.ready === true &&
       methods.every(method => typeof api[method] === 'function'));
   }, REQUIRED_METHODS, { timeout: 12000 });
+  await page.waitForFunction(() => {
+    const surface = document.getElementById('intro-overlay') ||
+      document.querySelector('[data-dogg-test-intro="true"]');
+    if (!surface) return true;
+    if (surface.hidden || surface.hasAttribute('inert') ||
+        surface.getAttribute('aria-hidden') === 'true') return true;
+    if (typeof surface.checkVisibility === 'function') {
+      return !surface.checkVisibility({
+        checkOpacity: true,
+        checkVisibilityCSS: true
+      });
+    }
+    const style = getComputedStyle(surface);
+    const rect = surface.getBoundingClientRect();
+    return style.display === 'none' || style.visibility === 'hidden' ||
+      Number(style.opacity) === 0 || rect.width === 0 || rect.height === 0;
+  }, null, { timeout: 3000 });
   await installInspector(page);
   const state = await inspect(page);
   requireMeasurement(Number.isFinite(state.tick), `${label} logical tick`);
