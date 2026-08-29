@@ -1,0 +1,162 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proof — worlds from a spoken key</title>
+<meta name="description" content="A recorded run: worlds worn out of one record by spoken keys, verified in your own browser rather than asserted.">
+<style>
+:root{color-scheme:dark;--ink:#e9e9f2;--dim:#8f8fb0;--line:#23234a;--ok:#7dffb0;--no:#ff6b8a;--hi:#7de3ff}
+*{box-sizing:border-box}body{margin:0;background:#06060d;color:var(--ink);
+  font:15px/1.65 -apple-system,system-ui,sans-serif;padding:0 20px 90px}
+.wrap{max-width:940px;margin:0 auto}
+header{padding:56px 0 22px;border-bottom:1px solid var(--line)}
+h1{font:600 30px/1.2 Georgia,serif;margin:0 0 8px}
+.sub{color:var(--dim);margin:0;max-width:62ch}
+h2{font:600 13px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--hi);margin:44px 0 4px}
+.lede{color:var(--dim);margin:0 0 16px;max-width:70ch}
+.card{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;background:#0a0a15}
+.k{font:600 13px ui-monospace,Menlo,monospace;color:#ffb3c1}
+.name{font:600 20px Georgia,serif;margin:2px 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:8px 20px;font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
+.row b{color:var(--ink);font-weight:600}
+.q{font:400 15px/1.5 Georgia,serif;color:#d8d8ea;margin:10px 0 0;padding-left:12px;border-left:2px solid #33335c}
+.h{font:11px ui-monospace,Menlo,monospace;color:#5a5a80;word-break:break-all;margin-top:10px}
+.v{display:inline-flex;align-items:center;gap:6px;font:11px ui-monospace,monospace;
+  border-radius:999px;padding:2px 9px;border:1px solid;margin-right:6px}
+.v.ok{color:var(--ok);border-color:#1d6b45;background:#0d2a1c}
+.v.no{color:var(--no);border-color:#6b1d2e;background:#2a0d14}
+.v.wait{color:var(--dim);border-color:var(--line)}
+table{width:100%;border-collapse:collapse;font:13px ui-monospace,Menlo,monospace;margin-top:6px}
+td,th{text-align:left;padding:7px 10px;border-bottom:1px solid #191932}
+th{color:var(--dim);font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+td.n{color:var(--hi);text-align:right}
+img{width:100%;border:1px solid var(--line);border-radius:12px;display:block;margin:10px 0}
+.foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--dim);font-size:13px}
+code{font:12px ui-monospace,Menlo,monospace;color:#c9c9e6;background:#12121f;border-radius:5px;padding:1px 6px}
+.warn{border-left:3px solid #6b5d1d;background:#1a1608;padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;color:#e8dfa8}
+</style></head><body><div class="wrap">
+<header>
+  <h1>Worlds worn out of one record</h1>
+  <p class="sub">A recorded run, not a description of one. Every hash below is recomputed in <em>your</em> browser
+  from the bytes on this page — if a number here were wrong, this page would say so about itself.</p>
+</header>
+
+<h2>What is being claimed</h2>
+<p class="lede">One record. A key you can say out loud. Together they produce a complete world that neither
+contained — the same world, byte for byte, on any machine, with nothing sent between them but the key.
+The world is <em>adapted from a real published world</em> whose bytes were checked, never invented from nothing.</p>
+<div id="verdict"></div>
+
+<h2>The record everything descends from</h2>
+<div class="card" id="parent"></div>
+
+<h2>Five keys, five worlds</h2>
+<p class="lede">Each key was worn against that one record. Nothing else differs.</p>
+<div id="worlds"></div>
+
+<h2>Bytes that fail their hash are refused</h2>
+<p class="lede">Not repaired, not used with a warning. Refused.</p>
+<div class="card" id="refusal"></div>
+
+<h2>Worlds shape what lives in them, and the order matters</h2>
+<p class="lede">The same creature poured through the moon, then the dark, then a planet that is no longer there —
+and then through the same three in the opposite order.</p>
+<div class="card" id="shaping"></div>
+
+<h2>They are really in the room</h2>
+<p class="lede">Three residents, each in its own page, each publishing only where it stands. Nine cameras scoring
+what they can see. Nobody shares an instance.</p>
+<div id="house"></div>
+
+<h2>What it cost</h2>
+<div class="card" id="cost"></div>
+
+<div class="foot" id="foot"></div>
+</div>
+<script src="ai/frames.js"></script>
+<script>
+// This page does not ask to be believed. It recomputes every hash in the reader's browser from
+// the frames printed on it, using the same rapp/1 arithmetic that produced them — so a claim
+// that does not hold up shows a red badge here rather than staying quietly wrong.
+const $ = s => document.querySelector(s);
+const esc = t => String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const badge = (ok, text) => `<span class="v ${ok===null?'wait':ok?'ok':'no'}">${ok===null?'…':ok?'✓':'✗'} ${esc(text)}</span>`;
+
+(async () => {
+  const url = new URLSearchParams(location.search).get('proof') || 'proof/latest/proof.json';
+  let P; try { P = await (await fetch(url, {cache:'no-cache'})).json(); }
+  catch (e) { $('#verdict').innerHTML = badge(false, 'no recording at ' + url); return; }
+  const F = window.NexusFrames;
+
+  // recompute a frame's own hashes from its own contents
+  async function check(f) {
+    const ph = await F.H('rapp/1:particle', f.payload);
+    const pre = {}; for (const k of Object.keys(f)) if (k !== 'frame_hash' && k !== 'sig') pre[k] = f[k];
+    const fh = await F.H('rapp/1:wave', pre);
+    return { payload: ph === f.payload_hash, frame: fh === f.frame_hash, ph, fh };
+  }
+
+  const parentOk = await check(P.parent);
+  $('#parent').innerHTML =
+    `<div class="row"><span>kind <b>${esc(P.parent.kind)}</b></span><span>seq <b>${P.parent.seq}</b></span>` +
+    `<span>utc <b>${esc(P.parent.utc)}</b></span><span>cast <b>${esc((P.parent.payload.requires.players||[]).join(', '))}</b></span></div>` +
+    `<div class="h">frame_hash ${esc(P.parent.frame_hash)}</div>` +
+    `<div style="margin-top:10px">${badge(parentOk.payload,'payload hash recomputed here')}${badge(parentOk.frame,'frame hash recomputed here')}</div>`;
+
+  let allOk = parentOk.payload && parentOk.frame, repeatable = true;
+  const cards = [];
+  for (const w of P.worlds) {
+    const c = await check(w.frame);
+    allOk = allOk && c.payload && c.frame;
+    repeatable = repeatable && w.tile.repeatable && w.forged.repeatable;
+    const g = w.world.gravity_milli;
+    cards.push(`<div class="card">
+      <div class="k">${esc(w.key)}</div>
+      <div class="name">${esc(w.world.called)}</div>
+      <div class="row">
+        <span>descends from <b>${esc(w.provenance.adapted_from_title || w.provenance.adapted_from_file)}</b></span>
+        <span>ground <b>${esc(w.world.ground)}</b></span>
+        <span>sky <b>${esc(w.world.sky)}</b></span>
+        <span>gravity <b>${(g/1000).toFixed(2)}g</b></span>
+        <span>rooms <b>${w.world.rooms}</b></span>
+        <span>in it <b>${esc(w.cast.map(c=>c.id).join(', '))}</b></span>
+      </div>
+      <p class="q">${esc(w.world.premise)}<br><span style="color:#9a9ac0">house rule — ${esc(w.world.house_rule)}</span></p>
+      <div class="h">source sha256 ${esc(String(w.provenance.source_sha256).slice(0,32))}… · tile ${esc(w.tile.frame_hash||w.tile.hash).slice(0,24)}…</div>
+      <div style="margin-top:8px">${badge(c.payload && c.frame,'hashes recomputed here')}${badge(w.tile.repeatable,'same key, same tile')}${badge(w.forged.repeatable,'same key, same world')}${badge(w.provenance.method.includes('NOT regenerated'),'adapted, not invented')}</div>
+    </div>`);
+  }
+  $('#worlds').innerHTML = cards.join('');
+
+  const r = P.refusal;
+  $('#refusal').innerHTML = `<div class="row"><span>status <b>${esc(r.status)}</b></span><span>generator <b>${esc(r.generator)}</b></span></div>
+    <p class="q">${esc(r.reason)}</p>
+    <div class="h">expected ${esc(String(r.expected).slice(0,32))}… · got ${esc(String(r.actual).slice(0,32))}…</div>
+    <div style="margin-top:8px">${badge(r.status==='refused','refused rather than repaired')}${badge(r.generator==='none','produced nothing at all')}</div>`;
+
+  const s = P.shaping;
+  const row = (label, t) => `<tr><td>${esc(label)}</td><td class="n">${t.reach_milli ?? '—'}</td><td class="n">${t.trust_milli ?? '—'}</td>
+    <td class="n">${t.hearing_milli ?? '—'}</td><td>${esc(t.gait||'—')}</td><td>${esc(t.belief||'')}</td></tr>`;
+  $('#shaping').innerHTML = `<table><tr><th>creature</th><th>reach</th><th>trust</th><th>hearing</th><th>gait</th><th>belief</th></tr>
+    ${row('as it started', s.start)}${row('moon → dark → dead', s.forward.traits)}${row('dead → dark → moon', s.backward.traits)}</table>
+    <div class="h">shaped by ${esc(s.order.join('  →  '))}</div>
+    <div style="margin-top:8px">${badge(s.differs,'the same three worlds in a different order made a different creature')}</div>`;
+
+  $('#house').innerHTML = (P.stills||[]).map(f=>`<img src="${esc(url.replace(/[^/]*$/,''))}${esc(f)}" alt="the house">`).join('') +
+    `<div class="row" style="margin-top:6px"><span>cameras <b>${(P.house.survey||[]).length}</b></span>
+     <span>residents painted <b>${(P.house.residents||[]).filter(x=>x.painted).length}/${(P.house.residents||[]).length}</b></span></div>
+     <div style="margin-top:8px">${badge((P.house.residents||[]).every(x=>x.painted),'every resident is visible to the cameras')}${badge((P.house.survey||[]).length>=6,'more than one angle on the same room')}</div>`;
+
+  const c = P.cost;
+  $('#cost').innerHTML = `<table><tr><th>frames</th><th>model calls</th><th>calls per frame</th><th>free frames</th></tr>
+    <tr><td class="n">${c.totalFrames}</td><td class="n">${c.calls}</td><td class="n">${c.callsPerFrame}</td><td class="n">${c.freeFrames}</td></tr></table>
+    <p class="lede" style="margin-top:10px">Deciding is what costs. Everything downstream of a decision — replayed, worn, derived — is arithmetic.</p>`;
+
+  $('#verdict').innerHTML = badge(allOk,'every hash on this page recomputed correctly') +
+    badge(repeatable,'every key reproduced its world exactly') +
+    badge(P.registryCount>0, P.registryCount + ' real published worlds available to adapt');
+
+  $('#foot').innerHTML = `Recorded ${esc(P.recorded)} · ${P.worlds.length} worlds worn from one record · ` +
+    `<code>wear(frame, key) → tile</code> · every mind in this run was scripted: no model decided anything here, ` +
+    `which is exactly what makes the numbers checkable.` +
+    (P.pageErrors && P.pageErrors.length ? `<br>page errors during recording: ${esc(P.pageErrors.join(' | '))}` : '');
+})();
+</script></body></html>

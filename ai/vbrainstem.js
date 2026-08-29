@@ -42,9 +42,10 @@
     { url: 'vb/lens_cataclysm_agent.py', className: 'LensCataclysmAgent' },
     // the inverse: a world wearing an organism rather than a lens wearing a world
     { url: 'vb/adapt_agent.py', className: 'AdaptAgent' },
+    { url: 'vb/world_forge_agent.py', className: 'WorldForgeAgent' },
   ];
   const CORE_AGENTS = ['ManageMemory', 'ContextMemory', 'NexusWorld',
-                       'LensGravity', 'LensDayNight', 'LensCataclysm', 'Adapt'];
+                       'LensGravity', 'LensDayNight', 'LensCataclysm', 'Adapt', 'WorldForge'];
 
   // ── the ceiling ──────────────────────────────────────────────────────────
   // A herd of players thinking every few seconds, several model round trips each, on somebody
@@ -406,7 +407,11 @@
       if (out && typeof out.toJs === 'function') { const j = out.toJs({ dict_converter: Object.fromEntries }); try { out.destroy(); } catch (e) {} out = j; }
       if (out === false || out === null || out === undefined) return 'failed: the world did not do that';
       if (out === true) return 'ok';
-      return typeof out === 'object' ? JSON.stringify(out).slice(0, 1200) : String(out).slice(0, 1200);
+      // NO TRUNCATION HERE. Cutting an agent's answer to a readable length is a courtesy owed to
+      // a MODEL's context window, and it belongs at that boundary — where turn() already does it.
+      // Doing it at the source silently mangles agent-to-agent piping: a lens that hands its
+      // world to the next lens had its JSON cut mid-object and arrived as "did not return a tile".
+      return typeof out === 'object' ? JSON.stringify(out) : String(out);
     } finally {
       try { proxy.destroy(); } catch (e) {}
       try { pyodide.globals.delete('_vb_args'); pyodide.globals.delete('_vb_target'); } catch (e) {}
