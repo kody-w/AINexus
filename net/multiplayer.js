@@ -129,6 +129,7 @@
                     this.peer = new Peer(undefined, brokerOptions());
 
                     this.peer.on('open', (id) => {
+                        this.peerOpen = true;
                         console.log('My peer ID:', id);
                         console.log('Attempting to join room:', this.roomId);
 
@@ -149,6 +150,7 @@
                     this.peer = new Peer(undefined, brokerOptions());
 
                     this.peer.on('open', (id) => {
+                        this.peerOpen = true;
                         this.roomId = id;
                         console.log('Created room with ID:', this.roomId);
                         this.updateShareUrl();
@@ -171,7 +173,7 @@
                     // silently alone — the failure that makes a room of four
                     // read as four rooms of one. It is transient, so retry it a
                     // few times with backoff instead of giving up on the first.
-                    if ((err.type === 'server-error' || err.type === 'network') && !this.roomId) {
+                    if ((err.type === 'server-error' || err.type === 'network') && !this.peerOpen) {
                         this.brokerTries = (this.brokerTries || 0) + 1;
                         if (this.brokerTries <= 3) {
                             const wait = 400 * this.brokerTries;
@@ -208,8 +210,12 @@
                     console.log('Disconnected from peer server');
                     this.updateStatus('Disconnected', false);
 
-                    // Try to reconnect
+                    // Try to reconnect — but only if this handler still belongs to
+                    // the CURRENT peer. A retry replaces this.peer, and the old
+                    // one's timer firing later would reconnect a socket nobody reads.
+                    const mine = this.peer;
                     setTimeout(() => {
+                        if (this.peer !== mine) return;      // superseded by a retry
                         if (!this.peer.destroyed) {
                             console.log('Attempting to reconnect...');
                             this.peer.reconnect();

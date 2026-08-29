@@ -277,15 +277,29 @@ $('signin').onclick = async () => {
     const d = await A.startDeviceLogin();
     $('mind').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
       '" target="_blank" rel="noopener">github.com/login/device</a> — waiting…';
-    const tick = setInterval(async () => {
+    // RFC 8628: poll at the interval the server gave, lengthen it on slow_down,
+    // and stop when the code expires. A fixed 5s that ignores both will get
+    // throttled and then wait forever for a code that is already dead.
+    let wait = 5000;
+    const deadline = Date.now() + 15 * 60 * 1000;
+    let timer = null;
+    const stop = (msg) => {
+      if (timer) clearTimeout(timer);
+      timer = null; btn.disabled = false;
+      if (msg) $('mind').textContent = msg; else paintMind();
+    };
+    const poll = async () => {
+      if (Date.now() > deadline) { stop('that sign-in code expired — start again'); return; }
       try {
-        if (!(await A.pollDeviceLogin())) return;
-        clearInterval(tick); btn.disabled = false; paintMind();
-      } catch (e) {
-        clearInterval(tick); btn.disabled = false;
-        $('mind').textContent = 'sign-in failed: ' + e.message;
-      }
-    }, 5000);
+        const tok = await A.pollDeviceLogin();
+        // obey whatever the server last asked for
+        if (A.pendingInterval) wait = Math.max(wait, A.pendingInterval() * 1000);
+        if (tok === 'SLOW_DOWN') wait = Math.min(60000, Math.max(wait, wait + 5000));
+        if (!tok || tok === 'SLOW_DOWN') { timer = setTimeout(poll, wait); return; }
+        stop();
+      } catch (e) { stop('sign-in failed: ' + e.message); }
+    };
+    timer = setTimeout(poll, wait);
   } catch (e) { btn.disabled = false; $('mind').textContent = 'could not start sign-in: ' + e.message; }
 };
 paintMind();

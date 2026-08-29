@@ -47,7 +47,13 @@ const WORLDS = ['index.html', 'crystal-caverns.html', 'floating-gardens.html',
 const wantWorld = params.get('world') || 'index.html';
 const WORLD = WORLDS.includes(wantWorld) ? wantWorld : null;
 const PROG = params.get('program') || 'minded';
-const BUDGET = +(params.get('turns') || 200);
+// `?turns=lots` used to make this NaN, and `c.turns >= NaN` is false forever —
+// a budget that quietly stops existing is worse than no budget, because the page
+// still claims to have one.
+const BUDGET = (function () {
+  const n = Number(params.get('turns'));
+  return (Number.isFinite(n) && n >= 1) ? Math.min(500, Math.floor(n)) : 200;
+})();
 
 // Text is text. Anything that came from a URL or a downloaded file is written
 // with textContent, never concatenated into innerHTML.

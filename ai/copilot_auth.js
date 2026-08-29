@@ -74,12 +74,24 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_code: pending.device_code, client_id: COPILOT_CLIENT_ID }),
     });
+    if (!r.ok) return null;          // a transient blip must not kill a valid 15-minute sign-in
     const d = await r.json();
     if (d.access_token) { saveSettings({ ghuToken: d.access_token }); pending = null; return d.access_token; }
-    if (d.error === 'authorization_pending' || d.error === 'slow_down') return null;
+    // RFC 8628 3.5: slow_down means LENGTHEN the interval by at least 5s. Folding
+    // it in with authorization_pending told the caller "keep waiting" while
+    // hiding the one instruction the server actually gave, so a caller polling on
+    // a fixed timer would be throttled and never learn why.
+    if (d.error === 'slow_down') {
+      pending.interval = Math.min(60, (pending.interval || 5) + 5);
+      return 'SLOW_DOWN';
+    }
+    if (d.error === 'authorization_pending') return null;
     if (d.error) { pending = null; throw new Error(d.error_description || d.error); }
     return null;
   }
+
+  // what the server last told us to wait, in seconds — so a caller can obey it
+  function pendingInterval() { return pending ? (pending.interval || 5) : 5; }
 
   async function exchange() {
     const ghu = getToken();
@@ -139,7 +151,7 @@
 
   function signOut() { saveSettings({ ghuToken: null, copilotToken: null, copilotExpiresAt: 0 }); pending = null; }
 
-  root.NexusAuth = { startDeviceLogin, pollDeviceLogin, exchange, ensureToken, chat, chatUrl,
+  root.NexusAuth = { startDeviceLogin, pollDeviceLogin, pendingInterval, exchange, ensureToken, chat, chatUrl,
                      signOut, signedIn, hasToken, verify, getToken, loadSettings, saveSettings,
                      AUTH_WORKER_URL, COPILOT_CLIENT_ID, COPILOT_DEFAULT_API, STORAGE_KEY, DEFAULT_MODEL };
 })(typeof window !== 'undefined' ? window : globalThis);

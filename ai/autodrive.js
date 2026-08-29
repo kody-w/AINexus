@@ -682,11 +682,17 @@
   // driver gets this for free and cannot opt out by omission. It is idempotent,
   // so a caller that also labels (the control tower does) changes nothing.
   api.labelAsAI = function (persona) {
-    const who = persona || window.NEXUS_PERSONA || 'anon';
+    // Only an AI player gets labelled as one. frontier.html arms this same driver
+    // for a PERSON at the keyboard; stamping "🤖 (AI)" on their name would be a
+    // lie in the opposite direction, and the honesty rule cuts both ways. A
+    // persona is set by whatever drives on an AI's behalf (the tower, the views
+    // grid); no persona and no declared AI intent means a human is flying.
+    const who = persona || window.NEXUS_PERSONA;
+    if (!who && !window.NEXUS_IS_AI) return false;
     try {
       const mp = window.worldNavigator && window.worldNavigator.multiplayer;
       if (mp) {
-        const tag = '🤖 ' + who + ' (AI)';
+        const tag = '🤖 ' + (who || 'agent') + ' (AI)';
         if (mp.username !== tag) mp.username = tag;
         if (mp.peer) mp.peer.__isAI = true;
       }
@@ -697,6 +703,13 @@
   // The world may not have built its multiplayer yet when the driver arms, so
   // try until it exists rather than labelling once into a void.
   (function labelWhenPossible(tries) {
+    if (!window.NEXUS_PERSONA && !window.NEXUS_IS_AI) {
+      // nobody has claimed this is an AI yet; check again in case a driver is
+      // still setting up, but never label a frame that stays human
+      if (tries > 40) return;
+      setTimeout(() => labelWhenPossible(tries + 1), 500);
+      return;
+    }
     if (api.labelAsAI() && window.worldNavigator && window.worldNavigator.multiplayer) return;
     if (tries > 40) return;                       // ~20s, then give up quietly
     setTimeout(() => labelWhenPossible(tries + 1), 500);
