@@ -275,10 +275,16 @@
   // THE PUBLISHED FINGERPRINTS. Loaded once and consulted by every hot-load, so verification is
   // what happens by default rather than what a careful caller remembers to ask for. state/
   // agent_templates.json is built by tools/build_agent_registry.py from the files themselves.
-  let fingerprints = null, fingerprintsTried = false;
+  // fingerprintsUnavailable is the difference between "no fingerprint published for this file"
+  // and "I could not read the list at all". The first is a judgement; the second is ignorance, and
+  // ignorance must not silently become permission — a failed fetch of this registry used to turn
+  // every later refusal into a load, which is a security check that disappears exactly when the
+  // network is being interfered with.
+  let fingerprints = null, fingerprintsTried = false, fingerprintsUnavailable = false;
   async function publishedFingerprints(log) {
     if (fingerprintsTried) return fingerprints;
     fingerprintsTried = true;
+    fingerprintsUnavailable = true;      // cleared below only if the list actually parses
     try {
       const r = await fetch(here('../state/agent_templates.json'), { cache: 'no-cache' });
       if (r.ok) {
@@ -289,6 +295,7 @@
             fingerprints[String(t.file).split('/').pop()] = t.sha256;
           }
         }
+        fingerprintsUnavailable = false;
         if (log) log('[vbrainstem] ' + Object.keys(fingerprints).length + ' published fingerprints loaded');
       }
     } catch (e) { if (log) log('[vbrainstem] no fingerprint registry: ' + e.message); }
@@ -331,6 +338,10 @@
             + 'Not repaired, not loaded.');
         }
         if (o.log) o.log('[vbrainstem] verified ' + file + ' against its published sha256');
+      } else if (fingerprintsUnavailable) {
+        // FAIL CLOSED. Not knowing what the bytes should be is not a reason to run them.
+        throw new Error('REFUSED: the published fingerprint list could not be read, so ' + file
+          + ' cannot be checked. Refusing rather than running it unverified.');
       } else if (o.requireVerified) {
         throw new Error('REFUSED: no published sha256 for ' + file + ' and verification was required');
       }
@@ -728,10 +739,18 @@
         // a player's ticks are its biography: body.pulse on a body-stream, which is a bare
         // MINTED rappid (§6.1, §7.2). Minted here on first use rather than spelled from a name.
         if (!streamId) streamId = await F.mintRappid('kody-w', 'nexus-player');
-        const f = await F.buildFrame({ kind: 'body.pulse', streamId, seq: state.chain.length,
+        // seq COUNTS THE LIFE, NOT THE ARRAY. Using state.chain.length meant that once the
+        // window below dropped the oldest frame, seq stopped advancing and started repeating —
+        // the chain read as a life that kept restarting at 500. herd.js was fixed for this; this
+        // copy was not. A biography whose numbering resets is a log with extra steps.
+        const f = await F.buildFrame({ kind: 'body.pulse', streamId, seq: state.seq = (state.seq || 0),
                                        payload: { asserts, requires }, prev: state.prev });
         state.chain.push(f); state.prev = f.payload_hash;
-        if (state.chain.length > 500) state.chain.shift();     // a long session is still bounded
+        state.seq++;
+        if (state.chain.length > 500) {
+          state.chain.shift();                                 // a long session is still bounded
+          state.windowed = true;   // and says so, rather than pretending the start was never there
+        }
         return f;
       } catch (e) { return null; }
     }
