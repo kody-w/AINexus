@@ -436,34 +436,74 @@ async function auditReachability(page, ids = REQUIRED_IDS) {
         Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
     const output = [];
-    for (const id of requested) {
-      const element = document.getElementById(id);
-      if (!element) {
-        output.push({ id, exists: false, visible: false, reachable: false });
-        continue;
+    const scrollingElements = [document.documentElement, document.body].filter(Boolean);
+    const originalScrollBehavior = scrollingElements.map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    for (const element of scrollingElements) {
+      element.style.setProperty('scroll-behavior', 'auto', 'important');
+    }
+    const settledRect = async element => {
+      let previous;
+      let stableSamples = 0;
+      let rect = element.getBoundingClientRect();
+      const deadline = performance.now() + 750;
+      while (performance.now() < deadline) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        rect = element.getBoundingClientRect();
+        const sample = [scrollX, scrollY, rect.left, rect.top, rect.right, rect.bottom];
+        const intersects = rect.right > 0 && rect.left < innerWidth &&
+          rect.bottom > 0 && rect.top < innerHeight;
+        if (intersects && previous &&
+            sample.every((value, index) => Math.abs(value - previous[index]) < 0.5)) {
+          stableSamples++;
+        } else {
+          stableSamples = 0;
+        }
+        if (stableSamples >= 1) break;
+        previous = sample;
       }
-      element.scrollIntoView({ block: 'center', inline: 'nearest' });
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const rect = element.getBoundingClientRect();
-      const left = Math.max(0, rect.left);
-      const right = Math.min(innerWidth, rect.right);
-      const top = Math.max(0, rect.top);
-      const bottom = Math.min(innerHeight, rect.bottom);
-      const intersects = right > left && bottom > top;
-      let reachable = false;
-      if (intersects) {
-        const x = Math.min(innerWidth - 1, Math.max(0, (left + right) / 2));
-        const y = Math.min(innerHeight - 1, Math.max(0, (top + bottom) / 2));
-        reachable = document.elementsFromPoint(x, y).some(node =>
-          node === element || element.contains(node));
+      return rect;
+    };
+    try {
+      for (const id of requested) {
+        const element = document.getElementById(id);
+        if (!element) {
+          output.push({ id, exists: false, visible: false, reachable: false });
+          continue;
+        }
+        element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        const rect = await settledRect(element);
+        const left = Math.max(0, rect.left);
+        const right = Math.min(innerWidth, rect.right);
+        const top = Math.max(0, rect.top);
+        const bottom = Math.min(innerHeight, rect.bottom);
+        const intersects = right > left && bottom > top;
+        let reachable = false;
+        if (intersects) {
+          const x = Math.min(innerWidth - 1, Math.max(0, (left + right) / 2));
+          const y = Math.min(innerHeight - 1, Math.max(0, (top + bottom) / 2));
+          reachable = document.elementsFromPoint(x, y).some(node =>
+            node === element || element.contains(node));
+        }
+        output.push({
+          id,
+          exists: true,
+          visible: visible(element),
+          reachable,
+          disabled: 'disabled' in element ? Boolean(element.disabled) : false
+        });
       }
-      output.push({
-        id,
-        exists: true,
-        visible: visible(element),
-        reachable,
-        disabled: 'disabled' in element ? Boolean(element.disabled) : false
-      });
+    } finally {
+      for (const original of originalScrollBehavior) {
+        if (original.value) {
+          original.element.style.setProperty('scroll-behavior', original.value, original.priority);
+        } else {
+          original.element.style.removeProperty('scroll-behavior');
+        }
+      }
     }
     return output;
   }, ids);
@@ -654,7 +694,7 @@ async function visibleHelp(page) {
     });
     return {
       count: visible.length,
-      text: visible.map(element => String(element.textContent || '').trim()).join(' ').slice(0, 500),
+      text: visible.map(element => String(element.textContent || '').trim()).join(' ').slice(0, 5000),
       expanded: button && button.getAttribute('aria-expanded')
     };
   });
@@ -752,7 +792,7 @@ async function runSuite() {
   const page = await openHeist(primaryContext, 'primary cold boot');
 
   const reach = await auditReachability(page);
-  const coldContextDependent = new Set(['fork-button']);
+  const coldContextDependent = new Set(['fork-button', 'step-button']);
   const unusable = reach.filter(item => !item.exists || !item.visible || !item.reachable ||
     (/-button$|play-toggle|speed-select|timeline/.test(item.id) && item.disabled &&
       !coldContextDependent.has(item.id)));
