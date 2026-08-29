@@ -45,3 +45,12 @@ fails twice, then it is real.
 The ten that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs` and `time_travel.cjs` —
 need the network. `copilot_auth.cjs` reaches the live worker.
+
+## The other half: the live origin
+
+These suites serve the repo from disk through request interception, which is what makes them
+fast and repeatable — and it means none of them can see a page that is broken only once it is
+deployed. `node tools/smoke_live.cjs` loads all 64 published pages from kody-w.github.io with
+nothing intercepted and requires a 200, no page error, and no subresource that 404s. It found
+eight pages whose portals had nothing to offer because they were fetching a world tree from a
+repo that does not exist — every visitor, every load, and no page error to show for it.
