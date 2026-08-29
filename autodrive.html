@@ -116,6 +116,11 @@ function inject(frame) {
   doc.body.appendChild(s);
 }
 
+// A stall in here used to be invisible: the panel simply sat at its last state
+// forever and there was no way to tell which await never returned. Each step now
+// announces itself in that player's own console, so a hang names the step it hung on.
+function step(i, what) { try { say(i, '· ' + what, 'd'); } catch (e) {} }
+
 async function boot() {
   document.querySelectorAll('.tab').forEach(e => e.remove());
   tabs.length = 0; room = null;
@@ -149,18 +154,24 @@ async function boot() {
     // worlds on another is a room nobody can reach
     const brokerQ = params.get('broker') ? '&broker=' + encodeURIComponent(params.get('broker')) : '';
     frame.src = world + '?player=' + (i + 1) + brokerQ + invite + (invite.includes('#') ? '&' : '#') + 'as=' + asName;
+    step(i, 'waiting for the frame to load');
     await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('frame never loaded')), 45000);
       frame.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
     }).catch(e => say(i, e.message, 'e'));
+    step(i, 'frame loaded');
     try { inject(frame); } catch (e) { say(i, e.message, 'e'); $('st' + i).textContent = 'cannot drive'; continue; }
     // the injected script loads asynchronously — calling into hands that do not exist yet
     // is how a player looks "ready" and never moves
+    step(i, 'waiting for the driver to arm');
     const armed = await waitFor(() => frame.contentWindow.__autodrive, 15000);
+    step(i, armed ? 'driver armed' : 'driver did NOT arm');
     if (!armed) { say(i, 'driver never armed', 'e'); $('st' + i).textContent = 'no hands'; continue; }
     try { frame.contentWindow.NEXUS_PERSONA = persona; } catch (e) {}
     if (i === 0) {
+      step(i, 'waiting for a room');
       room = await waitForRoom(frame, i);
+      step(i, room ? 'got room' : 'no room');
       if (room) {
         say(i, 'hosting room ' + room.id.slice(0, 8) + '…', 'd');
         publishRoom(room, world);            // so the ME view in another tab can find it
@@ -170,8 +181,11 @@ async function boot() {
         $('st' + i).textContent = 'no room';
       }
     }
+    step(i, 'labelling');
     await label(frame, i, persona);
+    step(i, 'labelled — starting the program');
     runProgram(i);
+    step(i, 'program started; moving to the next player');
   }
 }
 
