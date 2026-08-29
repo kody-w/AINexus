@@ -3670,10 +3670,12 @@ async function readBoardAccessibilitySnapshot(page) {
   );
   const liveTick = Number(state.state?.liveTick ?? state.tick);
   const currentFrameIndex = Number(state.state?.currentFrame?.index);
+  requireMeasurement(Number.isFinite(displayedTick),
+    'displayed board tick from state().currentFrame.tick/state.tick/viewTick');
   return Object.assign({
-    tick: Number.isFinite(displayedTick) ? displayedTick : undefined,
+    tick: displayedTick,
     currentFrameTick: Number.isFinite(currentFrameTick) ? currentFrameTick : undefined,
-    liveTick: Number.isFinite(liveTick) ? liveTick : undefined,
+    liveTick,
     head: state.head,
     frameCount: state.frameCount,
     currentFrameIndex: Number.isFinite(currentFrameIndex) ? currentFrameIndex : undefined
