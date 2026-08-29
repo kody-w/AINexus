@@ -255,7 +255,17 @@ $('eyes').onclick = async () => {
       if (!running && D() && performance.now() - lastDesk > 1200 && performance.now() - lastHover > 140) {
         lastHover = performance.now(); deskMode = false; gazeDrives = true; trackHover(gx, gy);
       }
-      if (gaze.pressed) { note('brow → select'); fire(gx, gy); }
+      // A BROW PRESS IS AN EDGE, AND AN EDGE THAT ARRIVES DURING THE GUARD USED TO DIE THERE.
+      // face.js reports `pressed` only on the rising edge, so a raise landing inside fire()'s
+      // 350ms double-select guard was dropped for good: nothing happened and the only way to
+      // recover was to lower the brow and raise it again. For someone selecting with their face
+      // rather than their hands, that is the input silently failing. Hold it briefly instead —
+      // the guard is there to stop a double-fire, not to throw a deliberate press away.
+      if (gaze.pressed) pendingPress = { x: gx, y: gy, at: performance.now() };
+      if (pendingPress) {
+        if (performance.now() - pendingPress.at > 700) pendingPress = null;   // stale: let it go
+        else if (fire(pendingPress.x, pendingPress.y)) { pendingPress = null; note('brow → select'); }
+      }
       readPulse(v, res);
     } else { gazePt = null; $('gaze').classList.remove('on'); }
     requestAnimationFrame(loop);
@@ -573,22 +583,28 @@ setInterval(() => {                       // the dwell ring: hold to select, han
   cursor.classList.add('dwelling');
   const t = (performance.now() - hotSince) / DWELL_MS;
   ring.style.strokeDashoffset = Math.max(0, 126 * (1 - t));
-  if (t >= 1) { dwellFired = true; ring.style.strokeDashoffset = 126; note('dwell → ' + hot.label); fire(cursorAt.x, cursorAt.y); }
+  if (t >= 1) { dwellFired = true; ring.style.strokeDashoffset = 126;
+                const label = hot.label; if (fire(cursorAt.x, cursorAt.y)) note('dwell → ' + label); }
 }, 60);
 
+let pendingPress = null;   // a brow press waiting for the guard to open
 let firing = false;
+// Returns whether it actually acted. Callers used to announce 'brow → select' BEFORE calling,
+// so a press swallowed by the guard below printed a confident line about something that never
+// happened — the HUD saying one thing while the world did another, which is the whole failure
+// this estate spent the night removing from its pages.
 function fire(x, y) {
   const d = D();
-  if (!d || firing) return;                    // a dwell completing at the same moment as a
+  if (!d || firing) return false;              // a dwell completing at the same moment as a
   firing = true;                               // pinch must not select the same thing twice
   setTimeout(() => { firing = false; }, 350);
   dwellFired = true;
-  if (talkingTo) { if (hotLine >= 0) sayLine(hotLine); else closeTalk(); return; }
+  if (talkingTo) { if (hotLine >= 0) sayLine(hotLine); else closeTalk(); return true; }
   let what = null;
   try { what = d.hover(x, y); } catch (e) {}
   if (what && what.kind === 'person') {
-    if (!facing(what.person || what)) { note('turn to face them first'); return; }
-    openTalk(what); return;
+    if (!facing(what.person || what)) { note('turn to face them first'); return true; }
+    openTalk(what); return true;
   }
   if (what && what.kind === 'portal' && what.url) {
     // Selecting an orb is a decision to GO there, and this page is the thing holding the
@@ -601,9 +617,10 @@ function fire(x, y) {
         return r && Date.now() - r.at < 6 * 3600e3 ? '#join=' + r.id + '.' + r.secret : ''; } catch (e) { return ''; } })();
     frame.src = what.url + (what.url.includes('?') ? '&' : '?') + 'from=frontier' + room;
     hot = null; drive = null;
-    return;
+    return true;
   }
   drive.pick(x, y).then(r => note('selected ' + (r && r.label ? r.label : 'nothing'))).catch(e => note('select failed: ' + e.message));
+  return true;
 }
 
 // Desk mode: the mouse is a cursor too, and a click is a decision — no dwell.
