@@ -34,6 +34,9 @@ which helped — but a broker intermittently erroring is a better explanation of
 latency, and I should not have settled on latency without checking this.
 
 ### 2. No model call has ever run in this estate
+**Narrowed further.** The ceiling, the round cap and the autonomous loop have now all been driven
+to their limits by a scripted mind — 4,000 free turns, a runaway mind that never stops calling, and
+six `live()` loops to their various deaths. The machinery is exercised; the mind still is not.
 **Narrowed, not closed.** A scripted mind (`ai/scripted_mind.js`) now drives everything downstream
 of the answer — real verbs, real refusals, real rapp/1 frames, real receipts — so the machinery is
 exercised end to end and the paths past the mind are no longer dark. What remains unproven is the
@@ -48,6 +51,20 @@ Needs an owner-signed §12.1 re-genesis. `frames/line.jsonl` is the clean line a
 
 ### 4. Enforcing the kind/family rule in `verifyChain` by default would refuse 53 of 54 published chains
 Left opt-in (`{kinds:true}`). Turning it on by default is a canon decision, not a bug fix.
+
+---
+
+### 5. `ensemble()` makes a model call with no `spend()` at all
+`ai/herd.js:359` calls `auth.chat()` directly — one model call per direction of the whole cast,
+entirely off the books. The ceiling that guards `turn()` never sees it, so a herd directed in a
+loop spends a visitor's seat without ever approaching the limit that exists to stop exactly that.
+Found by the ceiling audit, outside its region. Not fixed yet only because another agent is in that
+file; it is a small change (route it through `spend()`), not a hard one.
+
+### 6. `summon()` step 1 hot-loads source without the scan its sibling applies
+The "find a universe where it already worked" half loads source it found in a line, and does not run
+the forbidden-pattern scan that the "write it from nothing" half does. Same file, same function, two
+halves, one guard. Reported by the ceiling audit; the summon audit is in that region now.
 
 ---
 
