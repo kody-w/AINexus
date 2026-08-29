@@ -3734,6 +3734,247 @@ async function measureDoorCanvasContrast(page, preferredTransform) {
   };
 }
 
+function tacticalObjects(state) {
+  const targets = [];
+  const add = (type, id, position, details = {}) => {
+    if (!position) return;
+    targets.push(Object.assign({
+      type,
+      id: String(id || `${type}-${position.x}-${position.y}`),
+      position
+    }, details));
+  };
+  walkJson(state, (value, trail) => {
+    const context = trail.join('.');
+    if (Array.isArray(value) && /(laser|hazard)/i.test(context)) {
+      for (const cell of normalizedCells(value).cells) {
+        const position = coordinateOf(cell);
+        if (position) add('laser-hazard', context, position);
+      }
+      return;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        /(frames|history|chain|ledger|replay)/i.test(context)) return;
+    const identity = [
+      value.id, value.name, value.type, value.kind, value.role, value.label, context
+    ].filter(Boolean).join(' ');
+    const position = coordinateOf(value);
+    if (!position) return;
+    if (/\bterminals?\b/i.test(identity)) {
+      add(completionFlag(value) ? 'terminal-hacked' : 'terminal-unhacked',
+        value.id || value.name, position);
+    } else if (/\b(?:extraction|extract|exit)\b/i.test(identity)) {
+      add('extraction', value.id || value.name, position);
+    } else if (/\b(?:vault[-_\s]?core|data[-_\s]?core|core)\b/i.test(identity)) {
+      add('core', value.id || value.name, position);
+    } else if (/\bguards?\b/i.test(identity)) {
+      add('guard', value.id || value.name, position);
+    } else if (/\bcameras?\b/i.test(identity)) {
+      add('camera', value.id || value.name, position);
+    } else if (/\b(?:lasers?|hazards?)\b/i.test(identity)) {
+      add('laser-hazard', value.id || value.name, position);
+    } else if (/\bdoors?\b/i.test(identity)) {
+      add('door', value.id || value.name, position, {
+        open: value.open === true || /\bopen\b/i.test(String(value.status || value.state || '')),
+        locked: value.locked === true || /\blocked\b/i.test(String(value.status || value.state || ''))
+      });
+    }
+  });
+  return [...new Map(targets.map(target =>
+    [`${target.type}|${target.position.x},${target.position.y}`, target])).values()];
+}
+
+async function measureTacticalMarkerSet(page, preferredTransform, phase) {
+  const snapshot = await inspect(page);
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, `${phase} facility dimensions for tactical marker audit`);
+  const rawState = frameState(latestExportFrame(snapshot.exported));
+  requireMeasurement(rawState, `${phase} current exported frame for tactical marker audit`);
+  const agents = normalizedAgents(agentsOf(snapshot.state));
+  const rawAgents = normalizedAgents(agentsOf(rawState));
+  const knowledge = povKnowledge(snapshot.state, agents.map(agent => agent.id));
+  const fixtures = tacticalObjects(rawState);
+  const candidates = [];
+  for (const agent of agents) {
+    if (agent.position) {
+      candidates.push({
+        key: `agent:${agent.id}`,
+        type: 'agent',
+        id: agent.id,
+        panelAgentId: agent.id,
+        position: agent.position,
+        visibility: 'self',
+        phase
+      });
+    }
+  }
+  for (const fixture of fixtures) {
+    const eligible = [];
+    for (const agent of agents) {
+      const view = knowledge.find(item => item.id === agent.id);
+      const rawAgent = rawAgents.find(item => item.id === agent.id);
+      const known = view?.known.cells.length ? view.known : rawAgent?.seen;
+      const visible = view?.visible;
+      if (!known || !visible || (!visible.cells.length && visible.count > 0)) continue;
+      const cell = `${fixture.position.x},${fixture.position.y}`;
+      if (visible.cells.includes(cell)) {
+        eligible.push({ panelAgentId: agent.id, visibility: 'visible', score: 30 });
+      } else if (known.cells.includes(cell)) {
+        eligible.push({ panelAgentId: agent.id, visibility: 'remembered', score: 20 });
+      }
+    }
+    if (!eligible.length) continue;
+    for (const eligibleView of eligible) {
+      candidates.push(Object.assign({}, fixture, eligibleView, {
+        key: fixture.type,
+        phase
+      }));
+    }
+  }
+
+  const measured = await page.evaluate(({ candidates, dimensions, preferredTransform }) => {
+    const grid = document.getElementById('pov-grid');
+    if (!grid) return [];
+    const panels = [...grid.querySelectorAll(
+      '[data-pov-agent], [data-agent-id], .pov-card, .pov-panel, [data-pov]'
+    )].filter(panel => panel.querySelector('canvas'));
+    const panelIdentity = panel => [
+      panel.dataset.povAgent, panel.dataset.agentId, panel.dataset.pov,
+      panel.getAttribute('aria-label'), panel.textContent
+    ].filter(Boolean).join(' ');
+    const panelIds = [...new Set(candidates.map(candidate => candidate.panelAgentId))];
+    const canvases = new Map();
+    const getCanvas = candidate => {
+      const panel = panels.find(item =>
+        new RegExp(candidate.panelAgentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          .test(panelIdentity(item))) || panels[panelIds.indexOf(candidate.panelAgentId)];
+      const canvas = panel?.querySelector('canvas');
+      if (!canvas || !canvas.width || !canvas.height) return null;
+      if (canvases.has(canvas)) return canvases.get(canvas);
+      const scratch = document.createElement('canvas');
+      scratch.width = canvas.width;
+      scratch.height = canvas.height;
+      const context = scratch.getContext('2d', { willReadFrequently: true });
+      if (!context) return null;
+      context.drawImage(canvas, 0, 0);
+      const entry = {
+        context,
+        width: scratch.width,
+        height: scratch.height,
+        css: {
+          width: canvas.getBoundingClientRect().width,
+          height: canvas.getBoundingClientRect().height
+        }
+      };
+      canvases.set(canvas, entry);
+      return entry;
+    };
+    const luminance = color => {
+      const channel = value => {
+        const unit = value / 255;
+        return unit <= 0.03928 ? unit / 12.92 :
+          Math.pow((unit + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * channel(color[0]) +
+        0.7152 * channel(color[1]) +
+        0.0722 * channel(color[2]);
+    };
+    const ratio = (a, b) => {
+      const one = luminance(a);
+      const two = luminance(b);
+      return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+    };
+    const dominant = colors => {
+      const groups = new Map();
+      for (const color of colors) {
+        if (color[3] < 20) continue;
+        const key = color.slice(0, 3).map(channel =>
+          Math.round(channel / 16) * 16).join(',');
+        const group = groups.get(key) || { count: 0, total: [0, 0, 0] };
+        group.count++;
+        group.total[0] += color[0];
+        group.total[1] += color[1];
+        group.total[2] += color[2];
+        groups.set(key, group);
+      }
+      return [...groups.values()].map(group => ({
+        count: group.count,
+        color: group.total.map(total => Math.round(total / group.count))
+      })).sort((a, b) => b.count - a.count);
+    };
+    const output = [];
+    for (const candidate of candidates) {
+      const canvas = getCanvas(candidate);
+      if (!canvas) continue;
+      const half = preferredTransform === 'orthogonal' ? {
+        x: canvas.width / dimensions.cols / 2,
+        y: canvas.height / dimensions.rows / 2
+      } : {
+        x: canvas.width / (dimensions.cols + dimensions.rows),
+        y: canvas.height / (dimensions.cols + dimensions.rows)
+      };
+      const center = preferredTransform === 'orthogonal' ? {
+        x: (candidate.position.x + 0.5) * canvas.width / dimensions.cols,
+        y: (candidate.position.y + 0.5) * canvas.height / dimensions.rows
+      } : preferredTransform === 'diamond-mirrored' ? {
+        x: (candidate.position.y - candidate.position.x + dimensions.cols) * half.x,
+        y: (candidate.position.x + candidate.position.y + 1) * half.y
+      } : {
+        x: (candidate.position.x - candidate.position.y + dimensions.rows) * half.x,
+        y: (candidate.position.x + candidate.position.y + 1) * half.y
+      };
+      const inner = [];
+      const ring = [];
+      for (let gy = -10; gy <= 10; gy++) {
+        for (let gx = -10; gx <= 10; gx++) {
+          const nx = gx / 10;
+          const ny = gy / 10;
+          const distance = preferredTransform === 'orthogonal' ?
+            Math.max(Math.abs(nx), Math.abs(ny)) :
+            Math.abs(nx) + Math.abs(ny);
+          const x = Math.max(0, Math.min(canvas.width - 1,
+            Math.round(center.x + nx * half.x * 0.9)));
+          const y = Math.max(0, Math.min(canvas.height - 1,
+            Math.round(center.y + ny * half.y * 0.9)));
+          const color = [...canvas.context.getImageData(x, y, 1, 1).data];
+          if (distance <= 0.50) inner.push(color);
+          if (distance >= 0.72 && distance <= 0.95) ring.push(color);
+        }
+      }
+      const background = dominant(ring)[0];
+      const glyphCandidates = dominant(inner).filter(group =>
+        group.count >= 2 && background && Math.hypot(
+          group.color[0] - background.color[0],
+          group.color[1] - background.color[1],
+          group.color[2] - background.color[2]
+        ) >= 28).slice(0, 8).map(group => Object.assign({}, group, {
+        contrast: ratio(group.color, background.color)
+      })).sort((a, b) => b.contrast - a.contrast || b.count - a.count);
+      const glyph = glyphCandidates[0];
+      if (!background || !glyph) continue;
+      const lowGlyph = glyph.color.map((channel, index) =>
+        Math.round(channel * 0.1 + background.color[index] * 0.9));
+      output.push(Object.assign({}, candidate, {
+        transform: preferredTransform,
+        css: canvas.css,
+        glyph,
+        background,
+        glyphCandidates,
+        clusterDistance: Math.hypot(
+          glyph.color[0] - background.color[0],
+          glyph.color[1] - background.color[1],
+          glyph.color[2] - background.color[2]
+        ),
+        glyphFraction: glyph.count / inner.length,
+        contrast: ratio(glyph.color, background.color),
+        lowContrastControl: ratio(lowGlyph, background.color)
+      }));
+    }
+    return output;
+  }, { candidates, dimensions, preferredTransform });
+  return { phase, candidates, measured };
+}
+
 async function readBoardSemantic(page) {
   return page.locator('#game-board').evaluate(board => {
     const referenced = attribute => String(board.getAttribute(attribute) || '')
@@ -6206,6 +6447,11 @@ async function runSuite() {
     mobilePage,
     mobilePovMarkerContrast.transform
   );
+  const mobileTacticalActive = await measureTacticalMarkerSet(
+    mobilePage,
+    mobilePovMarkerContrast.transform,
+    'active'
+  );
   for (let batch = 0; batch < 12; batch++) {
     const won = await mobilePage.locator('#objective-value').getAttribute('data-outcome');
     if (won === 'won') break;
@@ -6216,6 +6462,11 @@ async function runSuite() {
   const wonContrast = await measureElementContrast(
     mobilePage,
     '#objective-value[data-outcome="won"]'
+  );
+  const mobileTacticalCompleted = await measureTacticalMarkerSet(
+    mobilePage,
+    mobilePovMarkerContrast.transform,
+    'completed'
   );
   const mobileLight = await mobilePage.evaluate(() =>
     matchMedia('(prefers-color-scheme: light)').matches &&
@@ -6308,6 +6559,11 @@ async function runSuite() {
       contrastPage,
       povMarkerContrast.transform
     );
+    const tacticalActive = await measureTacticalMarkerSet(
+      contrastPage,
+      povMarkerContrast.transform,
+      'active'
+    );
     for (let batch = 0;
       batch < 12 && !isTerminalOutcome(topLevelOutcomeOf(completedContrastState.state));
       batch++) {
@@ -6321,6 +6577,11 @@ async function runSuite() {
       'play'
     );
     const completedSmallText = await scanSmallTextContrast(contrastPage, 'completed');
+    const tacticalCompleted = await measureTacticalMarkerSet(
+      contrastPage,
+      povMarkerContrast.transform,
+      'completed'
+    );
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
       roles: readyContrast.roles,
@@ -6333,6 +6594,8 @@ async function runSuite() {
       completedSmallText,
       povMarkerContrast,
       doorContrast,
+      tacticalActive,
+      tacticalCompleted,
       disabledReturnLive,
       disabledFork,
       disabledTerminalPlay,
@@ -6467,6 +6730,79 @@ async function runSuite() {
     doorContrastPass,
     doorMeasurements.map(measurement =>
       `${measurement.theme}/${measurement.mode} ${measurement.doorId}@${measurement.target.x},${measurement.target.y} ${measurement.open ? 'open' : measurement.locked ? 'locked' : measurement.status || 'door'} ${measurement.contrast.toFixed(2)}:1 rgb(${measurement.glyph.color.join(',')})/rgb(${measurement.background.color.join(',')}) low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
+  const tacticalModes = [
+    {
+      mode: 'light',
+      phases: [
+        contrastByTheme.light.tacticalActive,
+        contrastByTheme.light.tacticalCompleted
+      ]
+    },
+    {
+      mode: 'dark',
+      phases: [
+        contrastByTheme.dark.tacticalActive,
+        contrastByTheme.dark.tacticalCompleted
+      ]
+    },
+    {
+      mode: 'mobile-light',
+      phases: [mobileTacticalActive, mobileTacticalCompleted]
+    }
+  ];
+  const requiredFixtureTypes = [
+    'extraction', 'terminal-unhacked', 'terminal-hacked',
+    'core', 'guard', 'camera', 'laser-hazard'
+  ];
+  const tacticalMeasurements = [];
+  const tacticalMissing = [];
+  for (const mode of tacticalModes) {
+    const candidates = mode.phases.flatMap(phase => phase.candidates);
+    const measured = mode.phases.flatMap(phase => phase.measured);
+    const agentKeys = [...new Set(candidates.filter(candidate => candidate.type === 'agent')
+      .map(candidate => candidate.key))];
+    if (agentKeys.length !== 4) tacticalMissing.push(`${mode.mode}:four-agents(${agentKeys.length})`);
+    const requiredKeys = [...agentKeys, ...requiredFixtureTypes];
+    if (candidates.some(candidate => candidate.type === 'door')) requiredKeys.push('door');
+    for (const key of requiredKeys) {
+      const options = measured.filter(measurement => measurement.key === key)
+        .sort((a, b) =>
+          a.css.width * a.css.height - b.css.width * b.css.height);
+      if (!options.length) {
+        tacticalMissing.push(`${mode.mode}:${key}`);
+      } else {
+        tacticalMeasurements.push(Object.assign({ mode: mode.mode }, options[0]));
+      }
+    }
+  }
+  requireMeasurement(tacticalMissing.length === 0,
+    `all tactical marker types measurable (${tacticalMissing.join(', ')})`);
+  const tacticalContrastPass = tacticalMeasurements.every(measurement =>
+    measurement.glyph.count >= 2 &&
+    measurement.background.count >= 2 &&
+    measurement.clusterDistance >= 28 &&
+    measurement.glyphFraction > 0 && measurement.glyphFraction < 0.85 &&
+    measurement.contrast >= 4.5 &&
+    measurement.lowContrastControl < 4.5 &&
+    (measurement.type === 'agent' ||
+      measurement.visibility === 'visible' ||
+      measurement.visibility === 'remembered'));
+  if (!tacticalContrastPass) {
+    console.log('tactical marker clusters:', JSON.stringify(tacticalMeasurements.map(
+      measurement => ({
+        mode: measurement.mode,
+        key: measurement.key,
+        phase: measurement.phase,
+        visibility: measurement.visibility,
+        background: measurement.background,
+        candidates: measurement.glyphCandidates
+      })
+    )));
+  }
+  result('all tactical POV markers retain 4.5:1 target-specific pixel contrast',
+    tacticalContrastPass,
+    tacticalMeasurements.map(measurement =>
+      `${measurement.mode}/${measurement.key}@${measurement.position.x},${measurement.position.y} ${measurement.phase}/${measurement.visibility} ${measurement.css.width.toFixed(0)}x${measurement.css.height.toFixed(0)} ${measurement.contrast.toFixed(2)}:1 low ${measurement.lowContrastControl.toFixed(2)}`).join(' | '));
 
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
