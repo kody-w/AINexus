@@ -48,6 +48,36 @@
             this.initializePeer();
         }
 
+        // Rebuild after a fatal error, backing off so a server having a bad minute is not hammered
+        // by every open tab. Four tries over about half a minute, then it stops and says so —
+        // a retry loop that never gives up is indistinguishable from a hang.
+        _rebuildPeerSoon() {
+            const waits = [2000, 5000, 12000, 20000];
+            this._rebuilds = this._rebuilds || 0;
+            if (this._rebuilds >= waits.length) {
+                this._givingUp = true;
+                this.showError('The signalling server did not come back after four tries, so '
+                    + 'multiplayer is off for now. Reload when you want to try again — nothing else '
+                    + 'on this page depends on it.');
+                return;
+            }
+            const wait = waits[this._rebuilds++];
+            const wasHost = this.isHost, oldRoom = this.roomId;
+            this.updateStatus('Reconnecting…', false);
+            clearTimeout(this._rebuildTimer);
+            this._rebuildTimer = setTimeout(() => {
+                try { if (this.peer && !this.peer.destroyed) this.peer.destroy(); } catch (e) {}
+                try {
+                    this.initializePeer();
+                    if (wasHost && oldRoom) {
+                        // said once, plainly: the old link is dead and a new one exists
+                        this.showNotification('The room was rebuilt after the connection dropped — '
+                            + 'your previous invite link no longer works. Share the new one.');
+                    }
+                } catch (e) { this.showError('Could not rebuild the connection: ' + (e.message || 'no reason given')); }
+            }, wait);
+        }
+
         initializePeer() {
             // Secure invite: #join=<hostId>.<token>. A URL fragment is never sent to a web
             // server by the browser — but that alone does not keep the secret off the network:
@@ -102,6 +132,7 @@
                     // Creating a new room — mint the room secret (host is whoever
                     // entered first; the room lives exactly as long as this tab)
                     this.isHost = true;
+                    this._rebuilds = 0; this._givingUp = false;   // a good open clears the backoff
                     const rnd = new Uint8Array(16);
                     crypto.getRandomValues(rnd);
                     this.roomSecret = btoa(String.fromCharCode(...rnd)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -150,6 +181,19 @@
                     }
 
                     this.updateStatus('Error', false);
+
+                    // A FATAL PEER ERROR DESTROYS THE PEER, AND A DESTROYED PEER CANNOT RECONNECT.
+                    // The 'disconnected' handler below calls reconnect(), which is right for a
+                    // dropped socket and useless here: after server-error the object is dead, so
+                    // multiplayer stayed dead for the rest of the page load even when the
+                    // signalling server came back seconds later. Build a NEW one, with backoff.
+                    //
+                    // A rebuilt HOST gets a new id, and the id IS the room — so anyone holding the
+                    // old invite can no longer arrive. That is worth saying out loud rather than
+                    // stranding them silently, which is why the retry announces the change.
+                    const fatal = (t === 'server-error' || t === 'socket-error' || t === 'network'
+                                   || t === 'socket-closed' || t === 'unavailable-id');
+                    if (fatal && !this._givingUp) this._rebuildPeerSoon();
                 });
 
                 // Handle disconnection

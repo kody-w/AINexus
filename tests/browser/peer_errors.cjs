@@ -63,7 +63,46 @@ const said = await p.evaluate(() => {
 
 console.log('what a visitor is told, per error type:\n');
 for (const [t, msg] of Object.entries(said)) console.log(`  ${String(t).padEnd(20)} ${msg}`);
+// RECOVERY. A fatal error destroys the peer, and a destroyed peer cannot reconnect — so the
+// question is whether anything builds a new one, how often it tries, and whether it ever admits
+// defeat. A retry loop that never stops is indistinguishable from a hang.
+const recovery = await p.evaluate(async () => {
+  const M = window.NexusMultiplayer;
+  if (!M) return { missing: true };
+  const m = Object.create(M.prototype);
+  const seen = [];
+  m.showError = (t) => seen.push('error: ' + t);
+  m.showNotification = (t) => seen.push('note: ' + t);
+  m.updateStatus = (t) => seen.push('status: ' + t);
+  m.isHost = true; m.roomId = 'old-room-id';
+  m.peer = { destroyed: true, destroy(){} };
+  let built = 0;
+  m.initializePeer = () => { built++; };
+  // drive the backoff without waiting for it in real time
+  const realTimeout = window.setTimeout;
+  window.setTimeout = (fn) => { realTimeout(fn, 0); return 0; };
+  const waits = [];
+  const origClear = window.clearTimeout;
+  for (let i = 0; i < 6; i++) { m._rebuildPeerSoon(); await new Promise(r => realTimeout(r, 5)); }
+  window.setTimeout = realTimeout; window.clearTimeout = origClear;
+  return { built, seen, gaveUp: !!m._givingUp };
+});
+
+console.log('\nrecovery from a fatal error:');
+console.log('  peers rebuilt      :', recovery.built);
+console.log('  gave up in the end :', recovery.gaveUp);
+(recovery.seen || []).slice(0, 8).forEach(l => console.log('   ', l.slice(0, 118)));
+
 console.log('\nchecks:');
+ok('a fatal error rebuilds the peer rather than leaving a destroyed one', recovery.built > 0);
+ok('it stops after a bounded number of tries instead of retrying forever',
+   recovery.built <= 4 && recovery.gaveUp === true);
+ok('and says so when it gives up, rather than going quiet',
+   (recovery.seen || []).some(l => /did not come back after four tries/.test(l)));
+ok('a rebuilt HOST warns that the old invite is dead, because the id IS the room',
+   (recovery.seen || []).some(l => /previous invite link no longer works/.test(l)));
+ok('it says it is reconnecting while it tries',
+   (recovery.seen || []).some(l => /status: Reconnecting/.test(l)));
 ok('the module is loadable and exposes the manager', !said.missing);
 const all = Object.entries(said).filter(([k]) => k !== 'missing');
 ok('every error type produces a message', all.every(([,m]) => typeof m === 'string' && m.length > 0));

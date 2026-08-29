@@ -9,8 +9,10 @@ even when the fix comes later — a finding carried in someone's head is a findi
 ## OPEN
 
 ### 1. The public PeerJS broker is returning `server-error`, and multiplayer is dead when it does
-**Status:** the half that is ours is CLOSED (see Closed #1). The broker outage itself is not ours
-and there is still no fallback or retry — that part stays open.
+**Status:** CLOSED as far as it is ours (see Closed C1 and C5). The broker is a third party and
+will still go down; what is no longer true is that its going down killed multiplayer for the rest
+of the page load. There is still no SECOND broker — a fallback host would be the remaining
+improvement, and that is a deployment decision rather than a bug.
 **Found:** 2026-08-29, on the live site in a real browser, by chasing a "Connection error:" badge
 I had first dismissed as unrelated noise.
 
@@ -102,6 +104,18 @@ Stated in words, deliberately, with no exploit written.
 ---
 
 ## CLOSED
+
+### C5. A fatal peer error left a destroyed peer nobody rebuilt
+`disconnected` called `reconnect()`, which is right for a dropped socket and useless after a fatal
+error: peerjs destroys the peer, and a destroyed peer cannot reconnect. So a signalling server
+having a bad minute took multiplayer out for the whole page load even when it came back seconds
+later — measured live as `destroyed: true, peerId: null, conns: 0`.
+**Closed by:** building a NEW peer on a fatal error, backing off 2s/5s/12s/20s so a struggling
+server is not hammered by every open tab, then stopping and saying so — a retry loop that never
+gives up is indistinguishable from a hang. A good open clears the backoff.
+**The honest part:** a rebuilt HOST gets a new id, and the id IS the room, so anyone holding the
+old invite can no longer arrive. It says that in words rather than stranding them silently.
+**Retested by:** `tests/browser/peer_errors.cjs`, now 15 checks.
 
 ### C4. `ensemble()` bought thoughts entirely off the books
 `ai/herd.js` called `auth.chat()` directly — one model call to direct the whole cast — and `spend`
