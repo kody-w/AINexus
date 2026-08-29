@@ -16,7 +16,10 @@ await ctx.route('https://kody-w.github.io/AINexus/**',r=>{const u=new URL(r.requ
  r.fulfill({status:200,contentType:T[path.extname(f)]||'application/octet-stream',body:fs.readFileSync(f)});});
 const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.message));
 await p.goto('https://kody-w.github.io/AINexus/frontier.html',{timeout:60000});
-await p.waitForTimeout(3000);
+// WAIT FOR THE MODULE, don't guess at it. A fixed 3s holds on a fast laptop and does not on a CI
+// runner, where this failed with "Cannot read properties of undefined (reading 'leave')" — the
+// page was simply still loading. A test that races the thing it is testing reports the race.
+await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames,{timeout:45000});
 const out=await p.evaluate(async()=>{
   const H=window.NexusHerd;
   const walk=[];
