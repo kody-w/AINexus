@@ -49,6 +49,11 @@ jobs:
         # passed anywhere — and stayed green for days because only that laptop ever ran it.
         run: python3 tools/check_portable.py
 
+      - name: every suite is gated or accounted for
+        # A suite can fall out of CI in silence — nobody adds it to the gate, nobody says why —
+        # and then it looks like part of a passing build while running nowhere.
+        run: python3 tools/check_gate_covers.py
+
       - name: every suite is in the inventory
         # The table in tests/browser/README.md went stale twice: once with five suites missing,
         # and again with the two written the same night the first gap was fixed. A list humans
