@@ -169,7 +169,14 @@
                       { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
     const calls = [];
 
+    // A stop bumps the driver's generation. Checking it here is what makes the kill
+    // switch actually kill: without it a stopped turn kept running its remaining rounds,
+    // and every one of those rounds is a billed auth.chat call.
+    const epoch0 = drive ? drive._epoch : 0;
+    const stopped = () => !!drive && drive._epoch !== epoch0;
+
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
+      if (stopped()) return { words: '', calls, rounds: round, note: 'stopped' };
       const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: 500 });
       messages.push(msg);
       const tcs = msg && msg.tool_calls;
@@ -178,6 +185,7 @@
         return { words, calls, rounds: round + 1 };
       }
       for (const tc of tcs) {
+        if (stopped()) return { words: '', calls, rounds: round + 1, note: 'stopped' };
         const fname = tc.function && tc.function.name;
         let args = {};
         try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}

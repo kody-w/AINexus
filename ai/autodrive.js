@@ -623,9 +623,21 @@
       // froze silently after its first thought — and only once a mind had been
       // granted, which is the moment the whole feature is supposed to start.
       const nested = api._depth > 0;
-      if (!nested) api.stop();                 // a top-level run replaces the last one
+      if (nested) {
+        // A nested run belongs to the turn that issued it. If a stop landed since that
+        // turn began, this inner run is part of work the operator already cancelled, so
+        // it must not run — and above all must not set _running back to true. Re-arming
+        // here is exactly how "Stop everything" was undone mid-turn: the flag went false,
+        // vbrainstem's next tool call re-entered run(), and the player kept walking,
+        // talking and BILLING auth.chat for the rest of its rounds.
+        if (api._epoch !== api._turnEpoch) return 'stopped';
+      } else {
+        api.stop();                            // a top-level run replaces the last one...
+        api._turnEpoch = api._epoch;           // ...and is itself the newest generation
+      }
       api._depth = (api._depth || 0) + 1;
       api._running = true;
+      try {
       do {
         for (const s of steps) {
           if (!api._running) return 'stopped';
@@ -666,13 +678,21 @@
           }
         }
       } while (api._running && program && program.loop);
-      api._depth = Math.max(0, (api._depth || 1) - 1);
-      if (api._depth === 0) api._running = false;   // only the outermost run ends the run
       return 'done';
+      } finally {
+        // in a finally so a thrown step can never strand the counter above zero — a
+        // stranded _depth would make every later top-level run look nested for good
+        api._depth = Math.max(0, (api._depth || 1) - 1);
+        if (api._depth === 0) api._running = false; // only the outermost run ends the run
+      }
     },
 
-    stop() { api._running = false; api._depth = 0; return true; },
-    _running: false, _depth: 0, _filming: false, _shot: null,
+    // A stop voids the current generation. It deliberately does NOT zero _depth: doing
+    // that made the very next call from inside a running turn look top-level, so it took
+    // the branch that re-arms _running and cancelled the stop. The depth drains on its
+    // own as the stack unwinds.
+    stop() { api._running = false; api._epoch = (api._epoch || 0) + 1; return true; },
+    _running: false, _depth: 0, _epoch: 0, _turnEpoch: 0, _filming: false, _shot: null,
   };
 
   window.__autodrive = api;
