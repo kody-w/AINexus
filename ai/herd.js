@@ -100,6 +100,20 @@
   // through here, so neither can drift away from the other the way vbrainstem's copy did.
   //
   // Throws on failure; the caller records that as sealFailed rather than losing the tick.
+  // WHERE, IN UNITS A FRAME CAN CARRY. rapp/1 is I-JSON: no floats. A drive handing back real
+  // coordinates (autodrive rounds, but nothing makes a drive round) would make buildFrame throw,
+  // and on the error path the frame is the ONLY record of the moment — so the guarantee that every
+  // tick seals one frame would break precisely where it matters most. Millimetres, as integers.
+  const place = (me) => {
+    if (!me || typeof me !== 'object') return {};
+    const out = {};
+    for (const k of ['x', 'y', 'z']) {
+      const v = me[k];
+      if (typeof v === 'number' && Number.isFinite(v)) out[k + '_milli'] = Math.round(v * 1000);
+    }
+    return out;
+  };
+
   async function sealPulse(rec, F, payload) {
     // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
     // Sharing one body-stream put two biographies in one book with colliding seq numbers.
@@ -147,7 +161,7 @@
           const f = await sealPulse(rec, F,
             { asserts: { tick: rec.ticks, player: rec.id, said: r.words || '',
                          called: entry.calls.map(c => c.tool + (c.failed ? ' ✗' : '')),
-                         at: (s0 && s0.me) || {},
+                         at: place(s0 && s0.me),
                          // the slot this turn held on the shared brainstem: two frames
                          // claiming one slot, anywhere in the herd, is a race made visible
                          slot: typeof r.slot === 'number' ? r.slot : -1 },
@@ -171,7 +185,7 @@
         try {
           const f = await sealPulse(rec, F,
             { asserts: { tick: rec.ticks, player: rec.id, said: '', called: [],
-                         at: (s0 && s0.me) || {},
+                         at: place(s0 && s0.me),
                          slot: -1,                    // a tick that threw held no slot to claim
                          // what went wrong, in the frame, where a reader of the line will find it
                          error: String((e && e.message) || e).slice(0, 200) },
