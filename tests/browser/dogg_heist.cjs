@@ -358,10 +358,13 @@ function frameHashConvention(exported) {
           return parent && prior && parent.hex === prior.hex;
         }));
       if (!parentKey) continue;
+      const tickKey = tickKeys.find(key => selectedKeys.includes(key));
+      if (!tickKey) continue;
       return {
         framesPath: bundle.trail,
         hashKey,
         parentKey,
+        tickKey,
         selectedKeys,
         hashPrefix: hashBody(frames[0][hashKey]).prefix
       };
@@ -584,6 +587,102 @@ function fullyRehashedSemanticMutation(json, kind) {
     checksumPath: checksumConvention.path.join('.'),
     frameHashKey: mutation.convention.hashKey,
     parentKey: mutation.convention.parentKey
+  };
+}
+
+function appendPostTerminalFrame(json, kind) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const convention = frameHashConvention(parsed);
+  const frames = valueAt(parsed, convention.framesPath);
+  const terminalFrame = frames[frames.length - 1];
+  const terminalState = frameState(terminalFrame);
+  const terminalProjection = terminalState && rawFrameProjection(terminalState);
+  requireMeasurement(terminalState && (
+    isTerminalOutcome(terminalProjection.outcome) ||
+    terminalProjection.objective.stage === 'complete'
+  ),
+    'a terminal head before appending an impossible frame');
+  const appended = cloneJson(terminalFrame);
+  const priorTick = Number(terminalFrame[convention.tickKey]);
+  requireMeasurement(Number.isFinite(priorTick), 'numeric terminal frame tick');
+  appended[convention.tickKey] = priorTick + 1;
+  const appendedState = frameState(appended);
+  requireMeasurement(appendedState, 'state in the appended post-terminal frame');
+  for (const key of ['tick', 'currentTick', 'liveTick']) {
+    if (Number.isFinite(Number(appendedState[key]))) appendedState[key] = priorTick + 1;
+  }
+
+  let detail;
+  if (kind === 'fork') {
+    let branchMutation;
+    walkJson(appendedState, (value, trail) => {
+      if (branchMutation || !trail.length || typeof value !== 'string') return;
+      const key = String(trail[trail.length - 1]);
+      if (!/^(?:branch|branchId|dimension)$/i.test(key)) return;
+      const next = `${value}-post-terminal`;
+      parentAt(appendedState, trail)[trail[trail.length - 1]] = next;
+      branchMutation = { trail, before: value, after: next };
+    });
+    if (!branchMutation) {
+      walkJson(appended, (value, trail) => {
+        if (branchMutation || !trail.length || typeof value !== 'string') return;
+        const key = String(trail[trail.length - 1]);
+        if (!/^(?:branch|branchId|dimension)$/i.test(key)) return;
+        const next = `${value}-post-terminal`;
+        parentAt(appended, trail)[trail[trail.length - 1]] = next;
+        branchMutation = { trail, before: value, after: next };
+      });
+    }
+    requireMeasurement(branchMutation, 'a branch identifier for an appended fork frame');
+    detail = `${branchMutation.trail.join('.')} ${branchMutation.before}→${branchMutation.after}`;
+    const data = parsed.data;
+    if (data && typeof data === 'object') {
+      for (const key of ['branch', 'branchId', 'dimension']) {
+        if (typeof data[key] === 'string') data[key] = branchMutation.after;
+      }
+    }
+  } else {
+    let directiveMutation;
+    for (const { id, agent } of stateAgentEntries(appendedState)) {
+      walkJson(agent, (value, trail) => {
+        if (directiveMutation || !trail.length || typeof value !== 'string') return;
+        const key = String(trail[trail.length - 1]);
+        if (!/^(?:intent|action|mode|doing)$/i.test(key)) return;
+        const next = /\bmove\b/i.test(value) ? 'hold' : 'move';
+        parentAt(agent, trail)[trail[trail.length - 1]] = next;
+        directiveMutation = { id, trail, before: value, after: next };
+      });
+      if (directiveMutation) break;
+    }
+    if (!directiveMutation) return null;
+    detail = `${directiveMutation.id}.${directiveMutation.trail.join('.')} ${directiveMutation.before}→${directiveMutation.after}`;
+  }
+
+  frames.push(appended);
+  const data = parsed.data;
+  if (data && typeof data === 'object') {
+    for (const key of ['cursor', 'selectedFrame', 'frameIndex']) {
+      if (Number.isFinite(Number(data[key]))) data[key] = frames.length - 1;
+    }
+    for (const key of ['frameCount', 'framesCount', 'historyCount']) {
+      if (Number.isFinite(Number(data[key]))) data[key] = frames.length;
+    }
+    for (const key of ['tick', 'currentTick', 'liveTick']) {
+      if (Number.isFinite(Number(data[key]))) data[key] = priorTick + 1;
+    }
+  }
+  const heads = rehashFrameDescendants(parsed, convention, frames.length - 1);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(verifyRehashedFrames(parsed, convention),
+    `fully rehashed appended ${kind} frame`);
+  return {
+    json: JSON.stringify(parsed),
+    kind,
+    detail,
+    tick: priorTick + 1,
+    heads,
+    checksumPath: checksumConvention.path.join('.')
   };
 }
 
@@ -2276,6 +2375,106 @@ async function auditReachability(page, ids = REQUIRED_IDS) {
     }
     return output;
   }, ids);
+}
+
+async function auditPrimaryHitboxes(page) {
+  return page.evaluate(async () => {
+    const visible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const controls = [...document.querySelectorAll(
+      'button, select, input[type="button"], input[type="submit"], [role="button"]'
+    )];
+    const live = document.querySelector(
+      '#return-live, #live-button, [data-action="return-live"], [data-action="live"]'
+    ) || controls.find(control => {
+      if (control.id === 'play-toggle') return false;
+      const text = [
+        control.id,
+        control.getAttribute('aria-label'),
+        control.getAttribute('title'),
+        control.textContent,
+        control.value
+      ].filter(Boolean).join(' ');
+      return /\b(return[-_\s]+(?:to[-_\s]+)?live|back[-_\s]+to[-_\s]+live|live[-_\s]+head)\b/i
+        .test(text);
+    });
+    const requested = [
+      ['play', document.getElementById('play-toggle')],
+      ['step', document.getElementById('step-button')],
+      ['restart', document.getElementById('restart-button')],
+      ['speed', document.getElementById('speed-select')],
+      ['live', live],
+      ['fork', document.getElementById('fork-button')],
+      ['export', document.getElementById('export-button')],
+      ['import', document.getElementById('import-button')],
+      ['help', document.getElementById('help-button')],
+      ['timeline', document.getElementById('timeline')]
+    ];
+    const roots = [document.documentElement, document.body].filter(Boolean);
+    const originals = roots.map(element => ({
+      element,
+      value: element.style.getPropertyValue('scroll-behavior'),
+      priority: element.style.getPropertyPriority('scroll-behavior')
+    }));
+    roots.forEach(element => element.style.setProperty('scroll-behavior', 'auto', 'important'));
+    const rows = [];
+    try {
+      for (const [name, element] of requested) {
+        if (!element) {
+          rows.push({ name, found: false, visible: false, reachable: false, height: 0 });
+          continue;
+        }
+        element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const rect = element.getBoundingClientRect();
+        const associated = name === 'timeline' ? [
+          element.closest('label'),
+          ...document.querySelectorAll('label[for="timeline"]')
+        ].filter(Boolean) : [];
+        const effectiveHeight = Math.max(
+          rect.height,
+          ...associated.map(candidate => candidate.getBoundingClientRect().height)
+        );
+        const left = Math.max(0, rect.left);
+        const right = Math.min(innerWidth, rect.right);
+        const top = Math.max(0, rect.top);
+        const bottom = Math.min(innerHeight, rect.bottom);
+        const intersects = right > left && bottom > top;
+        const x = intersects ? (left + right) / 2 : -1;
+        const y = intersects ? (top + bottom) / 2 : -1;
+        const reachable = intersects && document.elementsFromPoint(x, y).some(node =>
+          node === element || element.contains(node) ||
+          associated.some(label => node === label || label.contains(node)));
+        rows.push({
+          name,
+          id: element.id || '',
+          found: true,
+          visible: visible(element),
+          reachable,
+          height: effectiveHeight,
+          disabled: Boolean(
+            ('disabled' in element && element.disabled) ||
+            element.getAttribute('aria-disabled') === 'true'
+          )
+        });
+      }
+    } finally {
+      originals.forEach(({ element, value, priority }) => {
+        if (value) element.style.setProperty('scroll-behavior', value, priority);
+        else element.style.removeProperty('scroll-behavior');
+      });
+    }
+    return {
+      rows,
+      viewport: { width: innerWidth, height: innerHeight },
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth
+    };
+  });
 }
 
 async function inspectPovs(page) {
@@ -5101,6 +5300,40 @@ async function runSuite() {
     `watch tick ${watchSnapshot.tick}: ${watchContrast.ratio?.toFixed(2) || 'missing'}:1 "${watchContrast.text || ''}"; won tick ${wonSnapshot.tick}: ${wonContrast.ratio?.toFixed(2) || 'missing'}:1 "${wonContrast.text || ''}"`);
   await mobileContext.close();
 
+  const hitboxLayouts = [
+    {
+      name: 'desktop 1432x735',
+      options: { viewport: { width: 1432, height: 735 } }
+    },
+    {
+      name: 'mobile landscape 844x390',
+      options: {
+        viewport: { width: 844, height: 390 },
+        screen: { width: 844, height: 390 },
+        hasTouch: true,
+        isMobile: true
+      }
+    }
+  ];
+  const hitboxMeasurements = [];
+  for (const layout of hitboxLayouts) {
+    const context = await browser.newContext(layout.options);
+    await serve(context);
+    const layoutPage = await openHeist(context, `${layout.name} hitbox page`);
+    const measured = await auditPrimaryHitboxes(layoutPage);
+    hitboxMeasurements.push(Object.assign({ name: layout.name }, measured));
+    await context.close();
+  }
+  result('desktop and landscape primary controls expose 44px hitboxes',
+    hitboxMeasurements.every(measurement =>
+      measurement.rows.length === 10 &&
+      measurement.rows.every(row =>
+        row.found && row.visible && row.reachable && row.height >= 44) &&
+      measurement.documentWidth <= measurement.viewport.width + 1 &&
+      measurement.bodyWidth <= measurement.viewport.width + 1),
+    hitboxMeasurements.map(measurement =>
+      `${measurement.name} min ${Math.min(...measurement.rows.map(row => row.height)).toFixed(1)}px overflow ${Math.max(measurement.documentWidth, measurement.bodyWidth) - measurement.viewport.width}px; ${measurement.rows.map(row => `${row.name}:${row.height.toFixed(0)}`).join(',')}`).join(' | '));
+
   const contrastByTheme = {};
   for (const scheme of ['light', 'dark']) {
     const contrastContext = await browser.newContext({
@@ -5363,6 +5596,31 @@ async function runSuite() {
   terminalSnapshot = await inspect(policyPage);
   await sleep(100);
   const terminalStorageState = await policyContext.storageState();
+  const postTerminalFork = appendPostTerminalFrame(terminalSnapshot.exportText, 'fork');
+  const postTerminalForkAttempt = await rejectedTransactionalImport(
+    policyPage,
+    postTerminalFork.json,
+    terminalSnapshot
+  );
+  const postTerminalDirective = appendPostTerminalFrame(
+    terminalSnapshot.exportText,
+    'directive'
+  );
+  const postTerminalDirectiveAttempt = postTerminalDirective ?
+    await rejectedTransactionalImport(
+      policyPage,
+      postTerminalDirective.json,
+      terminalSnapshot
+    ) : null;
+  result('fully rehashed post-terminal fork and directive frames are rejected',
+    postTerminalForkAttempt.rejected &&
+      postTerminalForkAttempt.unchanged &&
+      postTerminalForkAttempt.stateCallable &&
+      (!postTerminalDirectiveAttempt ||
+        (postTerminalDirectiveAttempt.rejected &&
+          postTerminalDirectiveAttempt.unchanged &&
+          postTerminalDirectiveAttempt.stateCallable)),
+    `fork tick ${postTerminalFork.tick}: ${postTerminalFork.detail}; directive ${postTerminalDirective ? `${postTerminalDirective.tick}: ${postTerminalDirective.detail}` : 'not represented by this runtime'}`);
   const frameBundle = exportedFrames(terminalSnapshot.exported);
   const inspectedFrames = frameBundle.frames.map((frame, index) => {
     const state = frameState(frame);
