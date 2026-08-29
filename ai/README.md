@@ -22,11 +22,23 @@ It is inert until both of these are true:
 When both are true it does `window.worldNavigator.aiPlayer = new
 AIPlayerManager(window.worldNavigator)` on its own. No call site needed.
 
-For the AI to actually move (the `move` agent), a world page's `animate()`
-loop should call `this.aiPlayer?.update();` once per frame — harmless if
-`aiPlayer` was never created. The four world pages this script now ships in
-(`index_heavy.html`, `index2.0.html`, `newindex.html`, `nexusAIBattles.html`)
-already have that line.
+Movement is the drop-in's own job: on attach it starts a
+`requestAnimationFrame` loop that steps the body every frame, whatever the
+page's loop does. A page author adds nothing for the `move` agent to work.
+
+The ten pages it ships in: `index.html`, `index2.0.html`, `index_heavy.html`,
+`newindex.html`, `nexusAIBattles.html`, `ancient-library-world.html`,
+`crystal-caverns.html`, `floating-gardens.html`, `galaxy-zoo-world.html`,
+`neon-arcade-world.html`.
+
+Four of them (`index_heavy.html`, `index2.0.html`, `newindex.html`,
+`nexusAIBattles.html`) still carry `this.aiPlayer?.update();` in their own
+`animate()`, from before the script self-drove. That is **not** harmless:
+`update()` steps a fixed amount per *call* (`min(dist, this.speed * 0.016)` —
+a constant, not a measured frame delta), so two calls a frame move the body
+exactly twice as far. Those four walk at ~9 u/s, the other six at ~4.5. It
+converges instead of overshooting, which is why it has gone unseen. The line
+should come out of all four.
 
 ## Travelling through a portal
 
