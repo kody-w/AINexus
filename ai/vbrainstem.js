@@ -721,10 +721,23 @@
     async function seal(entry, percepts) {
       const F = root.NexusFrames;
       if (!F) return null;
+      // WHERE, IN UNITS A FRAME CAN CARRY. rapp/1 is I-JSON: no floats. herd.js was given this
+      // guard and this copy was not — the third time tonight one defect lived in two files and
+      // only one got fixed. A drive with real coordinates makes buildFrame throw, and a tick that
+      // cannot be sealed is a moment with no record.
+      const place = (me) => {
+        if (!me || typeof me !== 'object') return {};
+        const out = {};
+        for (const k of ['x', 'y', 'z']) {
+          const v = me[k];
+          if (typeof v === 'number' && Number.isFinite(v)) out[k + '_milli'] = Math.round(v * 1000);
+        }
+        return out;
+      };
       const named = (entry.calls || []).map(c => c.name).filter(Boolean);
       const asserts = {
         tick: entry.tick,
-        at: (percepts && percepts.me) || {},
+        at: place(percepts && percepts.me),
         said: entry.words || '',
         called: (entry.calls || []).map(c => c.tool + (c.failed ? ' ✗' : '')),
         saw_people: ((percepts && percepts.players) || []).map(p => p.name || p.id).slice(0, 8),
