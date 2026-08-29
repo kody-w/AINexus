@@ -129,6 +129,11 @@ function watchForResidents() {
       RIG.push({ id, name: 'POV · ' + String(p.name).toUpperCase().slice(0, 14) });
       buildRail();
     }
+    // FORGET WHO IS GONE. povs never forgot, so a resident who left and came back was skipped by
+    // the `has` above and never got a camera again — their second visit was invisible. holo drops
+    // a presence six seconds after its last pose, so absence here is real, not a dropped frame.
+    const here = new Set(holo.present().map(p => p.id));
+    for (const id of [...povs]) if (!here.has(id)) povs.delete(id);
   }, 1500);
 }
 
@@ -148,10 +153,17 @@ function tick(t) {
       }
       // CUT TO WHERE IT IS HAPPENING — but hold a shot long enough to be a shot
       const top = survey[0];
-      if (top && (!live || (t - liveSince > STICK && top.id !== live && top.score > (survey.find(x => x.id === live) || {}).score + 12))) {
+      // THE LIVE CAMERA CAN LEAVE THE SURVEY. A POV camera goes blind when the resident it
+      // follows stops sending poses, and survey() drops blind cameras — so `cur` becomes
+      // undefined. Comparing against `({}).score + 12` yields NaN, every comparison with NaN is
+      // false, so the director made no cut, `shown` was undefined, and the main view froze on a
+      // dead camera for good while the rail kept updating around it. A live camera that is gone
+      // is the strongest reason to cut, not a reason to compare against nothing.
+      const cur = survey.find(x => x.id === live);
+      if (top && (!live || !cur
+                  || (t - liveSince > STICK && top.id !== live && top.score > cur.score + 12))) {
         live = top.id; liveSince = t;
       }
-      if (!live && top) { live = top.id; liveSince = t; }
       const shown = survey.find(s => s.id === live);
       if (shown) {
         const big = cams.shoot(shown.id, { quality: 0.82 });

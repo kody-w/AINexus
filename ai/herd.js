@@ -114,19 +114,37 @@
     return out;
   };
 
+  // A FAILED SEAL MUST NOT BURN A NUMBER. seq used to be taken as `rec.seq++` while building the
+  // argument object — before the await — so a buildFrame that rejected consumed the number anyway
+  // and the next good frame was numbered N+1 while its prev pointed at N-1. frames.js refuses that
+  // ("seq is not contiguous"), so one failed seal made the whole line unverifiable from then on.
+  //
+  // Incrementing after the push fixes that but reintroduces the reason it was written this way:
+  // two overlapping serve() calls for one player would both read the same seq. So the seal is
+  // serialised PER PLAYER — a one-deep lane, the same shape turn() uses for the brainstem — and
+  // the number is taken and committed inside it. Overlapping ticks queue; a rejection costs
+  // nothing but the tick it belonged to.
   async function sealPulse(rec, F, payload) {
-    // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
-    // Sharing one body-stream put two biographies in one book with colliding seq numbers.
-    if (!rec.streamId) rec.streamId = await F.mintRappid('kody-w', 'nexus-player');
-    const f = await F.buildFrame({ kind: 'body.pulse', streamId: rec.streamId, seq: rec.seq++,
-                                   payload, prev: rec.prev });
-    rec.chain.push(f); rec.prev = f.payload_hash; remember(f, rec.id);
+    const run = async () => {
+      // its own organism, so its own minted rappid — not the estate's, and not a neighbour's.
+      // Sharing one body-stream put two biographies in one book with colliding seq numbers.
+      if (!rec.streamId) rec.streamId = await F.mintRappid('kody-w', 'nexus-player');
+      const seq = rec.seq = (rec.seq || 0);
+      const f = await F.buildFrame({ kind: 'body.pulse', streamId: rec.streamId, seq,
+                                     payload, prev: rec.prev });
+      rec.chain.push(f); rec.prev = f.payload_hash; rec.seq++; remember(f, rec.id);
     // DROPPING THE OLDEST FRAME BREAKS THE LINE. The window that was meant to bound memory
     // was quietly destroying the genesis link and freezing seq at 500, so after a long
     // session the exported chain no longer verified at all — a bounded log pretending to
     // be a chain. seq is now its own counter, and a window says out loud that it is one.
-    if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
-    return f;
+      if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
+      return f;
+    };
+    // queue behind whatever this player is already sealing, and never let one failure
+    // poison the lane for the next tick
+    const lane = (rec.sealLane || Promise.resolve()).then(run, run);
+    rec.sealLane = lane.catch(() => {});
+    return lane;
   }
 
   // one player's turn on the shared brainstem — the collapse
@@ -818,8 +836,10 @@
     // THE ONE DIMENSION WHERE IT WORKED. Prefer a line that shows the call actually succeeding
     // over one that merely had the thing loaded — a capability that was present and never used
     // is not evidence that it works.
+    // scored is a Map, and Maps have no sort — this line survived the change that introduced
+    // `ranked` above it and threw on every call, so summoning has been dead since gen-21: a model
+    // asking for an unknown tool got 'scored.sort is not a function' instead of either half of it.
     const ranked = [...scored.values()].sort((x, y) => (y.proven - x.proven) || (y.hits - x.hits));
-    scored.sort((x, y) => y.score - x.score);
     for (const s of ranked) {
       const src = B.sourceOf(s.name);
       if (src) return Object.assign({ player: s.player, proven: s.proven, seen: s.hits }, src);
