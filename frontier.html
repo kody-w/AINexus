@@ -105,7 +105,22 @@ const frame = $('f'), cursor = $('cursor');
 let drive = null, hands = null, running = false, prev = null, lastAct = 0, lastHover = 0, rec = null;
 
 const params = new URLSearchParams(location.search);
-const world = params.get('world') || 'index.html';
+// A world is CHOSEN FROM A LIST, never taken as a URL.
+//
+// This value is assigned to frame.src below. A `javascript:` URL in a frame
+// inherits the embedder's origin, and this origin — kody-w.github.io — is shared
+// by every front door in the estate, including heimdall's doorman, which stores a
+// GitHub token in localStorage under `rapp_settings`. So an unguarded ?world=
+// here is enough for a link to read that token. The single shared sign-in key is
+// what makes one loose sink on this origin reach every door's credential.
+//
+// The tower was never exposed because its worlds come from a <select>; this page
+// took a string. Now it takes a name from the same fixed list.
+const WORLDS = ['index.html', 'crystal-caverns.html', 'floating-gardens.html',
+                'neon-arcade-world.html', 'ancient-library-world.html',
+                'galaxy-zoo-world.html'];
+const wantWorld = params.get('world') || 'index.html';
+const world = WORLDS.includes(wantWorld) ? wantWorld : 'index.html';
 let joinFrag = location.hash && location.hash.includes('#join=') ? location.hash : '';
 if (!joinFrag) { try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
   if (r && Date.now() - r.at < 6 * 3600e3) joinFrag = '#join=' + r.id + '.' + r.secret; } catch (e) {} }
