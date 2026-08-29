@@ -306,7 +306,16 @@ async function runProgram(i) {
 // Copilot seat that every player could think, and then every player failed to think. A token earns
 // "checking…" and nothing more until it has actually bought a chat token.
 let mindLive = false;               // the VERIFIED state — what the button branches on
-let mindChecking = false;           // a verification is in flight; the watcher below must not race it
+// A COUNT, not a flag. Two paints can be in flight at once (the load-time one and the one a press
+// starts), and the stale one's `finally` cleared the guard out from under the fresh one still
+// running — handing the watcher below a window in the middle of a real verification.
+let mindChecks = 0;
+let signingIn = false;              // a sign-in is running; the watcher must not repaint over it
+// Bumped by every sign-out and every fresh press. A verify() that was already in flight when the
+// visitor pressed resolves AFTER the signOut() that press performed, and writing its answer lit
+// "mind: granted" with nothing in storage — so the next press took the revoke branch and revoked
+// nothing. A verification may only write in the generation it started in.
+let mindGen = 0;
 async function paintMind() {
   const A = window.NexusAuth, el = $('mind'), btn = $('signin');
   if (!A) { el.textContent = 'auth module missing'; btn.disabled = true; return false; }
@@ -317,8 +326,12 @@ async function paintMind() {
     return false;
   }
   el.textContent = 'mind: checking the sign-in…';
-  mindChecking = true;
-  try { mindLive = await A.verify(); } finally { mindChecking = false; }
+  const gen = mindGen;
+  mindChecks++;
+  let ok;
+  try { ok = await A.verify(); } finally { mindChecks--; }
+  if (gen !== mindGen) return mindLive;   // signed out or pressed again while we were asking
+  mindLive = ok;
   el.textContent = mindLive ? 'mind: granted — every player can think'
                             : 'mind: signed in, but that account has no usable Copilot seat — players will move but not think';
   btn.textContent = mindLive ? 'Revoke the mind' : 'Sign in again';
@@ -328,9 +341,12 @@ async function paintMind() {
 // page, so the lamp went on claiming a mind while every player quietly stopped thinking — and the
 // next press took the revoke branch instead of signing in. Storage is the shared truth, and reading
 // it costs no network.
+// It has to stand down for the WHOLE sign-in, not just the verify(): through the 15 minutes a
+// visitor spends authorising at GitHub there is legitimately no token yet, and the watcher fired
+// into that gap and painted "the sign-in stopped working" over a sign-in going perfectly well.
 setInterval(() => {
   const A = window.NexusAuth;
-  if (!A || mindChecking || !mindLive || A.hasToken()) return;
+  if (!A || mindChecks || signingIn || !mindLive || A.hasToken()) return;
   mindLive = false;
   $('signin').textContent = 'Grant a mind';
   $('mind').textContent = 'mind: the sign-in stopped working — grant a mind again';
@@ -338,9 +354,11 @@ setInterval(() => {
 $('signin').onclick = async () => {
   const A = window.NexusAuth, btn = $('signin');
   if (!A) return;
-  if (mindLive) { A.signOut(); paintMind(); return; }
+  if (mindLive) { mindGen++; A.signOut(); paintMind(); return; }
   try {
     btn.disabled = true;
+    signingIn = true;
+    mindGen++;                       // this press invalidates any verify() still in flight
     A.signOut();                     // clear any dead credential before asking for a fresh one
     const d = await A.startDeviceLogin();
     $('code').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
@@ -359,11 +377,12 @@ $('signin').onclick = async () => {
       if (timer) clearTimeout(timer);
       timer = null;
       $('code').textContent = '';
-      if (msg) { $('mind').textContent = msg; btn.disabled = false; return; }
+      if (msg) { signingIn = false; $('mind').textContent = msg; btn.disabled = false; return; }
       // The button stays disabled through the VERIFICATION, not just the poll. Re-enabled here, it
       // left a whole network round trip in which a second press took the sign-in branch and called
-      // signOut() — deleting the token that had just been saved.
-      try { await paintMind(); } finally { btn.disabled = false; }
+      // signOut() — deleting the token that had just been saved. `signingIn` is released with it so
+      // the watcher's stand-down covers exactly the same span the button does.
+      try { await paintMind(); } finally { signingIn = false; btn.disabled = false; }
     };
     const poll = async () => {
       if (Date.now() > deadline) { stop('that sign-in code expired — start again'); return; }
@@ -377,7 +396,7 @@ $('signin').onclick = async () => {
       } catch (e) { stop('sign-in failed: ' + e.message); }
     };
     timer = setTimeout(poll, wait);
-  } catch (e) { btn.disabled = false; $('mind').textContent = 'could not start sign-in: ' + e.message; }
+  } catch (e) { signingIn = false; btn.disabled = false; $('mind').textContent = 'could not start sign-in: ' + e.message; }
 };
 paintMind();
 

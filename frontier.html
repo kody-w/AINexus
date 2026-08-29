@@ -328,15 +328,29 @@ $('more').onclick = () => { $('hud').classList.toggle('min'); };
 // The button must say what is TRUE, not what is stored. A stale ghu_ looks identical to a
 // live one, so a token in storage earns "checking…" and nothing more until it has actually
 // bought a chat token. Claiming a mind that 401s is the same lie as claiming a verified build.
-let mindChecking = false;           // a verification is in flight; the watcher below must not race it
+// A COUNT, not a flag. Two paints can be in flight at once (the load-time one and the one a press
+// starts), and the stale one's `finally` cleared the guard out from under the fresh one still
+// running — handing the watcher below a window in the middle of a real verification.
+let mindChecks = 0;
+// A second press mints a NEW code and orphans the one the visitor is part-way through typing, and
+// the watcher below must not repaint over a sign-in that is still running.
+let signingIn = false;
+// Bumped by every sign-out and every fresh press. A verify() that was already in flight when the
+// visitor pressed resolves AFTER the signOut() that press performed, and writing its answer put the
+// `on` class back with nothing in storage — so the next press took the sign-OUT branch and signed
+// nothing out. A verification may only write in the generation it started in.
+let mindGen = 0;
 async function mindState(quiet) {
   const el = $('mind');
   if (!window.NexusAuth) { el.textContent = 'grant a mind'; return false; }
   if (!NexusAuth.hasToken()) { el.textContent = 'grant a mind'; el.classList.remove('on'); return false; }
   el.textContent = 'checking sign-in…';
-  mindChecking = true;
+  const gen = mindGen;
+  mindChecks++;
   let ok;
-  try { ok = await NexusAuth.verify(); } finally { mindChecking = false; }
+  try { ok = await NexusAuth.verify(); } finally { mindChecks--; }
+  // signed out or pressed again while we were asking — that press owns the surface now
+  if (gen !== mindGen) return el.classList.contains('on');
   el.textContent = ok ? 'mind granted ✓' : 'sign in again';
   el.classList.toggle('on', ok);
   // `quiet` is for a caller that is about to say what happened itself. Printing this note
@@ -352,22 +366,26 @@ mindState();
 // thinking with nothing on screen saying why, and the NEXT press took the sign-OUT branch instead
 // of signing in. Storage is the shared truth, so watch it — no network, and it also catches a
 // sign-out at another door on this origin.
+// It has to stand down for the WHOLE sign-in, not just the verify(): through the 15 minutes a
+// visitor spends authorising at GitHub there is legitimately no token yet, and the watcher fired
+// into that gap and said the mind had died over a sign-in going perfectly well.
 function noticeCredentialDeath() {
-  if (mindChecking || !window.NexusAuth) return false;
+  if (mindChecks || signingIn || !window.NexusAuth) return false;
   if (!$('mind').classList.contains('on') || NexusAuth.hasToken()) return false;
   note('the sign-in stopped working — press grant a mind to let the players think again');
   mindState(true);                  // quiet: the line above already said what happened
   return true;
 }
 setInterval(noticeCredentialDeath, 2000);
-let signingIn = false;              // a second press mints a NEW code and orphans the one
-$('mind').onclick = async () => {   // the visitor is part-way through typing
+$('mind').onclick = async () => {
   if (!window.NexusAuth) return note('auth module did not load');
   if (signingIn) return note('a sign-in is already running — use the code in the panel');
   if ($('mind').classList.contains('on')) {
+    mindGen++;
     NexusAuth.signOut(); mindState(); $('signin').classList.remove('on');
     return note('signed out — players fall back to their programs');
   }
+  mindGen++;                         // this press invalidates any verify() still in flight
   NexusAuth.signOut();               // clear any dead credential before asking for a fresh one
   signingIn = true;
   try {
@@ -377,11 +395,19 @@ $('mind').onclick = async () => {   // the visitor is part-way through typing
     $('hud').classList.remove('min');
     note('sign-in started — the code is in the panel');
     const started = Date.now();
+    // Every way out of the flow lands here, and the digits are dead by the time it does — so the
+    // reason goes in the note and the code element is emptied. Writing only the note left the dead
+    // code sitting in the panel and the visitor went on typing something that could never work.
+    const stop = (msg) => {
+      signingIn = false;
+      $('code').textContent = '';
+      $('signin-note').textContent = msg;
+    };
     const tick = async () => {
-      if (Date.now() - started > 900000) { signingIn = false; $('signin-note').textContent = 'that code expired — press grant a mind again'; return; }
+      if (Date.now() - started > 900000) { stop('that code expired — press grant a mind again'); return; }
       let tok = null;
       try { tok = await NexusAuth.pollDeviceLogin(); }
-      catch (e) { signingIn = false; $('signin-note').textContent = e.message; return; }
+      catch (e) { stop(e.message); return; }
       // 'SLOW_DOWN' is a throttle instruction, not a credential. Treating any
       // truthy value as a token would announce "mind granted" without ever
       // saving one, hide the panel holding the code the visitor is still
@@ -393,6 +419,7 @@ $('mind').onclick = async () => {   // the visitor is part-way through typing
       }
       if (tok) {
         $('signin').classList.remove('on');
+        $('code').textContent = '';   // the same dead code, on the way out that worked
         // The guard has to outlive the VERIFICATION, not just the poll. Cleared here, it left a
         // whole network round trip in which a second press took the sign-in branch and called
         // signOut() — deleting the token that had just been saved. It is released in `finally`
