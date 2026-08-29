@@ -136,6 +136,16 @@
       touch-action: none;
     }
 
+    html.help-open,
+    html.help-open body {
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    html.help-open body {
+      touch-action: none;
+    }
+
     .sr-only {
       position: absolute;
       width: 1px;
@@ -186,7 +196,13 @@
 
     button:disabled {
       cursor: not-allowed;
-      opacity: 0.5;
+      border-color: var(--cp-border-strong);
+      border-style: dashed;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text-muted);
+      opacity: 1;
+      transform: none;
+      transition: none;
     }
 
     button.primary {
@@ -198,6 +214,14 @@
     button.primary:hover:not(:disabled) {
       border-color: var(--cp-accent-hover);
       background: var(--cp-accent-hover);
+    }
+
+    button.primary:disabled {
+      border-color: var(--cp-border-strong);
+      border-style: dashed;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text-muted);
+      box-shadow: none;
     }
 
     button.danger {
@@ -219,6 +243,10 @@
       z-index: 1000;
       top: 8px;
       left: 8px;
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
       padding: 8px 12px;
       border-radius: 0.625rem;
       background: var(--cp-accent);
@@ -1013,6 +1041,8 @@
       background: var(--cp-panel-strong);
       color: var(--cp-text);
       box-shadow: var(--cp-shadow);
+      overscroll-behavior: contain;
+      touch-action: pan-y;
     }
 
     dialog::backdrop {
@@ -1742,6 +1772,8 @@
       let introScrollPosition = null;
       let introTouchY = null;
       let introScrollGuardsActive = false;
+      let helpModalState = null;
+      let helpTouchY = null;
 
       function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -3087,17 +3119,36 @@
 
       function drawDoor(ctx, metrics, door, alpha = 1) {
         const rect = cellRect(metrics, door.x, door.y);
+        const remembered = alpha < 0.99;
+        const lineWidth = Math.max(2.2, metrics.ratio * 1.8);
+        const left = rect.x + rect.w * 0.16;
+        const right = rect.x + rect.w * 0.84;
         ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = door.locked ? palette.warning : door.open ? palette.success : palette["canvas-door"];
-        ctx.lineWidth = Math.max(2, metrics.ratio * 1.7);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.fillStyle = palette["canvas-ink"];
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = "round";
+        ctx.setLineDash(remembered ? [lineWidth * 1.6, lineWidth * 1.15] : []);
         ctx.beginPath();
-        ctx.moveTo(rect.x + rect.w * 0.2, rect.cy);
-        ctx.lineTo(rect.x + rect.w * 0.8, rect.cy);
+        if (door.open) {
+          ctx.moveTo(left, rect.cy - rect.h * 0.09);
+          ctx.lineTo(rect.cx - rect.w * 0.12, rect.cy);
+          ctx.moveTo(rect.cx + rect.w * 0.12, rect.cy);
+          ctx.lineTo(right, rect.cy + rect.h * 0.09);
+        } else {
+          ctx.moveTo(left, rect.cy);
+          ctx.lineTo(right, rect.cy);
+        }
         ctx.stroke();
+        ctx.setLineDash([]);
         if (door.locked) {
-          ctx.fillStyle = palette.warning;
-          ctx.fillRect(rect.cx - rect.w * 0.07, rect.cy - rect.h * 0.19, rect.w * 0.14, rect.h * 0.19);
+          const lockWidth = rect.w * 0.2;
+          const lockHeight = rect.h * 0.18;
+          ctx.fillRect(rect.cx - lockWidth / 2, rect.cy - lockHeight * 0.05, lockWidth, lockHeight);
+          ctx.beginPath();
+          ctx.arc(rect.cx, rect.cy - lockHeight * 0.05, lockWidth * 0.34, Math.PI, 0);
+          ctx.stroke();
         }
         ctx.restore();
       }
@@ -4606,15 +4657,145 @@
         toast("Exported " + frames.length + " verified frames.", "success");
       }
 
+      function helpFocusableElements() {
+        return Array.from(elements.helpDialog.querySelectorAll(
+          'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+        )).filter((element) => element.getClientRects().length > 0);
+      }
+
+      function helpPointIsInside(event) {
+        const rect = elements.helpDialog.getBoundingClientRect();
+        return event.clientX >= rect.left && event.clientX <= rect.right &&
+          event.clientY >= rect.top && event.clientY <= rect.bottom;
+      }
+
+      function helpCanScroll(deltaY) {
+        const dialog = elements.helpDialog;
+        if (dialog.scrollHeight <= dialog.clientHeight) return false;
+        if (deltaY < 0 && dialog.scrollTop <= 0) return false;
+        if (deltaY > 0 && dialog.scrollTop + dialog.clientHeight >= dialog.scrollHeight - 1) return false;
+        return true;
+      }
+
+      function handleHelpWheel(event) {
+        if (!elements.helpDialog.open) return;
+        if (!helpPointIsInside(event) || !helpCanScroll(event.deltaY)) {
+          event.preventDefault();
+        }
+        event.stopPropagation();
+      }
+
+      function handleHelpTouchStart(event) {
+        helpTouchY = event.touches[0]?.clientY ?? null;
+      }
+
+      function handleHelpTouchMove(event) {
+        if (!elements.helpDialog.open || helpTouchY === null) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        const deltaY = helpTouchY - touch.clientY;
+        helpTouchY = touch.clientY;
+        event.preventDefault();
+        if (helpPointIsInside(touch) && helpCanScroll(deltaY)) {
+          elements.helpDialog.scrollTop += deltaY;
+        }
+        event.stopPropagation();
+      }
+
+      function handleHelpTouchEnd() {
+        helpTouchY = null;
+      }
+
+      function handleHelpKeydown(event) {
+        if (!elements.helpDialog.open) return;
+        const key = event.key.toLowerCase();
+        if (event.key === "Escape" || key === "h") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          closeHelp();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const focusable = helpFocusableElements();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!focusable.length) {
+          elements.helpDialog.focus({ preventScroll: true });
+          return;
+        }
+        const currentIndex = focusable.indexOf(document.activeElement);
+        const nextIndex = event.shiftKey
+          ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+          : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+        focusable[nextIndex].focus({ preventScroll: true });
+      }
+
+      function handleHelpFocusIn(event) {
+        if (!elements.helpDialog.open || elements.helpDialog.contains(event.target)) return;
+        event.stopPropagation();
+        (helpFocusableElements()[0] || elements.helpDialog).focus({ preventScroll: true });
+      }
+
+      function lockHelpModal() {
+        if (helpModalState) return;
+        helpModalState = {
+          x: window.scrollX,
+          y: window.scrollY,
+          focus: document.activeElement,
+          htmlHadClass: document.documentElement.classList.contains("help-open"),
+          bodyHadClass: document.body.classList.contains("help-open")
+        };
+        document.documentElement.classList.add("help-open");
+        document.body.classList.add("help-open");
+        document.addEventListener("keydown", handleHelpKeydown, true);
+        document.addEventListener("focusin", handleHelpFocusIn, true);
+        document.addEventListener("wheel", handleHelpWheel, { capture: true, passive: false });
+        document.addEventListener("touchstart", handleHelpTouchStart, { capture: true, passive: true });
+        document.addEventListener("touchmove", handleHelpTouchMove, { capture: true, passive: false });
+        document.addEventListener("touchend", handleHelpTouchEnd, true);
+        document.addEventListener("touchcancel", handleHelpTouchEnd, true);
+      }
+
+      function unlockHelpModal() {
+        if (!helpModalState) return;
+        const snapshot = helpModalState;
+        helpModalState = null;
+        document.removeEventListener("keydown", handleHelpKeydown, true);
+        document.removeEventListener("focusin", handleHelpFocusIn, true);
+        document.removeEventListener("wheel", handleHelpWheel, true);
+        document.removeEventListener("touchstart", handleHelpTouchStart, true);
+        document.removeEventListener("touchmove", handleHelpTouchMove, true);
+        document.removeEventListener("touchend", handleHelpTouchEnd, true);
+        document.removeEventListener("touchcancel", handleHelpTouchEnd, true);
+        helpTouchY = null;
+        if (!snapshot.htmlHadClass) document.documentElement.classList.remove("help-open");
+        if (!snapshot.bodyHadClass) document.body.classList.remove("help-open");
+        const focusTarget = snapshot.focus?.isConnected && !snapshot.focus.disabled && snapshot.focus.getClientRects().length
+          ? snapshot.focus
+          : elements.help;
+        focusTarget.focus({ preventScroll: true });
+        window.scrollTo(snapshot.x, snapshot.y);
+      }
+
       function openHelp() {
         dismissIntro(false);
-        if (typeof elements.helpDialog.showModal === "function") elements.helpDialog.showModal();
-        else elements.helpDialog.setAttribute("open", "");
+        if (elements.helpDialog.open) return;
+        lockHelpModal();
+        try {
+          if (typeof elements.helpDialog.showModal === "function") elements.helpDialog.showModal();
+          else elements.helpDialog.setAttribute("open", "");
+          elements.helpClose.focus({ preventScroll: true });
+        } catch (error) {
+          unlockHelpModal();
+          toast("Help could not open: " + error.message, "error");
+        }
       }
 
       function closeHelp() {
-        if (typeof elements.helpDialog.close === "function") elements.helpDialog.close();
+        if (!elements.helpDialog.open && !helpModalState) return;
+        if (elements.helpDialog.open && typeof elements.helpDialog.close === "function") elements.helpDialog.close();
         else elements.helpDialog.removeAttribute("open");
+        unlockHelpModal();
       }
 
       function boardPoint(event) {
@@ -4757,6 +4938,11 @@
         });
         elements.help.addEventListener("click", openHelp);
         elements.helpClose.addEventListener("click", closeHelp);
+        elements.helpDialog.addEventListener("cancel", (event) => {
+          event.preventDefault();
+          closeHelp();
+        });
+        elements.helpDialog.addEventListener("close", unlockHelpModal);
         elements.skipLink.addEventListener("click", () => {
           window.setTimeout(() => elements.board.focus({ preventScroll: true }), 0);
         });
