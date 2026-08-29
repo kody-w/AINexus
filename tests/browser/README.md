@@ -20,8 +20,8 @@ fails twice, then it is real.
 | `turn.cjs` | the agentic loop, with a scripted mind and no token: a line spoken alongside a tool call is kept, a verb that fails is reported as failed, an invented verb is refused before it is dispatched |
 | `orbs_and_gaze.cjs` | a person is only addressable when faced, a username made of markup does not execute, the ring closes itself when they leave, a brow raise selects |
 | `dialogue_ring.cjs` | options generated from what is true, rebuilt when they answer, and the floor holding when no mind is available |
-| `vbrainstem_python.cjs` | Pyodide really loads and the grail's agents really run — a memory written and read back through Python |
-| `copilot_auth.cjs` | the device flow starts and returns a live code (it deliberately does NOT complete the sign-in) |
+| `vbrainstem_python.cjs` | Pyodide really loads and every agent the module declares is resident; every verb offered to a model names a method the hands actually have; a memory written comes back out of Python word for word |
+| `copilot_auth.cjs` | the device flow either starts or says out loud that it could not — never neither — and the sign-in is deliberately NOT completed; a live rate limit is weather, so the code returning is never asserted |
 | `overlay.cjs` | portals draw no overlay, a faced person gets a reticle, a distant one stays a dot |
 | `tiles.cjs` | wearing: the same key wears byte-identical tiles from a record, a word is a key, twelve keys give twelve distinct starting conditions |
 | `slosh.cjs` | pouring in both directions — a world through lenses, an organism through worlds — and the order mattering in each |
