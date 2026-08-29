@@ -19,6 +19,28 @@ from js import window
 SYNC = ("people", "orbs", "dialogue", "snapshot", "agents")
 ASYNC = ("look", "walk", "aim", "travel", "say", "tell", "see", "scan", "wait")
 
+# the longest a single act may hold the world. walk() holds a key down for `ms` and wait() sleeps
+# it; both take the number straight from a model, and a model that asks to walk for 600000ms is
+# not making a mistake it can see — it simply freezes the player for ten minutes.
+MAX_MS = 20000
+
+
+def _int(v, default, lo=None, hi=None):
+    """A number from a model is a number, a numeral, or a mistake — never a crash.
+
+    int("abc") is a ValueError and int(None) a TypeError, and either of those reaches the model
+    as a traceback instead of the thing it asked about.
+    """
+    try:
+        n = int(float(v))            # NaN and the infinities raise here too, and land on default
+    except (TypeError, ValueError, OverflowError):
+        n = default
+    if lo is not None:
+        n = max(lo, n)
+    if hi is not None:
+        n = min(hi, n)
+    return n
+
 
 class NexusWorldAgent(BasicAgent):
     def __init__(self):
@@ -39,9 +61,13 @@ class NexusWorldAgent(BasicAgent):
                     "text": {"type": "string", "description": "what to say, for say and tell"},
                     "to": {"type": "string", "description": "a peer id, for tell and dialogue"},
                     "dir": {"type": "string", "description": "forward, back, left or right, for walk"},
-                    "ms": {"type": "integer", "description": "milliseconds, for walk and wait"},
+                    "ms": {"type": "integer", "description": "milliseconds, for walk and wait; at most 20000"},
                     "dx": {"type": "integer", "description": "pixels to turn, for look"},
                     "dy": {"type": "integer", "description": "pixels to look up or down, for look"},
+                    # scan has always read these; the manifest did not mention them, so the
+                    # schema handed to a model had no slot for the only two knobs it has
+                    "steps": {"type": "integer", "description": "how many frames to take, for scan"},
+                    "deg": {"type": "integer", "description": "degrees of turn between frames, for scan"},
                 },
                 "required": ["action"],
             },
@@ -84,9 +110,10 @@ class NexusWorldAgent(BasicAgent):
 
         # these take time in the world; hand the promise back and let the caller wait for it
         if action == "look":
-            return drive.look(int(kwargs.get("dx") or 0), int(kwargs.get("dy") or 0))
+            return drive.look(_int(kwargs.get("dx") or 0, 0), _int(kwargs.get("dy") or 0, 0))
         if action == "walk":
-            return drive.walk(str(kwargs.get("dir") or "forward"), int(kwargs.get("ms") or 600))
+            return drive.walk(str(kwargs.get("dir") or "forward"),
+                              _int(kwargs.get("ms") or 600, 600, 0, MAX_MS))
         if action == "aim":
             return drive.aim(kwargs.get("portal"))
         if action == "travel":
@@ -98,7 +125,9 @@ class NexusWorldAgent(BasicAgent):
         if action == "see":
             return drive.see({})
         if action == "scan":
-            return drive.scan(kwargs.get("steps"), kwargs.get("deg"))
+            # a scan takes a picture per step; an unbounded step count is a frozen player
+            return drive.scan(_int(kwargs.get("steps") or 4, 4, 1, 12),
+                              _int(kwargs.get("deg") or 90, 90, 1, 360))
         if action == "wait":
-            return drive.wait(int(kwargs.get("ms") or 800))
+            return drive.wait(_int(kwargs.get("ms") or 800, 800, 0, MAX_MS))
         return "unreachable"

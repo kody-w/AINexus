@@ -41,6 +41,22 @@ HABITS = ["repeats what it heard before answering", "answers the question under 
           "will not be hurried", "starts in the middle"]
 
 
+def _whole(v, default):
+    """A whole number out of a tile somebody else wrote, or the default.
+
+    A chat-tile arrives as an argument, so its shape is a claim rather than a fact: a `turns`
+    of "lots" or a `longest_silence` of "ages" used to crash the forge, and a float used to
+    survive into the organism — which a frame cannot hold.
+    """
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return default
+    if v != v or v in (float("inf"), float("-inf")):        # NaN and the infinities
+        return default
+    # and a bound: JSON carries integers of any length, and a conversation of 10**400 turns is
+    # not a long conversation — it is a number somebody put in a tile
+    return max(-10 ** 9, min(10 ** 9, int(round(v))))
+
+
 class OrganismForgeAgent(BasicAgent):
     def __init__(self):
         self.name = "OrganismForge"
@@ -74,7 +90,13 @@ class OrganismForgeAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return json.dumps({"error": "not a tile", "generator": "none"})
-        if tile.get("kind") != "chat":
+        # `[]`, `5` and `null` all parse. So does a chat-tile whose lines are numbers or whose
+        # shape is a list — and every one of those crashed further down, where the traceback
+        # tells a model nothing it can act on.
+        if not isinstance(tile, dict):
+            return json.dumps({"error": "not a tile", "generator": "none"})
+        if tile.get("kind") != "chat" or not isinstance(tile.get("lines", []), list) \
+                or not isinstance(tile.get("shape", {}), dict):
             return json.dumps({"error": "that is not a chat-tile", "generator": "none"})
 
         lines = tile.get("lines") or []
@@ -92,9 +114,12 @@ class OrganismForgeAgent(BasicAgent):
                 registry = json.loads(kwargs["registry"])
             except Exception:
                 registry = None
-        pool = (registry or {}).get("templates") or []
+        if not isinstance(registry, dict):
+            registry = None
+        # only rows that are actually rows: one bad entry must not take the forge down
+        pool = [t for t in ((registry or {}).get("templates") or []) if isinstance(t, dict)]
         if pool:
-            want = (kwargs.get("want") or "").lower().strip()
+            want = str(kwargs.get("want") or "").lower().strip()
             if want:
                 scored = [(sum(1 for w in want.split() if len(w) > 2
                                and w in json.dumps(t).lower()), t) for t in pool]
@@ -125,7 +150,7 @@ class OrganismForgeAgent(BasicAgent):
 
         # ── the conversation, and its shape, become a body ───────────────
         traits = {}
-        hour = shape.get("hour_of_day")
+        hour = _whole(shape.get("hour_of_day"), None)
         wake, wake_says = "plain", "keeps ordinary hours"
         if hour is not None:
             for lo, hi, w, says in WAKEFULNESS:
@@ -145,20 +170,23 @@ class OrganismForgeAgent(BasicAgent):
             traits["patience_milli"] = 700 + next(s) % 400
             traits["habit"] = take(HABITS)
 
-        turns = shape.get("turns") or len(lines)
+        turns = _whole(shape.get("turns"), 0) or len(lines)
         traits["verbosity_milli"] = max(80, min(2000, 40 * turns + next(s) % 300))
-        share = shape.get("loudest_share_milli")
+        share = _whole(shape.get("loudest_share_milli"), None)
         if share is not None:
             # a creature grown from a conversation one voice dominated tends to hold the floor
             traits["holds_the_floor_milli"] = share
             traits["listens_milli"] = 1000 - min(950, share)
         traits["temper"] = take(TEMPERS)
-        if shape.get("longest_silence"):
-            traits["tolerates_silence_seconds"] = int(shape["longest_silence"])
+        silence = _whole(shape.get("longest_silence"), 0)
+        if silence:
+            traits["tolerates_silence_seconds"] = silence
 
         # what it will actually talk about: the words that survived the wearing
         subjects = []
         for ln in lines[:12]:
+            if not isinstance(ln, dict):
+                continue          # a line with nothing said in it teaches the creature nothing
             words = [w.strip(".,!?;:\"'()").lower() for w in str(ln.get("said", "")).split()]
             for w in words:
                 if len(w) > 5 and w not in subjects:

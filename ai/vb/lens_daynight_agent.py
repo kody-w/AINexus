@@ -35,6 +35,11 @@ class LensDayNightAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return "not a tile"
+        # a model's JSON parses fine as `[]`, `5` or `null`, and a tile whose world or lenses is
+        # the wrong shape crashes on the setdefault below rather than at the parse
+        if not isinstance(tile, dict) or not isinstance(tile.get("world", {}), dict) \
+                or not isinstance(tile.get("lenses", []), list):
+            return "not a tile"
         hour = str(kwargs.get("hour") or "night").lower()
         if hour not in HOURS:
             hour = "night"

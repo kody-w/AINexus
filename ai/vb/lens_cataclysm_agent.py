@@ -36,6 +36,12 @@ class LensCataclysmAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return "not a tile"
+        # a model's JSON parses fine as `[]`, `5` or `null`; and this lens reaches into the cast,
+        # so a cast that is not a list of people is the same kind of malformed tile
+        if not isinstance(tile, dict) or not isinstance(tile.get("world", {}), dict) \
+                or not isinstance(tile.get("lenses", []), list) \
+                or not isinstance(tile.get("cast", []), list):
+            return "not a tile"
         try:
             deg = int(kwargs.get("degree", 1))
         except Exception:
@@ -51,6 +57,8 @@ class LensCataclysmAgent(BasicAgent):
         if deg >= 2:
             # what is gone changes what anyone can be doing
             for c in tile.get("cast", []):
+                if not isinstance(c, dict):
+                    continue          # a name with nobody behind it has nothing to stop doing
                 if c.get("standing") in ("go", "wander"):
                     c["standing"] = "hold"
             tile["mood"] = says

@@ -31,11 +31,21 @@ class LensGravityAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return "not a tile"
+        # THE ARGUMENTS COME FROM A MODEL, WHICH IS NOT A WELL-FORMED SOURCE. json.loads is
+        # perfectly happy with `[]`, `5` and `null`, and a tile whose world or lenses is the
+        # wrong shape does not fail at the parse — it fails four lines further down, on a
+        # setdefault, and the model is handed a Python traceback instead of an instruction.
+        if not isinstance(tile, dict) or not isinstance(tile.get("world", {}), dict) \
+                or not isinstance(tile.get("lenses", []), list):
+            return "not a tile"
         # A FRAME HOLDS NO FLOATS. rapp/1 is I-JSON and JCS refuses non-integers, because 0.1
         # does not canonicalise to the same bytes in every language — which is the whole point of
         # a hash two machines have to agree on. So gravity is carried in THOUSANDTHS, exactly.
         g = kwargs.get("g")
-        g = 0.35 if g is None else max(0.05, min(4.0, float(g)))
+        try:
+            g = 0.35 if g is None else max(0.05, min(4.0, float(g)))
+        except (TypeError, ValueError):
+            return "g must be a number: gravity as a multiple of normal, 0.05 to 4"
         milli = int(round(g * 1000))
         world = tile.setdefault("world", {})
         world["gravity_milli"] = milli

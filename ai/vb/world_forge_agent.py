@@ -79,6 +79,12 @@ class WorldForgeAgent(BasicAgent):
                 "tile": {"type": "string", "description": "the tile payload as JSON"},
                 "registry": {"type": "string", "description": "state/worlds.json contents as JSON"},
                 "key": {"type": "string", "description": "the wear key; defaults to the tile's own seed"},
+                # RULE 2 IS ONLY REAL IF THE CALLER CAN REACH IT. perform() has always read
+                # template_sha256 and refused a mismatch, but the manifest did not declare it —
+                # so the JSON schema handed to a model had no slot for the bytes it read, and the
+                # one path in this agent that refuses tampered bytes could not be entered by the
+                # caller the manifest is written for. Its sibling OrganismForge declared it.
+                "template_sha256": {"type": "string", "description": "optional: the sha256 of the template's bytes as the caller actually read them; a mismatch is REFUSED, never repaired"},
                 "want": {"type": "string", "description": "optional: words describing the world you want, used to bias the choice of template"},
             }, "required": ["tile"]},
         }
@@ -102,9 +108,14 @@ class WorldForgeAgent(BasicAgent):
             tile = json.loads(kwargs.get("tile") or "{}")
         except Exception:
             return json.dumps({"error": "not a tile", "generator": "none"})
+        # `[]`, `5` and `null` all parse; none of them is a tile, and a world or lenses of the
+        # wrong shape fails on the mutation below rather than here
+        if not isinstance(tile, dict) or not isinstance(tile.get("world", {}), dict) \
+                or not isinstance(tile.get("lenses", []), list):
+            return json.dumps({"error": "not a tile", "generator": "none"})
 
         key = kwargs.get("key") or tile.get("seed") or tile.get("tile") or "unkeyed"
-        want = (kwargs.get("want") or "").lower().strip()
+        want = str(kwargs.get("want") or "").lower().strip()
 
         registry = None
         if kwargs.get("registry"):
@@ -112,13 +123,17 @@ class WorldForgeAgent(BasicAgent):
                 registry = json.loads(kwargs["registry"])
             except Exception:
                 registry = None
+        if not isinstance(registry, dict):
+            registry = None
 
         s = self._stream(key)
         take = lambda seq: seq[next(s) % len(seq)]
 
         # ── 1. choose a template, from real worlds, biased by what was asked for ──
         chosen, generator, provenance = None, "scratch", None
-        worlds = (registry or {}).get("worlds") or []
+        # only rows that are actually rows: a registry is fetched JSON, and one bad entry must
+        # not take the forge down with it
+        worlds = [w for w in ((registry or {}).get("worlds") or []) if isinstance(w, dict)]
         if worlds:
             pool = worlds
             if want:

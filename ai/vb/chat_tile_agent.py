@@ -27,7 +27,12 @@ def _parse_time(v):
     if v is None:
         return None
     if isinstance(v, (int, float)):
-        return float(v / 1000.0 if v > 1e11 else v)
+        # JSON carries integers of any length, and a 400-digit "timestamp" is an OverflowError
+        # rather than a moment. An export nobody can date is undated, not fatal.
+        try:
+            return float(v / 1000.0 if v > 1e11 else v)
+        except (OverflowError, ValueError):
+            return None
     s = str(v).strip()
     m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})", s)
     if not m:
@@ -118,7 +123,9 @@ class ChatTileAgent(BasicAgent):
         body = json.dumps(lines, sort_keys=True).encode("utf-8")
         tile = {
             "kind": "chat",
-            "about": (kwargs.get("about") or "").strip()[:200] or None,
+            # str() first: `about` is a model's argument, and a number there is a wrong type,
+            # not a crash — the schema says string, the caller is not obliged to agree
+            "about": str(kwargs.get("about") or "").strip()[:200] or None,
             "lines": lines,
             "shape": shape,
             # what a full frame would have held and this does not

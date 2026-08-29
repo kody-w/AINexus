@@ -40,11 +40,12 @@ fails twice, then it is real.
 | `world_frame.cjs` | each player carrying its own hot-loaded agents on the shared runtime, and the world frame choosing who wakes — nobody in a still world, the one who was spoken to when there is a reason — on its own verifiable chain |
 | `hotload.cjs` | the world itself as an agent the brainstem can call, and a brand-new python agent taught from source into a running player and usable on its next thought, with no reload |
 | `time_travel.cjs` | a recorded session replayed twice with no model in the loop, frame for frame and epoch for epoch; a live player woken inside an ancient frame; going back forking a new dimension rather than editing the old line |
+| `agent_contract.cjs` | the eight python agents against the arguments a MODEL sends: every parameter perform() reads is declared and every one declared is read, nothing sent crashes one, the lenses are byte-identical twice and emit no floats, and a player's memory cannot be reached through a crafted key |
 
 `turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs` and `overlay.cjs` need no credentials at all.
-The ten that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
-`forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs` and `time_travel.cjs` —
-need the network. `copilot_auth.cjs` reaches the live worker.
+The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
+`forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
+`agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker.
 
 ## The other half: the live origin
 
