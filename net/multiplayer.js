@@ -329,6 +329,7 @@
                 this.pending.delete(peerId);
                 this.removePlayer(peerId);
                 this.connections.delete(peerId);
+                if (this.isHost) this.relayDeparture(peerId);
                 this.updatePlayerCount();
                 if (!this.isHost && peerId === this.roomId) {
                     // the host's tab is the room — when it closes, the room is gone
@@ -346,6 +347,7 @@
                 if (this.connections.get(peerId) === conn) {
                     this.connections.delete(peerId);
                     this.removePlayer(peerId);
+                    if (this.isHost) this.relayDeparture(peerId);
                     this.updatePlayerCount();
                 }
             });
@@ -409,22 +411,48 @@
             }
             if (data.type === 'hello') return;      // a joiner never needs to admit anybody
             switch (data.type) {
-                case 'playerUpdate':
+                case 'playerUpdate': {
+                    // Who this update is actually about. On the host the connection IS the
+                    // author, so `from` is ignored; a joiner hears about everyone except the
+                    // host second-hand and has to take the host's stamp, exactly as for chat.
+                    const who = this.isHost ? peerId : (data.from || peerId);
+                    const mineId = this.peer && this.peer.id;
+                    if (who === mineId) break;                    // never grow a body for myself
                     if (data.username) {
-                        const known = this.players.get(peerId);
-                        const claimed = this.uniqueName(peerId, data.username);
+                        const known = this.players.get(who);
+                        const claimed = this.uniqueName(who, data.username);
                         if (known && known.username !== claimed) {
                             known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
                                 if (old) known.avatar.remove(old);
-                                const tag = this.createNameTag(peerId, { username: claimed });
+                                const tag = this.createNameTag(who, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
                         }
                     }
-                    this.updatePlayerPosition(peerId, data.position, data.rotation);
+                    // A relayed peer has no connection here, so acceptConnection never ran for
+                    // it and it has no body. Give it one the first time it is heard from —
+                    // without this two joiners stay permanently invisible to each other.
+                    if (!this.players.has(who)) {
+                        this.createPlayerAvatar(who, { username: data.username });
+                        this.updatePlayerCount();
+                    }
+                    if (data.position) this.updatePlayerPosition(who, data.position, data.rotation);
+                    // The room is a star: every joiner is wired only to the host. Presence has
+                    // to be passed on for the same reason chat does, or each guest sees the
+                    // host and nobody else.
+                    if (this.isHost) {
+                        this.connections.forEach((c, id) => {
+                            if (id === peerId) return;
+                            try {
+                                c.send({ type: 'playerUpdate', from: peerId, username: data.username,
+                                         position: data.position, rotation: data.rotation });
+                            } catch (e) {}
+                        });
+                    }
                     break;
+                }
 
                 case 'chat': {
                     // A message may be addressed. Show it if it is for the room or for me...
@@ -446,6 +474,12 @@
                     }
                     break;
                 }
+
+                case 'playerLeft':
+                    // Only the host is wired to everyone, so only the host can tell the room
+                    // that somebody went. Without it a guest keeps a motionless body forever.
+                    if (!this.isHost && data.who) { this.removePlayer(data.who); this.updatePlayerCount(); }
+                    break;
 
                 case 'interaction':
                     this.showPlayerInteraction(peerId, data.target);
@@ -679,8 +713,24 @@
             }
         }
 
+        // The host is the only tab connected to everyone. Passing a departure on is the
+        // presence twin of the chat relay above.
+        relayDeparture(goneId) {
+            this.connections.forEach((c, id) => {
+                if (id === goneId) return;
+                try { c.send({ type: 'playerLeft', who: goneId }); } catch (e) {}
+            });
+        }
+
         updatePlayerCount() {
-            const count = this.connections.size + 1; // +1 for self
+            // Everyone I know of: the peers I am wired to, plus the ones the host has told me
+            // about. On the host those are the same set; on a joiner they are not, and counting
+            // only my own wires is what made every guest in a full room report "2 players".
+            const seen = new Set(this.connections.keys());
+            this.players.forEach((_, id) => seen.add(id));
+            const mineId = this.peer && this.peer.id;
+            if (mineId) seen.delete(mineId);
+            const count = seen.size + 1; // +1 for self
             const playerCountEl = document.getElementById('player-count');
             if (playerCountEl) playerCountEl.textContent = count;
         }
@@ -719,6 +769,7 @@
                 this.world.scene.remove(player.avatar);
                 this.players.delete(peerId);
                 this.showNotification(`Player left: ${player.username}`);
+                this.updatePlayerCount();
             }
         }
 
