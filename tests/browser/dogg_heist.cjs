@@ -3467,7 +3467,13 @@ async function readBoardAccessibilitySnapshot(page) {
       activeId: document.activeElement?.id || ''
     };
   });
-  return Object.assign({ tick: state.tick, head: state.head, frameCount: state.frameCount }, aria);
+  const currentFrameIndex = Number(state.state?.currentFrame?.index);
+  return Object.assign({
+    tick: state.tick,
+    head: state.head,
+    frameCount: state.frameCount,
+    currentFrameIndex: Number.isFinite(currentFrameIndex) ? currentFrameIndex : undefined
+  }, aria);
 }
 
 function boardAccessibilityConsistent(snapshot) {
@@ -4981,9 +4987,25 @@ async function runSuite() {
   await page.locator('[data-dogg-test-other-agent="true"]').click();
   await page.locator('#game-board').focus();
   const describedAfterAgent = await readBoardAccessibilitySnapshot(page);
-  const describedLiveTick = describedAfterAgent.tick;
-  const describedScrubTick = Math.max(0, describedLiveTick - 1);
-  await api(page, 'scrub', describedScrubTick);
+  const describedLive = await inspect(page);
+  const describedLiveIndex = Number(describedLive.state?.currentFrame?.index);
+  requireMeasurement(Number.isFinite(describedLiveIndex),
+    'state().currentFrame.index at the live board frame');
+  const describedFrames = exportedFrames(describedLive.exported).frames;
+  const describedPriorFrame = describedFrames.map((frame, index) => {
+    const state = frameState(frame);
+    const exportedIndex = Number(frame.index ?? frame.frameIndex ?? index);
+    return {
+      index: Number.isFinite(exportedIndex) ? exportedIndex : index,
+      tick: state ? tickOf(state) : undefined
+    };
+  }).filter(frame =>
+    frame.index < describedLiveIndex &&
+    Number.isFinite(frame.tick) &&
+    frame.tick !== describedAfterAgent.tick).reverse()[0];
+  requireMeasurement(describedPriorFrame,
+    'a prior exported frame index with a tick distinct from the live tick');
+  await api(page, 'scrub', describedPriorFrame.index);
   await page.locator('#game-board').focus();
   const describedAfterScrub = await readBoardAccessibilitySnapshot(page);
   const staleTick = (description, tick) =>
@@ -5001,10 +5023,19 @@ async function runSuite() {
       describedAfterAgent.selectedName !== describedInitial.selectedName &&
       !staleName.test(describedAfterAgent.description) &&
       describedAfterScrub.focusOnBoard && boardAccessibilityConsistent(describedAfterScrub) &&
-      describedAfterScrub.tick === describedScrubTick &&
-      !staleTick(describedAfterScrub.description, describedLiveTick),
-    `tick ${describedInitial.tick}→${describedAfterStep.tick}; agent ${describedInitial.selectedName}→${describedAfterAgent.selectedName}; scrub ${describedLiveTick}→${describedAfterScrub.tick}`);
-  await api(page, 'scrub', describedLiveTick);
+      describedAfterScrub.currentFrameIndex === describedPriorFrame.index &&
+      describedAfterScrub.tick === describedPriorFrame.tick &&
+      describedAfterScrub.selectedName === describedAfterAgent.selectedName &&
+      !staleTick(describedAfterScrub.description, describedAfterAgent.tick) &&
+      !staleName.test(describedAfterScrub.description),
+    `tick ${describedInitial.tick}→${describedAfterStep.tick}; agent ${describedInitial.selectedName}→${describedAfterAgent.selectedName}; scrub frame ${describedLiveIndex}→${describedPriorFrame.index}, tick ${describedAfterAgent.tick}→${describedAfterScrub.tick}`);
+  await api(page, 'scrub', describedLiveIndex);
+  const describedRestored = await inspect(page, false);
+  requireMeasurement(
+    Number(describedRestored.state?.currentFrame?.index) === describedLiveIndex &&
+      describedRestored.tick === describedAfterAgent.tick,
+    'returning to the actual live frame index after the ARIA scrub check'
+  );
   await api(page, 'pause');
 
   const povSemanticLabels = await readPovSemanticLabels(page);
