@@ -22,6 +22,44 @@
 
   const V = () => new root.THREE.Vector3();
 
+  // ── a camera that rides somebody ─────────────────────────────────────────
+  // A fixed camera shows you who is with whom. It can never show you what one of them is looking
+  // AT — and that is the shot that proves there is somebody in there rather than a puppet being
+  // moved around. So a camera can be bound to a presence: it stands where that resident stands
+  // and faces where they face, re-aimed every survey from the pose they published.
+  //
+  // It costs what any other camera costs, which is one more render of the scene. That is the
+  // real budget here and it is the same budget split-screen has always had.
+  function follow(spec) {
+    const c = add(Object.assign({}, spec, { pos: { x: 0, y: 2, z: 0 } }));
+    if (!c) return null;
+    c.follows = spec.follows;
+    c.eye = spec.eye === undefined ? 0 : spec.eye;      // 0 = their eyes, >0 = over the shoulder
+    return c;
+  }
+
+  function aimFollowers() {
+    const H = root.NexusHolo, w = root.worldNavigator;
+    for (const c of cams.values()) {
+      if (!c.follows) continue;
+      let pose = null;
+      if (c.follows === 'local' && w && w.camera) {
+        pose = { pos: w.camera.position, yaw: (w.rotation && w.rotation.y) || w.camera.rotation.y || 0 };
+      } else if (H) {
+        const p = H.present().find(x => x.id === c.follows || x.name === c.follows);
+        if (p) pose = { pos: p.pos, yaw: p.yaw || 0 };
+      }
+      if (!pose) { c.blind = true; continue; }
+      c.blind = false;
+      const yaw = pose.yaw;
+      const back = c.eye;                                 // how far behind the shoulder
+      c.cam.position.set(pose.pos.x + Math.sin(yaw) * back,
+                         pose.pos.y + (back ? 0.5 : 0),
+                         pose.pos.z + Math.cos(yaw) * back);
+      c.cam.rotation.set(0, yaw + Math.PI, 0);
+    }
+  }
+
   function add(spec) {
     const T = root.THREE, w = root.worldNavigator;
     if (!T || !w || !w.renderer) return null;
@@ -88,16 +126,22 @@
       people.push({ id: p.id, name: p.name, speaking: !!p.speaking, pos: p.pos,
                     dist: c.cam.position.distanceTo(v) });
     }
+    // a camera riding somebody should not score itself for seeing its own host
+    const host = c.follows || null;
+    if (host) for (let i = people.length - 1; i >= 0; i--) if (people[i].id === host) people.splice(i, 1);
     // and whoever is actually standing here in this instance
-    if (w.camera) {
+    if (w.camera && !host) {
       const me = w.camera.position.clone(); me.y -= 1.0;
       if (frustum.containsPoint(me)) people.push({ id: 'local', name: 'in the room', speaking: !!root.__holoSpeaking,
         pos: { x: me.x, y: me.y, z: me.z }, dist: c.cam.position.distanceTo(me) });
     }
 
+    // A SUBJECTIVE SHOT IS WORTH SOMETHING EVEN WHEN IT IS QUIET, but not as much as a scene —
+    // it is the shot you cut to when one character is doing something only they can see.
     // ENGAGEMENT, not just occupancy. Two people close together and one of them talking is a
     // scene; four people scattered and silent is a corridor.
     let score = 0;
+    if (c.follows) score += 14;                           // the point of view is itself a reason
     score += people.length * 10;
     if (people.some(p => p.speaking)) score += 45;
     for (let i = 0; i < people.length; i++) for (let j = i + 1; j < people.length; j++) {
@@ -116,7 +160,12 @@
              people: people.map(p => ({ id: p.id, name: p.name, speaking: p.speaking, dist: +p.dist.toFixed(1) })) };
   }
 
-  const survey = () => [...cams.keys()].map(look).filter(Boolean).sort((a, b) => b.score - a.score);
+  function survey() {
+    aimFollowers();                                       // a bound camera moves before it looks
+    return [...cams.keys()].map(look).filter(Boolean)
+      .filter(s => { const c = cams.get(s.id); return !(c && c.blind); })
+      .sort((a, b) => b.score - a.score);
+  }
 
   // the slow drift a mounted camera has, so a still room is not a still image
   function drift(t) {
@@ -138,6 +187,6 @@
     cams.clear();
   }
 
-  root.NexusCams = { add, house, shoot, look, survey, drift, list, clear,
+  root.NexusCams = { add, follow, house, shoot, look, survey, drift, list, clear, aimFollowers,
                      count: () => cams.size, get: (id) => cams.get(id) };
 })(typeof window !== 'undefined' ? window : globalThis);

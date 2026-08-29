@@ -88,6 +88,7 @@ frame.addEventListener('load', () => {
       holo.attach({ labels: true });          // the residents appear, wherever they really are
       cams.house(RIG);
       buildRail();
+      watchForResidents();
       requestAnimationFrame(tick);
     })();
   })();
@@ -102,6 +103,26 @@ function buildRail() {
     rail.appendChild(el);
     tiles.set(c.id, { el, img: el.querySelector('img'), sc: el.querySelector('.sc') });
   }
+}
+
+// EVERY RESIDENT GETS A CAMERA OF THEIR OWN. The fixed cameras show you who is with whom; a
+// camera riding a resident shows you what they are looking at, which is the shot that proves
+// there is somebody in there. Both are scored the same way, and the director picks between them
+// on the same terms — so a subjective shot has to EARN the cut like any other.
+const povs = new Set();
+function watchForResidents() {
+  setInterval(() => {
+    if (!holo || !cams) return;
+    for (const p of holo.present()) {
+      if (povs.has(p.id)) continue;
+      povs.add(p.id);
+      const id = 'pov-' + p.id;
+      cams.follow({ id, name: 'POV · ' + String(p.name).toUpperCase().slice(0, 14), room: 'eyes',
+                    follows: p.id, eye: 0, fov: 66, width: 400, height: 250 });
+      RIG.push({ id, name: 'POV · ' + String(p.name).toUpperCase().slice(0, 14) });
+      buildRail();
+    }
+  }, 1500);
 }
 
 let lastShot = 0;

@@ -197,10 +197,35 @@
     },
   };
 
+  // ── a dimension is a seed ────────────────────────────────────────────────
+  // "Different dimensions are literally new content" is only true if a dimension can be RE-RUN
+  // and come back the same. Local movement used Math.random(), so replaying a line gave a
+  // different walk every time — the frames matched, the world did not, and a variation you
+  // cannot reproduce is not content, it is noise.
+  //
+  // So the wandering is seeded. A dimension carries a seed; the same seed always walks the same
+  // walk. Which means the whole continuation compresses to a short string — where it split,
+  // what lens it wears, what seed it runs on — and the content is RE-DERIVED rather than stored.
+  // A small seed and a large derivation is how every procedural world has ever worked, and it is
+  // the same bargain the DOGG seed chants make.
+  let rngState = 1;
+  function seedRng(n) { rngState = (n >>> 0) || 1; }
+  function rnd() {                                        // xorshift32: small, fast, reproducible
+    rngState ^= rngState << 13; rngState >>>= 0;
+    rngState ^= rngState >>> 17;
+    rngState ^= rngState << 5;  rngState >>>= 0;
+    return rngState / 4294967296;
+  }
+  function hashSeed(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < String(str).length; i++) { h ^= String(str).charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+
   // what a player does on its own, between directions — cheap, local, no model
   const INTENTS = {
     hold:     async () => {},
-    wander:   async (d) => { await d.look((Math.random() * 120 - 60) | 0, 0); await d.walk('forward', 350 + Math.random() * 400 | 0); },
+    wander:   async (d) => { await d.look((rnd() * 120 - 60) | 0, 0); await d.walk('forward', 350 + (rnd() * 400 | 0)); },
     follow:   async (d, t) => { const who = (d.people() || []).find(p => p.id === t || p.name === t);
                                 if (who) { await d.look(Math.max(-160, Math.min(160, (who.x - innerWidth / 2) / 4 | 0)), 0); await d.walk('forward', 400); } },
     approach: async (d, t) => INTENTS.follow(d, t),
@@ -330,6 +355,7 @@
   // number that decides whether a world with a dozen AIs in it can be left running.
   const ledger = { liveFrames: 0, calls: 0, replayedFrames: 0, rewinds: 0, virtualFrames: 0 };
   let epoch = { id: 'genesis', seq: -1, at: Date.now(), virtual: 0 };
+  let dimension = { forkedFrom: null, lens: null, seed: 'genesis' };
   const virtualFrame = (rec) => { ledger.virtualFrames++;
     return { epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id }; };
 
@@ -399,7 +425,11 @@
     ensemblePrev = genesis ? genesis.payload_hash : null;
     if (genesis) epoch = { id: genesis.frame_hash, seq: 0, at: epoch.at, virtual: 0 };
     ledger.forks = (ledger.forks || 0) + 1;
-    return { dimension: stream, genesis: genesis && genesis.frame_hash,
+    // the whole continuation, as something you could write on a card
+    dimension = { forkedFrom: f.frame_hash, lens: o.lens ? String(o.lens) : null,
+                  seed: o.seed !== undefined ? String(o.seed) : (f.frame_hash.slice(0, 12) + ':' + (o.lens || '-')) };
+    seedRng(hashSeed(dimension.seed));
+    return { dimension: stream, seed: seedOf(), genesis: genesis && genesis.frame_hash,
              forkedFrom: f.frame_hash, at: f.seq, woke: woke.woke, lens: o.lens || null, lensSaid: worn };
   }
 
@@ -742,8 +772,28 @@
   const chainKind = (id) => { const r = players.get(String(id));
     return !r ? 'none' : r.truncated ? 'window' : 'chain'; };
 
+  // A DIMENSION IN ONE LINE: where it split, what lens it wears, what seed it runs on. Everything
+  // after the split re-derives from those three, so a variation is something you can write on a
+  // card and hand to somebody rather than a recording you have to ship.
+  function seedOf() {
+    return (dimension.forkedFrom || 'genesis').slice(0, 12) + '/' +
+           (dimension.lens || '-') + '/' + dimension.seed;
+  }
+
+  // re-derive a dimension from its seed alone: same split, same lens, same walk
+  async function fromSeed(seed, findFrame, opts) {
+    const bits = String(seed).split('/');
+    const from = bits[0], lensName = bits[1];
+    const s2 = bits.slice(2).join('/') || from;
+    const f = typeof findFrame === 'function' ? await findFrame(from) : findFrame;
+    if (!f) throw new Error('cannot re-derive: no frame matching ' + from);
+    return fork(f, Object.assign({}, opts, { lens: lensName === '-' ? null : lensName, seed: s2 }));
+  }
+
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
                      epoch: () => Object.assign({}, epoch), rewind, replay, fork, lens,
+                     // a dimension in one line: where it split, what it wears, what it runs on
+                     seedOf, fromSeed, reseed: (s2) => { dimension.seed = String(s2); seedRng(hashSeed(dimension.seed)); return seedOf(); },
                      lenses: () => Object.keys(LENSES),
                      cost: () => {
                        const free = ledger.replayedFrames + ledger.virtualFrames;
