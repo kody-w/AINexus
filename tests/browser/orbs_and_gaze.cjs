@@ -96,7 +96,20 @@ await p.evaluate(() => { window.__mk=(o={})=>{const lm=new Array(478).fill(null)
 // (the fake camera device can produce spurious detections that would otherwise set it)
 await p.evaluate(()=>window.__face={}); await p.waitForTimeout(1200);
 await p.keyboard.press('c'); await p.waitForTimeout(900);
-const look = async dx => { await p.evaluate(v=>window.__face={dx:v}, dx); await p.waitForTimeout(1300); };
+// WAIT FOR THE GAZE TO SETTLE, don't assume a millisecond count. The pointer eases toward its
+// target a fraction per animation frame, so how far it gets in 1300ms is a question about how many
+// frames the machine produced — on a CI runner it stalled at dead centre (640 of 1280) and every
+// later check waited on a reticle that could not be drawn. Settled = two reads the same.
+const look = async dx => {
+  await p.evaluate(v=>window.__face={dx:v}, dx);
+  let last = null, still = 0;
+  for (let i = 0; i < 60 && still < 3; i++) {
+    await p.waitForTimeout(120);
+    const at = await p.evaluate(()=>Math.round(parseFloat(document.getElementById('gaze').style.left)||-1));
+    still = (last !== null && Math.abs(at - last) <= 2) ? still + 1 : 0;
+    last = at;
+  }
+};
 await look(0);      const B = await state();
 console.log('B. eyes on, looking CENTRE (person at x=900):', B);
 const probe = await p.evaluate(() => { const g = window.__probe && window.__probe(); return g; });
