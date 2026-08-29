@@ -42,6 +42,9 @@ a{color:#7de3ff}
   <button id="dump">Download receipts</button>
   <button id="signin" title="one Copilot seat, shared by every player in the room">Grant a mind</button>
   <span id="mind" style="font:12px ui-monospace,monospace;color:#8a8aa8"></span>
+  <!-- the sign-in code gets its own element. It used to share the lamp above, so the first status
+       line written during the flow erased the digits the visitor was still typing -->
+  <span id="code" style="font:12px ui-monospace,monospace;color:#7de3ff"></span>
   <button id="me" title="watch from the sky in another tab, then drop in">👁 ME view</button>
 </header>
 <div class="grid" id="grid"></div>
@@ -298,33 +301,69 @@ async function runProgram(i) {
 // One Copilot seat covers every player. The token lives under `rapp_settings`,
 // the estate-wide key, so a sign-in at Heimdall or any other front door on this
 // origin already counts here — and a sign-in here counts there.
-function paintMind() {
+// The lamp must say what is TRUE, not what is stored. A revoked or expired ghu_ sits in storage
+// looking exactly like a live one, so signedIn() — token presence only — told an account with no
+// Copilot seat that every player could think, and then every player failed to think. A token earns
+// "checking…" and nothing more until it has actually bought a chat token.
+let mindLive = false;               // the VERIFIED state — what the button branches on
+let mindChecking = false;           // a verification is in flight; the watcher below must not race it
+async function paintMind() {
   const A = window.NexusAuth, el = $('mind'), btn = $('signin');
-  if (!A) { el.textContent = 'auth module missing'; btn.disabled = true; return; }
-  const inn = A.signedIn();
-  el.textContent = inn ? 'mind: granted — every player can think'
-                       : 'mind: none — players will move but not think';
-  btn.textContent = inn ? 'Revoke the mind' : 'Grant a mind';
+  if (!A) { el.textContent = 'auth module missing'; btn.disabled = true; return false; }
+  if (!A.hasToken()) {
+    mindLive = false;
+    el.textContent = 'mind: none — players will move but not think';
+    btn.textContent = 'Grant a mind';
+    return false;
+  }
+  el.textContent = 'mind: checking the sign-in…';
+  mindChecking = true;
+  try { mindLive = await A.verify(); } finally { mindChecking = false; }
+  el.textContent = mindLive ? 'mind: granted — every player can think'
+                            : 'mind: signed in, but that account has no usable Copilot seat — players will move but not think';
+  btn.textContent = mindLive ? 'Revoke the mind' : 'Sign in again';
+  return mindLive;
 }
+// A credential can die mid-run: copilot_auth signs itself out on a 401/403 and nothing tells this
+// page, so the lamp went on claiming a mind while every player quietly stopped thinking — and the
+// next press took the revoke branch instead of signing in. Storage is the shared truth, and reading
+// it costs no network.
+setInterval(() => {
+  const A = window.NexusAuth;
+  if (!A || mindChecking || !mindLive || A.hasToken()) return;
+  mindLive = false;
+  $('signin').textContent = 'Grant a mind';
+  $('mind').textContent = 'mind: the sign-in stopped working — grant a mind again';
+}, 2000);
 $('signin').onclick = async () => {
   const A = window.NexusAuth, btn = $('signin');
   if (!A) return;
-  if (A.signedIn()) { A.signOut(); paintMind(); return; }
+  if (mindLive) { A.signOut(); paintMind(); return; }
   try {
     btn.disabled = true;
+    A.signOut();                     // clear any dead credential before asking for a fresh one
     const d = await A.startDeviceLogin();
-    $('mind').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
-      '" target="_blank" rel="noopener">github.com/login/device</a> — waiting…';
+    $('code').innerHTML = 'enter <b>' + d.user_code + '</b> at <a href="' + d.verification_uri +
+      '" target="_blank" rel="noopener">github.com/login/device</a>';
+    $('mind').textContent = 'mind: waiting for you to authorise…';
     // RFC 8628: poll at the interval the server gave, lengthen it on slow_down,
     // and stop when the code expires. A fixed 5s that ignores both will get
     // throttled and then wait forever for a code that is already dead.
     let wait = 5000;
     const deadline = Date.now() + 15 * 60 * 1000;
     let timer = null;
-    const stop = (msg) => {
+    // Every way out of the flow lands here, and the code is dead by the time it does — so the
+    // status goes in the lamp and the code element is cleared, never overwritten with an error
+    // while a visitor is still reading digits out of it.
+    const stop = async (msg) => {
       if (timer) clearTimeout(timer);
-      timer = null; btn.disabled = false;
-      if (msg) $('mind').textContent = msg; else paintMind();
+      timer = null;
+      $('code').textContent = '';
+      if (msg) { $('mind').textContent = msg; btn.disabled = false; return; }
+      // The button stays disabled through the VERIFICATION, not just the poll. Re-enabled here, it
+      // left a whole network round trip in which a second press took the sign-in branch and called
+      // signOut() — deleting the token that had just been saved.
+      try { await paintMind(); } finally { btn.disabled = false; }
     };
     const poll = async () => {
       if (Date.now() > deadline) { stop('that sign-in code expired — start again'); return; }
@@ -334,7 +373,7 @@ $('signin').onclick = async () => {
         if (A.pendingInterval) wait = Math.max(wait, A.pendingInterval() * 1000);
         if (tok === 'SLOW_DOWN') wait = Math.min(60000, Math.max(wait, wait + 5000));
         if (!tok || tok === 'SLOW_DOWN') { timer = setTimeout(poll, wait); return; }
-        stop();
+        await stop();
       } catch (e) { stop('sign-in failed: ' + e.message); }
     };
     timer = setTimeout(poll, wait);
@@ -370,7 +409,7 @@ paintMind();
     b.className = 'dim';
     b.style.cssText = 'font:12px ui-monospace,monospace;color:#8a8aa8;margin-left:8px';
     b.textContent = 'broker ' + params.get('broker');
-    $('mind').after(b);
+    $('code').after(b);
   }
 })();
 

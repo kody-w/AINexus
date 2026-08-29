@@ -328,18 +328,38 @@ $('more').onclick = () => { $('hud').classList.toggle('min'); };
 // The button must say what is TRUE, not what is stored. A stale ghu_ looks identical to a
 // live one, so a token in storage earns "checking…" and nothing more until it has actually
 // bought a chat token. Claiming a mind that 401s is the same lie as claiming a verified build.
-async function mindState() {
+let mindChecking = false;           // a verification is in flight; the watcher below must not race it
+async function mindState(quiet) {
   const el = $('mind');
   if (!window.NexusAuth) { el.textContent = 'grant a mind'; return false; }
   if (!NexusAuth.hasToken()) { el.textContent = 'grant a mind'; el.classList.remove('on'); return false; }
   el.textContent = 'checking sign-in…';
-  const ok = await NexusAuth.verify();
+  mindChecking = true;
+  let ok;
+  try { ok = await NexusAuth.verify(); } finally { mindChecking = false; }
   el.textContent = ok ? 'mind granted ✓' : 'sign in again';
   el.classList.toggle('on', ok);
-  if (!ok) note('the saved sign-in has expired — press sign in again to grant a mind');
+  // `quiet` is for a caller that is about to say what happened itself. Printing this note
+  // unconditionally put "the saved sign-in has expired" directly underneath "signed in, but that
+  // account has no usable Copilot seat" on the SUCCESS path — two lines contradicting each other
+  // about the same event.
+  if (!ok && !quiet) note('the saved sign-in has expired — press sign in again to grant a mind');
   return ok;
 }
 mindState();
+// A credential can die underneath this page: copilot_auth signs itself out on a 401/403 mid-session
+// and nothing tells the surface. The button kept its `on` class, so the players quietly stopped
+// thinking with nothing on screen saying why, and the NEXT press took the sign-OUT branch instead
+// of signing in. Storage is the shared truth, so watch it — no network, and it also catches a
+// sign-out at another door on this origin.
+function noticeCredentialDeath() {
+  if (mindChecking || !window.NexusAuth) return false;
+  if (!$('mind').classList.contains('on') || NexusAuth.hasToken()) return false;
+  note('the sign-in stopped working — press grant a mind to let the players think again');
+  mindState(true);                  // quiet: the line above already said what happened
+  return true;
+}
+setInterval(noticeCredentialDeath, 2000);
 let signingIn = false;              // a second press mints a NEW code and orphans the one
 $('mind').onclick = async () => {   // the visitor is part-way through typing
   if (!window.NexusAuth) return note('auth module did not load');
@@ -372,15 +392,20 @@ $('mind').onclick = async () => {   // the visitor is part-way through typing
         return;
       }
       if (tok) {
-        signingIn = false;
         $('signin').classList.remove('on');
-        // mindState() VERIFIES the credential by exchanging it. Announcing before that
-        // resolves tells a visitor with no Copilot seat "mind granted" and then prints
-        // "the saved sign-in has expired" directly underneath it — the same lie the
-        // button fix removed, moved one layer over into the note pane.
-        const live = await mindState();
-        note(live ? 'mind granted — AI players can think on your Copilot seat'
-                  : 'signed in, but that account has no usable Copilot seat — players fall back to their programs');
+        // The guard has to outlive the VERIFICATION, not just the poll. Cleared here, it left a
+        // whole network round trip in which a second press took the sign-in branch and called
+        // signOut() — deleting the token that had just been saved. It is released in `finally`
+        // so every exit from this branch, thrown or returned, still releases it.
+        try {
+          // mindState() VERIFIES the credential by exchanging it. Announcing before that
+          // resolves tells a visitor with no Copilot seat "mind granted" and then prints
+          // "the saved sign-in has expired" directly underneath it — the same lie the
+          // button fix removed, moved one layer over into the note pane.
+          const live = await mindState(true);
+          note(live ? 'mind granted — AI players can think on your Copilot seat'
+                    : 'signed in, but that account has no usable Copilot seat — players fall back to their programs');
+        } finally { signingIn = false; }
         return;
       }
       if (NexusAuth.pendingInterval) interval = NexusAuth.pendingInterval();
@@ -449,7 +474,11 @@ async function inCharacter(who) {
   let chat = [], portals = [];
   try { chat = d.snapshot().chat || []; portals = d.orbs() || []; } catch (e) {}
   let better = null;
-  try { better = await NexusBrainstem.lines({ who, chat, portals }); } catch (e) { return; }
+  // A thin or failed answer is nothing to report — you keep the ring you already had. But the ONE
+  // failure that must not be swallowed is the credential dying: this is where copilot_auth's 401
+  // signOut() surfaces, and without this the surface went on showing "mind granted ✓" while every
+  // player silently stopped thinking.
+  try { better = await NexusBrainstem.lines({ who, chat, portals }); } catch (e) { noticeCredentialDeath(); return; }
   if (!better || talkingTo !== who) return;          // they moved on; the answer is stale
   lines = better; hotLine = -1; optAt = [];
   note('in character');
