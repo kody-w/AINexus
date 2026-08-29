@@ -59,7 +59,9 @@ for (const f of suites) {
     // actually is, and a red run nobody can diagnose is barely better than a red run nobody sees.
     const failed = out.split('\n').filter(l => BAD.test(l));
     for (const line of failed.slice(0, 6)) console.log('      ' + line.trim().slice(0, 160));
-    if (!failed.length) for (const line of out.split('\n').filter(l => l.trim()).slice(-8)) console.log('      | ' + line.trim().slice(0, 160));
+    // 8 lines of tail is exactly a node stack trace and nothing else, so a suite that printed
+    // WHY it was about to fail had that explanation pushed off the end by the trace itself.
+    if (!failed.length) for (const line of out.split('\n').filter(l => l.trim()).slice(-30)) console.log('      | ' + line.trim().slice(0, 200));
   }
 }
 const bad = results.filter(r => r.verdict !== 'ok');
