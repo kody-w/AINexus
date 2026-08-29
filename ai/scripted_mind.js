@@ -49,9 +49,15 @@
   }
 
   // A tick can take several rounds: the mind speaks, the hands answer, the mind speaks again.
-  // Which round we are in is readable from the conversation itself — the number of turns this
-  // mind has already taken in it — so nothing has to be remembered between calls and two players
-  // sharing one script cannot get tangled.
+  // WHICH ROUND we are in is readable from the conversation itself — the number of turns this mind
+  // has already taken in it — so a caller that replays a transcript is answered correctly without
+  // anything having to be remembered between calls.
+  //
+  // WHICH BEAT we are on is a different question, and it IS remembered: `ticks` below. That makes
+  // one scripted mind one position in one scene, which is what an NPC is. Hand the SAME mind
+  // object to two players and they share that position — they take alternate beats, and neither is
+  // running the scene you wrote. Give each character its own `scripted(...)`; the script itself
+  // (the array, the function) is immutable and may be shared freely.
   function roundOf(messages) {
     let n = 0;
     for (const m of (messages || [])) if (m && m.role === 'assistant') n++;
@@ -84,6 +90,18 @@
     return list[tick % list.length] || {};
   }
 
+  // What a beat asks the hands to do. `do` is written as a list, but an author who wrote one move
+  // without the brackets meant one move — and a `do` that is neither used to be walked by
+  // `for…of`, which turned the string 'look' into four calls named `world_undefined` and threw
+  // "5 is not iterable" on a number: this module's stack trace arriving at the world as an event.
+  function movesIn(beat) {
+    const d = beat && beat.do;
+    const list = Array.isArray(d) ? d : (d && typeof d === 'object' ? [d] : []);
+    return list.filter(c => c && typeof c === 'object');
+  }
+  // the names those moves would arrive under — world_<verb> for a hand, a bare name for an agent
+  const nameOf = (c) => c.tool || ('world_' + String(c.verb));
+
   function scripted(script, opts) {
     const o = opts || {};
     let ticks = 0;
@@ -94,11 +112,28 @@
       hasToken: () => true,
       // said out loud so nothing downstream can mistake this for a bought thought
       isScripted: true,
+      // A SCRIPTED MIND IS FREE, AND `free: false` SAYS OTHERWISE ON PURPOSE — it is how the PAID
+      // ceiling stays testable without buying a thought. That override was documented in
+      // vbrainstem's spend() and had no way in from here: `scripted(s, { free: false })` was read
+      // for `name` and silently dropped, so a mind a test believed it had marked paid went on
+      // being exempt and the ceiling it was aimed at was never reached.
+      free: o.free === false ? false : true,
       describe: () => o.name ? ('scripted mind: ' + o.name) : 'scripted mind',
 
       async chat(messages, chatOpts) {
         const raw = !!(chatOpts && chatOpts.raw);
         const round = roundOf(messages);
+        // A FORCED TOOL IS A DIFFERENT QUESTION, NOT THE NEXT BEAT OF THE SCENE. turn() offers the
+        // world's verbs and lets the mind choose; lines() and summon() DEMAND one named shape back
+        // — suggestions for a dialogue ring, or an agent written from nothing. Both went through
+        // this function and both took a beat with them, so an NPC asked for dialogue options
+        // silently skipped a line of its own script and stopped being deterministic. Unless the
+        // beat in hand actually names the tool being demanded, this mind answers nothing and
+        // spends nothing: the caller falls back to its floor, and the scene keeps its place.
+        // (ensemble()'s scripted director DOES name `direct`, so directing still works — and
+        // still costs the beat that wrote it.)
+        const forced = chatOpts && chatOpts.tool_choice && chatOpts.tool_choice.function
+                       && chatOpts.tool_choice.function.name;
 
         if (round > 0) {
           // The hands have answered. A second round of tool calls would loop until the round cap,
@@ -109,10 +144,10 @@
         }
 
         const beat = beatFor(script, ticks, messages) || {};
+        const moves = movesIn(beat);
+        if (forced && !moves.some(c => nameOf(c) === forced)) return raw ? reply('', null) : '';
         ticks++;
-        const calls = [];
-        for (const c of (beat.do || [])) calls.push(c);
-        const msg = reply(beat.say, calls);
+        const msg = reply(beat.say, moves);
         if (!raw) return msg.content;
         return msg;
       },

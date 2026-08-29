@@ -33,6 +33,22 @@
   };
   const MAX_INT = 9007199254740991;                                    // 2^53-1, §7.4 uint53 / §4
 
+  // TRUNCATION IS WHERE A WELL-FORMED STRING BECOMES AN ILL-FORMED ONE. `s.slice(0, 200)` counts
+  // UTF-16 code UNITS, so a cut that lands between the halves of an emoji leaves a lone surrogate
+  // behind — and the refusal above then fires far away from the line that caused it, at seal time,
+  // on the one frame nobody can afford to lose (the tick that already went wrong). Every place in
+  // this estate that shortens text destined for a frame goes through here instead.
+  //
+  // It only promises not to CREATE a lone surrogate. A string that arrived broken stays broken,
+  // and §4 still refuses it — repairing somebody else's bytes is not this module's business.
+  function clip(s, max) {
+    const t = String(s == null ? '' : s);
+    if (!(max > 0)) return '';
+    if (t.length <= max) return t;
+    const c = t.charCodeAt(max - 1);
+    return t.slice(0, (c >= 0xD800 && c <= 0xDBFF) ? max - 1 : max);   // never end on a high half
+  }
+
   // "float in frame" without saying WHICH field is a message that makes you go and look, and the
   // whole reason the rule exists is that floats do not canonicalise the same way twice. So the
   // path comes with the complaint.
@@ -310,6 +326,6 @@
     return null;
   }
 
-  root.NexusFrames = { canonical, H, buildFrame, verifyChain, utcNow, shapeOf, utcValid,
+  root.NexusFrames = { canonical, H, buildFrame, verifyChain, utcNow, shapeOf, utcValid, clip,
                        mintRappid, memoryStream, compliant, formOf, REGISTERED_KINDS: KINDS };
 })(typeof window !== 'undefined' ? window : globalThis);

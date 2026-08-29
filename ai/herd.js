@@ -161,6 +161,19 @@
     const drive = rec.drive || root.__autodrive;
     if (!drive) throw new Error(rec.id + ' has no hands');
     rec.ticks++;
+    // WHO THIS TICK LEANED ON, BY NAME. A record that names nobody cannot be worn: wear() now
+    // refuses to fall back to whoever is in this tab, and rightly — but nothing here ever wrote
+    // the field it refuses without, so every frame this loop sealed was unwearable and no test
+    // noticed, because the wearing tests all hand-build their parent. The roster is a real
+    // requirement of the tick: these are the people the percepts named, and the player itself.
+    const cast = (s0) => {
+      const out = [String(rec.id)];
+      for (const p of ((s0 && s0.players) || [])) {
+        const id = String((p && (p.id || p.name)) || '');
+        if (id && out.indexOf(id) < 0) out.push(id);
+      }
+      return out.slice(0, 12);
+    };
     const started = Date.now();
     let entry, s0 = null;
     try {
@@ -195,7 +208,7 @@
                          slot: typeof r.slot === 'number' ? r.slot : -1 },
               // what had to be true for this tick: whose hands, and which agents were
               // actually answering in the runtime at the moment the call went out
-              requires: { hands: rec.id,
+              requires: { hands: rec.id, players: cast(s0),
                           resident: ((r.residency && r.residency.resident) || []).slice(0, 12),
                           missing: ((r.residency && r.residency.missing) || []).slice(0, 6) },
               // a capability that was invented a second ago must never look, to anyone
@@ -215,11 +228,17 @@
             { asserts: { tick: rec.ticks, player: rec.id, said: '', called: [],
                          at: place(s0 && s0.me),
                          slot: -1,                    // a tick that threw held no slot to claim
-                         // what went wrong, in the frame, where a reader of the line will find it
-                         error: String((e && e.message) || e).slice(0, 200) },
+                         // What went wrong, in the frame, where a reader of the line will find it.
+                         // CUT ON A CHARACTER, NOT ON A CODE UNIT. `.slice(0, 200)` stood here, and
+                         // an error message is the one string in this payload that routinely carries
+                         // somebody else's text — copilot_auth throws 'copilot chat 400: ' + the
+                         // API's own body. Land that cut between the halves of an emoji and §4
+                         // refuses the frame, so the tick that went wrong is once again the tick
+                         // with no record: exactly the hole the error path was written to close.
+                         error: F.clip((e && e.message) || e, 200) },
               // resident/missing are unknown on this path and are therefore not claimed: a
-              // record that guesses is not a record. The one thing we know is whose hands.
-              requires: { hands: rec.id } });
+              // record that guesses is not a record. The hands, and who was in the room.
+              requires: { hands: rec.id, players: cast(s0) } });
           entry.frame = f.frame_hash;
         } catch (e2) { entry.sealFailed = e2.message; }
       }
@@ -519,6 +538,11 @@
     ensembleChain = genesis ? [genesis] : [];
     ensemblePrev = genesis ? genesis.payload_hash : null;
     ensembleSeq = genesis ? (genesis.seq + 1) : 0;   // a new line continues the numbering it starts from
+    // AND THE NEW LINE IS ON THE NEW STREAM. This was left pointing at the ensemble stream, so
+    // the very next conduct() appended a frame belonging to a DIFFERENT stream behind a perfectly
+    // correct hash link — one chain carrying two streams, which is not a chain. It verified until
+    // frames.js learned §7.5 step 1a; the splice was always there, and now it is refused out loud.
+    if (genesis) ensembleStream = stream;
     if (genesis) epoch = { id: genesis.frame_hash, seq: 0, at: epoch.at, virtual: 0 };
     ledger.forks = (ledger.forks || 0) + 1;
     // the whole continuation, as something you could write on a card
@@ -1155,6 +1179,7 @@
     seedRng(hashSeed(dimension.seed));
     ensembleChain = [spec.frame]; ensemblePrev = spec.frame.payload_hash;
     ensembleSeq = (spec.frame.seq || 0) + 1;
+    ensembleStream = spec.frame.stream_id;    // the tile's stream, not the one we came from — see fork()
     epoch = { id: spec.frame.frame_hash, seq: 0, at: Date.now(), virtual: 0 };
     ledger.tiles = (ledger.tiles || 0) + 1;
     return { entered: spec.frame.frame_hash, seed: a.seed, lens: a.lens, mood: a.mood, woke };
