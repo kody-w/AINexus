@@ -54,13 +54,6 @@ Left opt-in (`{kinds:true}`). Turning it on by default is a canon decision, not 
 
 ---
 
-### 5. `ensemble()` makes a model call with no `spend()` at all
-`ai/herd.js:359` calls `auth.chat()` directly — one model call per direction of the whole cast,
-entirely off the books. The ceiling that guards `turn()` never sees it, so a herd directed in a
-loop spends a visitor's seat without ever approaching the limit that exists to stop exactly that.
-Found by the ceiling audit, outside its region. Not fixed yet only because another agent is in that
-file; it is a small change (route it through `spend()`), not a hard one.
-
 ### 6. ~~`summon()` step 1 hot-loads source without the scan its sibling applies~~ — ANSWERED: no
 The summon audit examined this and said no, with reasoning now in the code. Step 1 only reloads
 source somebody already vouched for (shipped with the page and sha-verified, operator-supplied, or
@@ -109,6 +102,16 @@ Stated in words, deliberately, with no exploit written.
 ---
 
 ## CLOSED
+
+### C4. `ensemble()` bought thoughts entirely off the books
+`ai/herd.js` called `auth.chat()` directly — one model call to direct the whole cast — and `spend`
+appeared nowhere in that file, because the brainstem never exported it. So the one call that scales
+with how many players are in the room was invisible to the ceiling built to bound a visitor's
+spend: a herd directed in a loop could run indefinitely without ever approaching the limit.
+**Closed by:** exporting `spend` and declaring the call, passing the director so a scripted one
+stays free.
+**Measured both ways:** a paid director moves `calls` 0 → 1 where it previously moved nothing; a
+scripted director leaves `calls` alone and increments `free`.
 
 ### C4. `summon()` reached past its caller for a seat, so half of it had never run
 The second half of summoning — write the agent from nothing — took its mind from `root.NexusAuth`

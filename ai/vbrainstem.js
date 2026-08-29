@@ -1045,6 +1045,12 @@
   }
 
   root.NexusBrainstem = { turn, lines, live, hotload, summon, ensureResident, initPyodide, slots: () => nextSlot,
+                          // ONE CEILING PER PAGE, AND EVERYTHING THAT BUYS A THOUGHT GOES THROUGH IT.
+                          // herd's ensemble() calls a model directly — one call to direct the whole
+                          // cast — and had no way to declare it, so those calls were off the books
+                          // entirely: the ceiling that exists to bound a visitor's spend never saw
+                          // the one call that scales with how many players are in the room.
+                          spend,
                           // RAISING A CEILING THAT HAS ALREADY BITTEN MUST ACTUALLY RAISE IT.
                           // `stopped` is sticky on purpose — a session that ran out stays out, and
                           // no player can talk its way past it — but the operator moving the

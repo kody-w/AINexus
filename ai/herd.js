@@ -356,6 +356,11 @@
                carrying: (r.agents || []).slice(0, 6),
                heard: (s0.chat || []).slice(-3).map(c => c.text) };
     });
+    // DECLARE IT. This is one model call that directs everybody, so it is the cheapest way to move
+    // a whole cast — and it was invisible to the ceiling, which meant a herd directed in a loop
+    // spent a visitor's seat without ever approaching the limit built to stop exactly that. A free
+    // director (a scripted mind) still spends none of it.
+    if (B && B.spend) B.spend(auth);
     const msg = await auth.chat([
       { role: 'system', content: (o.director || 'You direct a group of AI characters sharing a 3D world of portals.')
         + ' Give EACH player something to be doing until you speak again. Most of the time most of them should '
