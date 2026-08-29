@@ -287,17 +287,17 @@ function runningImport(json) {
 function oversizedImport(json) {
   const parsed = JSON.parse(json);
   const convention = findChecksumConvention(parsed);
-  const targetBytes = 4 * 1024 * 1024 + 64 * 1024;
+  const targetBytes = 8 * 1024 * 1024 + 64 * 1024;
   parsed.importPadding = 'x'.repeat(Math.max(1, targetBytes - Buffer.byteLength(json, 'utf8')));
   rewriteChecksum(parsed, convention);
   let output = JSON.stringify(parsed);
-  if (Buffer.byteLength(output, 'utf8') <= 4 * 1024 * 1024) {
+  if (Buffer.byteLength(output, 'utf8') <= 8 * 1024 * 1024) {
     parsed.importPadding += 'x'.repeat(128 * 1024);
     rewriteChecksum(parsed, convention);
     output = JSON.stringify(parsed);
   }
-  requireMeasurement(Buffer.byteLength(output, 'utf8') > 4 * 1024 * 1024,
-    'a bounded import payload just over 4 MiB');
+  requireMeasurement(Buffer.byteLength(output, 'utf8') > 8 * 1024 * 1024,
+    'a bounded import payload just over 8 MiB');
   return {
     json: output,
     bytes: Buffer.byteLength(output, 'utf8'),
@@ -1247,6 +1247,48 @@ function liveMetadataOf(state) {
   return null;
 }
 
+function pendingDirectiveProjection(state) {
+  const found = [];
+  walkJson(state, (value, trail) => {
+    if (!trail.length) return;
+    const key = String(trail[trail.length - 1]);
+    if (!/^(?:directiveQueue|pendingDirectives|queuedDirectives|directives)$/i.test(key)) return;
+    found.push({ path: trail.join('.'), value });
+  });
+  return found;
+}
+
+function exposedRuntimeLimits(snapshot) {
+  const limits = { directive: [], frame: [] };
+  const visit = (value, trail = [], depth = 0) => {
+    if (!value || typeof value !== 'object' || depth > 7) return;
+    for (const [key, child] of Object.entries(value)) {
+      const next = trail.concat(key);
+      const pathText = next.join('.');
+      if (Number.isFinite(Number(child)) && /\b(max|limit|cap|capacity)\b/i.test(pathText)) {
+        if (/directive|queue/i.test(pathText)) {
+          limits.directive.push({ path: pathText, value: Number(child) });
+        }
+        if (/frame|history|timeline|chain/i.test(pathText)) {
+          limits.frame.push({ path: pathText, value: Number(child) });
+        }
+      }
+      if (child && typeof child === 'object' &&
+          !/(frames|history|chain|timeline)$/i.test(key)) {
+        visit(child, next, depth + 1);
+      }
+    }
+  };
+  visit(snapshot.state);
+  visit(snapshot.exported?.data);
+  const pick = values => values.filter(item => item.value > 0 && item.value <= 10000)
+    .sort((a, b) => a.value - b.value)[0];
+  return {
+    directive: pick(limits.directive),
+    frame: pick(limits.frame)
+  };
+}
+
 function policyState(snapshot) {
   const state = snapshot.state;
   const latest = snapshot.exported && latestExportFrame(snapshot.exported);
@@ -1590,6 +1632,11 @@ async function auditSlowStreamFirstPaint(browser) {
             ].join('|'),
             inside: Boolean(card && card.contains(document.activeElement)),
             cardVisible: Boolean(card && getComputedStyle(card).display !== 'none'),
+            pendingShield: Boolean(beginControl && (
+              beginControl.disabled ||
+              beginControl.getAttribute('aria-busy') === 'true' ||
+              beginControl.getAttribute('aria-disabled') === 'true'
+            )),
             signature: JSON.stringify({
               cardText: card?.textContent,
               cardData: card ? Object.assign({}, card.dataset) : null,
@@ -1622,6 +1669,7 @@ async function auditSlowStreamFirstPaint(browser) {
         ready: window.__doggHeist?.ready,
         inside: Boolean(document.querySelector('.intro-card')?.contains(document.activeElement)),
         cardVisible: Boolean(document.querySelector('.intro-card')),
+        pendingShield: false,
         signature: ''
       }));
     }
@@ -1704,6 +1752,7 @@ async function auditSlowStreamFirstPaint(browser) {
     return {
       parserHeld,
       acknowledged,
+      pendingShield: acknowledgementAfter.pendingShield,
       acknowledgementBefore,
       acknowledgementAfter,
       queuedReady,
@@ -1718,6 +1767,154 @@ async function auditSlowStreamFirstPaint(browser) {
     if (releaseStream) releaseStream();
     await context.close().catch(() => {});
     await new Promise(resolve => server.close(resolve));
+  }
+}
+
+async function auditRepeatedIntroActivation(browser, mode) {
+  const context = await browser.newContext({
+    viewport: { width: 836, height: 224 },
+    screen: { width: 836, height: 224 },
+    hasTouch: true,
+    isMobile: true
+  });
+  await serve(context);
+  const page = await navigateHeist(context, `${mode} repeated intro page`);
+  try {
+    const begin = await page.evaluate(() => {
+      const card = document.querySelector('.intro-card');
+      const controls = card ? [...card.querySelectorAll(
+        'button, [role="button"], input[type="button"], input[type="submit"]'
+      )] : [];
+      const element = controls.find(control => {
+        const text = [
+          control.id,
+          control.getAttribute('aria-label'),
+          control.getAttribute('title'),
+          control.textContent,
+          control.value
+        ].filter(Boolean).join(' ');
+        return /\b(begin|start|enter|continue|deploy|ready)\b/i.test(text);
+      });
+      if (!element) return null;
+      element.setAttribute('data-dogg-test-repeat-begin', 'true');
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    });
+    requireMeasurement(begin, `${mode} Begin control`);
+    const beforeState = await page.evaluate(async () => {
+      const api = window.__doggHeist;
+      const state = api && typeof api.state === 'function' ?
+        await Promise.resolve(api.state()) : {};
+      return JSON.parse(JSON.stringify(state));
+    });
+    const beforeSeed = findNamedValue(beforeState, [
+      'seed', 'worldSeed', 'facilitySeed'
+    ])?.value;
+    requireMeasurement(beforeSeed !== undefined, `${mode} original seed`);
+    const beforeBranch = findNamedValue(beforeState, [
+      'branch', 'branchId', 'dimension'
+    ])?.value;
+    const beforeDirectives = stable(pendingDirectiveProjection(beforeState));
+    const beforeSurface = await page.evaluate(() => ({
+      hash: location.hash,
+      event: document.getElementById('event-log')?.textContent || '',
+      status: document.getElementById('status-live')?.textContent || ''
+    }));
+
+    if (mode === 'double-click') {
+      await page.mouse.click(begin.x, begin.y, { clickCount: 2, delay: 20 });
+    } else if (mode === 'double-enter') {
+      await page.locator('[data-dogg-test-repeat-begin="true"]').focus();
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Enter');
+    } else {
+      await page.touchscreen.tap(begin.x, begin.y);
+      await page.touchscreen.tap(begin.x, begin.y);
+    }
+    const shield = await page.evaluate(() => {
+      const beginControl = document.querySelector('[data-dogg-test-repeat-begin="true"]');
+      const card = document.querySelector('.intro-card');
+      return {
+        acknowledged: Boolean(beginControl && (
+          beginControl.disabled ||
+          beginControl.getAttribute('aria-busy') === 'true' ||
+          beginControl.getAttribute('aria-disabled') === 'true' ||
+          Object.entries(beginControl.dataset).some(([key, value]) =>
+            /pending|busy|start|guard|shield/i.test(key) && value !== 'false')
+        )),
+        cardPresent: Boolean(card)
+      };
+    });
+    const ready = await poll(
+      () => page.evaluate(async () => {
+        const api = window.__doggHeist;
+        const state = api && typeof api.state === 'function' ?
+          await Promise.resolve(api.state()) : {};
+        return {
+          ready: api?.ready,
+          state: JSON.parse(JSON.stringify(state)),
+          hash: location.hash,
+          introVisible: Boolean(document.querySelector('.intro-card') &&
+            getComputedStyle(document.querySelector('.intro-card')).display !== 'none'),
+          event: document.getElementById('event-log')?.textContent || '',
+          status: document.getElementById('status-live')?.textContent || ''
+        };
+      }),
+      value => value.ready === true && !value.introVisible,
+      5000,
+      25
+    );
+    const readyTick = Number(ready.state.tick ?? ready.state.currentTick ?? ready.state.liveTick);
+    const advanced = await poll(
+      () => page.evaluate(async () => {
+        const state = await Promise.resolve(window.__doggHeist.state());
+        return {
+          tick: Number(state.tick ?? state.currentTick ?? state.liveTick),
+          running: Boolean(state.running ?? state.playing),
+          state: JSON.parse(JSON.stringify(state))
+        };
+      }),
+      value => value.running && value.tick > readyTick,
+      5000,
+      40
+    );
+    await page.evaluate(() => window.__doggHeist.pause());
+    const afterSeed = findNamedValue(advanced.state, [
+      'seed', 'worldSeed', 'facilitySeed'
+    ])?.value;
+    const afterBranch = findNamedValue(advanced.state, [
+      'branch', 'branchId', 'dimension'
+    ])?.value;
+    const afterDirectives = stable(pendingDirectiveProjection(ready.state));
+    const surfaceDelta =
+      `${ready.status.slice(beforeSurface.status.length)} ${ready.event.slice(beforeSurface.event.length)}`;
+    const startMentions = (surfaceDelta.match(
+      /\b(operation|mission|heist)\s+(?:started|began|running)\b/gi
+    ) || []).length;
+    return {
+      mode,
+      shield,
+      beforeSeed,
+      afterSeed,
+      beforeBranch,
+      afterBranch,
+      beforeDirectives,
+      afterDirectives,
+      hashUnchanged: ready.hash === beforeSurface.hash,
+      running: advanced.running,
+      tickAdvanced: advanced.tick > readyTick,
+      oneStart: startMentions <= 1,
+      noDirective: beforeDirectives === afterDirectives &&
+        !/\bdirective\b/i.test(surfaceDelta),
+      readyTick,
+      advancedTick: advanced.tick,
+      surfaceDelta: surfaceDelta.replace(/\s+/g, ' ').trim().slice(-160)
+    };
+  } finally {
+    await context.close();
   }
 }
 
@@ -4623,13 +4820,27 @@ async function runSuite() {
 
   const slowStream = await auditSlowStreamFirstPaint(browser);
   result('slow-stream parser delay keeps focus and skip action inside intro',
-    slowStream.parserHeld && slowStream.acknowledged &&
+    slowStream.parserHeld && slowStream.acknowledged && slowStream.pendingShield &&
       slowStream.queuedReady.ready === true &&
       slowStream.queuedAdvanced.running &&
       slowStream.queuedAdvanced.tick > slowStream.queuedReady.tick &&
       slowStream.skipAfter.hash === slowStream.href &&
       slowStream.skipAfter.targetExists,
-    `parser tabs ${slowStream.parserSamples.map(sample => sample.active).join('→')}; ack ${slowStream.acknowledged}; queued tick ${slowStream.queuedReady.tick}→${slowStream.queuedAdvanced.tick}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
+    `parser tabs ${slowStream.parserSamples.map(sample => sample.active).join('→')}; ack ${slowStream.acknowledged}/shield ${slowStream.pendingShield}; queued tick ${slowStream.queuedReady.tick}→${slowStream.queuedAdvanced.tick}; pre-hash "${slowStream.before.hash}", post-skip "${slowStream.skipAfter.hash}"`);
+  const repeatedIntroActivations = [];
+  for (const mode of ['double-click', 'double-enter', 'double-touch']) {
+    repeatedIntroActivations.push(await auditRepeatedIntroActivation(browser, mode));
+  }
+  result('repeated Begin activation starts exactly one unchanged-seed operation',
+    repeatedIntroActivations.every(run =>
+      run.shield.acknowledged &&
+      stable(run.beforeSeed) === stable(run.afterSeed) &&
+      (run.beforeBranch === undefined ||
+        stable(run.beforeBranch) === stable(run.afterBranch)) &&
+      run.hashUnchanged && run.running && run.tickAdvanced &&
+      run.oneStart && run.noDirective),
+    repeatedIntroActivations.map(run =>
+      `${run.mode} seed ${String(run.beforeSeed)}→${String(run.afterSeed)} branch ${String(run.beforeBranch)}→${String(run.afterBranch)} tick ${run.readyTick}→${run.advancedTick} shield=${run.shield.acknowledged} directive-free=${run.noDirective}`).join(' | '));
 
   const firstPaintContext = await browser.newContext({
     viewport: { width: 390, height: 420 },
@@ -5455,7 +5666,7 @@ async function runSuite() {
     const observer = new MutationObserver(() => {
       const current = text();
       if (current !== window.__doggOversizeProbe.base &&
-          /\b(too large|oversize|size limit|4\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(current)) {
+          /\b(too large|oversize|size limit|8\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(current)) {
         window.__doggOversizeProbe.errorAt ??= performance.now();
         window.__doggOversizeProbe.text = current;
         observer.disconnect();
@@ -5495,15 +5706,216 @@ async function runSuite() {
     Number.isFinite(oversizeTiming?.errorAt) ?
     oversizeTiming.errorAt - oversizeTiming.changeAt : Infinity;
   result('oversized import is rejected promptly without poisoning play',
-    tooLarge.bytes > 4 * 1024 * 1024 && tooLarge.bytes < 5 * 1024 * 1024 &&
+    tooLarge.bytes > 8 * 1024 * 1024 && tooLarge.bytes < 9 * 1024 * 1024 &&
       oversizeDelay >= 0 && oversizeDelay < 750 &&
-      /\b(too large|oversize|size limit|4\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(oversizeTiming?.text || '') &&
+      /\b(too large|oversize|size limit|8\s*(?:mi?b|megabyte)|maximum import|exceeds)\b/i.test(oversizeTiming?.text || '') &&
       oversizeAfterExport === oversizeBeforeExport &&
       oversizeAfter.head === oversizeBefore.head &&
       oversizeAfter.frameCount === oversizeBefore.frameCount &&
       oversizeAfter.tick === oversizeBefore.tick &&
       oversizePlayed.tick > oversizeAfter.tick,
     `${(tooLarge.bytes / 1048576).toFixed(2)} MiB; rejected in ${Number.isFinite(oversizeDelay) ? oversizeDelay.toFixed(1) : 'unmeasured'}ms; checksum ${tooLarge.checksumPath}`);
+
+  const longContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
+  await serve(longContext);
+  const longPage = await openHeist(longContext, 'long-session page');
+  await api(longPage, 'restart', 'LONG-SESSION-720');
+  await api(longPage, 'pause');
+  await api(longPage, 'setSpeed', 1);
+  const longStart = await inspect(longPage);
+  const longRaw = frameState(latestExportFrame(longStart.exported));
+  requireMeasurement(longRaw, 'current raw state for long-session directives');
+  const longAgents = longStart.agents;
+  requireMeasurement(longAgents.length === 4, 'four agents for the long session');
+  const longCells = traversableCells(longRaw).cells;
+  requireMeasurement(longCells.length >= 4, 'legal traversable long-session directive targets');
+  const longSafeTargets = new Map(longAgents.map(agent => {
+    const current = coordinateOf(agent.state);
+    const exact = current && longCells.find(cell =>
+      cell.x === current.x && cell.y === current.y);
+    const nearest = current && [...longCells].sort((a, b) =>
+      (Math.abs(a.x - current.x) + Math.abs(a.y - current.y)) -
+      (Math.abs(b.x - current.x) + Math.abs(b.y - current.y)))[0];
+    return [agent.id, exact || nearest];
+  }));
+  requireMeasurement([...longSafeTargets.values()].every(Boolean),
+    'one legal hold-position target per long-session agent');
+  const longDirectives = Array.from({ length: 720 }, (_, index) => {
+    const agent = longAgents[index % longAgents.length];
+    const target = longSafeTargets.get(agent.id);
+    return {
+      agentId: agent.id,
+      x: Number(target.x),
+      y: Number(target.y)
+    };
+  });
+  const queuedLong = await longPage.evaluate(async directives => {
+    const accepted = value => value !== false &&
+      !(value && typeof value === 'object' &&
+        (value.ok === false || value.accepted === false || value.queued === false));
+    let count = 0;
+    let rejection;
+    for (let index = 0; index < directives.length; index++) {
+      const directive = directives[index];
+      try {
+        const value = await Promise.resolve(window.__doggHeist.queueDirective(
+          directive.agentId,
+          directive.x,
+          directive.y
+        ));
+        if (!accepted(value)) {
+          rejection = { index, value };
+          break;
+        }
+        count++;
+      } catch (error) {
+        rejection = { index, error: String(error && (error.message || error)) };
+        break;
+      }
+    }
+    return { count, rejection };
+  }, longDirectives);
+  requireMeasurement(queuedLong.count === 720 && !queuedLong.rejection,
+    `720 legal directives queued (accepted ${queuedLong.count})`);
+  const targetFrames = 901;
+  const longTicks = Math.max(0, targetFrames - longStart.frameCount);
+  const longStep = await tryApi(longPage, 'step', longTicks);
+  requireMeasurement(!longStep.threw, `long-session step(${longTicks})`);
+  await api(longPage, 'pause');
+  const longSnapshot = await inspect(longPage);
+  const longVerification = await tryApi(longPage, 'verifyChain');
+  const longExport = longSnapshot.exportText;
+  const longBytes = Buffer.byteLength(longExport, 'utf8');
+  requireMeasurement(verificationPassed(longVerification),
+    'the long-session hash chain');
+  requireMeasurement(longSnapshot.frameCount >= targetFrames,
+    `${targetFrames} frames in the long session (measured ${longSnapshot.frameCount})`);
+  requireMeasurement(longBytes > 4 * 1024 * 1024 && longBytes <= 8 * 1024 * 1024,
+    `a valid long export between 4 and 8 MiB (${longBytes} bytes)`);
+
+  const longImportContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
+  await serve(longImportContext);
+  const longImportPage = await openHeist(longImportContext, 'long-session import page');
+  await api(longImportPage, 'pause');
+  const longImportOutcome = await tryApi(longImportPage, 'importState', longExport);
+  requireMeasurement(!longImportOutcome.threw && !explicitImportRejection(longImportOutcome),
+    'fresh-context import of the valid >4 MiB session');
+  await api(longImportPage, 'pause');
+  const longImported = await inspect(longImportPage);
+  const longImportedVerification = await tryApi(longImportPage, 'verifyChain');
+  result('720-directive session round-trips above 4 MiB under the bounded cap',
+    longImported.exportText === longExport &&
+      longImported.head === longSnapshot.head &&
+      longImported.frameCount === longSnapshot.frameCount &&
+      longImported.tick === longSnapshot.tick &&
+      verificationPassed(longImportedVerification),
+    `${queuedLong.count} directives; ${longSnapshot.frameCount} frames; ${(longBytes / 1048576).toFixed(2)} MiB; head ${longSnapshot.head.slice(0, 12)}…`);
+  await longImportContext.close();
+
+  const exposedLimits = exposedRuntimeLimits(longSnapshot);
+  let frameCapProbePass = true;
+  let frameCapProbeDetail = 'no exposed frame cap';
+  if (exposedLimits.frame && exposedLimits.frame.value <= 2000) {
+    const remaining = exposedLimits.frame.value - longSnapshot.frameCount;
+    if (remaining > 0) {
+      const toCap = await tryApi(longPage, 'step', remaining);
+      requireMeasurement(!toCap.threw, `stepping to ${exposedLimits.frame.path}`);
+      await api(longPage, 'pause');
+    }
+    const frameCapBaseline = await inspect(longPage);
+    const frameCapExtra = await tryApi(longPage, 'step', 1);
+    await sleep(80);
+    const frameCapAfter = await inspect(longPage);
+    const frameCapSurface =
+      `${frameCapBaseline.dom['status-live']} ${frameCapBaseline.dom['event-log']} ` +
+      `${frameCapAfter.dom['status-live']} ${frameCapAfter.dom['event-log']}`;
+    frameCapProbePass = frameCapBaseline.frameCount === exposedLimits.frame.value &&
+      (frameCapExtra.threw || frameCapExtra.value === false ||
+        /\b(limit|cap|capacity|full|maximum)\b/i.test(frameCapSurface)) &&
+      frameCapAfter.exportText === frameCapBaseline.exportText &&
+      frameCapAfter.head === frameCapBaseline.head &&
+      frameCapAfter.frameCount === frameCapBaseline.frameCount &&
+      frameCapAfter.tick === frameCapBaseline.tick;
+    frameCapProbeDetail =
+      `${exposedLimits.frame.path}=${exposedLimits.frame.value}, exact=${frameCapAfter.exportText === frameCapBaseline.exportText}`;
+  }
+  await api(longPage, 'restart', 'DIRECTIVE-CAP-PROBE');
+  await api(longPage, 'pause');
+  const capStart = await inspect(longPage);
+  const capAgent = capStart.agents[0];
+  const capPosition = coordinateOf(capAgent?.state);
+  requireMeasurement(capAgent && capPosition, 'an agent for directive-cap probing');
+  const capAttempts = Math.min(
+    Math.max((exposedLimits.directive?.value || 900) + 2, 722),
+    1500
+  );
+  const capBatch = await longPage.evaluate(async ({ count, directive }) => {
+    const rejected = value => value === false ||
+      Boolean(value && typeof value === 'object' &&
+        (value.ok === false || value.accepted === false || value.queued === false));
+    let accepted = 0;
+    let firstRejected = null;
+    for (let index = 0; index < count; index++) {
+      try {
+        const value = await Promise.resolve(window.__doggHeist.queueDirective(
+          directive.agentId,
+          directive.x,
+          directive.y
+        ));
+        if (rejected(value)) {
+          firstRejected = { index, value };
+          break;
+        }
+        accepted++;
+      } catch (error) {
+        firstRejected = { index, error: String(error && (error.message || error)) };
+        break;
+      }
+    }
+    return { accepted, firstRejected };
+  }, {
+    count: capAttempts,
+    directive: { agentId: capAgent.id, x: capPosition.x, y: capPosition.y }
+  });
+  let capProbePass = true;
+  let capProbeDetail = `no exposed directive rejection through ${capBatch.accepted}`;
+  if (capBatch.firstRejected) {
+    const capBaseline = await inspect(longPage);
+    const capExtra = await tryApi(
+      longPage,
+      'queueDirective',
+      capAgent.id,
+      capPosition.x,
+      capPosition.y
+    );
+    await sleep(80);
+    const capAfter = await inspect(longPage);
+    const capVerification = await tryApi(longPage, 'verifyChain');
+    const capStatusDelta = capBaseline.dom['status-live'] !== capStart.dom['status-live'] ?
+      capBaseline.dom['status-live'] : '';
+    const capLogDelta = capBaseline.dom['event-log'].startsWith(capStart.dom['event-log']) ?
+      capBaseline.dom['event-log'].slice(capStart.dom['event-log'].length) :
+      capBaseline.dom['event-log'] !== capStart.dom['event-log'] ?
+        capBaseline.dom['event-log'] : '';
+    const capSurface = `${capStatusDelta} ${capLogDelta}`;
+    capProbePass = explicitImportRejection(capExtra) &&
+      capAfter.exportText === capBaseline.exportText &&
+      capAfter.head === capBaseline.head &&
+      capAfter.frameCount === capBaseline.frameCount &&
+      capAfter.tick === capBaseline.tick &&
+      verificationPassed(capVerification) &&
+      /\b(limit|cap|capacity|full|too many)\b/i.test(capSurface);
+    capProbeDetail =
+      `rejected at ${capBatch.firstRejected.index}; second reject ${explicitImportRejection(capExtra)}; exact ${capAfter.exportText === capBaseline.exportText}`;
+  } else if (exposedLimits.directive) {
+    capProbePass = false;
+    capProbeDetail =
+      `${exposedLimits.directive.path}=${exposedLimits.directive.value} exposed but ${capAttempts} directives did not reject`;
+  }
+  result('exposed directive cap rejects visibly without mutating the line',
+    capProbePass && frameCapProbePass,
+    `${capProbeDetail}; ${frameCapProbeDetail}`);
+  await longContext.close();
 
   await page.locator('#help-button').click();
   const helpOpened = await poll(() => visibleHelp(page), value => value.count > 0, 2500);
