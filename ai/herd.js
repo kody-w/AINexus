@@ -215,9 +215,10 @@
       // direction has to be built from — not where it was told to go, where it ended up. It
       // sloshes forward into the next frame.
       let where = null; try { const s0 = rec.drive.snapshot(); where = s0 && s0.me; } catch (e) {}
-      (rec.slosh = rec.slosh || []).push({ did: st.intent, at: where });
+      const vf = virtualFrame(rec);
+      (rec.slosh = rec.slosh || []).push({ did: st.intent, at: where, v: vf.v, epoch: vf.epoch.slice(0, 12) });
       while (rec.slosh.length > 6) rec.slosh.shift();
-      return { player: rec.id, local: st.intent, target: st.target || null };
+      return { player: rec.id, local: st.intent, target: st.target || null, virtual: epoch.virtual, epoch: epoch.id };
     } catch (e) { return { player: rec.id, local: st.intent, error: e.message }; }
   }
 
@@ -260,35 +261,119 @@
     if (!tc) return null;
     let got; try { got = JSON.parse(tc.function.arguments || '{}'); } catch (e) { return null; }
 
-    const applied = [];
+    // EVERYTHING AT ONCE. Build the whole next state first, then commit it in one pass, so no
+    // player is ever observed running the new direction while its neighbour still runs the old.
+    const staged = [];
     for (const d of (got.directives || [])) {
       const rec = players.get(String(d.player));
       if (!rec) continue;                                   // a player who is not here gets nothing
       const intent = INTENTS[d.intent] ? d.intent : 'hold';  // and an intent nobody has is holding still
-      rec.standing = { intent, target: d.target || null, say: d.say || null, since: Date.now() };
+      staged.push([rec, { intent, target: d.target || null, say: d.say || null }]);
+    }
+    const spentVirtual = epoch.virtual;
+    const applied = [];
+    // the commit: one synchronous pass, one instant, every object
+    const at = Date.now();
+    for (const [rec, st] of staged) {
+      rec.standing = Object.assign({ since: at }, st);
       rec.slosh = [];                                       // consumed: it fed this direction
-      applied.push({ player: rec.id, intent, target: d.target || null, said: !!d.say });
+      applied.push({ player: rec.id, intent: st.intent, target: st.target, said: !!st.say });
     }
     let frame = null;
     if (F && applied.length) {
       try {
         frame = await F.buildFrame({ kind: 'nexus.ensemble', streamId: ensembleStream,
           seq: ensembleChain.length,
-          payload: { asserts: { directed: applied.length, directives: applied.slice(0, 12), calls: 1 },
+          payload: { asserts: { directed: applied.length, directives: applied.slice(0, 12), calls: 1,
+                                // how much world happened between the last keyframe and this one
+                                virtual_frames_elapsed: spentVirtual },
                      requires: { players: who.map(r => r.id).slice(0, 12),
                                  resident: (residency.resident || []).slice(0, 16),
                                  missing: (residency.missing || []).slice(0, 6) } },
           prev: ensemblePrev });
         ensembleChain.push(frame); ensemblePrev = frame.payload_hash;
         if (ensembleChain.length > 300) ensembleChain.shift();
+        // the new epoch begins here, and every object is in it from this instant
+        epoch = { id: frame.frame_hash, seq: frame.seq, at, virtual: 0 };
+        for (const [rec] of staged) rec.epoch = epoch.id;
       } catch (e) {}
     }
-    return { directives: applied, calls: 1, players: who.length, frame: frame && frame.frame_hash };
+    return { directives: applied, calls: 1, players: who.length, frame: frame && frame.frame_hash,
+             epoch: epoch.id, virtual_elapsed: spentVirtual };
   }
+
+  // ── epochs and virtual frames ────────────────────────────────────────────
+  // A published frame is a KEYFRAME: it names one instant, and everything it directs takes
+  // effect at that same instant for every object. Not applied one player at a time — a
+  // half-applied direction is a world where two objects disagree about what moment it is.
+  //
+  // Between keyframes the world still moves, and those in-between states are VIRTUAL FRAMES:
+  // derived, not published, cheap, and each stamped with the epoch it descends from. That is
+  // what lets everything stay in sync without anything being sent: two objects carrying the
+  // same epoch are provably in the same moment, and a virtual frame always knows which real
+  // frame it is a continuation of.
+  let epoch = { id: 'genesis', seq: -1, at: Date.now(), virtual: 0 };
+  const virtualFrame = (rec) => ({ epoch: epoch.id, seq: epoch.seq, v: ++epoch.virtual, player: rec.id });
 
   let ensembleChain = [], ensemblePrev = null;
   const ensembleStream = 'rappid:@kody-w/ainexus/ensemble:' +
     (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
+
+  // ── time travel through the exhaust ──────────────────────────────────────
+  // The keyframes are already written down. That means a past session is not a log of something
+  // that happened — it is a WORLD you can start again, and it costs nothing to run because
+  // nobody has to decide anything: every decision was made once and recorded.
+  //
+  // Two things fall out. A live AI can be dropped into an ancient frame and wake up standing in
+  // that moment, directed as that moment directed it. And because the frames after it are also
+  // known, the replay can be timed exactly — the gaps between keyframes are in the chain, so the
+  // world unfolds at the speed it originally did, or faster, with no model in the loop at all.
+  //
+  // What that gives back is the thing a live session cannot: run it twice and compare. Two runs
+  // that agree tick for tick are evidence; one that diverges names the frame where it happened.
+  function rewind(frame, opts) {
+    const o = opts || {};
+    const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
+    const a = (f && f.payload && f.payload.asserts) || {};
+    const applied = [];
+    const at = Date.now();
+    for (const d of (a.directives || [])) {
+      const rec = players.get(String(d.player));
+      if (!rec) continue;
+      rec.standing = { intent: INTENTS[d.intent] ? d.intent : 'hold', target: d.target || null,
+                       say: o.speak ? d.say || null : null, since: at };
+      rec.slosh = [];
+      rec.epoch = f.frame_hash;
+      applied.push({ player: rec.id, intent: rec.standing.intent });
+    }
+    epoch = { id: f.frame_hash, seq: f.seq, at, virtual: 0 };
+    return { woke: applied, epoch: epoch.id, seq: f.seq,
+             from: (f.utc || 'an unrecorded moment'), directed: a.directed || applied.length };
+  }
+
+  // walk a recorded chain, honouring the gaps it recorded — no model call anywhere
+  function replay(chainText, opts) {
+    const o = Object.assign({ speed: 1, act: true, onFrame: null }, opts || {});
+    const frames = (typeof chainText === 'string'
+      ? chainText.split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+      : chainText).filter(f => f && f.payload);
+    let i = 0, running = true, timer = null;
+    const stamp = (f) => Date.parse(f.utc || 0) || 0;
+    function step() {
+      if (!running || i >= frames.length) { running = false; if (o.onDone) try { o.onDone({ played: i }); } catch (e) {} return; }
+      const f = frames[i++];
+      const r = rewind(f, { speak: true });
+      if (o.onFrame) { try { o.onFrame(Object.assign({ index: i - 1 }, r)); } catch (e) {} }
+      if (o.act) { for (const rec of players.values()) actLocally(rec); }
+      if (i >= frames.length) { running = false; if (o.onDone) try { o.onDone({ played: i }); } catch (e) {} return; }
+      // the gap is not guessed — it is the distance the chain itself recorded
+      const gap = Math.max(0, (stamp(frames[i]) - stamp(f))) / (o.speed || 1);
+      timer = setTimeout(step, Math.min(gap || o.minGapMs || 60, o.maxGapMs || 5000));
+    }
+    step();
+    return { stop: () => { running = false; if (timer) clearTimeout(timer); },
+             state: () => ({ played: i, of: frames.length, running }) };
+  }
 
   // the loop that makes a crowd affordable: direct rarely, act continuously
   function hangOut(opts) {
@@ -562,6 +647,10 @@
     return r ? r.chain.map(f => JSON.stringify(f)).join('\n') + (r.chain.length ? '\n' : '') : ''; };
 
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live,
+                     epoch: () => Object.assign({}, epoch), rewind, replay,
+                     history: () => ensembleChain.map(f => JSON.stringify(f)).join('\n') + (ensembleChain.length ? '\n' : ''),
+                     inSync: () => { const e = [...players.values()].map(r => r.epoch || null);
+                                     return { epoch: epoch.id, all: e.every(x => x === epoch.id), of: e.length }; },
                      roster, chainOf, auditSlots, provenSource,
                      lines: recall, forget: () => { try { localStorage.removeItem(LS_LINES); } catch (e) {} },
                      players: () => players, running: () => !!herd };

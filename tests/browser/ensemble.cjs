@@ -64,7 +64,9 @@ const out = await p.evaluate(async () => {
   const standing = [...H.players().values()].map(r => ({ id: r.id, intent: r.standing && r.standing.intent }));
   let verified = null;
   try { const txt = (window.NexusHerd.hangOut && null); } catch (e) {}
-  return { first, second, calls, callsAfterDirect, callsAfterMoving, moved, said, standing, seenSince };
+  const sync = H.inSync();
+  return { first, second, calls, callsAfterDirect, callsAfterMoving, moved, said, standing, seenSince,
+           sync, epoch: H.epoch() };
 });
 console.log('one call directed everyone :', JSON.stringify(out.first));
 console.log('model calls after directing:', out.callsAfterDirect);
@@ -82,6 +84,12 @@ ok('a line given in the directive is said once, not every act', (out.said.cy || 
 ok('the next call saw where they actually got to', Array.isArray(out.seenSince) && out.seenSince.some(s => (s.since_last || []).length > 0));
 ok('an intent nobody has becomes holding still', out.standing.find(s => s.id === 'bo').intent === 'hold');
 ok('the second direction superseded the first', out.standing.find(s => s.id === 'cy').intent === 'wander');
+console.log('\nepoch                      :', out.epoch.id.slice(0,16) + '…  seq', out.epoch.seq);
+console.log('virtual frames under it    :', out.epoch.virtual, '· elapsed under the previous:', out.second.virtual_elapsed);
+console.log('every object in one moment :', JSON.stringify(out.sync));
+ok('one keyframe put every object in the same epoch', out.sync.all && out.sync.of === 3);
+ok('the free movement between keyframes was counted as virtual frames', out.second.virtual_elapsed >= 4);
+ok('each keyframe starts a new epoch', out.first.epoch !== out.second.epoch);
 console.log('errors:', errs.slice(0,3));
 await b.close();
 })();
