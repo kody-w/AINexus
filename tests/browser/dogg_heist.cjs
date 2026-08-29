@@ -3467,11 +3467,11 @@ async function readBoardAccessibilitySnapshot(page) {
       activeId: document.activeElement?.id || ''
     };
   });
-  const topLevelTick = Number(state.state?.tick);
   const currentFrameTick = Number(state.state?.currentFrame?.tick);
-  const displayedTick = Number.isFinite(topLevelTick) ?
-    topLevelTick : currentFrameTick;
-  const liveTick = Number(state.state?.liveTick);
+  const displayedTick = Number(
+    state.state?.currentFrame?.tick ?? state.state?.tick ?? state.viewTick
+  );
+  const liveTick = Number(state.state?.liveTick ?? state.tick);
   const currentFrameIndex = Number(state.state?.currentFrame?.index);
   return Object.assign({
     tick: Number.isFinite(displayedTick) ? displayedTick : undefined,
