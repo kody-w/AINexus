@@ -1,0 +1,58 @@
+name: Fingerprints
+
+# Hot-loading an agent VERIFIES it against state/agent_templates.json and refuses
+# bytes that do not match, which is the protection learn.html promises a stranger
+# reading the page. The forge does the same for the world templates in
+# state/worlds.json.
+#
+# That protection has a cost, and this workflow is the cost: a fingerprint left
+# stale by an ordinary edit no longer fails soft. It REFUSES the agent, and the
+# capability disappears for everyone, for a reason nobody edited anything to
+# cause. Editing index.html without rebuilding state/worlds.json is enough.
+#
+# So the registries are checked on every push that touches a file they cover, and
+# the spec's own tables are checked against the vectors they claim to describe.
+# A red run here is the system working.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ai/vb/**.py'
+      - '**.html'
+      - 'state/agent_templates.json'
+      - 'state/worlds.json'
+      - 'WEARING.md'
+      - 'WEARING-VECTORS.json'
+      - 'tools/check_registries.py'
+      - 'tools/check_spec_tables.cjs'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fingerprints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+
+      - name: every published fingerprint matches its file
+        run: python3 tools/check_registries.py
+
+      - name: WEARING.md still describes its own vectors
+        run: node tools/check_spec_tables.cjs
+
+      - name: every frame on disk is rapp/1 conformant
+        # Reports only. 101 legacy frames carry body.* kinds on non-conformant
+        # streams; §12.1 re-genesis is owner-authorized and needs a signature.
+        # frames/line.jsonl is the clean line and IS enforced, below.
+        run: python3 tools/check_rapp1.py || true
+
+      - name: the compliant line verifies
+        run: python3 frames/verify.py frames/line.jsonl
