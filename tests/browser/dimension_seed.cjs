@@ -20,7 +20,7 @@ await p.goto('https://kody-w.github.io/AINexus/frontier.html',{timeout:60000});
 // runner, where this failed with "Cannot read properties of undefined (reading 'leave')" — the
 // page was simply still loading. A test that races the thing it is testing reports the race.
 try {
-  await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames,{timeout:45000});
+  await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames,null,{timeout:45000});
 } catch (e) {
   // Say WHY, rather than only that it timed out. This passes locally and times out on a CI
   // runner, and a timeout with no state is a dead end for whoever reads the log next.

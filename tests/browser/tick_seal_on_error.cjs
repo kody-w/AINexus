@@ -30,7 +30,7 @@ const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.mess
 await p.goto('https://kody-w.github.io/AINexus/frontier.html',{timeout:60000});
 // wait for the modules rather than guessing at a delay — a test that races what it tests
 // reports the race, not the defect
-await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames&&window.NexusBrainstem,{timeout:45000});
+await p.waitForFunction(()=>window.NexusHerd&&window.NexusFrames&&window.NexusBrainstem,null,{timeout:45000});
 
 const out=await p.evaluate(async()=>{
   const H=window.NexusHerd, F=window.NexusFrames;

@@ -146,7 +146,7 @@ for (let i = 0; i < 3; i++) {
 }
 const h = await ctx.newPage();
 await h.goto('https://kody-w.github.io/AINexus/house.html', { timeout: 60000 });
-await h.waitForFunction(() => window.__houseReady && window.__houseReady(), { timeout: 45000 }).catch(() => {});
+await h.waitForFunction(() => window.__houseReady && window.__houseReady(), null, { timeout: 45000 }).catch(() => {});
 await h.waitForTimeout(5000);
 const seen = await h.evaluate(() => {
   const w = document.getElementById('world').contentWindow;

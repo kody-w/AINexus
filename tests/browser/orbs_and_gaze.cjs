@@ -99,7 +99,7 @@ await p.evaluate(()=>{ const s=document.getElementById('state'); s.textContent='
 // say the second option, then make them vanish
 // wait for the ring to actually be drawn rather than assuming the previous step's timeout was
 // long enough — on a slower machine it is not, and this read undefined.getAttribute instead
-await p.waitForFunction(()=>document.querySelectorAll('#orbs circle.opt').length>=2,{timeout:20000});
+await p.waitForFunction(()=>document.querySelectorAll('#orbs circle.opt').length>=2,null,{timeout:30000});
 await p.evaluate(() => { const o=[...document.querySelectorAll('#orbs circle.opt')][1];
   const c={x:+o.getAttribute('cx'), y:+o.getAttribute('cy')}; window.__opt=c; });
 const o = await p.evaluate(()=>window.__opt);

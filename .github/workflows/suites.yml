@@ -4,13 +4,11 @@ name: Suites
 # knocks on a live rate-limited endpoint and a third party's throttle must never be able to turn
 # this red.
 #
-# KNOWN GAP, stated rather than hidden: dimension_seed and orbs_and_gaze are excluded because they
-# pass locally and fail HERE for a reason not yet found — both time out waiting for something that
-# demonstrably exists on a laptop (NexusHerd; the dialogue ring). Blocking the CDN locally does not
-# reproduce it, and dialogue_ring and overlay drive the same page and pass. That is unfinished
-# work, not a resolved question. They are excluded because a gate that is always red is a gate
-# everyone learns to ignore, which costs more than the two suites are worth — but they still run
-# in the local sweep, and this comment is here so nobody concludes they were fine all along.
+# The two that were excluded here are back. They did not fail for a mysterious environment reason:
+# every timeout I had "set" was being ignored. Playwright's signature is
+# waitForFunction(fn, arg, options) and the options object was going into the ARG slot, so the wait
+# silently used the 30s default — which is why the CI log said 30000ms while the source said 45000.
+# Measured both ways: arg slot fails after 30s, options slot after the 3s asked for.
 #
 # Run everything locally with:
 
@@ -67,5 +65,5 @@ jobs:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
         run: |
           node tools/run_suites.cjs \
-            dialogue_ring holo_calibration overlay proof_red \
-            tick_loop tiles turn views_live tick_seal_on_error
+            dialogue_ring dimension_seed holo_calibration orbs_and_gaze overlay \
+            proof_red tick_loop tiles turn views_live tick_seal_on_error
