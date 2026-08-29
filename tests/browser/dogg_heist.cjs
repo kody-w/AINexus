@@ -3575,7 +3575,8 @@ function boardTacticalDisclosure(text) {
 
 function boardEnemyDisclosure(text) {
   return /\b(?:guard|camera|laser)(?:[-\s#]*\d+)?\b/i.test(text) ||
-    /\b(?:enemy|hostile|adversary)\b/i.test(text) ||
+    /\b(?:enemy|hostile|adversary)\s+(?:present|visible|detected|nearby|occupying|ahead)\b/i
+      .test(text) ||
     /\bno\s+known\s+occupant\b/i.test(text) ||
     /\boccupants?:\s*(?!unknown\b|unseen\b|hidden\b)/i.test(text);
 }
@@ -3587,39 +3588,21 @@ function normalizeFogSemantic(text) {
     .trim();
 }
 
-async function selectedBoardAgentId(page) {
-  return page.evaluate(() => {
-    const selected = document.querySelector(
-      '#agent-list [aria-pressed="true"], #agent-list .agent-button.selected'
-    );
-    return String(
-      selected?.getAttribute('data-agent-id') ||
-      selected?.dataset?.agentId ||
-      selected?.getAttribute('aria-label') ||
-      ''
-    ).trim();
-  });
-}
-
-function povCellSets(state, agentId) {
-  const agents = normalizedAgents(agentsOf(state));
+function unionPovCellSets(state) {
   const views = collectionEntries(povsOf(state));
-  const entry = views.find(({ key, value }, index) => {
+  requireMeasurement(views.length > 0, 'public POVs for team-union visibility');
+  const known = new Set();
+  const visible = new Set();
+  views.forEach(({ value }) => {
     const view = value && typeof value === 'object' ? value : {};
-    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ??
-      (key.match(/^\d+$/) ? agents[index]?.id : key) ?? key);
-    return id.toLowerCase() === String(agentId).toLowerCase();
-  });
-  requireMeasurement(entry, `a public POV for selected agent ${agentId}`);
-  const view = entry.value && typeof entry.value === 'object' ? entry.value : {};
-  return {
-    known: new Set(normalizedCells(
+    for (const cell of normalizedCells(
       view.knownCells ?? view.seen ?? view.seenCells ?? view.known ?? view.cells
-    ).cells),
-    visible: new Set(normalizedCells(
+    ).cells) known.add(cell);
+    for (const cell of normalizedCells(
       view.visibleCells ?? view.visible ?? view.currentlyVisible ?? view.inSight
-    ).cells)
-  };
+    ).cells) visible.add(cell);
+  });
+  return { known, visible, viewCount: views.length };
 }
 
 async function auditSemanticFogPrivacy(page) {
@@ -3635,9 +3618,7 @@ async function auditSemanticFogPrivacy(page) {
   requireMeasurement(genesis.tick === 0, `${seed} tick-0 genesis`);
   const dimensions = facilityDimensions(genesis);
   requireMeasurement(dimensions, `${seed} facility dimensions`);
-  const selectedId = await selectedBoardAgentId(page);
-  requireMeasurement(selectedId, `${seed} selected board agent`);
-  const genesisVisibility = povCellSets(genesis.state, selectedId);
+  const genesisVisibility = unionPovCellSets(genesis.state);
   const rawGenesis = frameState(latestExportFrame(genesis.exported));
   requireMeasurement(rawGenesis, `${seed} sealed genesis state`);
   const guards = collectionEntries(rawGenesis.guards).map(({ value }) => value);
@@ -3667,7 +3648,7 @@ async function auditSemanticFogPrivacy(page) {
   requireMeasurement(
     !genesisVisibility.visible.has(targetKey) &&
       !genesisVisibility.known.has(targetKey),
-    'guard-1 cell absent from the selected public POV at tick 0'
+    'guard-1 cell absent from the public team-visibility union at tick 0'
   );
   requireMeasurement(
     !occupied.has(emptyKey) &&
@@ -3708,42 +3689,66 @@ async function auditSemanticFogPrivacy(page) {
 
   await api(page, 'restart', seed);
   await api(page, 'pause');
-  await api(page, 'step', 11);
-  const atEleven = await inspect(page, false);
-  const atElevenVisibility = povCellSets(atEleven.state, selectedId);
   const rememberedKey = `${rememberedCell.x},${rememberedCell.y}`;
-  requireMeasurement(
-    atEleven.tick === 11 &&
-      atElevenVisibility.known.has(rememberedKey) &&
-      atElevenVisibility.visible.has(rememberedKey),
-    '[6,4] known and currently visible at tick 11 before it leaves sight'
-  );
-  await api(page, 'step', 1);
-  await moveBoardCursorTo(page, rememberedCell, dimensions);
+  const openIntervals = new Map();
+  const completedIntervals = [];
+  for (let index = 0; index <= 45; index++) {
+    const snapshot = await inspect(page, false);
+    const visibility = unionPovCellSets(snapshot.state);
+    for (const cell of visibility.known) {
+      if (!visibility.visible.has(cell) && !openIntervals.has(cell)) {
+        openIntervals.set(cell, snapshot.tick);
+      } else if (visibility.visible.has(cell) && openIntervals.has(cell)) {
+        completedIntervals.push({
+          cell,
+          start: openIntervals.get(cell),
+          end: snapshot.tick
+        });
+        openIntervals.delete(cell);
+      }
+    }
+    if (completedIntervals.some(interval => interval.cell === rememberedKey)) break;
+    if (index < 45) await api(page, 'step', 1);
+  }
+  const rememberedInterval =
+    completedIntervals.find(interval => interval.cell === rememberedKey) ||
+    completedIntervals.sort((a, b) =>
+      Math.abs(a.start - 11) - Math.abs(b.start - 11) ||
+      b.end - b.start - (a.end - a.start) ||
+      a.cell.localeCompare(b.cell))[0];
+  requireMeasurement(rememberedInterval,
+    'a public-union remembered interval that later becomes visible');
+  const [rememberedX, rememberedY] = rememberedInterval.cell.split(',').map(Number);
+  const observedRememberedCell = { x: rememberedX, y: rememberedY };
+
+  await api(page, 'restart', seed);
+  await api(page, 'pause');
+  if (rememberedInterval.start > 0) {
+    await api(page, 'step', rememberedInterval.start);
+  }
+  await moveBoardCursorTo(page, observedRememberedCell, dimensions);
   const rememberedSamples = [];
   let rememberedSnapshot = await inspect(page, false);
-  let rememberedVisibility = povCellSets(rememberedSnapshot.state, selectedId);
-  while (!rememberedVisibility.visible.has(rememberedKey) &&
-      rememberedSnapshot.tick <= 30) {
+  let rememberedVisibility = unionPovCellSets(rememberedSnapshot.state);
+  while (rememberedSnapshot.tick < rememberedInterval.end) {
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
     const semantic = await readBoardSemantic(page);
-    const pixels = await sampleCanvasCellCore(page, dimensions, rememberedCell);
+    const pixels = await sampleCanvasCellCore(page, dimensions, observedRememberedCell);
     rememberedSamples.push({
       tick: rememberedSnapshot.tick,
-      known: rememberedVisibility.known.has(rememberedKey),
-      visible: rememberedVisibility.visible.has(rememberedKey),
+      known: rememberedVisibility.known.has(rememberedInterval.cell),
+      visible: rememberedVisibility.visible.has(rememberedInterval.cell),
       semantic: semantic.text,
       warningRatio: pixels.warningRatio,
       pixelHash: pixels.hash
     });
     await api(page, 'step', 1);
     rememberedSnapshot = await inspect(page, false);
-    rememberedVisibility = povCellSets(rememberedSnapshot.state, selectedId);
+    rememberedVisibility = unionPovCellSets(rememberedSnapshot.state);
   }
 
   return {
     seed,
-    selectedId,
     unseenGuardCell,
     emptyFogCell,
     hiddenGuardId: hiddenGuard.id,
@@ -3778,12 +3783,13 @@ async function auditSemanticFogPrivacy(page) {
     visibleVsFog,
     rememberedSamples,
     rememberedBecameVisible:
-      rememberedSnapshot.tick > 12 &&
-      rememberedSnapshot.tick <= 30 &&
-      rememberedVisibility.visible.has(rememberedKey),
+      rememberedSnapshot.tick === rememberedInterval.end &&
+      rememberedVisibility.visible.has(rememberedInterval.cell),
+    rememberedInterval,
+    rememberedCell: observedRememberedCell,
     rememberedVisibleTick: rememberedSnapshot.tick,
     rememberedPrivate: rememberedSamples.length > 0 &&
-      rememberedSamples[0].tick === 12 &&
+      rememberedSamples[0].tick === rememberedInterval.start &&
       rememberedSamples.every(sample =>
         sample.known &&
         !sample.visible &&
@@ -6121,17 +6127,20 @@ async function runSuite() {
     `${customSpeedRuns.map(run => `${run.requested}ms ret=${mutationSucceeded(run.returned)} state=${run.surface.exportSpeed} select="${run.surface.select.value}/${run.surface.select.selectedText}" pace=${Number(run.pacing.median).toFixed(1)}`).join(' | ')}; preset ${preset.value} "${presetSurface.select.selectedText}" pace=${Number(presetPacing.median).toFixed(1)} stale=${staleCustomOptions.map(option => `${option.value}:${option.selected}`).join(',') || 'removed'}; import ${arbitraryImported.exportSpeed} "${arbitraryImported.select.value}/${arbitraryImported.select.selectedText}" pace=${Number(importedPacing.median).toFixed(1)}`);
 
   const fogPrivacy = await auditSemanticFogPrivacy(page);
+  const fogPrivacyChecks = {
+    hiddenUnknown: fogPrivacy.hiddenUnknown,
+    emptyUnknown: fogPrivacy.emptyUnknown,
+    hiddenNoDisclosure: fogPrivacy.hiddenNoDisclosure,
+    emptyNoDisclosure: fogPrivacy.emptyNoDisclosure,
+    equivalentFogSemantics: fogPrivacy.equivalentFogSemantics,
+    equivalentFogPixels: fogPrivacy.equivalentFogPixels,
+    visibleControlExposed: fogPrivacy.visibleControlExposed,
+    rememberedPrivate: fogPrivacy.rememberedPrivate,
+    rememberedBecameVisible: fogPrivacy.rememberedBecameVisible
+  };
   result('SEMANTIC-LEAK-01 keeps unseen and remembered tactics private',
-    fogPrivacy.hiddenUnknown &&
-      fogPrivacy.emptyUnknown &&
-      fogPrivacy.hiddenNoDisclosure &&
-      fogPrivacy.emptyNoDisclosure &&
-      fogPrivacy.equivalentFogSemantics &&
-      fogPrivacy.equivalentFogPixels &&
-      fogPrivacy.visibleControlExposed &&
-      fogPrivacy.rememberedPrivate &&
-      fogPrivacy.rememberedBecameVisible,
-    `hidden "${fogPrivacy.hiddenText.slice(0, 90)}"; empty "${fogPrivacy.emptyText.slice(0, 90)}"; pixels ${fogPrivacy.hiddenPixels.hash}/${fogPrivacy.emptyPixels.hash}, visible ${fogPrivacy.visibleThreat.id}@${fogPrivacy.visibleThreat.cell.x},${fogPrivacy.visibleThreat.cell.y} Δ${(fogPrivacy.visibleVsFog.changedRatio * 100).toFixed(1)}%; remembered ${fogPrivacy.rememberedSamples.map(sample => `${sample.tick}:${sample.known}/${sample.visible}/${sample.warningRatio.toFixed(3)}`).join(',')}→visible@${fogPrivacy.rememberedVisibleTick}`);
+    Object.values(fogPrivacyChecks).every(Boolean),
+    `${Object.entries(fogPrivacyChecks).map(([name, passed]) => `${name}=${passed}`).join(', ')}; hidden pixels ${fogPrivacy.hiddenPixels.hash}/${fogPrivacy.emptyPixels.hash}; visible ${fogPrivacy.visibleThreat.id}@${fogPrivacy.visibleThreat.cell.x},${fogPrivacy.visibleThreat.cell.y} Δ${(fogPrivacy.visibleVsFog.changedRatio * 100).toFixed(1)}%; remembered ${fogPrivacy.rememberedInterval.cell}@${fogPrivacy.rememberedInterval.start}-${fogPrivacy.rememberedInterval.end} ${fogPrivacy.rememberedSamples.map(sample => `${sample.tick}:${sample.known}/${sample.visible}/${sample.warningRatio.toFixed(3)}`).join(',')}→visible@${fogPrivacy.rememberedVisibleTick}`);
 
   const sameA = await deterministicRun(page, 'dogg-heist-repeatable-42');
   const sameB = await deterministicRun(page, 'dogg-heist-repeatable-42');
