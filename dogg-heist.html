@@ -70,6 +70,15 @@
       --cp-panel-strong: rgba(255, 255, 255, 0.96);
       --cp-sheen: rgba(255, 255, 255, 0.55);
       --cp-highlight: rgba(177, 31, 75, 0.12);
+      --cp-canvas-role-ghost: #005ea6;
+      --cp-canvas-role-cipher: #147a38;
+      --cp-canvas-role-atlas: #8a5200;
+      --cp-canvas-role-spark: #9a1a41;
+      --cp-canvas-success: #147a38;
+      --cp-canvas-warning: #8a5200;
+      --cp-canvas-danger: #b91c1c;
+      --cp-canvas-neutral: #4b5563;
+      --cp-canvas-marker-fg: #ffffff;
     }
     html[data-theme="dark"] {
       color-scheme: dark;
@@ -99,6 +108,15 @@
       --cp-panel-strong: rgba(41, 41, 41, 0.96);
       --cp-sheen: rgba(255, 255, 255, 0.04);
       --cp-highlight: rgba(253, 142, 161, 0.12);
+      --cp-canvas-role-ghost: #4da6ff;
+      --cp-canvas-role-cipher: #4ade80;
+      --cp-canvas-role-atlas: #fbbf24;
+      --cp-canvas-role-spark: #fd8ea1;
+      --cp-canvas-success: #4ade80;
+      --cp-canvas-warning: #fbbf24;
+      --cp-canvas-danger: #ff9f9f;
+      --cp-canvas-neutral: #c3c3c3;
+      --cp-canvas-marker-fg: #1a1a1a;
     }
 
     :root {
@@ -3009,7 +3027,9 @@
           "bg", "bg-elevated", "surface", "surface-soft", "border", "border-strong", "text",
           "text-muted", "accent", "success", "danger", "warning", "link",
           "role-ghost", "role-cipher", "role-atlas", "role-spark",
-          "canvas-floor", "canvas-memory", "canvas-fog", "canvas-wall", "canvas-grid", "canvas-door", "canvas-ink"
+          "canvas-floor", "canvas-memory", "canvas-fog", "canvas-wall", "canvas-grid", "canvas-door", "canvas-ink",
+          "canvas-role-ghost", "canvas-role-cipher", "canvas-role-atlas", "canvas-role-spark",
+          "canvas-success", "canvas-warning", "canvas-danger", "canvas-neutral", "canvas-marker-fg"
         ];
         palette = {};
         names.forEach((name) => {
@@ -3084,7 +3104,7 @@
         ctx.beginPath();
         ctx.arc(rect.cx, rect.cy, radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = palette.surface;
+        ctx.fillStyle = palette["canvas-marker-fg"];
         ctx.font = "900 " + Math.max(8, rect.h * scale) + "px Consolas, 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -3094,10 +3114,14 @@
 
       function drawDiamond(ctx, metrics, x, y, color, alpha = 1) {
         const rect = cellRect(metrics, x, y);
-        const radius = Math.min(rect.w, rect.h) * 0.31;
+        const radius = Math.min(rect.w, rect.h) * 0.36;
+        const remembered = alpha < 0.99;
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = 1;
         ctx.fillStyle = color;
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.lineWidth = Math.max(1.5, metrics.ratio * 1.1);
+        ctx.setLineDash(remembered ? [ctx.lineWidth * 1.4, ctx.lineWidth] : []);
         ctx.beginPath();
         ctx.moveTo(rect.cx, rect.cy - radius);
         ctx.lineTo(rect.cx + radius, rect.cy);
@@ -3105,6 +3129,7 @@
         ctx.lineTo(rect.cx - radius, rect.cy);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.restore();
       }
 
@@ -3116,19 +3141,22 @@
         const radius = Math.min(rect.w, rect.h) * 0.3;
         ctx.save();
         ctx.fillStyle = color;
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.lineWidth = Math.max(1.7, metrics.ratio * 1.2);
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
         if (selected) {
           ctx.strokeStyle = palette["canvas-ink"];
           ctx.lineWidth = Math.max(2, metrics.ratio * 1.5);
+          ctx.setLineDash([ctx.lineWidth * 1.5, ctx.lineWidth]);
           ctx.beginPath();
           ctx.arc(cx, cy, radius + Math.max(3, metrics.ratio * 2), 0, Math.PI * 2);
           ctx.stroke();
+          ctx.setLineDash([]);
         }
-        const brightRoleInLight = document.documentElement.dataset.theme === "light" &&
-          (color === palette["role-cipher"] || color === palette["role-atlas"]);
-        ctx.fillStyle = brightRoleInLight ? palette["canvas-ink"] : palette.surface;
+        ctx.fillStyle = palette["canvas-marker-fg"];
         ctx.font = "900 " + Math.max(7, radius * 0.9) + "px Consolas, 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -3148,10 +3176,11 @@
         const ey = end.cy - Math.sin(angle) * trim;
         const head = Math.min(start.w, start.h) * 0.2;
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
         ctx.lineWidth = Math.max(1.5, metrics.ratio * 1.1);
+        ctx.setLineDash(alpha < 0.8 ? [ctx.lineWidth * 2, ctx.lineWidth * 1.4] : []);
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(ex, ey);
@@ -3206,8 +3235,10 @@
         const direction = DIRECTIONS[camera.dir];
         const size = Math.min(rect.w, rect.h) * 0.27;
         ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = palette.accent;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = palette["canvas-role-spark"];
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.lineWidth = Math.max(1.5, metrics.ratio);
         ctx.translate(rect.cx, rect.cy);
         ctx.rotate(Math.atan2(direction.y, direction.x));
         ctx.beginPath();
@@ -3216,30 +3247,55 @@
         ctx.lineTo(-size, size * 0.75);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.restore();
       }
 
       function drawHazard(ctx, metrics, hazard, alpha = 1) {
         const rect = cellRect(metrics, hazard.x, hazard.y);
+        const remembered = alpha < 0.99;
+        const symbolColor = hazard.active ? palette["canvas-danger"] : palette["canvas-neutral"];
+        const outerWidth = Math.max(3.5, metrics.ratio * 2.2);
+        const innerWidth = Math.max(1.7, metrics.ratio * 1.1);
+        const drawX = () => {
+          ctx.beginPath();
+          ctx.moveTo(rect.x + rect.w * 0.2, rect.y + rect.h * 0.2);
+          ctx.lineTo(rect.x + rect.w * 0.8, rect.y + rect.h * 0.8);
+          ctx.moveTo(rect.x + rect.w * 0.8, rect.y + rect.h * 0.2);
+          ctx.lineTo(rect.x + rect.w * 0.2, rect.y + rect.h * 0.8);
+          ctx.stroke();
+        };
         ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = hazard.active ? palette.danger : palette["text-muted"];
-        ctx.lineWidth = Math.max(1, metrics.ratio);
-        ctx.beginPath();
-        ctx.moveTo(rect.x + rect.w * 0.2, rect.y + rect.h * 0.2);
-        ctx.lineTo(rect.x + rect.w * 0.8, rect.y + rect.h * 0.8);
-        ctx.moveTo(rect.x + rect.w * 0.8, rect.y + rect.h * 0.2);
-        ctx.lineTo(rect.x + rect.w * 0.2, rect.y + rect.h * 0.8);
-        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.lineWidth = outerWidth;
+        drawX();
+        ctx.strokeStyle = symbolColor;
+        ctx.lineWidth = innerWidth;
+        drawX();
+        if (remembered) {
+          ctx.strokeStyle = palette["canvas-ink"];
+          ctx.lineWidth = Math.max(1, metrics.ratio);
+          ctx.setLineDash([ctx.lineWidth * 1.5, ctx.lineWidth]);
+          ctx.strokeRect(rect.x + rect.w * 0.13, rect.y + rect.h * 0.13, rect.w * 0.74, rect.h * 0.74);
+        }
         ctx.restore();
       }
 
       function drawExtraction(ctx, metrics, extraction) {
         const rect = cellRect(metrics, extraction.x, extraction.y);
         ctx.save();
-        ctx.strokeStyle = palette.success;
-        ctx.lineWidth = Math.max(2, metrics.ratio * 1.6);
+        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.lineWidth = Math.max(4, metrics.ratio * 2.5);
         ctx.strokeRect(rect.x + rect.w * 0.12, rect.y + rect.h * 0.12, rect.w * 0.76, rect.h * 0.76);
+        ctx.strokeStyle = palette["canvas-success"];
+        ctx.lineWidth = Math.max(2, metrics.ratio * 1.25);
+        ctx.strokeRect(rect.x + rect.w * 0.12, rect.y + rect.h * 0.12, rect.w * 0.76, rect.h * 0.76);
+        ctx.beginPath();
+        ctx.moveTo(rect.x + rect.w * 0.32, rect.cy);
+        ctx.lineTo(rect.x + rect.w * 0.68, rect.cy);
+        ctx.stroke();
         ctx.restore();
       }
 
@@ -3270,11 +3326,12 @@
         state.terminals.forEach((terminal) => {
           const cell = keyOf(terminal.x, terminal.y);
           if (!seen.has(cell)) return;
-          drawDiamond(ctx, metrics, terminal.x, terminal.y, terminal.hacked ? palette.success : palette.warning, visible.has(cell) ? 0.95 : 0.42);
+          drawDiamond(ctx, metrics, terminal.x, terminal.y, terminal.hacked ? palette["canvas-success"] : palette["canvas-warning"], visible.has(cell) ? 1 : 0.42);
           drawMarkerBadge(ctx, metrics, terminal.hacked ? "✓" : "T", terminal.x, terminal.y, 0.29);
         });
         if (seen.has(keyOf(state.core.x, state.core.y)) || !privateAgentId) {
-          drawDiamond(ctx, metrics, state.core.x, state.core.y, palette.warning, state.core.acquired ? 0.35 : 1);
+          const coreIsRemembered = !visible.has(keyOf(state.core.x, state.core.y));
+          drawDiamond(ctx, metrics, state.core.x, state.core.y, palette["canvas-warning"], state.core.acquired || coreIsRemembered ? 0.42 : 1);
           drawMarkerBadge(ctx, metrics, "C", state.core.x, state.core.y, 0.3);
         }
         state.hazards.forEach((hazard) => {
@@ -3286,14 +3343,19 @@
       function drawThreats(ctx, metrics, state, visible) {
         state.cameras.filter((camera) => camera.active && visible.has(keyOf(camera.x, camera.y))).forEach((camera) => drawCamera(ctx, metrics, camera));
         state.guards.filter((guard) => guard.active && visible.has(keyOf(guard.x, guard.y))).forEach((guard) => {
-          drawDiamond(ctx, metrics, guard.x, guard.y, guard.stunned > 0 ? palette["text-muted"] : palette.danger);
-          drawText(ctx, metrics, guard.stunned > 0 ? "Z" : "G", guard.x, guard.y, palette.surface, 0.26);
+          drawDiamond(ctx, metrics, guard.x, guard.y, guard.stunned > 0 ? palette["canvas-neutral"] : palette["canvas-danger"]);
+          drawMarkerBadge(ctx, metrics, guard.stunned > 0 ? "Z" : "G", guard.x, guard.y, 0.28);
         });
         state.lures.filter((lure) => visible.has(keyOf(lure.x, lure.y))).forEach((lure) => {
           const rect = cellRect(metrics, lure.x, lure.y);
           ctx.save();
-          ctx.strokeStyle = palette.accent;
-          ctx.lineWidth = Math.max(1, metrics.ratio);
+          ctx.strokeStyle = palette["canvas-ink"];
+          ctx.lineWidth = Math.max(3, metrics.ratio * 2);
+          ctx.beginPath();
+          ctx.arc(rect.cx, rect.cy, Math.min(rect.w, rect.h) * 0.38, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = palette["canvas-role-spark"];
+          ctx.lineWidth = Math.max(1.5, metrics.ratio);
           ctx.beginPath();
           ctx.arc(rect.cx, rect.cy, Math.min(rect.w, rect.h) * 0.38, 0, Math.PI * 2);
           ctx.stroke();
@@ -3392,7 +3454,7 @@
 
         state.guards.filter((guard) => guard.active && visible.has(keyOf(guard.x, guard.y))).forEach((guard) => {
           const projectedGuard = nextProjection.state.guards.find((candidate) => candidate.id === guard.id);
-          drawArrow(ctx, metrics, guard, projectedGuard || guard, palette.danger, 0.58);
+          drawArrow(ctx, metrics, guard, projectedGuard || guard, palette["canvas-danger"], 0.58);
         });
         state.agents.filter((agent) => agent.status === "active").forEach((agent) => {
           const intent = computeAgentIntent(state, agent);
@@ -3452,7 +3514,7 @@
       }
 
       function paletteRole(agentId) {
-        return palette["role-" + agentId] || palette.accent;
+        return palette["canvas-role-" + agentId] || palette["canvas-role-spark"];
       }
 
       function renderStatus(state, frame) {
