@@ -166,7 +166,7 @@
 
     button,
     select {
-      min-height: 42px;
+      min-height: 44px;
       border: 1px solid var(--cp-border);
       border-radius: 0.625rem;
       background: var(--cp-surface);
@@ -597,7 +597,7 @@
 
     #timeline {
       width: 100%;
-      min-height: 28px;
+      min-height: 44px;
       margin: 0;
       accent-color: var(--cp-accent);
       cursor: pointer;
@@ -3779,12 +3779,14 @@
       function createForkTransition(parentFrame, counter, abandonedCount) {
         if (!Number.isInteger(counter) || counter < 1) throw new Error("Fork counter is invalid.");
         if (!Number.isInteger(abandonedCount) || abandonedCount < 1) throw new Error("Fork must abandon at least one future frame.");
+        if (parentFrame.state.outcome !== "active") throw new Error("Only an active historical frame can be forked.");
         const state = clone(parentFrame.state);
         const oldBranch = state.branchId;
         state.branchId = "B" + counter + "-" + sha256(parentFrame.hash + "|" + counter).slice(0, 7).toUpperCase();
         state.stats.forks += 1;
         const events = ["Forked " + oldBranch + " at tick " + state.tick + ". " + abandonedCount + " future frame" + (abandonedCount === 1 ? "" : "s") + " abandoned."];
         state.lastEvents = events.slice();
+        if (state.outcome !== "active") throw new Error("Fork transition produced a sealed state.");
         return { state, events, branchId: state.branchId };
       }
 
@@ -3835,6 +3837,7 @@
         agent.lastIntent = "Following your waypoint";
         const events = ["Directive " + state.directiveSerial + " queued for " + ROLE[agent.id].name + " → [" + targetX + "," + targetY + "]."];
         state.lastEvents = events.slice();
+        if (state.outcome !== "active") throw new Error("Directive transition produced a sealed state.");
         return { agentId: agent.id, targetX, targetY, events };
       }
 
@@ -4142,6 +4145,12 @@
       }
 
       function validateDirectiveTransition(previousFrame, frame, frameIndex) {
+        if (previousFrame.state.outcome !== "active") {
+          throw new Error("Frame " + frameIndex + " directive follows a sealed mission.");
+        }
+        if (frame.state.outcome !== "active") {
+          throw new Error("Frame " + frameIndex + " directive result is not active.");
+        }
         if (frame.events.length !== 1) throw new Error("Frame " + frameIndex + " directive must contain exactly one event.");
         const match = /^Directive (\d+) queued for (Ghost|Cipher|Atlas|Spark) → \[(\d+),(\d+)\]\.$/.exec(frame.events[0]);
         if (!match) throw new Error("Frame " + frameIndex + " directive event is malformed.");
@@ -4155,6 +4164,12 @@
       }
 
       function validateForkTransition(previousFrame, frame, frameIndex) {
+        if (previousFrame.state.outcome !== "active") {
+          throw new Error("Frame " + frameIndex + " fork follows a sealed mission.");
+        }
+        if (frame.state.outcome !== "active") {
+          throw new Error("Frame " + frameIndex + " fork result is not active.");
+        }
         if (frame.events.length !== 1) throw new Error("Frame " + frameIndex + " fork must contain exactly one event.");
         const eventMatch = /^Forked (B\d+-[A-F0-9]{7}) at tick (\d+)\. (\d+) future (frame|frames) abandoned\.$/.exec(frame.events[0]);
         if (!eventMatch) throw new Error("Frame " + frameIndex + " fork event is malformed.");
