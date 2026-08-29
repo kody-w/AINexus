@@ -18,6 +18,18 @@
       document.addEventListener("keydown", earlyIntroKeyGuard, true);
       document.addEventListener("keyup", earlyIntroKeyGuard, true);
       window.__doggIntroKeyGuard = earlyIntroKeyGuard;
+      const earlyStartHandler = (event) => {
+        const start = event.target instanceof Element ? event.target.closest("#intro-start") : null;
+        if (!start || window.__doggHeist?.ready) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.__doggPendingStart = true;
+        start.textContent = "Preparing operation…";
+        start.setAttribute("aria-busy", "true");
+        start.setAttribute("aria-label", "Preparing operation; start request queued");
+      };
+      document.addEventListener("click", earlyStartHandler, true);
+      window.__doggEarlyStartHandler = earlyStartHandler;
     })();
   </script>
   <meta charset="UTF-8">
@@ -3293,7 +3305,9 @@
       function updateBoardAccessibility(state, nextDanger, announce = false) {
         const description = boardCursorDescription(state, nextDanger);
         elements.board.setAttribute("aria-label", description);
-        if (announce) elements.boardCursorLive.textContent = description;
+        if (announce || document.activeElement === elements.board) {
+          elements.boardCursorLive.textContent = description;
+        }
       }
 
       function povSemanticSummary(state, agent, visible, seen, intent) {
@@ -3648,6 +3662,15 @@
         } else if (event.key === "Escape") {
           event.preventDefault();
         }
+      }
+
+      function consumePendingStart() {
+        if (!window.__doggPendingStart) return false;
+        window.__doggPendingStart = false;
+        elements.introStart.removeAttribute("aria-busy");
+        userCommanded = true;
+        dismissIntro(true);
+        return true;
       }
 
       function dismissIntro(shouldPlay) {
@@ -4958,8 +4981,17 @@
           closeHelp();
         });
         elements.helpDialog.addEventListener("close", unlockHelpModal);
-        elements.skipLink.addEventListener("click", () => {
-          window.setTimeout(() => elements.board.focus({ preventScroll: true }), 0);
+        elements.skipLink.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (!ready) return;
+          const hash = "#game-board";
+          if (window.location.hash === hash) history.replaceState(history.state, "", hash);
+          else history.pushState(history.state, "", hash);
+          const previousBehavior = document.documentElement.style.scrollBehavior;
+          document.documentElement.style.scrollBehavior = "auto";
+          elements.board.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+          document.documentElement.style.scrollBehavior = previousBehavior;
+          elements.board.focus({ preventScroll: true });
         });
         elements.board.addEventListener("pointerdown", handleBoardPointerDown);
         elements.board.addEventListener("pointermove", handleBoardPointerMove);
@@ -4982,6 +5014,10 @@
           document.removeEventListener("keydown", window.__doggIntroKeyGuard, true);
           document.removeEventListener("keyup", window.__doggIntroKeyGuard, true);
           delete window.__doggIntroKeyGuard;
+        }
+        if (window.__doggEarlyStartHandler) {
+          document.removeEventListener("click", window.__doggEarlyStartHandler, true);
+          delete window.__doggEarlyStartHandler;
         }
         window.addEventListener("resize", renderAll);
 
@@ -5030,10 +5066,12 @@
         activateIntroModal();
         renderAll();
         status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
-        introTimer = window.setTimeout(() => {
-          introTimer = null;
-          if (!userCommanded) dismissIntro(resumeAfterIntro);
-        }, 2800);
+        if (!consumePendingStart()) {
+          introTimer = window.setTimeout(() => {
+            introTimer = null;
+            if (!userCommanded) dismissIntro(resumeAfterIntro);
+          }, 2800);
+        }
         persistState();
       }
 
