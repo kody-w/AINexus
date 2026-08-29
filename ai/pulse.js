@@ -11,10 +11,13 @@
  *      together, cancels, while BLOOD, which does not, survives
  *   3. resample to an even clock — a browser's frame timer is not a metronome
  *   4. detrend, window, FFT, and take the strongest beat between 42 and 240 bpm
- *   5. refuse to answer unless that peak actually stands out of the band (SNR)
+ *   5. refuse to answer unless that peak actually stands out of the band (SNR and share)
+ *   6. refuse again if the loudest thing in the recording is slower than any heart — a lean or
+ *      an exposure ramp leaks a skirt into the band that looks, to 1-5, exactly like a pulse
  *
- * Step 5 is the important one. A number is easy; an honest number is the product. When the
- * light is bad or you are moving, this reports ok:false rather than a plausible-looking lie.
+ * Steps 5 and 6 are the important ones. A number is easy; an honest number is the product. When
+ * the light is bad, or you are moving, or the only rhythm in shot is you breathing, this reports
+ * ok:false rather than a plausible-looking lie.
  *
  * NOTHING HERE LEAVES THE MACHINE. This module takes numbers and returns numbers; it holds no
  * pixels, no video, no network. A pulse is a body measurement, so the page treats it as
@@ -36,6 +39,11 @@
   // share 0.59-1.00 and snr 13-25; pure noise scores share 0.16-0.40 and snr 3.5-6.3.
   // Both gates must pass, so neither statistic alone can be fooled.
   const MIN_SNR = 8, MIN_SHARE = 0.50;
+  // ...and how much slower-than-a-heart energy may sit under a reading before the peak inside
+  // the band is just that slower thing's skirt. Honest worst case measured 0.74; the lies
+  // measured 6e3 upward, so 4 is generous in both directions.
+  const MAX_SLOW = 4;
+  const RECENT_MS = 15000;                   // how far back the reported median is allowed to reach
 
   // ── FFT (iterative radix-2) ───────────────────────────────────────────
   function fft(re, im) {
@@ -127,7 +135,21 @@
       if (d1 <= near || d2 <= near) sig2 += p(i);
     }
     const bandAvg = total / (hi - lo + 1);
-    return { bpm: hz * 60, hz, snr: bandAvg > 0 ? p(peak) / bandAvg : 0, share: total > 0 ? sig2 / total : 0 };
+    // A THIRD GATE, BECAUSE THE FIRST TWO ONLY LOOK INSIDE THE BAND. Both statistics above ask
+    // how CONCENTRATED the band's energy is — and energy arriving from BELOW the band (a slow
+    // lean, breathing, a camera settling its exposure) is maximally concentrated at the band's
+    // very first bin, so it scores like a textbook pulse. Measured: a plain exponential exposure
+    // ramp with no periodicity in it at all scored snr 40 / share 0.68, and a 0.5 Hz sway scored
+    // snr 104 / share 0.97 — both reported, confidently, as 42 bpm. 42 is not a coincidence: it
+    // is LO_HZ, the bottom of the band, and it is what this says every time it is lying.
+    // So ask the question those statistics cannot: is the loudest thing in this recording even
+    // inside the human range? Sub-band energy against the whole band separates the two cases by
+    // four orders of magnitude — every lie above scored 6e3 to 2e6, while the hardest honest
+    // case there is (a 42 bpm heart, half of whose main lobe falls below the band) scored 0.74.
+    let slow = 0;
+    for (let i = 1; i < lo; i++) slow += p(i);
+    return { bpm: hz * 60, hz, slow: total > 0 ? slow / total : Infinity,
+             snr: bandAvg > 0 ? p(peak) / bandAvg : 0, share: total > 0 ? sig2 / total : 0 };
   }
 
   function median(a) {
@@ -143,7 +165,10 @@
     return {
       // one ROI colour average per video frame
       push(rgb, t) {
-        if (!rgb || !isFinite(rgb.g)) return;
+        // all three channels, not just green: CHROM divides by each channel's own mean, so one
+        // undefined red is enough to make the whole window NaN — and a NaN window looks exactly
+        // like a dark room, so twelve good seconds are thrown away with a lighting excuse
+        if (!rgb || !isFinite(rgb.r) || !isFinite(rgb.g) || !isFinite(rgb.b) || !isFinite(t)) return;
         ts.push(t); R.push(rgb.r); G.push(rgb.g); B.push(rgb.b);
         const cut = t - o.window * 1000;
         while (ts.length && ts[0] < cut) { ts.shift(); R.shift(); G.shift(); B.shift(); }
@@ -158,8 +183,19 @@
         if (s.snr < o.minSnr || s.share < o.minShare)
           return (last = { ok: false, bpm: 0, snr: s.snr, share: s.share, seconds,
                            why: 'signal too weak — hold still, more light on your face' });
-        recent.push(s.bpm); if (recent.length > 7) recent.shift();
-        return (last = { ok: true, bpm: Math.round(median(recent)), instant: Math.round(s.bpm), snr: s.snr, share: s.share, seconds, why: '' });
+        if (s.slow > MAX_SLOW)
+          return (last = { ok: false, bpm: 0, snr: s.snr, share: s.share, slow: s.slow, seconds,
+                           why: 'that is drift, not a beat — the strongest wobble is slower than any heart' });
+        // THE MEDIAN MUST NOT REMEMBER A DIFFERENT MINUTE. This ring only advanced on readings
+        // that PASSED, so a run of refusals froze it: twelve fresh seconds of a 55 bpm heart
+        // came back as 140 — ok:true, the number confident, the data two minutes old — because
+        // six survivors of the last good session still outvoted the one live sample. Smooth
+        // over the last few seconds, never across a gap.
+        const at = ts[ts.length - 1];
+        recent.push({ bpm: s.bpm, t: at });
+        while (recent.length && (recent.length > 7 || at - recent[0].t > RECENT_MS)) recent.shift();
+        return (last = { ok: true, bpm: Math.round(median(recent.map(r => r.bpm))),
+                         instant: Math.round(s.bpm), snr: s.snr, share: s.share, slow: s.slow, seconds, why: '' });
       },
       last() { return last; },
       reset() { ts.length = R.length = G.length = B.length = 0; recent = []; },

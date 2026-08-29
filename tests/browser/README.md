@@ -43,9 +43,11 @@ fails twice, then it is real.
 | `room.cjs` | the room under a member who lies and a member who goes quiet: a position made of strings never reaching a THREE matrix, a rename replacing one label rather than hanging a second, a relayed chat bounded in length and rate, a duplicate channel closing without evicting the member whose id it carries, five seconds of silence not deleting somebody permanently, and a refused invite saying so instead of blaming a host who never left |
 | `agent_contract.cjs` | the eight python agents against the arguments a MODEL sends: every parameter perform() reads is declared and every one declared is read, nothing sent crashes one, the lenses are byte-identical twice and emit no floats, and a player's memory cannot be reached through a crafted key |
 | `frames_conformance.cjs` | `ai/frames.js` against the standard rather than against itself: 18 JCS vectors — non-BMP member names, the 2^53-1 boundary, escaping, empty containers, null against absent — hashing byte-identically here and in kody-w/rapp-1's `rapp.py`, the §5 tags really in the pre-image, and a battery of chains that must be REFUSED (a genesis that is not seq 0, a segment spliced in from another stream, a twelfth key hashed in, a calendar that does not exist) |
+| `slow_frames.cjs` | the camera modules on a machine that is not fast: the same second of looking read at 4, 6, 10, 15, 30 and 60 frames a second landing in ONE place — the origin used to lock after a fixed count of frames, so a slow runner pinned the pointer dead centre and then learned whatever pose it found as straight ahead — one raise still one press at every rate, a missed detection not costing a held look its origin, a NaN landmark not smoothed into the pointer forever, and the pulse refusing an exposure ramp and a slow sway that both used to be reported, confidently, as 42 bpm |
 
-`turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs`, `overlay.cjs` and `frames_conformance.cjs`
-need no credentials at all.
+`turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs`, `overlay.cjs`, `frames_conformance.cjs` and
+`slow_frames.cjs` need no credentials at all — and `slow_frames.cjs` needs no camera or network
+either, because it drives the two modules as the pure functions they are.
 The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
 `agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker.

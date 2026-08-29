@@ -38,11 +38,26 @@
   const BROW_ON_LM = 0.085, BROW_OFF_LM = 0.045;     // eye-width units
   const BROW_REFRACTORY_MS = 700;
   const BLINK_CLOSED = 0.17;                 // eye aspect ratio below this reads as shut
-  const SETTLE_FRAMES = 20;                  // don't trust the first glimpse of a face
   const PINNED_MS = 1800;                    // a pointer stuck on an edge this long is wrong
   const NEUTRAL_ADAPT = 0.004;               // the baseline drifts slowly toward where you sit
   const NEUTRAL_DEADZONE = 0.06;             // ...and ONLY while you are looking straight ahead
   const BROW_FLOOR_RECOVER = 0.0015;         // the brow's resting level can rise again, slowly
+
+  // A MOMENT IS A LENGTH OF TIME, NOT A NUMBER OF FRAMES. "Don't trust the first glimpse of a
+  // face" used to be spelled `frames < 20`, which is a third of a second at 60fps and four
+  // seconds at 5 — and until the origin locks, EVERY reading is 0.5 by construction, so the
+  // pointer sits dead centre and cannot deflect at all. On a loaded headless runner that is
+  // indistinguishable from a broken face reader: the gaze reached exactly half the viewport,
+  // settled there, and the synthetic look that moves it to 1001 on a laptop moved nothing.
+  // Worse than the stall: whatever pose you happen to hold when the count finally runs out
+  // BECOMES your centre, so a slow machine quietly learns "looking right" as straight ahead.
+  const SETTLE_MS = 600, SETTLE_MIN_FRAMES = 4;
+  const HOLD_MS = 1500;                      // how long a learned origin outlives a lost face
+  // Every rate above is per FRAME, and was tuned against a 30fps camera. `steps` says how many
+  // of those tuned frames one real interval stands for, so the same second of looking does the
+  // same thing whether the loop managed 60 ticks in it or six.
+  const TUNED_MS = 1000 / 30, MAX_STEPS = 20;
+  const perFrame = (r, steps) => 1 - Math.pow(1 - r, steps);
 
   function cat(shapes, name) {
     if (!shapes) return 0;
@@ -58,17 +73,42 @@
     return hi - lo < 1e-6 ? 0.5 : clamp01((p - lo) / (hi - lo));
   }
 
+  // A LANDMARK THAT IS NOT A NUMBER IS NOT A LANDMARK. A detector hands back a point object
+  // whether or not it could actually find it, and one NaN coordinate used to travel all the way
+  // to the EMA — where it is permanent, because every later frame smooths against it. The
+  // pointer freezes where it stood, `ok` stays true, and nothing short of a reload recovers it.
+  // Treat a non-finite point exactly like a missing one: the guards for that already exist.
+  function pt(lm, i) { const p = lm[i]; return p && isFinite(p.x) && isFinite(p.y) ? p : null; }
+
+  // A FACE THAT BLINKS OUT FOR ONE FRAME MUST NOT COST YOU THE ORIGIN. Detectors drop frames —
+  // a hand across the face, motion blur, one slow tick. This used to answer with a bare
+  // { ok:false }, and because callers chain `gaze = readFace(res, gaze)` that threw away the
+  // learned origin, the settle clock, the brow's floor and the refractory all at once: a look
+  // held on somebody snapped back to centre and the origin was re-learned from wherever the
+  // eyes happened to be. Carry the state across a short gap; forget it once they really left.
+  function lost(prev, now) {
+    if (!prev || !prev.base) return { ok: false, kind: 'none' };
+    const goneSince = prev.goneSince || now;
+    if (now - goneSince > HOLD_MS) return { ok: false, kind: 'none' };
+    return { ok: false, kind: 'none', goneSince, now, base: prev.base, frames: prev.frames,
+      since: prev.since, x: prev.x, y: prev.y, browRaised: prev.browRaised,
+      lastPress: prev.lastPress, pinnedSince: prev.pinnedSince };
+  }
+
   function readFace(res, prev, opts) {
     const o = opts || {};
+    const now = (o.now === undefined ? (typeof performance !== 'undefined' ? performance.now() : Date.now()) : o.now);
     const lm = res && res.faceLandmarks && res.faceLandmarks[0];
-    if (!lm || lm.length < 478) return { ok: false, kind: 'none' };
+    if (!lm || lm.length < 478) return lost(prev, now);
     const shapes = res.faceBlendshapes && res.faceBlendshapes[0] && res.faceBlendshapes[0].categories;
+    const dt = (prev && isFinite(prev.now)) ? Math.max(0, now - prev.now) : TUNED_MS;
+    const steps = Math.min(MAX_STEPS, dt / TUNED_MS);
 
     // ── where the eyes point, relative to their own sockets ──────────────
     let tx = 0, ty = 0, open = 0, n = 0;
     for (const e of EYES) {
-      const c0 = lm[e.corners[0]], c1 = lm[e.corners[1]], ir = lm[e.iris];
-      const u = lm[e.lids[0]], d = lm[e.lids[1]];
+      const c0 = pt(lm, e.corners[0]), c1 = pt(lm, e.corners[1]), ir = pt(lm, e.iris);
+      const u = pt(lm, e.lids[0]), d = pt(lm, e.lids[1]);
       if (!c0 || !c1 || !ir || !u || !d) continue;
       tx += between(ir.x, c0.x, c1.x);
       ty += between(ir.y, u.y, d.y);
@@ -76,19 +116,19 @@
       open += w > 1e-6 ? Math.hypot(u.x - d.x, u.y - d.y) / w : 0;
       n++;
     }
-    if (!n) return { ok: false, kind: 'none' };
+    if (!n) return lost(prev, now);
     tx /= n; ty /= n; open /= n;
     const eyesClosed = open < BLINK_CLOSED;
 
     // ── which way the head is turned ─────────────────────────────────────
     // The nose leads the rotation: it slides toward whichever way the face turns, measured
     // against the eye corners and scaled by face width so distance from the camera cancels.
-    const cs = EYES.flatMap(e => [lm[e.corners[0]], lm[e.corners[1]]]).filter(Boolean);
+    const cs = EYES.flatMap(e => [pt(lm, e.corners[0]), pt(lm, e.corners[1])]).filter(Boolean);
     const xs = cs.map(p => p.x), ys = cs.map(p => p.y);
     const faceW = Math.max(...xs) - Math.min(...xs);
     const eyeMidX = xs.reduce((a, b) => a + b, 0) / xs.length;
     const eyeMidY = ys.reduce((a, b) => a + b, 0) / ys.length;
-    const nose = lm[NOSE], chin = lm[CHIN];
+    const nose = pt(lm, NOSE), chin = pt(lm, CHIN);
     const faceH = chin && nose ? Math.abs(chin.y - eyeMidY) : faceW;
     const yaw = faceW > 1e-6 && nose ? (nose.x - eyeMidX) / faceW : 0;
     const pitch = faceH > 1e-6 && nose ? (nose.y - eyeMidY) / faceH : 0;
@@ -104,8 +144,8 @@
     } else {
       let lift = 0, m = 0;
       BROW_HI.forEach((bi, i) => {
-        const b = lm[bi], e = EYES[i] && lm[EYES[i].lids[0]];
-        const c0 = EYES[i] && lm[EYES[i].corners[0]], c1 = EYES[i] && lm[EYES[i].corners[1]];
+        const b = pt(lm, bi), e = EYES[i] && pt(lm, EYES[i].lids[0]);
+        const c0 = EYES[i] && pt(lm, EYES[i].corners[0]), c1 = EYES[i] && pt(lm, EYES[i].corners[1]);
         if (!b || !e || !c0 || !c1) return;
         const w = Math.hypot(c0.x - c1.x, c0.y - c1.y);
         if (w > 1e-6) { lift += Math.abs(b.y - e.y) / w; m++; }
@@ -121,11 +161,13 @@
     // exposure, a stray detection in the background. Lock the origin only after the face has
     // been present for a moment.
     const frames = ((prev && prev.frames) || 0) + 1;
-    const settling = frames < SETTLE_FRAMES;
+    const since = (prev && prev.base && isFinite(prev.since)) ? prev.since : now;
+    const settling = frames < SETTLE_MIN_FRAMES || (now - since) < SETTLE_MS;
     const base = (prev && prev.base && !o.recenter && !settling)
       ? prev.base
       : { tx, ty, yaw, pitch, brow };
-    const adapt = (a, b) => a + (b - a) * NEUTRAL_ADAPT;
+    const adaptK = perFrame(NEUTRAL_ADAPT, steps), recover = BROW_FLOOR_RECOVER * steps;
+    const adapt = (a, b) => a + (b - a) * adaptK;
     // A DELIBERATE LOOK MUST NOT BECOME "CENTRE". If the baseline chased your gaze, holding
     // your eyes on a person would quietly recentre and drop them — so the neutral only learns
     // while you are looking roughly straight ahead. That is drift correction; chasing a held
@@ -137,17 +179,15 @@
     // up poisons the floor with a raised value, and that press (and the rest of that raise) is
     // silently swallowed with no feedback until you relax all the way down and start again.
     const browFloor = (prev && prev.base)
-      ? (brow < prev.base.brow ? brow : prev.base.brow + BROW_FLOOR_RECOVER)
+      ? (brow < prev.base.brow ? brow : prev.base.brow + recover)
       : brow;
     const nextBase = (o.recenter || !prev || !prev.base) ? { tx, ty, yaw, pitch, brow: browFloor } : {
       tx: calm ? adapt(base.tx, tx) : base.tx, ty: calm ? adapt(base.ty, ty) : base.ty,
       yaw: calm ? adapt(base.yaw, yaw) : base.yaw, pitch: calm ? adapt(base.pitch, pitch) : base.pitch,
       // the brow's resting level tracks the floor down at once but recovers slowly, so one bad
       // frame cannot permanently convince us your eyebrows live higher than they do
-      brow: brow < base.brow ? brow : base.brow + BROW_FLOOR_RECOVER,
+      brow: brow < base.brow ? brow : base.brow + recover,
     };
-
-    const now0 = (o.now === undefined ? (typeof performance !== 'undefined' ? performance.now() : Date.now()) : o.now);
 
     // ── the point on screen, in IMAGE space (caller mirrors, exactly like hands) ──
     const rawX = 0.5 + (tx - base.tx) * EYE_GAIN_X + (yaw - base.yaw) * HEAD_GAIN_X;
@@ -157,11 +197,13 @@
     // the gaze would be stuck against a wall until the person happens to know about the 'c'
     // key. So being pinned for a moment IS the signal to re-learn the origin.
     const saturated = rawX <= 0.001 || rawX >= 0.999 || rawY <= 0.001 || rawY >= 0.999;
-    const pinnedSince = saturated ? ((prev && prev.pinnedSince) || now0) : 0;
-    const unstick = saturated && pinnedSince && (now0 - pinnedSince) > PINNED_MS;
+    const pinnedSince = saturated ? ((prev && prev.pinnedSince) || now) : 0;
+    const unstick = saturated && pinnedSince && (now - pinnedSince) > PINNED_MS;
     const px = clamp01(unstick ? 0.5 : rawX), py = clamp01(unstick ? 0.5 : rawY);
-    const sm = prev && prev.ok && !eyesClosed
-      ? { x: prev.x + (px - prev.x) * SMOOTH, y: prev.y + (py - prev.y) * SMOOTH }
+    const smoothK = perFrame(SMOOTH, steps);
+    const held = prev && prev.ok && isFinite(prev.x) && isFinite(prev.y);
+    const sm = held && !eyesClosed
+      ? { x: prev.x + (px - prev.x) * smoothK, y: prev.y + (py - prev.y) * smoothK }
       : { x: px, y: py };
 
     // brow press, edge-triggered and refractory so one raise is one click
@@ -169,19 +211,21 @@
     const wasRaised = !!(prev && prev.browRaised);
     const onT = browFromShapes ? BROW_ON : BROW_ON_LM, offT = browFromShapes ? BROW_OFF : BROW_OFF_LM;
     const browRaised = wasRaised ? browN > offT : browN > onT;
-    const now = now0;
     const lastPress = (prev && prev.lastPress) || -1e9;
     const pressed = browRaised && !wasRaised && (now - lastPress) > BROW_REFRACTORY_MS;
 
     return {
       ok: true, kind: 'face',
-      x: eyesClosed && prev && prev.ok ? prev.x : sm.x,   // a blink must not fling the gaze
-      y: eyesClosed && prev && prev.ok ? prev.y : sm.y,
+      x: eyesClosed && held ? prev.x : sm.x,   // a blink must not fling the gaze
+      y: eyesClosed && held ? prev.y : sm.y,
       tx, ty, yaw, pitch, open, eyesClosed,
       brow: browN, browRaised, pressed, browSource: browFromShapes ? 'blendshape' : 'landmark',
       lastPress: pressed ? now : lastPress,
       base: (unstick || settling) ? { tx, ty, yaw, pitch, brow: browFloor } : nextBase,
-      frames, settling, recentred: !!unstick, pinnedSince: unstick ? 0 : pinnedSince,
+      // the settle clock, so a lost frame or a slow one cannot restart it; and `now`, so the
+      // next frame can tell how much time it actually stands for
+      frames, settling, since: (unstick ? now : since), now, goneSince: 0,
+      recentred: !!unstick, pinnedSince: unstick ? 0 : pinnedSince,
       conf: eyesClosed ? 0.2 : Math.min(1, open / 0.28),
     };
   }
