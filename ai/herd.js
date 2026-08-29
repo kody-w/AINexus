@@ -147,7 +147,319 @@
     return entry;
   }
 
-  // round-robin: everyone gets a turn, nobody waits long
+  // ── invoked, not polled ──────────────────────────────────────────────────
+  // A player on a timer thinks because a clock said so, which is how a room full of AIs ends up
+  // spending a seat to stare at an empty world. A player should run when the world gives it a
+  // REASON: someone spoke, someone arrived, it was addressed, it landed somewhere new. The
+  // wider frame invokes it; otherwise it is simply not running.
+  //
+  // A heartbeat still exists, off by default and slow when on, for the one case a reason cannot
+  // cover: a player alone in a world deciding to go somewhere else.
+  function invoke(id, reason, opts) {
+    const rec = players.get(String(id));
+    if (!rec) return Promise.resolve(null);
+    rec.sleeping = false; rec.idle = 0; rec.lastReason = reason || 'invoked';
+    return serve(id, Object.assign({ reason }, opts || {}));
+  }
+
+  // ── the ensemble: everyone in one call ───────────────────────────────────
+  // A call per player is a call per player. Twelve AIs hanging around a portal is twelve model
+  // calls to decide that most of them are, in fact, still hanging around a portal.
+  //
+  // So the world asks ONCE. It hands the model every player's situation and gets back a stack of
+  // directives — one per player — which are sealed into a single world frame. Each player then
+  // has a STANDING INTENTION and runs it locally, on its own, with no model call at all: walking,
+  // drifting, glancing, saying the line it was given. It keeps that freedom until the next frame
+  // arrives and changes what it is doing.
+  //
+  // That is the shape games have always used for a crowd: a director speaks rarely, actors act
+  // continuously. It is also, bluntly, the difference between a demo and something you can leave
+  // running — one call for a dozen players instead of a dozen.
+  const DIRECT_TOOL = {
+    type: 'function',
+    function: {
+      name: 'direct',
+      description: 'Give every player something to be doing until the next direction.',
+      parameters: { type: 'object', required: ['directives'], properties: {
+        directives: { type: 'array', items: { type: 'object', required: ['player', 'intent'], properties: {
+          player: { type: 'string', description: 'the player id, exactly as given' },
+          intent: { type: 'string', description: 'one of: wander, hold, follow, approach, go, talk' },
+          target: { type: 'string', description: 'a player id for follow/approach/talk, or a portal name for go' },
+          say: { type: 'string', description: 'optional: one short line to say out loud now' },
+        } } },
+      } },
+    },
+  };
+
+  // what a player does on its own, between directions — cheap, local, no model
+  const INTENTS = {
+    hold:     async () => {},
+    wander:   async (d) => { await d.look((Math.random() * 120 - 60) | 0, 0); await d.walk('forward', 350 + Math.random() * 400 | 0); },
+    follow:   async (d, t) => { const who = (d.people() || []).find(p => p.id === t || p.name === t);
+                                if (who) { await d.look(Math.max(-160, Math.min(160, (who.x - innerWidth / 2) / 4 | 0)), 0); await d.walk('forward', 400); } },
+    approach: async (d, t) => INTENTS.follow(d, t),
+    go:       async (d, t) => { if (t) await d.aim(t); },
+    talk:     async (d, t) => { const r = d.dialogue && d.dialogue(t);
+                                if (r && r.length) await d.tell(t, r[0].text); },
+  };
+
+  async function actLocally(rec) {
+    const st = rec.standing;
+    if (!st || !rec.drive) return null;
+    const fn = INTENTS[st.intent] || INTENTS.hold;
+    try {
+      if (st.say) { await rec.drive.say(String(st.say).slice(0, 200)); st.say = null; }   // said once
+      await fn(rec.drive, st.target);
+      rec.localActs = (rec.localActs || 0) + 1;
+      // DATA SLOSH. What actually happened while the player was free is the thing the next
+      // direction has to be built from — not where it was told to go, where it ended up. It
+      // sloshes forward into the next frame.
+      let where = null; try { const s0 = rec.drive.snapshot(); where = s0 && s0.me; } catch (e) {}
+      (rec.slosh = rec.slosh || []).push({ did: st.intent, at: where });
+      while (rec.slosh.length > 6) rec.slosh.shift();
+      return { player: rec.id, local: st.intent, target: st.target || null };
+    } catch (e) { return { player: rec.id, local: st.intent, error: e.message }; }
+  }
+
+  // one call, everybody directed, one frame
+  async function ensemble(opts) {
+    const o = opts || {};
+    const B = root.NexusBrainstem, F = root.NexusFrames, auth = root.NexusAuth;
+    if (!auth || !auth.signedIn()) throw new Error('no mind: not signed in');
+    const who = [...players.values()].filter(r => r.drive);
+    if (!who.length) return null;
+    // ONE RESIDENCY PASS FOR THE WHOLE HERD. Everything anybody might need is made resident
+    // before the single call, rather than each player discovering a gap on its own turn.
+    let residency = { resident: [], missing: [] };
+    if (B && B.ensureResident && o.python !== false) {
+      const union = [...new Set(who.reduce((a, r) => a.concat(r.agents || []), []))];
+      try { residency = await B.ensureResident(union, o.log); } catch (e) {}
+    }
+    const situation = who.map(r => {
+      let s0 = {}; try { s0 = r.drive.snapshot() || {}; } catch (e) {}
+      return { player: r.id, at: s0.me || {}, world: s0.world,
+               others: (s0.players || []).map(x => x.name || x.id).slice(0, 6),
+               portals: (s0.portals || []).slice(0, 5).map(x => x.name || x),
+               doing: (r.standing && r.standing.intent) || 'nothing',
+               // where it got to while it was free, which is what it must re-orient FROM
+               since_last: (r.slosh || []).slice(-4),
+               carrying: (r.agents || []).slice(0, 6),
+               heard: (s0.chat || []).slice(-3).map(c => c.text) };
+    });
+    const msg = await auth.chat([
+      { role: 'system', content: (o.director || 'You direct a group of AI characters sharing a 3D world of portals.')
+        + ' Give EACH player something to be doing until you speak again. Most of the time most of them should '
+        + 'simply carry on — hold or wander — and only one or two should do something pointed. Do not invent a '
+        + 'player, a portal or a person that is not listed. Each player has been moving freely since '
+        + 'your last direction — since_last shows where it actually got to, so direct it from THERE, '
+        + 'not from where you last put it. Call direct and nothing else.' },
+      { role: 'user', content: JSON.stringify(situation) },
+    ], { tools: [DIRECT_TOOL], tool_choice: { type: 'function', function: { name: 'direct' } },
+         raw: true, temperature: 0.8, max_tokens: 700 });
+    const tc = msg && msg.tool_calls && msg.tool_calls[0];
+    if (!tc) return null;
+    let got; try { got = JSON.parse(tc.function.arguments || '{}'); } catch (e) { return null; }
+
+    const applied = [];
+    for (const d of (got.directives || [])) {
+      const rec = players.get(String(d.player));
+      if (!rec) continue;                                   // a player who is not here gets nothing
+      const intent = INTENTS[d.intent] ? d.intent : 'hold';  // and an intent nobody has is holding still
+      rec.standing = { intent, target: d.target || null, say: d.say || null, since: Date.now() };
+      rec.slosh = [];                                       // consumed: it fed this direction
+      applied.push({ player: rec.id, intent, target: d.target || null, said: !!d.say });
+    }
+    let frame = null;
+    if (F && applied.length) {
+      try {
+        frame = await F.buildFrame({ kind: 'nexus.ensemble', streamId: ensembleStream,
+          seq: ensembleChain.length,
+          payload: { asserts: { directed: applied.length, directives: applied.slice(0, 12), calls: 1 },
+                     requires: { players: who.map(r => r.id).slice(0, 12),
+                                 resident: (residency.resident || []).slice(0, 16),
+                                 missing: (residency.missing || []).slice(0, 6) } },
+          prev: ensemblePrev });
+        ensembleChain.push(frame); ensemblePrev = frame.payload_hash;
+        if (ensembleChain.length > 300) ensembleChain.shift();
+      } catch (e) {}
+    }
+    return { directives: applied, calls: 1, players: who.length, frame: frame && frame.frame_hash };
+  }
+
+  let ensembleChain = [], ensemblePrev = null;
+  const ensembleStream = 'rappid:@kody-w/ainexus/ensemble:' +
+    (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
+
+  // the loop that makes a crowd affordable: direct rarely, act continuously
+  function hangOut(opts) {
+    const o = Object.assign({ directEveryMs: 30000, actEveryMs: 2500 }, opts || {});
+    let running = true, directions = 0, acts = 0;
+    (async function actLoop() {
+      while (running) {
+        for (const rec of players.values()) {
+          const e = await actLocally(rec);
+          if (e) { acts++; if (o.onAct) { try { o.onAct(e); } catch (x) {} } }
+        }
+        await new Promise(r => setTimeout(r, o.actEveryMs));
+      }
+    })();
+    (async function directLoop() {
+      while (running) {
+        try { const r = await ensemble(o); if (r) { directions++; if (o.onDirect) { try { o.onDirect(r); } catch (x) {} } } }
+        catch (e) { if (o.onDirect) { try { o.onDirect({ error: e.message }); } catch (x) {} }
+                    if (/sign-in|budget|no mind/i.test(e.message)) { running = false; break; } }
+        await new Promise(r => setTimeout(r, o.directEveryMs));
+      }
+    })();
+    return { stop: () => { running = false; },
+             state: () => ({ directions, acts, running, frames: ensembleChain.length }),
+             chain: () => ensembleChain.map(f => JSON.stringify(f)).join('\n') + (ensembleChain.length ? '\n' : '') };
+  }
+
+  // ── the world frame ──────────────────────────────────────────────────────
+  // Not every player watching for its own reasons — that is N pollers and no shared clock. ONE
+  // frame sits over the whole world, looks once, and picks the single player with the strongest
+  // reason to act. That player wakes for a second, does one thing, and the world moves. The
+  // others were not asleep because a timer said so; they were not chosen.
+  //
+  // Each world tick is itself a frame recording who was picked and why, and what the alternatives
+  // were — so the question "why did that one act?" has an answer on a chain rather than in a
+  // guess. And when nobody has a reason, nobody wakes and nothing is spent. A still world is
+  // allowed to be still.
+  // A REASON IS SOMETHING NEW, AND IT IS SPENT ONCE. Two ways this goes wrong and both cost
+  // real money: the FIRST look at a world has nothing to compare against, so everything reads as
+  // a change and a still world wakes somebody; and a sentence sitting in the chat log stays true
+  // forever, so one "hey alice" wakes alice on every tick until the tab is closed. So the
+  // baseline is seeded on first sight, and a reason only counts for what arrived since this
+  // player last acted on it.
+  const REASONS = [
+    [40, 'was spoken to',         (s, me, was) => (s.chat || []).slice(was.chat).some(c => new RegExp(me, 'i').test(c.text || ''))],
+    [30, 'someone spoke',         (s, _m, was) => (s.chat || []).length > was.chat],
+    [20, 'who is here changed',   (s, _m, was) => ((s.players || []).map(x => x.id).sort().join(',')) !== was.here],
+    [15, 'arrived somewhere new', (s, _m, was) => !!was.world && s.world !== was.world],
+    [5,  'has never acted',       (s, _m, was, rec) => rec.ticks === 0],
+  ];
+
+  function conduct(opts) {
+    const o = Object.assign({ everyMs: 1500, secondsEach: 20 }, opts || {});
+    const seen = new Map();
+    const world = { tick: 0, chain: [], prev: null, running: true, busy: false,
+      streamId: 'rappid:@kody-w/ainexus/world:' +
+        (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)) };
+
+    // A frame published anywhere on this device triggers the next run here, and this world's
+    // frames are announced the same way — so two tabs watching one world take turns rather than
+    // both deciding, and a frame maker that is not this loop can drive it just as well.
+    let bus = null;
+    try {
+      bus = new BroadcastChannel('nexus:world');
+      bus.onmessage = (ev) => {
+        const d = ev && ev.data;
+        if (!d || d.streamId === world.streamId) return;
+        if (d.kind === 'nexus.world' && d.chose && players.has(d.chose) && !world.busy) {
+          world.busy = true;
+          invoke(d.chose, d.because || 'a frame named it', o)
+            .then(() => { world.busy = false; }).catch(() => { world.busy = false; });
+        }
+      };
+    } catch (e) {}
+
+    const timer = setInterval(async () => {
+      if (!world.running || world.busy) return;
+      const candidates = [];
+      for (const rec of players.values()) {
+        if (!rec.drive) continue;
+        let s0 = null;
+        try { s0 = rec.drive.snapshot(); } catch (e) { continue; }
+        const first = !seen.has(rec.id);
+        const was = seen.get(rec.id) || { chat: (s0.chat || []).length,
+                                          here: (s0.players || []).map(x => x.id).sort().join(','), world: s0.world };
+        let score = 0; const why = [];
+        if (!first) {
+          for (const [w, label, test] of REASONS) {
+            let hit = false;
+            try { hit = !!test(s0, rec.id, was, rec); } catch (e) {}
+            if (hit) { score += w; why.push(label); }
+          }
+        }
+        // the baseline only advances when this player ACTS on what it saw; merely being looked
+        // at does not consume a reason, and acting consumes all of them
+        if (first) seen.set(rec.id, was);
+        if (score > 0) candidates.push({ id: rec.id, score, why: why.join(' · '),
+                                         mark: { chat: (s0.chat || []).length,
+                                                 here: (s0.players || []).map(x => x.id).sort().join(','), world: s0.world } });
+      }
+      candidates.sort((a, b) => b.score - a.score);
+      const chosen = candidates[0];
+
+      world.tick++;
+      const F = root.NexusFrames;
+      const payload = {
+        asserts: { tick: world.tick, chose: chosen ? chosen.id : null,
+                   because: chosen ? chosen.why : 'nobody had a reason — the world is still' },
+        requires: { considered: candidates.slice(0, 6).map(c => c.id + ':' + c.score) },
+      };
+      if (F) {
+        try {
+          const f = await F.buildFrame({ kind: 'nexus.world', streamId: world.streamId,
+                                         seq: world.chain.length, payload, prev: world.prev });
+          world.chain.push(f); world.prev = f.payload_hash;
+          if (world.chain.length > 500) world.chain.shift();
+          try { bus && bus.postMessage({ kind: 'nexus.world', streamId: world.streamId,
+                  chose: payload.asserts.chose, because: payload.asserts.because, hash: f.frame_hash }); } catch (e) {}
+        } catch (e) {}
+      }
+      if (!chosen) { if (o.onTick) { try { o.onTick(payload.asserts, roster()); } catch (e) {} } return; }
+
+      // wake it for a second — one turn, and not for longer than the world will wait
+      world.busy = true;
+      seen.set(chosen.id, chosen.mark);          // this player has now acted on what it saw
+      const guard = setTimeout(() => { world.busy = false; }, (o.secondsEach || 20) * 1000);
+      invoke(chosen.id, chosen.why, o)
+        .then(e => { clearTimeout(guard); world.busy = false;
+                     if (o.onTick) { try { o.onTick(Object.assign({}, payload.asserts, { entry: e }), roster()); } catch (x) {} } })
+        .catch(() => { clearTimeout(guard); world.busy = false; });
+    }, o.everyMs);
+
+    return {
+      stop: () => { world.running = false; clearInterval(timer); try { bus && bus.close(); } catch (e) {} },
+      state: () => ({ tick: world.tick, frames: world.chain.length, busy: world.busy, streamId: world.streamId }),
+      chain: () => world.chain.map(f => JSON.stringify(f)).join('\n') + (world.chain.length ? '\n' : ''),
+      // THE LAST FRAME STANDS. Between publications nothing runs and nothing is spent: this frame
+      // is simply what is true about the world right now, ongoing, until the next one is
+      // published. Reading it is how anything — another tab, another tool, a person — finds out
+      // where the world got to without asking a player to think about it.
+      head: () => world.chain[world.chain.length - 1] || null,
+    };
+  }
+
+  // watch the world and invoke whoever has a reason to think
+  function watch(opts) {
+    const o = opts || {};
+    const seen = new Map();                 // player id -> what it had last time we looked
+    const timer = setInterval(() => {
+      for (const rec of players.values()) {
+        const drive = rec.drive; if (!drive) continue;
+        let s0 = null;
+        try { s0 = drive.snapshot(); } catch (e) { continue; }
+        const chat = (s0.chat || []), here = (s0.players || []).map(x => x.id).sort().join(',');
+        const was = seen.get(rec.id) || { chat: 0, here: '', world: '' };
+        const reasons = [];
+        if (chat.length > was.chat) reasons.push('someone spoke');
+        if (here !== was.here) reasons.push('who is here changed');
+        if (s0.world !== was.world && was.world) reasons.push('a new world');
+        seen.set(rec.id, { chat: chat.length, here, world: s0.world });
+        if (!reasons.length || rec.thinking) continue;
+        rec.thinking = true;
+        invoke(rec.id, reasons.join(' and '), o)
+          .then(e => { rec.thinking = false; if (o.onTick) { try { o.onTick(e, roster()); } catch (x) {} } })
+          .catch(() => { rec.thinking = false; });
+      }
+    }, o.checkMs || 1200);
+    return { stop: () => clearInterval(timer) };
+  }
+
+  // round-robin, for when you deliberately want everyone thinking on a clock
   function live(opts) {
     const o = Object.assign({ everyMs: 4000, maxTicks: 0 }, opts || {});
     if (herd) return herd;
@@ -249,7 +561,8 @@
   const chainOf = (id) => { const r = players.get(String(id));
     return r ? r.chain.map(f => JSON.stringify(f)).join('\n') + (r.chain.length ? '\n' : '') : ''; };
 
-  root.NexusHerd = { join, leave, wake, serve, live, roster, chainOf, auditSlots, provenSource,
+  root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live,
+                     roster, chainOf, auditSlots, provenSource,
                      lines: recall, forget: () => { try { localStorage.removeItem(LS_LINES); } catch (e) {} },
                      players: () => players, running: () => !!herd };
 })(typeof window !== 'undefined' ? window : globalThis);

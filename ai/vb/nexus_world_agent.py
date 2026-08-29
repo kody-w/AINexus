@@ -16,7 +16,7 @@ from agents.basic_agent import BasicAgent
 from js import window
 
 
-SYNC = ("people", "orbs", "dialogue", "snapshot")
+SYNC = ("people", "orbs", "dialogue", "snapshot", "agents")
 ASYNC = ("look", "walk", "aim", "travel", "say", "tell", "see", "scan", "wait")
 
 
@@ -33,7 +33,8 @@ class NexusWorldAgent(BasicAgent):
                 "type": "object",
                 "properties": {
                     "action": {"type": "string", "description":
-                               "one of: " + ", ".join(SYNC + ASYNC)},
+                               "one of: " + ", ".join(SYNC + ASYNC)
+                               + ". Use agents to list the agent.py files you are carrying."},
                     "portal": {"type": "string", "description": "portal name, for aim and travel"},
                     "text": {"type": "string", "description": "what to say, for say and tell"},
                     "to": {"type": "string", "description": "a peer id, for tell and dialogue"},
@@ -67,6 +68,15 @@ class NexusWorldAgent(BasicAgent):
             return json.dumps([
                 {"short": l.short, "text": l.text} for l in drive.dialogue(kwargs.get("to"))
             ])
+        if action == "agents":
+            # What am I actually carrying right now? The answer is not the same for every
+            # player: one runtime holds every agent, but a turn is only offered its own set,
+            # and this reads THAT set — so two players asked the same question answer
+            # differently, which is the difference between sharing a brainstem and being one.
+            mine = getattr(window, "__nexus_agents", None)
+            names = list(mine) if mine is not None else []
+            return json.dumps(sorted(set(names)))
+
         if action == "snapshot":
             s = drive.snapshot()
             return json.dumps({"me": s.me.to_py() if hasattr(s.me, "to_py") else {},

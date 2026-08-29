@@ -386,10 +386,11 @@
     // after — is what lets a shared runtime move a different player's hands each turn without
     // any of them noticing. The swap is a pointer, not a load.
     return inLane(async (slot) => {
-      const held = root.__autodrive;
+      const held = root.__autodrive, heldAgents = root.__nexus_agents;
       if (o.drive) root.__autodrive = o.drive;
+      root.__nexus_agents = (o.agents || []).concat(CORE_AGENTS);
       try { const r = await think(); r.slot = slot; return r; }
-      finally { if (o.drive) root.__autodrive = held; }
+      finally { if (o.drive) root.__autodrive = held; root.__nexus_agents = heldAgents; }
     });
 
     async function think() {
