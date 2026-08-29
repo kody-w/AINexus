@@ -28,6 +28,7 @@ fails twice, then it is real.
 | `spiral.cjs` | crossing and selecting: how much of a child neither parent had, and whether six routes crossed beat the best single one |
 | `chat_tile.cjs` | a conversation worn into a tile, and its shape in time genuinely changing what is forged from it |
 | `forge.cjs` | worlds adapted from real published ones, sha256-verified, refused on mismatch |
+| `proof_red.cjs` | proof.html catches lies about itself: a lie inside a frame goes red, a lie beside the frame changes nothing because the page must not read it, an unsupported repeatability claim goes red |
 | `tick_loop.cjs` | a player ticking on its own clock, sealing a rapp/1 frame per tick |
 | `holo_calibration.cjs` | whether matching frames actually lands the projection closer to the truth |
 | `views_live.cjs` | the public DOGG edge holds between ticks, advances when the manifest grows, and leaves a scrubbed viewer in history |
