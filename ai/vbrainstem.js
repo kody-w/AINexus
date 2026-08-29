@@ -58,13 +58,43 @@
   //
   // So the session has a hard ceiling on model calls and on wall-clock, both raisable on
   // purpose and neither raisable by a player. When it is reached, thinking stops and says so.
-  const budget = { calls: 0, limit: 400, since: Date.now(), minutes: 90, stopped: null };
-  function spend() {
-    if (budget.stopped) throw new Error(budget.stopped);
+  //
+  // SCOPE: this is one counter per JS realm — per page, and per iframe. A herd sharing one page
+  // shares one ceiling, which is the case it was written for. Players in SEPARATE frames
+  // (autodrive.html gives each one its own world in its own iframe) each get their own 400, so
+  // six tabs is a ceiling of 2400. That is the truth about it; the word "session" above meant
+  // the page, not the visitor, and pretending otherwise would be the more expensive mistake.
+  //
+  // `since` is a DEADLINE, not a rolling window: it is stamped when this file loads and never
+  // moves on its own, so the wall-clock ceiling is 90 minutes from the page opening. Nothing
+  // resets it except an operator explicitly patching it, which is the point — a window that
+  // rolled would be a budget that refills itself while nobody is watching.
+  const budget = { calls: 0, limit: 400, since: Date.now(), minutes: 90,
+                   stopped: null, reason: null, free: 0 };
+  function refuse(reason, msg) {
+    budget.reason = reason; budget.stopped = msg;
+    const e = new Error(msg); e.code = 'budget'; e.reason = reason; return e;
+  }
+  // A MIND THAT COSTS NOTHING MUST NOT EAT A CEILING THAT EXISTS TO BOUND COST. Since a mind is
+  // a contract rather than a service, some of them are free: a scripted NPC buys no thought and
+  // reaches no seat. Counting its turns against the paid limit did two bad things at once —
+  // a few hundred NPC turns permanently locked the visitor's own player out of thinking, and the
+  // refusal it got said "400 model calls" when the true number of model calls was zero.
+  // Free turns are still COUNTED, in their own column, because a run nobody paid for is still a
+  // run somebody should be able to see.
+  // `free: false` on a mind overrides the exemption, which is how the paid ceiling stays testable:
+  // a scripted mind marked paid drives the real accounting thousands of times without buying one.
+  function spend(mind) {
+    const paid = !(mind && mind.free !== false && (mind.isScripted === true || mind.free === true));
+    // an operator's halt binds everything; a ceiling only binds what spends
+    if (budget.stopped && (paid || budget.reason === 'operator')) {
+      const e = new Error(budget.stopped); e.code = 'budget'; e.reason = budget.reason || 'calls'; throw e;
+    }
+    if (!paid) { budget.free++; return; }
     if (budget.calls >= budget.limit)
-      throw new Error(budget.stopped = 'session budget reached (' + budget.limit + ' model calls) — nothing more will be spent');
+      throw refuse('calls', 'session budget reached (' + budget.limit + ' model calls) — nothing more will be spent');
     if ((Date.now() - budget.since) / 60000 >= budget.minutes)
-      throw new Error(budget.stopped = 'session time limit reached (' + budget.minutes + ' minutes) — nothing more will be spent');
+      throw refuse('time', 'session time limit reached (' + budget.minutes + ' minutes) — nothing more will be spent');
     budget.calls++;
   }
 
@@ -618,7 +648,14 @@
     let lastWords = '';
 
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
-      spend();
+      // STOP MEANS STOP, INCLUDING MID-THOUGHT. A turn holds the lane across several model round
+      // trips, so a kill switch pressed during one used to buy every remaining round and move the
+      // body for each — the operator watched a stopped player go on walking. `until` is asked
+      // BETWEEN rounds (never before the first: a turn that does nothing is not a turn) and the
+      // turn ends where it stands, keeping what it already said and did.
+      if (round && typeof o.until === 'function' && !o.until())
+        return { words: lastWords, calls, rounds: round, residency, summoned, note: 'stopped mid-turn' };
+      spend(auth);        // whose seat this round is on — a free mind spends none of it
       const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: 500 });
       messages.push(msg);
       const said = String((msg && msg.content) || '').trim();
@@ -753,8 +790,13 @@
     // estate does not make twice.
     // minted on first use through the spec's grammar, never spelled from a name (§6.2)
     let streamId = o.streamId || null;
+    // `stopped` is the sentence a person reads; `reason` is the word a caller branches on —
+    // budget | no-mind | no-hands | maxTicks | failing | asked. Three different deaths that all
+    // arrived as English prose used to be told apart by regex, which is how herd.js and this
+    // file came to disagree about what counts as fatal.
     const state = { ticks: 0, acts: 0, words: 0, running: true, done: false, journal: [],
-                    stopped: null, get streamId() { return streamId; }, chain: [], prev: null };
+                    stopped: null, reason: null, fails: 0,
+                    get streamId() { return streamId; }, chain: [], prev: null };
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // what this tick claims, and what it leaned on
@@ -819,7 +861,7 @@
     (async () => {
       while (state.running && (!o.maxTicks || state.ticks < o.maxTicks)) {
         const drive = o.drive || root.__autodrive;
-        if (!drive) { state.stopped = 'the hands went away'; break; }
+        if (!drive) { state.stopped = 'the hands went away'; state.reason = 'no-hands'; break; }
         state.ticks++;
         const started = Date.now();
         let entry, s0 = null;
@@ -830,24 +872,54 @@
                         room: s0.room, chat: (s0.chat || []).slice(-4),
                         picture: s0.vision ? (s0.vision.blank ? 'BLANK — you cannot see' : 'you can see') : 'none' },
             persona: o.persona, python: o.python, log: o.log, rounds: o.rounds,
-            drive: o.drive, guid: o.guid,
+            // THE MIND WAS BEING DROPPED ON THE FLOOR. turn() takes one — a scripted NPC, or
+            // anything else satisfying the contract — and live() accepted `mind` and then never
+            // passed it on, so every tick of an NPC loop fell through to root.NexusAuth and threw
+            // 'no mind: not signed in' on tick 1. The loop then stopped, correctly, for a reason
+            // that was entirely its own doing: a scripted player could not live at all.
+            drive: o.drive, guid: o.guid, mind: o.mind,
+            // and the loop's own aliveness, so stop() reaches INSIDE the thought it interrupted
+            until: () => state.running,
           });
           state.acts += (r.calls || []).length;
           if (r.words) state.words++;
           entry = { tick: state.ticks, ms: Date.now() - started, words: r.words,
+                    // the dispatch's verdict when it has one — see turn(); the text test is the
+                    // fallback, and herd.js's copy of this line was fixed alongside it, because
+                    // one defect living in two files and only one of them getting fixed is how
+                    // this pair drifted apart before
                     calls: (r.calls || []).map(c => ({ tool: c.tool, name: c.args && (c.args.portal || c.args.to),
-                                                       failed: /failed|no such/.test(c.result) })) };
+                      failed: c.failed != null ? !!c.failed : /failed|no such/.test(c.result) })) };
           entry.frame = await seal(entry, s0);
           if (!entry.frame && state.lastSealError) entry.sealFailed = state.lastSealError;
+          state.fails = 0;                          // a tick that worked clears the streak
         } catch (e) {
           entry = { tick: state.ticks, ms: Date.now() - started, error: e.message };
+          if (e.code) entry.code = e.code;
           // s0, not null: if the percepts were taken before the mind threw, the position IS
           // known, and herd's error path records it. Passing null threw away a fact we had.
           entry.frame = await seal(entry, s0);
           if (!entry.frame && state.lastSealError) entry.sealFailed = state.lastSealError;
           // A dead credential will not heal by being asked again in six seconds. Stop, and say why.
           if (/sign-in expired|not signed in|no mind/i.test(e.message)) {
-            state.stopped = e.message; state.running = false;
+            state.stopped = e.message; state.reason = 'no-mind'; state.running = false;
+          }
+          // NEITHER WILL AN EXHAUSTED CEILING. herd.js already stopped its direct loop on
+          // /budget/; this loop did not, so a player that ran out of budget went on ticking
+          // every six seconds forever — refused every time, journalling the refusal every time,
+          // its button still reading "● Looping" — which is the exact shape of a thing that
+          // looks alive and is not. The ceiling is permanent by design; a loop that keeps
+          // knocking on it is a clock left running.
+          else if (e.code === 'budget') {
+            state.stopped = e.message; state.reason = 'budget'; state.running = false;
+          }
+          // A FAILED TICK IS WEATHER; A HUNDRED IN A ROW IS A CLIMATE. Anything else is treated
+          // as transient and retried, because most things are — but a world that has thrown on
+          // every tick for a solid streak is not coming back on its own, and a loop that never
+          // admits that is another clock nobody stopped.
+          else if ((state.fails = (state.fails || 0) + 1) >= 20) {
+            state.stopped = '20 ticks in a row failed — last: ' + String(e.message).slice(0, 120);
+            state.reason = 'failing'; state.running = false;
           }
         }
         state.journal.push(entry);
@@ -857,12 +929,20 @@
         await sleep(o.everyMs);
       }
       state.running = false; state.done = true;
-      if (!state.stopped) state.stopped = 'asked to stop';
+      if (!state.stopped) {
+        state.stopped = (o.maxTicks && state.ticks >= o.maxTicks)
+          ? ('ran its ' + o.maxTicks + ' ticks') : 'asked to stop';
+        state.reason = (o.maxTicks && state.ticks >= o.maxTicks) ? 'maxTicks' : 'asked';
+      }
       if (o.onStop) { try { o.onStop(state); } catch (e) {} }
     })();
 
     return {
-      stop: (why) => { state.running = false; state.stopped = why || 'asked to stop'; },
+      // WHY IT STOPPED IS THE ONLY THING WORTH KNOWING ABOUT A STOPPED LOOP, so an operator
+      // pressing the button must not overwrite a reason the loop already has. `stop('operator')`
+      // arriving one tick after the budget died used to relabel it as an operator decision.
+      stop: (why) => { state.running = false;
+                       if (!state.stopped) { state.stopped = why || 'asked to stop'; state.reason = 'asked'; } },
       state: () => state,
       // the line itself, as a file anybody can check against the spec
       chain: () => state.chain.map(f => JSON.stringify(f)).join('\n') + (state.chain.length ? '\n' : ''),
@@ -871,11 +951,35 @@
   }
 
   root.NexusBrainstem = { turn, lines, live, hotload, summon, ensureResident, initPyodide, slots: () => nextSlot,
-                          budget: (patch) => { if (patch) Object.assign(budget, patch); return Object.assign({}, budget); },
-                          halt: (why) => { budget.stopped = why || 'stopped by the operator'; },
+                          // RAISING A CEILING THAT HAS ALREADY BITTEN MUST ACTUALLY RAISE IT.
+                          // `stopped` is sticky on purpose — a session that ran out stays out, and
+                          // no player can talk its way past it — but the operator moving the
+                          // ceiling is not a player. Patching limit from 400 to 800 left the old
+                          // refusal standing, so the raise did nothing at all while the error went
+                          // on naming 400: a control that reports success and changes nothing.
+                          // An operator HALT is not lifted this way; only the operator lifts that,
+                          // by passing `stopped` explicitly.
+                          budget: (patch) => {
+                            if (patch) {
+                              Object.assign(budget, patch);
+                              const named = Object.prototype.hasOwnProperty.call(patch, 'stopped');
+                              if (!named && budget.stopped && budget.reason && budget.reason !== 'operator'
+                                  && budget.calls < budget.limit
+                                  && (Date.now() - budget.since) / 60000 < budget.minutes) {
+                                budget.stopped = null; budget.reason = null;
+                              }
+                              if (named && patch.stopped == null) budget.reason = null;
+                            }
+                            return Object.assign({}, budget);
+                          },
+                          halt: (why) => { budget.reason = 'operator';
+                                           budget.stopped = why || 'stopped by the operator'; },
                           wasSummoned: (n) => summonedNames.has(n), takesGuid, queued,
                           resident: () => Object.keys(pyAgents),
-                          sourceOf: (name) => agentSource[name] || null, verbToolDefs, agentToolDefs, callAgent,
+                          // provenSource() asks this about every name it finds in a line; an
+                          // inherited one answered with Object's own constructor
+                          sourceOf: (name) => (has(agentSource, name) ? agentSource[name] : null),
+                          verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
                           VERBS, MAX_ROUNDS };
 })(typeof window !== 'undefined' ? window : globalThis);

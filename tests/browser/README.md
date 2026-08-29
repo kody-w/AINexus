@@ -44,6 +44,7 @@ fails twice, then it is real.
 | `room.cjs` | the room under a member who lies and a member who goes quiet: a position made of strings never reaching a THREE matrix, a rename replacing one label rather than hanging a second, a relayed chat bounded in length and rate, a duplicate channel closing without evicting the member whose id it carries, five seconds of silence not deleting somebody permanently, and a refused invite saying so instead of blaming a host who never left |
 | `peer_errors.cjs` | every peerjs error type produces a message a person can act on — peerjs leaves `message` empty on its commonest real failure, and the fall-through used to print "Connection error:" and nothing else |
 | `scripted_mind.cjs` | an NPC drives the whole machinery from a written script — real verbs, real refusals, real rapp/1 frames, no model bought — and the same script runs the same way twice |
+| `ceiling.cjs` | the three ceilings, driven past on a scripted mind so it costs nothing: the SPEND ceiling bites at exactly its limit and refuses with a code a caller can branch on rather than a sentence to regex, four thousand free NPC turns leave the visitor's seat untouched, an operator raising a ceiling that has already bitten actually raises it, and a halt binds even a mind that costs nothing; the ROUND cap holds a mind that never stops calling to MAX_ROUNDS and says so; and the LOOP ends for a reason it can name — its maxTicks, an exhausted budget, hands that went away, a mind that died, or a world that threw twenty times running — sealing one frame per tick throughout, with stop() reaching inside the thought it interrupted so nothing more is bought after the button |
 | `npc_program.cjs` | an NPC runs a program's `mind` step with nobody signed in and no brainstem reachable — branching on what it sees, which a fixed choreography cannot do, and the receipt names the door the thought came through |
 | `agent_contract.cjs` | the eight python agents against the arguments a MODEL sends: every parameter perform() reads is declared and every one declared is read, nothing sent crashes one, the lenses are byte-identical twice and emit no floats, and a player's memory cannot be reached through a crafted key |
 | `frames_conformance.cjs` | `ai/frames.js` against the standard rather than against itself: 18 JCS vectors — non-BMP member names, the 2^53-1 boundary, escaping, empty containers, null against absent — hashing byte-identically here and in kody-w/rapp-1's `rapp.py`, the §5 tags really in the pre-image, and a battery of chains that must be REFUSED (a genesis that is not seq 0, a segment spliced in from another stream, a twelfth key hashed in, a calendar that does not exist) |
@@ -52,7 +53,7 @@ fails twice, then it is real.
 | `autodrive_hands.cjs` | the hands (`ai/autodrive.js`) under the numbers a MODEL chooses and the one button that has to work: `walk(600000)` bounded rather than ten minutes of a held key, a walk already in stride ended by a stop with the key coming back up, a direction the hands do not have refused instead of dispatched as a keystroke, a stop that also puts the camera down — its own frame loop, and the reason the world's legs were stubbed out — and hands the pointer back, a mind that answers after a stop neither speaking nor acting, a program no longer ending silently at its first thought with the mind's own move on the receipt as its own turn, `travel` refusing to claim a door the crosshair is not on, `ask` reporting false when the page never took the message, and a looping program of synchronous steps leaving the page still answering |
 
 `turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs`, `overlay.cjs`, `frames_conformance.cjs`,
-`slow_frames.cjs` and `absent_and_infinite.cjs` need no credentials at all — and `slow_frames.cjs`
+`ceiling.cjs`, `slow_frames.cjs` and `absent_and_infinite.cjs` need no credentials at all — and `slow_frames.cjs`
 needs no camera or network either, because it drives the two modules as the pure functions they are.
 The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
@@ -61,6 +62,9 @@ deliberately does not — it replaces the door inside the page, so it needs no c
 network, and neither of them ever completes a sign-in.
 `absent_and_infinite.cjs` boots the real AI player with Pyodide stubbed at the CDN, so it drives
 the drop-in through its own boot path without pulling the 10MB runtime.
+`ceiling.cjs` buys nothing and proves it: every mind in it is scripted, it aborts any request to a
+model endpoint, and it fails if one was even attempted. It opens frontier.html a second time in a
+same-origin frame on purpose — to hold down that the spend ceiling is one counter per frame.
 
 `holo_wire.cjs` and `room.cjs` need the network for one particular thing: the public PeerJS
 signalling server, because they hold a REAL peer room rather than a simulated one. Both say so
