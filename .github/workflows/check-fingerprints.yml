@@ -25,6 +25,8 @@ on:
       - 'WEARING.md'
       - 'WEARING-VECTORS.json'
       - 'tools/check_registries.py'
+      - 'tools/check_portable.py'
+      - 'tests/**'
       - 'tools/check_spec_tables.cjs'
   pull_request:
   workflow_dispatch:
@@ -41,6 +43,11 @@ jobs:
         with: { python-version: '3.11' }
       - uses: actions/setup-node@v4
         with: { node-version: '24' }
+
+      - name: nothing is anchored to one machine
+        # A test carrying an absolute path to its author's laptop passed here and could not have
+        # passed anywhere — and stayed green for days because only that laptop ever ran it.
+        run: python3 tools/check_portable.py
 
       - name: every published fingerprint matches its file
         run: python3 tools/check_registries.py
