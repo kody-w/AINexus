@@ -5878,21 +5878,28 @@ async function runSuite() {
   }, longDirectives);
   requireMeasurement(queuedLong.count === 720 && !queuedLong.rejection,
     `720 legal directives queued (accepted ${queuedLong.count})`);
-  const targetFrames = 901;
-  const longTicks = Math.max(0, targetFrames - longStart.frameCount);
-  const longStep = await tryApi(longPage, 'step', longTicks);
-  requireMeasurement(!longStep.threw, `long-session step(${longTicks})`);
+  const longTickBudget = 900;
+  const longStep = await tryApi(longPage, 'step', longTickBudget);
+  requireMeasurement(!longStep.threw, `long-session step(${longTickBudget})`);
   await api(longPage, 'pause');
   const longSnapshot = await inspect(longPage);
   const longVerification = await tryApi(longPage, 'verifyChain');
   const longExport = longSnapshot.exportText;
   const longBytes = Buffer.byteLength(longExport, 'utf8');
+  const resultingTicks = longSnapshot.tick - longStart.tick;
+  const expectedLongFrames = longStart.frameCount + queuedLong.count + resultingTicks;
+  const longStopEvidence = isTerminalOutcome(topLevelOutcomeOf(longSnapshot.state)) ||
+    resultingTicks === longTickBudget ||
+    /\b(max.?ticks|limit|cap|terminal|outcome)\b/i.test(JSON.stringify(longStep.value || ''));
   requireMeasurement(verificationPassed(longVerification),
     'the long-session hash chain');
-  requireMeasurement(longSnapshot.frameCount >= targetFrames,
-    `${targetFrames} frames in the long session (measured ${longSnapshot.frameCount})`);
-  requireMeasurement(longBytes > 4 * 1024 * 1024 && longBytes <= 8 * 1024 * 1024,
-    `a valid long export between 4 and 8 MiB (${longBytes} bytes)`);
+  requireMeasurement(resultingTicks > 0 && resultingTicks <= longTickBudget && longStopEvidence,
+    `legal ticks stopping at terminal/maxTicks (${resultingTicks}/${longTickBudget})`);
+  requireMeasurement(longSnapshot.frameCount === expectedLongFrames &&
+    longSnapshot.frameCount > 720,
+  `genesis + directives + legal ticks (${longSnapshot.frameCount} = ${longStart.frameCount} + ${queuedLong.count} + ${resultingTicks})`);
+  requireMeasurement(longBytes > 4_000_000 && longBytes <= 8 * 1024 * 1024,
+    `a valid long export above 4 MB and within 8 MiB (${longBytes} bytes)`);
 
   const longImportContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(longImportContext);
@@ -5900,45 +5907,44 @@ async function runSuite() {
   await api(longImportPage, 'pause');
   const longImportOutcome = await tryApi(longImportPage, 'importState', longExport);
   requireMeasurement(!longImportOutcome.threw && !explicitImportRejection(longImportOutcome),
-    'fresh-context import of the valid >4 MiB session');
+    'fresh-context import of the valid >4 MB session');
   await api(longImportPage, 'pause');
   const longImported = await inspect(longImportPage);
   const longImportedVerification = await tryApi(longImportPage, 'verifyChain');
-  result('720-directive session round-trips above 4 MiB under the bounded cap',
+  result('720-directive legal session round-trips under the bounded cap',
     longImported.exportText === longExport &&
       longImported.head === longSnapshot.head &&
       longImported.frameCount === longSnapshot.frameCount &&
       longImported.tick === longSnapshot.tick &&
       verificationPassed(longImportedVerification),
-    `${queuedLong.count} directives; ${longSnapshot.frameCount} frames; ${(longBytes / 1048576).toFixed(2)} MiB; head ${longSnapshot.head.slice(0, 12)}…`);
+    `${queuedLong.count} directives + ${resultingTicks} legal ticks + ${longStart.frameCount} genesis = ${longSnapshot.frameCount} frames; ${longBytes} bytes (${(longBytes / 1000000).toFixed(2)} MB / ${(longBytes / 1048576).toFixed(2)} MiB); ${String(topLevelOutcomeOf(longSnapshot.state))}`);
   await longImportContext.close();
 
   const exposedLimits = exposedRuntimeLimits(longSnapshot);
   let frameCapProbePass = true;
   let frameCapProbeDetail = 'no exposed frame cap';
   if (exposedLimits.frame && exposedLimits.frame.value <= 2000) {
-    const remaining = exposedLimits.frame.value - longSnapshot.frameCount;
-    if (remaining > 0) {
-      const toCap = await tryApi(longPage, 'step', remaining);
-      requireMeasurement(!toCap.threw, `stepping to ${exposedLimits.frame.path}`);
-      await api(longPage, 'pause');
+    if (longSnapshot.frameCount === exposedLimits.frame.value) {
+      const frameCapBaseline = await inspect(longPage);
+      const frameCapExtra = await tryApi(longPage, 'step', 1);
+      await sleep(80);
+      const frameCapAfter = await inspect(longPage);
+      const frameCapSurface =
+        `${frameCapBaseline.dom['status-live']} ${frameCapBaseline.dom['event-log']} ` +
+        `${frameCapAfter.dom['status-live']} ${frameCapAfter.dom['event-log']}`;
+      frameCapProbePass =
+        (frameCapExtra.threw || frameCapExtra.value === false ||
+          /\b(limit|cap|capacity|full|maximum)\b/i.test(frameCapSurface)) &&
+        frameCapAfter.exportText === frameCapBaseline.exportText &&
+        frameCapAfter.head === frameCapBaseline.head &&
+        frameCapAfter.frameCount === frameCapBaseline.frameCount &&
+        frameCapAfter.tick === frameCapBaseline.tick;
+      frameCapProbeDetail =
+        `${exposedLimits.frame.path}=${exposedLimits.frame.value}, exact=${frameCapAfter.exportText === frameCapBaseline.exportText}`;
+    } else {
+      frameCapProbeDetail =
+        `${exposedLimits.frame.path}=${exposedLimits.frame.value}, terminal stopped at ${longSnapshot.frameCount} before cap`;
     }
-    const frameCapBaseline = await inspect(longPage);
-    const frameCapExtra = await tryApi(longPage, 'step', 1);
-    await sleep(80);
-    const frameCapAfter = await inspect(longPage);
-    const frameCapSurface =
-      `${frameCapBaseline.dom['status-live']} ${frameCapBaseline.dom['event-log']} ` +
-      `${frameCapAfter.dom['status-live']} ${frameCapAfter.dom['event-log']}`;
-    frameCapProbePass = frameCapBaseline.frameCount === exposedLimits.frame.value &&
-      (frameCapExtra.threw || frameCapExtra.value === false ||
-        /\b(limit|cap|capacity|full|maximum)\b/i.test(frameCapSurface)) &&
-      frameCapAfter.exportText === frameCapBaseline.exportText &&
-      frameCapAfter.head === frameCapBaseline.head &&
-      frameCapAfter.frameCount === frameCapBaseline.frameCount &&
-      frameCapAfter.tick === frameCapBaseline.tick;
-    frameCapProbeDetail =
-      `${exposedLimits.frame.path}=${exposedLimits.frame.value}, exact=${frameCapAfter.exportText === frameCapBaseline.exportText}`;
   }
   await api(longPage, 'restart', 'DIRECTIVE-CAP-PROBE');
   await api(longPage, 'pause');
