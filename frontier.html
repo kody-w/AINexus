@@ -334,25 +334,54 @@ $('more').onclick = () => { $('hud').classList.toggle('min'); };
 // The button must say what is TRUE, not what is stored. A stale ghu_ looks identical to a
 // live one, so a token in storage earns "checking…" and nothing more until it has actually
 // bought a chat token. Claiming a mind that 401s is the same lie as claiming a verified build.
-async function mindState() {
+// `quiet` is for a caller that is about to say what happened itself: without it the
+// no-seat path printed "the saved sign-in has expired" directly above the caller's own
+// "signed in, but that account has no usable Copilot seat" — a contradiction the reader
+// has to resolve. `mindGen` is bumped by every sign-out and every press, so a verify()
+// that was already in flight cannot write its stale answer over a newer state.
+let mindGen = 0, mindChecks = 0, signingIn = false;
+async function mindState(quiet) {
   const el = $('mind');
   if (!window.NexusAuth) { el.textContent = 'grant a mind'; return false; }
   if (!NexusAuth.hasToken()) { el.textContent = 'grant a mind'; el.classList.remove('on'); return false; }
   el.textContent = 'checking sign-in…';
-  const ok = await NexusAuth.verify();
+  const gen = mindGen;
+  mindChecks++;
+  let ok;
+  try { ok = await NexusAuth.verify(); } finally { mindChecks--; }
+  if (gen !== mindGen) return el.classList.contains('on');   // a newer press owns the surface
   el.textContent = ok ? 'mind granted ✓' : 'sign in again';
   el.classList.toggle('on', ok);
-  if (!ok) note('the saved sign-in has expired — press sign in again to grant a mind');
+  if (!ok && !quiet) note('the saved sign-in has expired — press sign in again to grant a mind');
   return ok;
 }
+
+// copilot_auth signs itself out on a 401 mid-session. Nothing repainted when it did, so
+// the button kept its granted look and the NEXT press signed OUT instead of in — but the
+// worse half was the silence: the players simply stopped thinking and nothing said why.
+function noticeCredentialDeath() {
+  if (mindChecks || signingIn || !window.NexusAuth) return;
+  if ($('mind').classList.contains('on') && !NexusAuth.hasToken()) {
+    $('mind').textContent = 'grant a mind';
+    $('mind').classList.remove('on');
+    note('the sign-in ended — players have fallen back to their programs');
+  }
+}
+setInterval(noticeCredentialDeath, 2000);
 mindState();
 $('mind').onclick = async () => {
   if (!window.NexusAuth) return note('auth module did not load');
+  if (signingIn) return note('a sign-in is already running — use the code in the panel');
   if ($('mind').classList.contains('on')) {
-    NexusAuth.signOut(); mindState(); $('signin').classList.remove('on');
+    mindGen++; NexusAuth.signOut(); mindState(); $('signin').classList.remove('on');
     return note('signed out — players fall back to their programs');
   }
+  mindGen++;                         // this press invalidates any verify() still in flight
   NexusAuth.signOut();               // clear any dead credential before asking for a fresh one
+  // the note pane holds the LAST attempt's terminal message; without clearing it, "that
+  // code expired" sits under the brand-new code the person is being asked to type
+  $('signin-note').textContent = '';
+  signingIn = true;
   try {
     const { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
     $('code').textContent = user_code;
@@ -360,20 +389,36 @@ $('mind').onclick = async () => {
     $('hud').classList.remove('min');
     note('sign-in started — the code is in the panel');
     const started = Date.now();
+    // every terminal exit goes through here: the code on screen is dead by then, and
+    // leaving it there has the person typing digits that can no longer work
+    const stop = (msg) => {
+      signingIn = false;
+      $('code').textContent = '';
+      $('signin-note').textContent = msg;
+      $('mind').textContent = 'grant a mind';
+      $('mind').classList.remove('on');
+    };
     const tick = async () => {
-      if (Date.now() - started > 900000) { $('signin-note').textContent = 'that code expired — press grant a mind again'; return; }
+      if (Date.now() - started > 900000) { stop('that code expired — press grant a mind again'); return; }
       let tok = null;
       try { tok = await NexusAuth.pollDeviceLogin(); }
-      catch (e) { $('signin-note').textContent = e.message; return; }
+      catch (e) { stop(e.message); return; }
       if (tok) {
-        $('signin').classList.remove('on'); mindState();
-        note('mind granted — AI players can think on your Copilot seat');
+        $('signin').classList.remove('on'); $('code').textContent = '';
+        // mindState() VERIFIES by exchanging the credential. Announcing before that
+        // resolves tells an account with no Copilot seat "mind granted" and then prints
+        // the expiry note underneath it.
+        try {
+          const live = await mindState(true);
+          note(live ? 'mind granted — AI players can think on your Copilot seat'
+                    : 'signed in, but that account has no usable Copilot seat — players fall back to their programs');
+        } finally { signingIn = false; }
         return;
       }
       setTimeout(tick, (interval || 5) * 1000);
     };
     setTimeout(tick, (interval || 5) * 1000);
-  } catch (e) { note('could not start sign-in: ' + e.message); }
+  } catch (e) { signingIn = false; note('could not start sign-in: ' + e.message); }
 };
 $('stop').onclick = () => {
   running = false; cursor.classList.remove('on'); $('hands').classList.remove('on');

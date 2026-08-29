@@ -117,10 +117,19 @@
     if (Date.now() > pending.expires_at) { pending = null; throw new Error('that code expired — start again'); }
     if (Date.now() < pending.next) return null;
     pending.next = Date.now() + pending.interval * 800;   // claimed BEFORE the await, so two
-    const r = await fetch(AUTH_WORKER_URL + '/api/auth/device/poll', {   // overlapping calls are
-      method: 'POST', headers: { 'Content-Type': 'application/json' },   // still one knock
-      body: JSON.stringify({ device_code: pending.device_code, client_id: COPILOT_CLIENT_ID }),
-    });
+    // A 429 is handled below as weather. A REJECTED fetch is the same weather and was
+    // not handled at all: the worker supplies its own CORS headers, so an edge error
+    // (1101, 522) or two seconds of bad wifi produces no usable Response and the fetch
+    // rejects. That rejection escaped to the caller, which ended the flow — throwing
+    // away an authorization the person may already have completed at GitHub and making
+    // them type a fresh code. It is "no answer yet", which is what null means here.
+    let r;
+    try {
+      r = await fetch(AUTH_WORKER_URL + '/api/auth/device/poll', {   // overlapping calls are
+        method: 'POST', headers: { 'Content-Type': 'application/json' },   // still one knock
+        body: JSON.stringify({ device_code: pending.device_code, client_id: COPILOT_CLIENT_ID }),
+      });
+    } catch (e) { return null; }
     const d = await r.json().catch(() => null);
     if (!pending) return null;                            // signed out while this was in flight
     // A RATE LIMIT IS WEATHER, NOT A REFUSAL — and a 429 arrives as a proxy's HTML often as not,
