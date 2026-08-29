@@ -65,7 +65,11 @@ async function runLive(n) {
   catch (e) { $('stage').innerHTML = '<div class="blank">refused: ' + e.message + '</div>'; return; }
 
   layout(n);
-  const roomId = 'views-' + Math.random().toString(36).slice(2, 8);
+  // The invite must be #join=<hostId>.<token> — net/multiplayer.js matches
+  // /[#&]join=([^.&]+)\.([A-Za-z0-9_-]{8,})/ and a bare room id does NOT match,
+  // so a made-up id would send every joiner off to host a world of its own. The
+  // host's peer id IS the room, so we wait for it rather than inventing one.
+  let room = null;
   const cells = [];
   for (let i = 0; i < n; i++) {
     const persona = loaded.prog.name + '-' + (i + 1);
@@ -80,10 +84,12 @@ async function runLive(n) {
 
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i], persona = c.rec.id;
-    // window.name survives the navigation, so the room is known before the world
-    // has a chance to invent one of its own.
-    try { c.frame.name = JSON.stringify({ room: roomId, persona: persona }); } catch (e) {}
-    const invite = i === 0 ? '#ai=views' : '#join=' + roomId + '&ai=views';
+    if (i > 0 && !room) {
+      c.doing.textContent = 'no room to join — not opening a solo world';
+      break;                      // never turn one broken host into N lonely ones
+    }
+    const invite = i === 0 ? '#ai=views'
+                           : '#join=' + room.id + '.' + room.secret + '&ai=views';
     c.frame.src = WORLD + '?player=' + (i + 1) + invite +
                   '&as=' + encodeURIComponent('🤖 ' + persona + ' (AI)');
     await new Promise(res => {
@@ -115,6 +121,19 @@ async function runLive(n) {
     if (!armed) { c.doing.textContent = 'driver never armed'; continue; }
     try { c.frame.contentWindow.NEXUS_PERSONA = persona; c.frame.contentWindow.NEXUS_IS_AI = true; } catch (e) {}
 
+    if (i === 0) {
+      room = await new Promise(res => {
+        const t0 = Date.now();
+        const t = setInterval(() => {
+          let mp = null;
+          try { mp = w.worldNavigator && w.worldNavigator.multiplayer; } catch (e) {}
+          if (mp && mp.roomId && mp.roomSecret) { clearInterval(t); res({ id: mp.roomId, secret: mp.roomSecret }); }
+          else if (Date.now() - t0 > 30000) { clearInterval(t); res(null); }
+        }, 400);
+      });
+      if (!room) c.doing.textContent = 'host got no room — the others cannot join';
+    }
+
     // budgets are not optional just because this view is prettier
     const d = c.frame.contentWindow.__autodrive;
     c.doing.textContent = 'playing';
@@ -134,7 +153,7 @@ async function runLive(n) {
     });
     $('who').textContent = cells[focus] ? cells[focus].rec.label : '—';
     $('n').textContent = cells[focus] ? cells[focus].turns : 0;
-    $('ep').textContent = 'live · room ' + roomId;
+    $('ep').textContent = 'live · ' + (room ? 'room ' + String(room.id).slice(0, 10) : 'no room');
     focus = (focus + 1) % cells.length;
   }, HOLD);
   window.__viewsReady = true;
