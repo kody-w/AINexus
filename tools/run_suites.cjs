@@ -53,7 +53,14 @@ for (const f of suites) {
   results.push({ name, ...j, code, secs, flaky });
   const mark = j.verdict === 'ok' ? (flaky ? '~' : '✓') : '✗';
   console.log(`  ${mark} ${name.padEnd(22)} ${String(j.checks).padStart(3)} checks  ${String(secs).padStart(3)}s  ${j.verdict === 'ok' ? (flaky ? 'passed only on retry' : '') : j.verdict}`);
-  if (j.verdict !== 'ok') for (const line of out.split('\n').filter(l => BAD.test(l) || /Error|error:/.test(l)).slice(0, 4)) console.log('      ' + line.trim().slice(0, 150));
+  if (j.verdict !== 'ok') {
+    // Print the TAIL, not a filter. Filtering for /Error/ once reduced a CI failure to the single
+    // line "name: 'Error'" — technically a match, and useless. The last lines are where the reason
+    // actually is, and a red run nobody can diagnose is barely better than a red run nobody sees.
+    const failed = out.split('\n').filter(l => BAD.test(l));
+    for (const line of failed.slice(0, 6)) console.log('      ' + line.trim().slice(0, 160));
+    if (!failed.length) for (const line of out.split('\n').filter(l => l.trim()).slice(-8)) console.log('      | ' + line.trim().slice(0, 160));
+  }
 }
 const bad = results.filter(r => r.verdict !== 'ok');
 const total = results.reduce((n, r) => n + r.checks, 0);
