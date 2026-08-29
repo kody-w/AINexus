@@ -158,6 +158,16 @@
         }
 
         connectToHost(hostId) {
+            // ONE dial per room. `peer.on('open')` is not a once-in-a-lifetime event: PeerJS
+            // re-emits it every time the signalling socket comes back (reconnect() → _initialize
+            // → the server's OPEN → emit('open')), and this class asks for that reconnect itself
+            // three seconds after every 'disconnected'. Each of those re-openings used to dial
+            // the host AGAIN, and a second channel from a peer the host has already admitted is
+            // a channel it can never accept — its `hello` is ignored because it is already a
+            // member — so it died in `pending` eight seconds later and took the live one with
+            // it (see the ownership guard in the close handler below).
+            if (this.connections.has(hostId) || this.dialling) return;
+            this.dialling = true;
             try {
                 console.log('Connecting to host:', hostId);
 
@@ -186,11 +196,22 @@
                 conn.on('open', () => {
                     clearTimeout(connectionTimeout);
                     console.log('Connected to host successfully');
-                    this.updateStatus('Connected', true);
+                    // An open channel is not yet a place in the room — the host has not looked at
+                    // the invite yet, and closes the door on a bad one without sending a byte.
+                    // Saying "Connected" here was the UI answering a question it had not asked;
+                    // the honest word arrives with the host's first message (handlePeerData).
+                    this.updateStatus('Proving invite...', false);
                 });
+
+                // A failure that arrives BEFORE the ten seconds are up has to cancel the timer,
+                // or the user is told "the host may be offline" long after being told what
+                // actually happened — two explanations for one event, the later one wrong.
+                conn.on('close', () => { clearTimeout(connectionTimeout); this.dialling = false; });
+                conn.on('error', () => { clearTimeout(connectionTimeout); this.dialling = false; });
 
                 this.handleNewConnection(conn, true);    // outbound: we dialled the host
             } catch (error) {
+                this.dialling = false;
                 console.error('Failed to connect to host:', error);
                 this.showError('Failed to connect to host');
             }
@@ -214,6 +235,23 @@
                     // Hold it. An open channel is not yet a member: the joiner has to present
                     // the invite over this encrypted channel first, and gets a few seconds to
                     // do it before the door shuts.
+                    //
+                    // An unproven channel is a whole WebRTC peer connection the host is paying
+                    // for on a stranger's say-so. The doorway is not unlimited.
+                    if (this.pending.size >= 24) {
+                        console.warn('Too many unproven channels waiting; refusing:', peerId);
+                        try { conn.close(); } catch (e) {}
+                        return;
+                    }
+                    // `pending` is keyed by peer id, so a peer that opens a SECOND channel used to
+                    // displace its own first one out of the map — and the displaced channel's
+                    // timer then found someone else's conn under its key, declined to act, and
+                    // left an open connection nobody held a reference to. Close what we drop.
+                    const prior = this.pending.get(peerId);
+                    if (prior && prior !== conn) {
+                        if (prior.__authTimer) clearTimeout(prior.__authTimer);
+                        try { prior.close(); } catch (e) {}
+                    }
                     this.pending.set(peerId, conn);
                     conn.__authTimer = setTimeout(() => {
                         if (this.pending.get(peerId) === conn) {
@@ -243,14 +281,36 @@
             conn.on('close', () => {
                 console.log('Peer disconnected:', peerId);
                 if (conn.__authTimer) clearTimeout(conn.__authTimer);
-                this.pending.delete(peerId);
+                if (this.pending.get(peerId) === conn) this.pending.delete(peerId);
+
+                // CLEANUP BELONGS TO THE CHANNEL THAT DIED, NOT TO ITS PEER ID. A second channel
+                // from the same peer — a re-dial, or an unproven one shutting after eight
+                // seconds — closed with the live member's id on it and deleted that member: the
+                // avatar vanished and the room stopped believing in somebody whose connection was
+                // still open and still sending. The 'error' handler below has always checked
+                // this; this one did not, and it is the one that runs far more often.
+                if (this.connections.get(peerId) !== conn) return;
+
                 this.removePlayer(peerId);
                 this.connections.delete(peerId);
+                if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                 this.updatePlayerCount();
                 if (!this.isHost && peerId === this.roomId) {
-                    // the host's tab is the room — when it closes, the room is gone
-                    this.updateStatus('Host left — room closed', false);
-                    this.showError('The host closed their tab, so this room no longer exists. Ask for a new invite link.');
+                    // Two different endings used to be reported with the same sentence. If the
+                    // host never said one word to us the tab did not close — the invite was
+                    // refused, which the host does silently and immediately for a token that is
+                    // wrong or from a room that has since restarted. Sending someone to ask for a
+                    // new link when the host is sitting right there is a false statement.
+                    if (this.heardFromHost) {
+                        this.updateStatus('Host left — room closed', false);
+                        this.showError('The host closed their tab, so this room no longer exists. Ask for a new invite link.');
+                    } else {
+                        this.updateStatus('Invite refused', false);
+                        this.showError('The host did not accept this invite. It is probably from an older link, or from a room that has since restarted — ask for a fresh one.');
+                    }
+                    // and the next attempt starts from not having heard anything, the same as
+                    // the first one did
+                    this.heardFromHost = false;
                 }
             });
 
@@ -259,10 +319,11 @@
                 // left in the map is a player who is still standing there to everyone else.
                 console.error('Connection error with peer', peerId, ':', err);
                 if (conn.__authTimer) clearTimeout(conn.__authTimer);
-                this.pending.delete(peerId);
+                if (this.pending.get(peerId) === conn) this.pending.delete(peerId);
                 if (this.connections.get(peerId) === conn) {
                     this.connections.delete(peerId);
                     this.removePlayer(peerId);
+                    if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                     this.updatePlayerCount();
                 }
             });
@@ -304,7 +365,35 @@
             this.showNotification(`${this.players.get(peerId)?.username || String(peerId).slice(0, 6)}: ${String(message).slice(0, 120)}`);
         }
 
+        // A budget: at most `n` messages of one kind from one peer in any `ms` window. Beyond
+        // that they are dropped, silently — a warning per drop would be the flood. This exists
+        // because the host is the only machine in the room that turns one message into many, and
+        // because every message that gets through here costs a DOM node for three seconds.
+        allowRate(peerId, kind, n, ms) {
+            const key = kind + ':' + peerId;
+            const now = Date.now();
+            const live = ((this.rates = this.rates || new Map()).get(key) || []).filter((t) => now - t < ms);
+            this.rates.set(key, live);
+            if (live.length >= n) return false;
+            live.push(now);
+            return true;
+        }
+
         handlePeerData(peerId, data, conn) {
+            // EVERYTHING BELOW ARRIVED FROM ANOTHER MACHINE. `null`, a number and a bare string
+            // are all things a peer is free to send, and every one of them threw on `data.type`.
+            // The throw was caught one level up, so nothing crashed — but a swallowed exception
+            // is not a decision about hostile input, it is the absence of one.
+            if (!data || typeof data !== 'object') return;
+
+            // The first word from the host is what tells a joiner it is actually IN the room, as
+            // opposed to holding an open channel the host has not judged yet. Both the status
+            // line and the close message below turn on this one fact.
+            if (!this.isHost && peerId === this.roomId && !this.heardFromHost) {
+                this.heardFromHost = true;
+                this.updateStatus('Connected', true);
+            }
+
             // THE DOOR. Until a peer has presented the invite over this channel it is not in
             // the room, and the only sentence it is allowed to say is the one that lets it in.
             if (this.isHost && !this.connections.has(peerId)) {
@@ -326,15 +415,19 @@
             }
             if (data.type === 'hello') return;      // a joiner never needs to admit anybody
             switch (data.type) {
-                case 'playerUpdate':
-                    if (data.username) {
-                        const known = this.players.get(peerId);
+                case 'playerUpdate': {
+                    // A rename is not free: it burns a canvas, a texture upload and a material
+                    // every time, and the PEER chooses how often it happens. Twenty a second is
+                    // not somebody correcting their name, it is somebody making the host draw.
+                    const known = this.players.get(peerId);
+                    if (data.username && known && Date.now() - (known.lastRename || 0) >= 1000) {
                         const claimed = this.uniqueName(peerId, data.username);
-                        if (known && known.username !== claimed) {
+                        if (known.username !== claimed) {
+                            known.lastRename = Date.now();
                             known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
-                                if (old) known.avatar.remove(old);
+                                if (old) { known.avatar.remove(old); this.disposeObject(old); }
                                 const tag = this.createNameTag(peerId, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
@@ -342,6 +435,7 @@
                     }
                     this.updatePlayerPosition(peerId, data.position, data.rotation);
                     break;
+                }
 
                 case 'chat': {
                     // A message may be addressed. Show it if it is for the room or for me...
@@ -351,20 +445,34 @@
                     // else's. Only a joiner, which hears everything second-hand through the
                     // host, has to take the relayed attribution on trust.
                     const from = this.isHost ? peerId : (data.from || peerId);
-                    if (!data.to || data.to === mine) this.displayChat(from, data.message);
+                    // An address is a peer id or nothing. Anything else is not a message for
+                    // somebody, and letting it fall through would have turned a junk `to` into a
+                    // room-wide broadcast of a line meant to be private.
+                    if (data.to != null && typeof data.to !== 'string') return;
+                    const to = data.to || null;
+                    // THE RELAY IS THE AMPLIFIER: one message in, one per member out, paid for by
+                    // the host's uplink. It used to forward whatever arrived, at whatever length
+                    // and whatever rate, so a single peer's five megabytes became five megabytes
+                    // times the room. Nothing here ever says more than a couple of hundred
+                    // characters — autodrive's `tell` clamps at 240, displayChat keeps 200 — so a
+                    // 500-character wire is everything anyone can see and nothing they cannot.
+                    const message = String(data.message == null ? '' : data.message).slice(0, 500);
+                    if (this.isHost && !this.allowRate(peerId, 'chat', 20, 5000)) return;
+                    if (!to || to === mine) this.displayChat(from, message);
                     // ...and if I am the host, pass it on: joiners are connected only to me, so
                     // without this relay two joiners can never hear each other at all.
                     if (this.isHost) {
                         this.connections.forEach((c, id) => {
                             if (id === peerId) return;
-                            if (data.to && data.to !== id) return;
-                            try { c.send({ type: 'chat', message: data.message, from, to: data.to }); } catch (e) {}
+                            if (to && to !== id) return;
+                            try { c.send({ type: 'chat', message, from, to }); } catch (e) {}
                         });
                     }
                     break;
                 }
 
                 case 'interaction':
+                    if (!this.allowRate(peerId, 'interaction', 10, 5000)) break;
                     this.showPlayerInteraction(peerId, data.target);
                     break;
 
@@ -411,6 +519,38 @@
             // Implementation depends on your world structure
         }
 
+        // The same latent birth defect displayChat had: handlePeerData has dispatched every
+        // 'interaction' message to this method since day one and nothing anywhere ever defined
+        // it, so each one threw inside the data handler and was swallowed by the try/catch in
+        // handleNewConnection. The feature has never once run in any copy of this class.
+        showPlayerInteraction(peerId, target) {
+            const who = this.players.get(peerId)?.username || String(peerId).slice(0, 6);
+            const what = String(target == null ? 'something' : target).slice(0, 60);
+            (this.interactions = this.interactions || []).push({ from: String(peerId).slice(0, 6), target: what });
+            if (this.interactions.length > 12) this.interactions = this.interactions.slice(-12);
+            this.showNotification(`${who} used ${what}`);
+        }
+
+        // scene.remove() unhooks an object; it does not give the GPU anything back. The host is
+        // the tab that runs for hours across many joiners, and every avatar body, every point
+        // light and every name-tag texture it ever built stayed resident — including one texture
+        // per rename, which a peer decides the rate of.
+        disposeObject(obj) {
+            if (!obj) return;
+            const killMaterial = (m) => {
+                if (!m) return;
+                if (m.map && m.map.dispose) m.map.dispose();
+                if (m.dispose) m.dispose();
+            };
+            const killOne = (o) => {
+                if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+                if (Array.isArray(o.material)) o.material.forEach(killMaterial);
+                else killMaterial(o.material);
+            };
+            if (typeof obj.traverse === 'function') obj.traverse(killOne);
+            else killOne(obj);
+        }
+
         handleAICompanionData(peerId, data) {
             // Handle AI companion presence from other players
             console.log(`AI companion data from ${peerId}:`, data);
@@ -440,8 +580,12 @@
             head.position.y = 2.3;
             avatarGroup.add(head);
 
-            // Name tag
+            // Name tag. It has to carry the name the rename path looks it up BY: without this
+            // getObjectByName('nametag') found nothing the first time somebody changed their
+            // name, so the new label was hung beside the original instead of replacing it and
+            // the old name stayed legible underneath it for the rest of the session.
             const nameTag = this.createNameTag(peerId, metadata);
+            nameTag.name = 'nametag';
             nameTag.position.y = 3;
             avatarGroup.add(nameTag);
 
@@ -485,12 +629,26 @@
             const player = this.players.get(peerId);
             if (!player) return;
 
+            // EVERY NUMBER HERE CAME FROM ANOTHER MACHINE, AND ONE OF THEM IS PERMANENT. A NaN
+            // or an Infinity does not make an avatar jump: lerp() folds it straight back into
+            // .position, and from that frame on the body's matrix is NaN forever — it never
+            // returns even when the peer starts telling the truth again, it is culled out of the
+            // scene, and index.html clones that same position into the scene recorder every
+            // frame. A missing field was a different kind of loss: `position.x` threw, and the
+            // catch one level up ate the whole message including the rotation.
+            const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : null;
+            const px = num(position && position.x);
+            const py = num(position && position.y);
+            const pz = num(position && position.z);
+            if (px === null || py === null || pz === null) return;
+
             // Smooth interpolation
-            const targetPos = new THREE.Vector3(position.x, position.y, position.z);
+            const targetPos = new THREE.Vector3(px, py, pz);
             player.avatar.position.lerp(targetPos, 0.3);
 
             // Update rotation
-            player.avatar.rotation.y = rotation.y;
+            const ry = num(rotation && rotation.y);
+            if (ry !== null) player.avatar.rotation.y = ry;
 
             player.lastUpdate = Date.now();
         }
@@ -538,10 +696,11 @@
             this.connections.forEach((conn) => {
                 if (conn && conn.open) {
                     try {
-                        conn.send({
-                            type: 'ai_companion',
-                            ...aiData
-                        });
+                        // `type` last, not first. Spread over it and any caller handing this a
+                        // payload with its own `type` field was silently sending a message of
+                        // whatever kind it liked through the AI-presence door — including one
+                        // the host would relay.
+                        conn.send(Object.assign({}, aiData, { type: 'ai_companion' }));
                     } catch (error) {
                         console.error('Failed to broadcast AI presence:', error);
                     }
@@ -634,6 +793,7 @@
             const player = this.players.get(peerId);
             if (player) {
                 this.world.scene.remove(player.avatar);
+                this.disposeObject(player.avatar);
                 this.players.delete(peerId);
                 this.showNotification(`Player left: ${player.username}`);
             }
@@ -662,12 +822,24 @@
         update() {
             this.broadcastPlayerUpdate();
 
-            // Remove inactive players
+            // Remove inactive players — meaning players with no LIVE channel behind them.
+            // Silence on an open connection is not absence, and reaping on it alone was a one-way
+            // door: nothing in this class builds an avatar after the handshake, so once the body
+            // was deleted updatePlayerPosition returned early on every message that peer sent for
+            // the rest of the room's life. Five seconds is nothing — a backgrounded tab throttles
+            // the frame loop that sends these — and the count went on counting the person who had
+            // just been made invisible.
+            //
+            // A channel that died without ever saying 'close' is the other half, and it is why
+            // this looks at `conn.open` rather than merely at the map: a member whose data
+            // channel is gone must stop being counted, not just stop being drawn.
             const now = Date.now();
             this.players.forEach((player, peerId) => {
-                if (now - player.lastUpdate > 5000) {
-                    this.removePlayer(peerId);
-                }
+                if (now - player.lastUpdate <= 5000) return;
+                const conn = this.connections.get(peerId);
+                if (conn && conn.open !== false) return;
+                if (conn) { this.connections.delete(peerId); this.updatePlayerCount(); }
+                this.removePlayer(peerId);
             });
         }
     }

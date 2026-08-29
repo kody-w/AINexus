@@ -40,12 +40,17 @@ fails twice, then it is real.
 | `world_frame.cjs` | each player carrying its own hot-loaded agents on the shared runtime, and the world frame choosing who wakes — nobody in a still world, the one who was spoken to when there is a reason — on its own verifiable chain |
 | `hotload.cjs` | the world itself as an agent the brainstem can call, and a brand-new python agent taught from source into a running player and usable on its next thought, with no reload |
 | `time_travel.cjs` | a recorded session replayed twice with no model in the loop, frame for frame and epoch for epoch; a live player woken inside an ancient frame; going back forking a new dimension rather than editing the old line |
+| `room.cjs` | the room under a member who lies and a member who goes quiet: a position made of strings never reaching a THREE matrix, a rename replacing one label rather than hanging a second, a relayed chat bounded in length and rate, a duplicate channel closing without evicting the member whose id it carries, five seconds of silence not deleting somebody permanently, and a refused invite saying so instead of blaming a host who never left |
 | `agent_contract.cjs` | the eight python agents against the arguments a MODEL sends: every parameter perform() reads is declared and every one declared is read, nothing sent crashes one, the lenses are byte-identical twice and emit no floats, and a player's memory cannot be reached through a crafted key |
 
 `turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs` and `overlay.cjs` need no credentials at all.
 The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
 `agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker.
+
+`holo_wire.cjs` and `room.cjs` need the network for one particular thing: the public PeerJS
+signalling server, because they hold a REAL peer room rather than a simulated one. Both say so
+out loud and exit 1 if that server cannot be reached, rather than passing on an empty room.
 
 ## The other half: the live origin
 
