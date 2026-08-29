@@ -1,0 +1,184 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Views — everyone at once</title>
+<meta name="description" content="Every AI player's own view, side by side, with the focus moving from one to the next.">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:#05050c;color:#e9e9f2;font:13px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0;display:grid;gap:10px;padding:14px}
+.cell{position:relative;border:1px solid #23234a;border-radius:12px;overflow:hidden;background:#0a0a18;
+  transition:transform .6s cubic-bezier(.2,.8,.2,1),border-color .5s,box-shadow .5s;min-height:0}
+.cell img,.cell iframe{width:100%;height:100%;object-fit:cover;display:block;border:0;opacity:.72;transition:opacity .5s}
+.cell.focus{border-color:#7dffb0;box-shadow:0 0 0 1px #7dffb0,0 18px 60px rgba(125,255,176,.18);z-index:3}
+.cell.focus img,.cell.focus iframe{opacity:1}
+.tag{position:absolute;left:8px;top:8px;z-index:2;background:rgba(6,6,16,.78);border:1px solid #2b2b52;
+  border-radius:999px;padding:3px 10px;font:11px ui-monospace,Menlo,monospace;color:#c9c9e6;backdrop-filter:blur(6px)}
+.cell.focus .tag{color:#7dffb0;border-color:#1d6b45}
+.doing{position:absolute;left:8px;bottom:8px;right:8px;z-index:2;font:11px ui-monospace,Menlo,monospace;
+  color:#9a9ac0;background:rgba(6,6,16,.7);border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell.focus .doing{color:#e9e9f2}
+#hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
+  background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
+#hud b{color:#7de3ff;font-weight:600}
+.blank{display:flex;align-items:center;justify-content:center;height:100%;color:#3a3a63;font:11px ui-monospace,monospace}
+</style></head><body>
+<div id="stage"></div>
+<div id="hud"><b id="who">—</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="ep">—</span></div>
+<script src="ai/program_chain.js"></script>
+<script src="ai/copilot_auth.js"></script>
+<script>
+// Everyone's own view, at once, with the focus moving around. It plays from a manifest written
+// by tools/record_views.cjs — the same frames a player actually saw, in the order it saw them —
+// or live from a running herd on this origin.
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const MANIFEST = params.get('manifest') || 'recordings/latest/manifest.json';
+const HOLD = +(params.get('hold') || 2400);      // how long each player holds the focus
+const FPS = +(params.get('fps') || 8);
+const BASE = MANIFEST.replace(/[^/]*$/, '');     // shots are named relative to their manifest
+const LIVE = +(params.get('live') || 0);         // ?live=4 — a running herd instead of a recording
+const WORLD = params.get('world') || 'index.html';
+const PROG = params.get('program') || 'minded';
+const BUDGET = +(params.get('turns') || 200);
+
+function layout(n) {
+  const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  const st = $('stage');
+  st.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  st.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  return { cols, rows };
+}
+
+// ── live: the same grid, but the herd is running right now ─────────────────
+// The panels are iframes rather than stills, so this is the real thing at real
+// speed — no recording step, nothing to fall out of date. They are same-origin,
+// which is the only reason a page may look inside another page at all; a
+// cross-origin world cannot be shown this way and this page says so instead of
+// pretending.
+//
+// Every player is driven by a program VERIFIED against the sealed chain, by the
+// same ai/program_chain.js the control tower uses. A recording could not lie
+// about what a player saw; neither can this.
+async function runLive(n) {
+  let loaded;
+  try { loaded = await window.ProgramChain.loadProgram(PROG); }
+  catch (e) { $('stage').innerHTML = '<div class="blank">refused: ' + e.message + '</div>'; return; }
+
+  layout(n);
+  const roomId = 'views-' + Math.random().toString(36).slice(2, 8);
+  const cells = [];
+  for (let i = 0; i < n; i++) {
+    const persona = loaded.prog.name + '-' + (i + 1);
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = '<span class="tag">' + persona + '</span>' +
+                  '<iframe title="' + persona + '"></iframe><div class="doing">opening…</div>';
+    $('stage').appendChild(c);
+    cells.push({ rec: { id: persona, label: persona }, el: c,
+                 frame: c.querySelector('iframe'), doing: c.querySelector('.doing'), turns: 0 });
+  }
+  $('of').textContent = '∞';
+
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i], persona = c.rec.id;
+    // window.name survives the navigation, so the room is known before the world
+    // has a chance to invent one of its own.
+    try { c.frame.name = JSON.stringify({ room: roomId, persona: persona }); } catch (e) {}
+    const invite = i === 0 ? '#ai=views' : '#join=' + roomId + '&ai=views';
+    c.frame.src = WORLD + '?player=' + (i + 1) + invite +
+                  '&as=' + encodeURIComponent('🤖 ' + persona + ' (AI)');
+    await new Promise(res => {
+      const t = setTimeout(res, 30000);
+      c.frame.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
+    });
+    let w;
+    try { w = c.frame.contentWindow; w.document; }
+    catch (e) { c.doing.textContent = 'cross-origin — cannot be shown live'; continue; }
+
+    try {
+      const doc = w.document;
+      ['ai/program_chain.js', 'ai/copilot_auth.js', 'ai/vbrainstem.js', 'ai/dialogue.js']
+        .forEach(src => { const e = doc.createElement('script');
+                          e.src = new URL(src, location.href).href; doc.body.appendChild(e); });
+      const s = doc.createElement('script');
+      s.src = new URL('ai/autodrive.js', location.href).href;
+      s.setAttribute('data-autodrive', '1');
+      doc.body.appendChild(s);
+    } catch (e) { c.doing.textContent = 'cannot drive: ' + e.message; continue; }
+
+    const armed = await (async () => {
+      for (let t = 0; t < 60; t++) {
+        try { if (c.frame.contentWindow.__autodrive) return true; } catch (e) {}
+        await new Promise(r => setTimeout(r, 250));
+      }
+      return false;
+    })();
+    if (!armed) { c.doing.textContent = 'driver never armed'; continue; }
+    try { c.frame.contentWindow.NEXUS_PERSONA = persona; c.frame.contentWindow.NEXUS_IS_AI = true; } catch (e) {}
+
+    // budgets are not optional just because this view is prettier
+    const d = c.frame.contentWindow.__autodrive;
+    c.doing.textContent = 'playing';
+    d.run(loaded.prog, (verb) => {
+      c.turns++;
+      c.doing.textContent = verb + ' · turn ' + c.turns + '/' + BUDGET;
+      if (c.turns >= BUDGET) { try { d.stop(); } catch (e) {} c.doing.textContent = 'budget reached'; }
+    }).catch(e => { c.doing.textContent = 'stopped: ' + e.message; });
+  }
+
+  // the focus still walks the room, exactly as it does for a recording
+  let focus = 0;
+  setInterval(() => {
+    cells.forEach((c, k) => {
+      c.el.classList.toggle('focus', k === focus);
+      c.el.style.transform = k === focus ? 'scale(1.06)' : 'scale(.965)';
+    });
+    $('who').textContent = cells[focus] ? cells[focus].rec.label : '—';
+    $('n').textContent = cells[focus] ? cells[focus].turns : 0;
+    $('ep').textContent = 'live · room ' + roomId;
+    focus = (focus + 1) % cells.length;
+  }, HOLD);
+  window.__viewsReady = true;
+}
+
+(async () => {
+  if (LIVE > 0) { await runLive(Math.min(LIVE, 9)); return; }
+  let m;
+  try { m = await (await fetch(MANIFEST, { cache: 'no-cache' })).json(); }
+  catch (e) { $('stage').innerHTML = '<div class="blank">no recording at ' + MANIFEST + '</div>'; return; }
+  const players = m.players || [];
+  const frames = m.frames || 0;
+  layout(players.length);
+  $('of').textContent = frames;
+
+  const cells = players.map(p => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = `<span class="tag">${p.label || p.id}</span><img alt="${p.id}'s view">` +
+                  `<div class="doing"></div>`;
+    $('stage').appendChild(c);
+    return { rec: p, el: c, img: c.querySelector('img'), doing: c.querySelector('.doing') };
+  });
+
+  let i = 0, focus = 0, lastSwap = 0;
+  function paint(now) {
+    const f = Math.min(frames - 1, Math.floor(i));
+    cells.forEach((c, k) => {
+      const shot = (c.rec.shots || [])[f];
+      if (shot) { const want = BASE + shot; if (c.img.getAttribute('src') !== want) c.img.src = want; }
+      const note = (c.rec.doing || [])[f];
+      c.doing.textContent = note || '';
+      c.el.classList.toggle('focus', k === focus);
+      // the focused view gets the room: it grows toward the middle and the others give way
+      c.el.style.transform = k === focus ? 'scale(1.06)' : 'scale(.965)';
+    });
+    $('who').textContent = (cells[focus] && (cells[focus].rec.label || cells[focus].rec.id)) || '—';
+    $('n').textContent = f + 1;
+    $('ep').textContent = ((cells[focus] && (cells[focus].rec.epochs || [])[f]) || '').slice(0, 10) || '—';
+    if (now - lastSwap > HOLD) { focus = (focus + 1) % cells.length; lastSwap = now; }
+    i += 1;
+    if (i >= frames) i = 0;                       // loop, so it can be recorded at any length
+    setTimeout(() => requestAnimationFrame(paint), 1000 / FPS);
+  }
+  requestAnimationFrame(t => { lastSwap = t; paint(t); });
+  window.__viewsReady = true;
+})();
+</script></body></html>
