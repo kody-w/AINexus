@@ -61,7 +61,13 @@ loop spends a visitor's seat without ever approaching the limit that exists to s
 Found by the ceiling audit, outside its region. Not fixed yet only because another agent is in that
 file; it is a small change (route it through `spend()`), not a hard one.
 
-### 6. `summon()` step 1 hot-loads source without the scan its sibling applies
+### 6. ~~`summon()` step 1 hot-loads source without the scan its sibling applies~~ — ANSWERED: no
+The summon audit examined this and said no, with reasoning now in the code. Step 1 only reloads
+source somebody already vouched for (shipped with the page and sha-verified, operator-supplied, or
+already scanned by step 2), and running the scan there would refuse the page's OWN world:
+`ai/vb/nexus_world_agent.py` says `from js import window`, and six of the eight local agents do the
+same. The one change that would invalidate that reasoning — persisting `agentSource` — is named in
+the code beside it. Left as reported so the question and its answer stay together.
 **ANSWERED — not a hole, and the scan must NOT be added there.** Raised by the ceiling audit and
 checked by the summon audit, which owns that region. Step 1 reloads source out of `agentSource`,
 and exactly three things ever put anything there: the agents this page shipped with (sha256-verified
@@ -90,6 +96,15 @@ rather than a patch.
 capability was PROVEN to work, cannot resurrect anything after a reload — the frames survive in
 localStorage, the source does not. That is the safe way round (a re-summon goes past the door
 again), but it means the "universe where it matched" half only ever fires within one page load.
+
+---
+
+### 7. The summon door is a text search, and text can be composed at runtime
+The forbidden-pattern scan and the import allowlist both read source as text. Text can be assembled
+at runtime, and no regex sees that. The actual containment is Pyodide plus the fact that a summoned
+agent is only ever called with the model's own arguments. Closing it properly means a capability
+boundary — import hooks, restricted builtins — which is a design decision rather than a patch.
+Stated in words, deliberately, with no exploit written.
 
 ---
 
