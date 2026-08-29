@@ -1,10 +1,11 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Views — everyone at once</title>
-<meta name="description" content="Every AI player's own view, side by side, with the focus moving from one to the next.">
+<title>Views - everyone at once</title>
+<meta name="description" content="Every AI player's own view, side by side, on a live scrub-able DOGG timeline.">
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}html,body{height:100%;margin:0}
 body{background:#05050c;color:#e9e9f2;font:13px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
-#stage{position:fixed;inset:0;display:grid;gap:10px;padding:14px}
+button,input{font:inherit}
+#stage{position:fixed;inset:0 0 52px;display:grid;gap:10px;padding:14px}
 .cell{position:relative;border:1px solid #23234a;border-radius:12px;overflow:hidden;background:#0a0a18;
   transition:transform .6s cubic-bezier(.2,.8,.2,1),border-color .5s,box-shadow .5s;min-height:0}
 .cell img{width:100%;height:100%;object-fit:cover;display:block;opacity:.72;transition:opacity .5s}
@@ -19,68 +20,351 @@ body{background:#05050c;color:#e9e9f2;font:13px/1.5 -apple-system,system-ui,sans
 #hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
   background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
 #hud b{color:#7de3ff;font-weight:600}
-.blank{display:flex;align-items:center;justify-content:center;height:100%;color:#3a3a63;font:11px ui-monospace,monospace}
+#state{color:#7dffb0}
+#state.waiting{color:#ffd479}
+#transport{position:fixed;z-index:10;left:0;right:0;bottom:0;height:52px;display:flex;align-items:center;gap:10px;
+  padding:8px 14px;background:rgba(5,5,12,.94);border-top:1px solid #23234a;backdrop-filter:blur(10px)}
+#transport button{height:32px;border:1px solid #34345f;border-radius:8px;padding:0 11px;color:#dadaee;background:#111126;cursor:pointer}
+#transport button:hover{border-color:#7de3ff}
+#live{color:#7dffb0!important;border-color:#276246!important}
+#live.off{color:#8f8fb0!important;border-color:#34345f!important}
+#scrub{min-width:100px;flex:1;accent-color:#7de3ff}
+#when{min-width:172px;text-align:right;color:#8f8fb0;font:11px ui-monospace,Menlo,monospace}
+.blank{display:flex;align-items:center;justify-content:center;height:100%;color:#55557d;font:11px ui-monospace,monospace}
+@media(max-width:700px){#hud{left:14px;right:auto}#when{display:none}#stage{gap:6px;padding:8px;bottom:48px}
+  #transport{height:48px;padding:7px 8px;gap:7px}#transport button{padding:0 8px}}
 </style></head><body>
-<div id="stage"></div>
-<div id="hud"><b id="who">—</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="ep">—</span></div>
+<div id="stage"><div class="blank">waiting for the first DOGG frame...</div></div>
+<div id="hud"><b id="who">-</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="state" class="waiting">CONNECTING</span></div>
+<div id="transport">
+  <button id="play" type="button" aria-label="Play timeline">Play</button>
+  <input id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="DOGG timeline">
+  <button id="live" class="off" type="button">LIVE</button>
+  <span id="when">-</span>
+</div>
 <script>
-// Everyone's own view, at once, with the focus moving around. It plays from a manifest written
-// by tools/record_views.cjs — the same frames a player actually saw, in the order it saw them —
-// or live from a running herd on this origin.
+// A DOGG is a line, not a GIF. The manifest can grow while this page is open: viewers at the
+// live edge hold the newest frame until the next tick arrives, while anyone who scrubs back
+// stays on the frame they chose.
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const MANIFEST = params.get('manifest') || 'recordings/latest/manifest.json';
-const HOLD = +(params.get('hold') || 2400);      // how long each player holds the focus
-const FPS = +(params.get('fps') || 8);
-const BASE = MANIFEST.replace(/[^/]*$/, '');     // shots are named relative to their manifest
+const REQUESTED_MANIFEST = params.get('manifest') || 'recordings/latest/manifest.json';
+const DOGG_MANIFEST = params.get('dogg') ||
+  'https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/manifest.json';
+const USE_DOGG = params.get('live') !== '0' && REQUESTED_MANIFEST === 'recordings/latest/manifest.json';
+const PRIMARY_MANIFEST = USE_DOGG ? DOGG_MANIFEST : REQUESTED_MANIFEST;
+const FALLBACK_MANIFEST = USE_DOGG ? REQUESTED_MANIFEST : '';
+const HOLD = Math.max(250, +(params.get('hold') || 2400));
+const POLL = Math.max(250, +(params.get('poll') || 15000));
+const LOOP = params.get('loop') === '1';
+const AUTOPLAY = params.get('autoplay') !== '0';
+
+const view = {
+  manifest: null,
+  manifestUrl: '',
+  base: '',
+  cells: [],
+  frame: 0,
+  focus: 0,
+  followingLive: USE_DOGG,
+  playing: false,
+  live: USE_DOGG,
+  ready: false,
+  signature: '',
+  frameAt: 0,
+  focusAt: 0,
+  imageRetry: 0
+};
 
 function layout(n) {
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
-  const rows = Math.ceil(n / cols);
-  const st = $('stage');
-  st.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  st.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-  return { cols, rows };
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const stage = $('stage');
+  stage.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  stage.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 }
 
-(async () => {
-  let m;
-  try { m = await (await fetch(MANIFEST, { cache: 'no-cache' })).json(); }
-  catch (e) { $('stage').innerHTML = '<div class="blank">no recording at ' + MANIFEST + '</div>'; return; }
-  const players = m.players || [];
-  const frames = m.frames || 0;
-  layout(players.length);
-  $('of').textContent = frames;
+function frameCount(manifest) {
+  const players = manifest && Array.isArray(manifest.players) ? manifest.players : [];
+  const lengths = players.flatMap(player => [
+    Array.isArray(player.shots) ? player.shots.length : 0,
+    Array.isArray(player.doing) ? player.doing.length : 0,
+    Array.isArray(player.epochs) ? player.epochs.length : 0
+  ]);
+  return Math.max(0, Number(manifest && manifest.frames) || 0,
+    Array.isArray(manifest && manifest.ticks) ? manifest.ticks.length : 0, ...lengths);
+}
 
-  const cells = players.map(p => {
-    const c = document.createElement('div'); c.className = 'cell';
-    c.innerHTML = `<span class="tag">${p.label || p.id}</span><img alt="${p.id}'s view">` +
-                  `<div class="doing"></div>`;
-    $('stage').appendChild(c);
-    return { rec: p, el: c, img: c.querySelector('img'), doing: c.querySelector('.doing') };
+function manifestIdentity(manifest, url) {
+  const ticks = Array.isArray(manifest.ticks) ? manifest.ticks : [];
+  const tail = ticks.length ? ticks[ticks.length - 1] : null;
+  return [url, manifest.updated || manifest.recorded || '', frameCount(manifest),
+    tail && (tail.id || tail.capturedAt) || ''].join('|');
+}
+
+function resolvedUrl(url, cacheBust) {
+  const resolved = new URL(url, location.href);
+  if (cacheBust) resolved.searchParams.set('_dogg', String(Date.now()));
+  return resolved.href;
+}
+
+async function fetchManifest(url) {
+  const response = await fetch(resolvedUrl(url, true), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`manifest ${response.status}`);
+  return { manifest: await response.json(), url };
+}
+
+function setStatus(text, waiting) {
+  $('state').textContent = text;
+  $('state').classList.toggle('waiting', !!waiting);
+}
+
+function tickAt(index) {
+  const ticks = view.manifest && Array.isArray(view.manifest.ticks) ? view.manifest.ticks : [];
+  return ticks[index] || null;
+}
+
+function tickId(index) {
+  const tick = tickAt(index);
+  return tick && (tick.id || tick.capturedAt) || '';
+}
+
+function tickTime(index) {
+  const tick = tickAt(index);
+  const raw = tick && tick.capturedAt ||
+    (view.manifest && (view.manifest.updated || view.manifest.recorded)) || '';
+  if (!raw) return '-';
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? raw : date.toLocaleString();
+}
+
+function rebuildCells(players) {
+  const stage = $('stage');
+  stage.textContent = '';
+  view.cells = players.map(player => {
+    const cell = document.createElement('div');
+    const tag = document.createElement('span');
+    const image = document.createElement('img');
+    const doing = document.createElement('div');
+    cell.className = 'cell';
+    tag.className = 'tag';
+    image.alt = `${player.id || 'player'}'s view`;
+    doing.className = 'doing';
+    cell.append(tag, image, doing);
+    stage.appendChild(cell);
+    return { rec: player, el: cell, tag, img: image, doing, current: '', pending: '', loadToken: 0 };
   });
+  layout(players.length);
+}
 
-  let i = 0, focus = 0, lastSwap = 0;
-  function paint(now) {
-    const f = Math.min(frames - 1, Math.floor(i));
-    cells.forEach((c, k) => {
-      const shot = (c.rec.shots || [])[f];
-      if (shot) { const want = BASE + shot; if (c.img.getAttribute('src') !== want) c.img.src = want; }
-      const note = (c.rec.doing || [])[f];
-      c.doing.textContent = note || '';
-      c.el.classList.toggle('focus', k === focus);
-      // the focused view gets the room: it grows toward the middle and the others give way
-      c.el.style.transform = k === focus ? 'scale(1.06)' : 'scale(.965)';
-    });
-    $('who').textContent = (cells[focus] && (cells[focus].rec.label || cells[focus].rec.id)) || '—';
-    $('n').textContent = f + 1;
-    $('ep').textContent = ((cells[focus] && (cells[focus].rec.epochs || [])[f]) || '').slice(0, 10) || '—';
-    if (now - lastSwap > HOLD) { focus = (focus + 1) % cells.length; lastSwap = now; }
-    i += 1;
-    if (i >= frames) i = 0;                       // loop, so it can be recorded at any length
-    setTimeout(() => requestAnimationFrame(paint), 1000 / FPS);
+function updateRoster(players) {
+  const roster = players.map(player => player.id || '').join('|');
+  const current = view.cells.map(cell => cell.rec.id || '').join('|');
+  if (roster !== current) rebuildCells(players);
+  view.cells.forEach((cell, index) => {
+    cell.rec = players[index];
+    cell.tag.textContent = players[index].label || players[index].id || `player ${index + 1}`;
+  });
+}
+
+function imageUrl(shot) {
+  if (!shot) return '';
+  return new URL(shot, view.base).href;
+}
+
+function holdThenSwap(cell, wanted) {
+  if (!wanted || cell.current === wanted) {
+    if (cell.pending && cell.pending !== wanted) {
+      cell.pending = '';
+      cell.loadToken += 1;
+    }
+    return;
   }
-  requestAnimationFrame(t => { lastSwap = t; paint(t); });
+  if (cell.pending === wanted) return;
+  const token = ++cell.loadToken;
+  cell.pending = wanted;
+  const preload = new Image();
+  preload.onload = () => {
+    if (cell.loadToken !== token || cell.pending !== wanted) return;
+    cell.img.src = preload.src;
+    cell.current = wanted;
+    cell.pending = '';
+    if (view.live && view.followingLive) setStatus('LIVE', false);
+  };
+  preload.onerror = () => {
+    if (cell.loadToken !== token || cell.pending !== wanted) return;
+    cell.pending = '';
+    if (view.live && view.followingLive) setStatus('WAITING FOR FRAME', true);
+    clearTimeout(view.imageRetry);
+    view.imageRetry = setTimeout(paint, Math.min(5000, POLL));
+  };
+  const separator = wanted.includes('?') ? '&' : '?';
+  preload.src = wanted + separator + '_dogg_frame=' + Date.now();
+}
+
+function paint() {
+  if (!view.manifest) return;
+  const frames = frameCount(view.manifest);
+  if (!frames) {
+    $('n').textContent = '0';
+    $('of').textContent = '0';
+    return;
+  }
+  view.frame = Math.max(0, Math.min(frames - 1, Math.floor(view.frame)));
+  view.focus = view.cells.length ? view.focus % view.cells.length : 0;
+  view.cells.forEach((cell, index) => {
+    const shot = Array.isArray(cell.rec.shots) ? cell.rec.shots[view.frame] : '';
+    holdThenSwap(cell, imageUrl(shot));
+    const note = Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
+    cell.doing.textContent = note || '';
+    cell.el.classList.toggle('focus', index === view.focus);
+    cell.el.style.transform = index === view.focus ? 'scale(1.06)' : 'scale(.965)';
+  });
+  const focused = view.cells[view.focus];
+  $('who').textContent = focused && (focused.rec.label || focused.rec.id) || '-';
+  $('n').textContent = String(view.frame + 1);
+  $('of').textContent = String(frames);
+  $('scrub').max = String(Math.max(0, frames - 1));
+  $('scrub').value = String(view.frame);
+  $('when').textContent = tickTime(view.frame);
+  $('live').classList.toggle('off', !view.live || !view.followingLive);
+  $('play').textContent = view.playing ? 'Pause' : 'Play';
+}
+
+function applyManifest(manifest, url) {
+  const signature = manifestIdentity(manifest, url);
+  if (signature === view.signature) {
+    if (view.live && view.followingLive) setStatus('LIVE', false);
+    return;
+  }
+
+  const oldFrames = frameCount(view.manifest);
+  const oldTick = oldFrames ? tickId(view.frame) : '';
+  const wasAtEdge = view.followingLive || !oldFrames || view.frame >= oldFrames - 1;
+  const players = Array.isArray(manifest.players) ? manifest.players : [];
+  const frames = frameCount(manifest);
+
+  view.manifest = manifest;
+  view.manifestUrl = url;
+  view.base = new URL('.', new URL(url, location.href)).href;
+  view.live = USE_DOGG || !!manifest.live;
+  view.signature = signature;
+  updateRoster(players);
+
+  if (!view.ready) {
+    view.frame = view.live ? Math.max(0, frames - 1) : 0;
+    view.followingLive = view.live;
+    view.playing = !view.live && AUTOPLAY && frames > 1;
+  } else if (view.live && wasAtEdge) {
+    view.frame = Math.max(0, frames - 1);
+    view.followingLive = true;
+  } else if (oldTick && Array.isArray(manifest.ticks)) {
+    const sameTick = manifest.ticks.findIndex(tick => tick && (tick.id || tick.capturedAt) === oldTick);
+    view.frame = sameTick >= 0 ? sameTick : Math.min(view.frame, Math.max(0, frames - 1));
+  } else {
+    view.frame = Math.min(view.frame, Math.max(0, frames - 1));
+  }
+
+  view.ready = true;
   window.__viewsReady = true;
-})();
+  setStatus(view.live && view.followingLive ? 'LIVE' : view.live ? 'HISTORY' : 'RECORDING', false);
+  paint();
+}
+
+async function refreshManifest() {
+  try {
+    const result = await fetchManifest(PRIMARY_MANIFEST);
+    applyManifest(result.manifest, result.url);
+    return;
+  } catch (error) {
+    if (view.ready) {
+      if (view.live && view.followingLive) setStatus('WAITING FOR TICK', true);
+      return;
+    }
+  }
+
+  if (FALLBACK_MANIFEST) {
+    try {
+      const result = await fetchManifest(FALLBACK_MANIFEST);
+      applyManifest(result.manifest, result.url);
+      setStatus('WAITING FOR LIVE', true);
+      return;
+    } catch (error) {}
+  }
+  const blank = document.createElement('div');
+  blank.className = 'blank';
+  blank.textContent = `no recording at ${PRIMARY_MANIFEST}`;
+  $('stage').replaceChildren(blank);
+  setStatus('OFFLINE', true);
+}
+
+$('scrub').addEventListener('input', event => {
+  view.frame = +event.target.value;
+  view.followingLive = view.live && view.frame >= frameCount(view.manifest) - 1;
+  view.playing = false;
+  setStatus(view.followingLive ? 'LIVE' : view.live ? 'HISTORY' : 'RECORDING', false);
+  paint();
+});
+
+$('live').addEventListener('click', () => {
+  if (!view.live || !view.manifest) return;
+  view.frame = Math.max(0, frameCount(view.manifest) - 1);
+  view.followingLive = true;
+  view.playing = false;
+  setStatus('LIVE', false);
+  paint();
+});
+
+$('play').addEventListener('click', () => {
+  const frames = frameCount(view.manifest);
+  if (frames < 2) return;
+  if (!view.playing && view.frame >= frames - 1) view.frame = 0;
+  view.followingLive = false;
+  view.playing = !view.playing;
+  setStatus(view.live ? 'HISTORY' : 'RECORDING', false);
+  paint();
+});
+
+function animate(now) {
+  const fps = Math.max(.25, +(params.get('fps') ||
+    (view.manifest && (view.manifest.playbackFps || view.manifest.fps)) || 8));
+  const frames = frameCount(view.manifest);
+  if (view.playing && frames > 1 && now - view.frameAt >= 1000 / fps) {
+    view.frameAt = now;
+    if (view.frame < frames - 1) {
+      view.frame += 1;
+    } else if (LOOP) {
+      view.frame = 0;
+    } else {
+      view.playing = false;
+      view.followingLive = view.live;
+      setStatus(view.followingLive ? 'LIVE' : 'END', false);
+    }
+    paint();
+  }
+  if (view.cells.length && now - view.focusAt >= HOLD) {
+    view.focus = (view.focus + 1) % view.cells.length;
+    view.focusAt = now;
+    paint();
+  }
+  requestAnimationFrame(animate);
+}
+
+window.__viewsState = () => ({
+  frames: frameCount(view.manifest),
+  frame: view.frame,
+  followingLive: view.followingLive,
+  playing: view.playing,
+  live: view.live,
+  source: view.manifestUrl,
+  tick: tickId(view.frame)
+});
+
+refreshManifest();
+setInterval(refreshManifest, POLL);
+requestAnimationFrame(now => {
+  view.frameAt = now;
+  view.focusAt = now;
+  animate(now);
+});
 </script></body></html>

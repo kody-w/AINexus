@@ -36,7 +36,7 @@ await ctx.route('https://kody-w.github.io/AINexus/**', r => {
 });
 const p = await ctx.newPage();
 const url = 'https://kody-w.github.io/AINexus/views.html?manifest=' + encodeURIComponent(MANIFEST)
-          + '&hold=' + HOLD + '&fps=' + Math.max(4, Math.round(FPS / 2));
+          + '&hold=' + HOLD + '&fps=' + Math.max(4, Math.round(FPS / 2)) + '&live=0&loop=1';
 await p.goto(url, { timeout: 45000 });
 await p.waitForFunction(() => window.__viewsReady, { timeout: 20000 }).catch(() => {});
 await p.waitForTimeout(700);

@@ -1,0 +1,72 @@
+name: Publish DOGG Live Tick
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dogg-live-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the current world
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Prepare the public DOGG feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init feed
+          git -C feed remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git -C feed fetch --depth=1 origin dogg-live; then
+            git -C feed checkout --detach FETCH_HEAD
+          else
+            git -C feed checkout --orphan dogg-live
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the browser driver
+        run: npm install --prefix source/.dogg-runtime --no-save --no-package-lock playwright-core@1.62.1
+
+      - name: Capture and append one tick
+        env:
+          PLAYWRIGHT_DIR: ${{ github.workspace }}/source/.dogg-runtime
+        run: |
+          node source/tools/record_views.cjs \
+            --players 4 \
+            --seconds 1 \
+            --fps 1 \
+            --width 360 \
+            --quality 0.62 \
+            --browser-channel chrome \
+            --output-root "${{ github.workspace }}/feed" \
+            --stream recordings/live \
+            --max-frames 2016 \
+            --tick-seconds 300
+
+      - name: Publish the tick
+        working-directory: feed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recordings/live
+          if git diff --cached --quiet; then
+            echo "No new DOGG frame was captured"
+            exit 1
+          fi
+          tree=$(git write-tree)
+          commit=$(printf 'dogg: tick %s [skip ci]\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | git commit-tree "$tree")
+          git push --force origin "$commit:refs/heads/dogg-live"

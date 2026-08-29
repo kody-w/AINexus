@@ -30,6 +30,7 @@ fails twice, then it is real.
 | `forge.cjs` | worlds adapted from real published ones, sha256-verified, refused on mismatch |
 | `tick_loop.cjs` | a player ticking on its own clock, sealing a rapp/1 frame per tick |
 | `holo_calibration.cjs` | whether matching frames actually lands the projection closer to the truth |
+| `views_live.cjs` | the public DOGG edge holds between ticks, advances when the manifest grows, and leaves a scrubbed viewer in history |
 | `dimension_seed.cjs` | the same seed walking the same walk |
 
 `turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs` and `overlay.cjs` need no credentials at all.

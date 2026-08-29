@@ -1,129 +1,250 @@
-/* record_views.cjs — run a herd for real and keep what every player SAW.
+/* record_views.cjs - run a herd for real and keep what every player SAW.
  *
- * Each player gets its own page in the same room, so these are genuinely different points of
- * view rather than one camera relabelled. Every capture is that player's own canvas, taken
- * through the same see() an AI uses to look at the world.
+ * Each player gets its own page, so these are genuinely different points of view rather than
+ * one camera relabelled. A finite run still writes recordings/<stamp> plus recordings/latest.
+ * Passing --stream appends the run as immutable ticks in a cumulative DOGG manifest.
  *
- * Writes recordings/<stamp>/<player>/NNNN.webp plus a manifest views.html can play. Nothing
- * here needs a Copilot seat: without one the players still move (the local intent set), which
- * is the point of having a floor.
- *
- *   node tools/record_views.cjs [--players 4] [--seconds 30] [--fps 4] [--room <join-fragment>]
+ *   node tools/record_views.cjs [--players 4] [--seconds 30] [--fps 4]
+ *   node tools/record_views.cjs --seconds 1 --fps 1 --stream recordings/live \
+ *     --output-root /path/to/public-feed --max-frames 2016 --tick-seconds 300
  */
 const { createRequire } = require('module');
-const _req = (() => {
-  for (const base of [process.env.PLAYWRIGHT_DIR, require('path').join(process.env.HOME || '', 'Documents/GitHub/aaa-fps')]) {
-    if (!base) continue;
-    try { const r = createRequire(require('path').join(base, 'package.json')); r.resolve('playwright'); return r; } catch (e) {}
-  }
-  return require;
-})();
-const { chromium } = _req('playwright');
-const fs = require('fs'), path = require('path');
-const ROOT = path.resolve(__dirname, '..');
-const TYPES = { '.html':'text/html','.js':'text/javascript','.json':'application/json','.css':'text/css','.py':'text/plain','.webp':'image/webp' };
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { appendCapture } = require('./dogg_stream.cjs');
 
-const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const N = +arg('players', 4), SECONDS = +arg('seconds', 24), FPS = +arg('fps', 4);
+function loadPlaywright() {
+  const bases = [
+    process.env.PLAYWRIGHT_DIR,
+    path.join(process.env.HOME || '', 'Documents/GitHub/aaa-fps')
+  ].filter(Boolean);
+  for (const base of bases) {
+    const candidate = createRequire(path.join(base, 'package.json'));
+    for (const packageName of ['playwright', 'playwright-core']) {
+      try {
+        candidate.resolve(packageName);
+        return candidate(packageName);
+      } catch (error) {}
+    }
+  }
+  for (const packageName of ['playwright', 'playwright-core']) {
+    try {
+      return require(packageName);
+    } catch (error) {}
+  }
+  throw new Error('playwright or playwright-core is required');
+}
+
+const { chromium } = loadPlaywright();
+const ROOT = path.resolve(__dirname, '..');
+const TYPES = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.css': 'text/css',
+  '.py': 'text/plain',
+  '.webp': 'image/webp'
+};
+
+const arg = (key, fallback) => {
+  const index = process.argv.indexOf('--' + key);
+  return index > 0 ? process.argv[index + 1] : fallback;
+};
+const positive = (name, fallback) => {
+  const value = Number(arg(name, fallback));
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`--${name} must be positive`);
+  return value;
+};
+const N = Math.floor(positive('players', 4));
+const SECONDS = positive('seconds', 24);
+const FPS = positive('fps', 4);
+const WIDTH = Math.floor(positive('width', 480));
+const QUALITY = Number(arg('quality', .72));
 const WORLD = arg('world', 'index.html');
+const STREAM = arg('stream', '');
+const OUTPUT_ROOT = path.resolve(arg('output-root', ROOT));
+const MAX_FRAMES = Math.floor(positive('max-frames', 2016));
+const TICK_SECONDS = Number(arg('tick-seconds', 0));
+const BROWSER_CHANNEL = arg('browser-channel', '');
 const NAMES = ['wanderer', 'greeter', 'pilgrim', 'watcher', 'scribe', 'runner', 'herald', 'tinker'];
+if (!Number.isFinite(QUALITY) || QUALITY <= 0 || QUALITY > 1) throw new Error('--quality must be between 0 and 1');
+if (!Number.isFinite(TICK_SECONDS) || TICK_SECONDS < 0) throw new Error('--tick-seconds must be zero or positive');
+
+function inside(root, candidate, label) {
+  const relative = path.relative(root, candidate);
+  if (relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
+    return candidate;
+  }
+  throw new Error(`${label} escapes ${root}`);
+}
 
 (async () => {
-const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const outDir = path.join(ROOT, 'recordings', stamp);
+const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
+const outDir = STREAM
+  ? fs.mkdtempSync(path.join(os.tmpdir(), 'dogg-capture-'))
+  : path.join(OUTPUT_ROOT, 'recordings', stamp);
 fs.mkdirSync(outDir, { recursive: true });
 
-const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 900, height: 620 } });
-await ctx.route('https://kody-w.github.io/AINexus/**', r => {
-  const u = new URL(r.request().url());
-  const f = path.join(ROOT, decodeURIComponent(u.pathname).replace(/^\/AINexus/, ''));
-  if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 404, body: 'no' });
-  r.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+const launchOptions = BROWSER_CHANNEL
+  ? { channel: BROWSER_CHANNEL, args: ['--disable-dev-shm-usage'] }
+  : {};
+const browser = await chromium.launch(launchOptions);
+const context = await browser.newContext({ viewport: { width: 900, height: 620 } });
+await context.route('https://kody-w.github.io/AINexus/**', route => {
+  const url = new URL(route.request().url());
+  const file = path.join(ROOT, decodeURIComponent(url.pathname).replace(/^\/AINexus/, ''));
+  if ((file !== ROOT && !file.startsWith(ROOT + path.sep)) ||
+      !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    return route.fulfill({ status: 404, body: 'no' });
+  }
+  return route.fulfill({
+    status: 200,
+    contentType: TYPES[path.extname(file)] || 'application/octet-stream',
+    body: fs.readFileSync(file)
+  });
 });
 
-// THEY DO NOT NEED TO SHARE A WORLD TO SEE EACH OTHER. Each page publishes where it is standing
-// and paints everyone else as a 3D projection in its own scene (ai/holo.js). Four tabs, four
-// instances, one shared sense of who is present — which is also why this keeps working when the
-// players are in DIFFERENT worlds entirely.
-console.log(`opening ${N} players in ${WORLD}…`);
+// Pages publish where they stand and paint the others as projections, so the herd can still see
+// itself even when its members occupy different worlds.
+console.log(`opening ${N} players in ${WORLD}...`);
 const players = [];
-let joinFrag = '';
-for (let i = 0; i < N; i++) {
-  const id = NAMES[i % NAMES.length] + (i >= NAMES.length ? '-' + i : '');
-  const page = await ctx.newPage();
-  page.on('pageerror', e => console.log('  ! ' + id + ': ' + e.message.slice(0, 80)));
-  await page.goto('https://kody-w.github.io/AINexus/' + WORLD + '#as=' + encodeURIComponent('🤖 ' + id + ' (AI)'), { timeout: 60000 });
+for (let index = 0; index < N; index++) {
+  const id = NAMES[index % NAMES.length] + (index >= NAMES.length ? '-' + index : '');
+  const page = await context.newPage();
+  page.on('pageerror', error => console.log('  ! ' + id + ': ' + error.message.slice(0, 80)));
+  await page.goto('https://kody-w.github.io/AINexus/' + WORLD +
+    '#as=' + encodeURIComponent('AI ' + id), { timeout: 60000 });
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/autodrive.js' }).catch(() => {});
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/holo.js' }).catch(() => {});
-  await page.waitForFunction(() => !!window.__autodrive && !!window.NexusHolo, { timeout: 30000 }).catch(() => {});
-  await page.evaluate((who) => {
+  await page.waitForFunction(() => !!window.__autodrive && !!window.NexusHolo,
+    { timeout: 30000 }).catch(() => {});
+  await page.evaluate(who => {
     window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
     window.NexusHolo.attach();
   }, id).catch(() => {});
-  // each one starts facing somewhere different, so the views are not four copies of one view
-  // spread them around a shared spot and turn them to face inward, so each camera has
-  // somebody in it rather than a view of the horizon
-  await page.evaluate(async (k, n) => {
-    const d = window.__autodrive; if (!d) return;
-    // spread around a circle and turn inward, so they are looking at each other
-    await d.look(Math.round((360 / n) * k * 2.2), 0);
-    await d.walk('forward', 420);
-    await d.look(180 * 2.2, 0);
-  }, i, N).catch(() => {});
+  await page.evaluate(async (position, count) => {
+    const drive = window.__autodrive;
+    if (!drive) return;
+    await drive.look(Math.round((360 / count) * position * 2.2), 0);
+    await drive.walk('forward', 420);
+    await drive.look(180 * 2.2, 0);
+  }, index, N).catch(() => {});
   players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [] });
   console.log('  ' + id + ' is in');
 }
 
-// let the projections find each other before the first frame
-await new Promise(r => setTimeout(r, 1500));
-for (const p of players) {
-  const seen = await p.page.evaluate(() => window.NexusHolo.present().map(x => x.name + (x.painted ? '' : '(unpainted)'))).catch(() => []);
-  console.log('  ' + p.id + ' sees ' + (seen.length ? seen.join(', ') : 'nobody'));
+await new Promise(resolve => setTimeout(resolve, 1500));
+for (const player of players) {
+  const seen = await player.page.evaluate(() =>
+    window.NexusHolo.present().map(item => item.name + (item.painted ? '' : '(unpainted)'))
+  ).catch(() => []);
+  console.log('  ' + player.id + ' sees ' + (seen.length ? seen.join(', ') : 'nobody'));
 }
 
-const INTENTS = ['wander', 'hold', 'go', 'wander'];
-const total = SECONDS * FPS;
-console.log(`recording ${total} frames at ${FPS}fps…`);
-for (let f = 0; f < total; f++) {
-  for (let k = 0; k < players.length; k++) {
-    const p = players[k];
-    // move it a little, the way a standing intention would between keyframes
-    if (f % Math.max(1, Math.round(FPS)) === 0) {
-      const intent = INTENTS[(k + Math.floor(f / FPS)) % INTENTS.length];
-      p.doing[f] = intent;
-      await p.page.evaluate(async (it) => {
-        const d = window.__autodrive; if (!d) return;
-        if (it === 'wander') { await d.look((Math.random() * 90 - 45) | 0, 0); await d.walk('forward', 260); }
-        else if (it === 'go') { await d.look(60, 0); }
+const intents = ['wander', 'hold', 'go', 'wander'];
+const total = Math.max(1, Math.round(SECONDS * FPS));
+const ticks = [];
+console.log(`recording ${total} frames at ${FPS}fps...`);
+for (let frame = 0; frame < total; frame++) {
+  ticks[frame] = {
+    id: `${stamp}:${String(frame).padStart(4, '0')}`,
+    capturedAt: new Date().toISOString()
+  };
+  for (let index = 0; index < players.length; index++) {
+    const player = players[index];
+    if (frame % Math.max(1, Math.round(FPS)) === 0) {
+      const intent = intents[(index + Math.floor(frame / FPS)) % intents.length];
+      player.doing[frame] = intent;
+      await player.page.evaluate(async value => {
+        const drive = window.__autodrive;
+        if (!drive) return;
+        if (value === 'wander') {
+          await drive.look((Math.random() * 90 - 45) | 0, 0);
+          await drive.walk('forward', 260);
+        } else if (value === 'go') {
+          await drive.look(60, 0);
+        }
       }, intent).catch(() => {});
-    } else { p.doing[f] = p.doing[f - 1] || ''; }
-    const shot = await p.page.evaluate(() => {
-      const d = window.__autodrive; if (!d) return null;
-      const s = d.see({ width: 480, format: 'image/webp', quality: 0.72, send: false });
-      return s && !s.blank ? s.uri : null;
-    }).catch(() => null);
-    if (shot) {
-      const dir = path.join(outDir, p.id); fs.mkdirSync(dir, { recursive: true });
-      const file = String(f).padStart(4, '0') + '.webp';
-      fs.writeFileSync(path.join(dir, file), Buffer.from(shot.split(',')[1], 'base64'));
-      p.shots[f] = p.id + '/' + file;
     } else {
-      p.shots[f] = p.shots[f - 1] || null;
+      player.doing[frame] = player.doing[frame - 1] || '';
+    }
+    const shot = await player.page.evaluate(options => {
+      const drive = window.__autodrive;
+      if (!drive) return null;
+      const seen = drive.see({
+        width: options.width,
+        format: 'image/webp',
+        quality: options.quality,
+        send: false
+      });
+      return seen && !seen.blank ? seen.uri : null;
+    }, { width: WIDTH, quality: QUALITY }).catch(() => null);
+    if (shot) {
+      const directory = path.join(outDir, player.id);
+      fs.mkdirSync(directory, { recursive: true });
+      const file = String(frame).padStart(4, '0') + '.webp';
+      fs.writeFileSync(path.join(directory, file), Buffer.from(shot.split(',')[1], 'base64'));
+      player.shots[frame] = player.id + '/' + file;
+    } else {
+      player.shots[frame] = player.shots[frame - 1] || null;
     }
   }
-  if (f % (FPS * 4) === 0) process.stdout.write('  ' + f + '/' + total + '\r');
+  if (frame % Math.max(1, Math.round(FPS * 4)) === 0) {
+    process.stdout.write('  ' + frame + '/' + total + '\r');
+  }
 }
-console.log('\nwriting manifest…');
-const manifest = { recorded: new Date().toISOString(), world: WORLD, fps: FPS, frames: total,
-  players: players.map(p => ({ id: p.id, label: p.label, shots: p.shots, doing: p.doing, epochs: p.epochs })) };
+
+console.log('\nwriting manifest...');
+const missingPlayers = players.filter(player => !player.shots.some(Boolean)).map(player => player.id);
+if (missingPlayers.length) throw new Error('no frame captured for: ' + missingPlayers.join(', '));
+const manifest = {
+  recorded: new Date().toISOString(),
+  world: WORLD,
+  fps: FPS,
+  frames: total,
+  ticks,
+  players: players.map(player => ({
+    id: player.id,
+    label: player.label,
+    shots: player.shots,
+    doing: player.doing,
+    epochs: player.epochs
+  }))
+};
 fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest));
-const latest = path.join(ROOT, 'recordings', 'latest');
-try { fs.rmSync(latest, { recursive: true, force: true }); } catch (e) {}
+await browser.close();
+
+const sizeKb = directory => {
+  let bytes = 0;
+  for (const file of fs.readdirSync(directory, { recursive: true })) {
+    const candidate = path.join(directory, file);
+    try {
+      if (fs.statSync(candidate).isFile()) bytes += fs.statSync(candidate).size;
+    } catch (error) {}
+  }
+  return Math.round(bytes / 1024);
+};
+
+if (STREAM) {
+  const streamDir = inside(OUTPUT_ROOT, path.resolve(OUTPUT_ROOT, STREAM), 'stream');
+  const live = appendCapture({
+    streamDir,
+    captureDir: outDir,
+    captureManifest: manifest,
+    maxFrames: MAX_FRAMES,
+    tickSeconds: TICK_SECONDS
+  });
+  fs.rmSync(outDir, { recursive: true, force: true });
+  console.log(`\n${players.length} views · ${total} new ticks · ${live.frames} retained`);
+  console.log('  ' + streamDir + ` (${sizeKb(streamDir)}KB)`);
+  return;
+}
+
+const latest = path.join(OUTPUT_ROOT, 'recordings', 'latest');
+fs.rmSync(latest, { recursive: true, force: true });
 fs.cpSync(outDir, latest, { recursive: true });
-await b.close();
-const kb = (dir) => { let n = 0; for (const f of fs.readdirSync(dir, { recursive: true })) { const p = path.join(dir, f); try { if (fs.statSync(p).isFile()) n += fs.statSync(p).size; } catch (e) {} } return Math.round(n / 1024); };
-console.log(`\n${players.length} views · ${total} frames each · ${kb(outDir)}KB`);
-console.log('  ' + path.relative(ROOT, outDir));
-console.log('  open views.html?manifest=recordings/latest/manifest.json');
+console.log(`\n${players.length} views · ${total} frames each · ${sizeKb(outDir)}KB`);
+console.log('  ' + path.relative(OUTPUT_ROOT, outDir));
+console.log('  open views.html?manifest=recordings/latest/manifest.json&live=0');
 })();
