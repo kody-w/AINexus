@@ -59,15 +59,32 @@
   }
   function releaseHeldKeys() { for (const c of Array.from(held)) key(c, false); }
 
+  // ── ONE SESSION PER OPERATOR INTENT ───────────────────────────────────────
+  // This file has had the same bug seven times, and it was always the same bug: ambient
+  // state answering a question only a particular piece of work can answer. A counter can
+  // be re-read after an await, compared against the wrong thing, or bumped back to a
+  // value that makes dead work look live — and each fix moved the question one layer
+  // over and left a global answering it somewhere else.
+  //
+  // A session cannot be got wrong the same way. It is an object; killing it is final;
+  // and the only way to have one is to have been HANDED it. Nothing below asks "what is
+  // live now" — every piece of work asks "am I still wanted", of the session it was
+  // given. A later run creating a different session cannot resurrect a dead one, which
+  // is precisely what defeated every previous attempt.
+  let sessionSeq = 0;
+  function newSession() { return { id: ++sessionSeq, alive: true }; }
+
   // A VERB THAT AWAITS IS A FRAME TOO. run()'s loop re-checks the generation between
   // steps, but never inside one — and travel/aim/walk/scan are multi-second await chains.
   // A stop landing inside travel therefore could not reach it: the killed frame walked on,
   // clicked, and navigated the tab into another world, where the driver re-armed fresh and
   // the tower's "stopped" no longer described anything that existed. Capture the
   // generation on entry; ask after every await whether it outlived us.
-  function generationGate() {
-    const mine = api._epoch;
-    return () => api._epoch === mine;
+  // Captured synchronously at verb entry, so it is the very session the calling frame
+  // just checked — a verb is dispatched in the same tick as that check.
+  function liveGate() {
+    const mine = api._session;
+    return () => !!mine && mine.alive;
   }
 
   function mouse(type, opts) {
@@ -172,7 +189,7 @@
     },
 
     async walk(dir, ms) {
-      const live = generationGate();
+      const live = liveGate();
       const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
       key(k, true);
       await sleep(Math.max(50, ms | 0));
@@ -217,7 +234,7 @@
       const perUnit = wrap(api.facing() - before) / 60;
       if (!isFinite(perUnit) || Math.abs(perUnit) < 1e-6) { log('this world does not turn on a mouse look'); return false; }
 
-      const live = generationGate();
+      const live = liveGate();
       for (let i = 0; i < 40; i++) {
         if (!live()) return false;         // the operator stopped us mid-turn
         const err = wrap(want() - api.facing());
@@ -240,7 +257,7 @@
           window.__NEXUS_CARRY_FRAGMENT = '&carry=' + b64;
         } catch (e) {}
       }
-      const live = generationGate();
+      const live = liveGate();
       await api.walk('forward', 900);
       // The click is the irreversible half — it opens a portal and NAVIGATES THE TAB. A
       // stop that landed during the approach must not be followed through: the walk was
@@ -316,7 +333,7 @@
     // reply comes back on two channels — words for the room, and the NEXUS sense's JSON
     // block for the hands (ai/senses/nexus_sense.py). Words are said, the move is made.
     // Without a grant it does nothing and says so: a mindless player is honest, not fake.
-    async mind(opts, inheritedGen) {
+    async mind(opts, inheritedSession) {
       const o = Object.assign({ url: 'http://localhost:7071/chat', vision: true, act: true }, opts || {});
       // TWO DOORS TO A MIND, and a player will take whichever is open.
       //   · a brainstem on this machine — the real thing, with its senses and its memory
@@ -324,16 +341,13 @@
       //     doorman uses (ai/copilot_auth.js). No install, no separate meter: it spends the
       //     Copilot seat the person already has, and only while they are here.
       // Neither present means the player runs on its program alone, and says so.
-      // A turn belongs to the generation of whatever INVOKED it. Reading one off the clock
-      // instead re-stamped a `mind` step that was executing inside an already-voided frame
-      // with the live generation, which made both speech gates below unreachable in the one
-      // case they exist for: a resurrected program spoke, and billed, while the tower
-      // reported it stopped. As a step, the generation is handed in. Entered directly
-      // (drive.mind() at the tab CLI) there is no caller to inherit from, so the turn IS
-      // the operator's action and adopts the current generation.
-      const myTurn = typeof inheritedGen === 'number' ? inheritedGen : api._epoch;
-      if (typeof inheritedGen !== 'number') api._liveTurn = api._epoch;
-      if (myTurn !== api._epoch) { log('turn belongs to a stopped generation — not thinking'); return null; }
+      // A turn belongs to whatever INVOKED it. As a `mind` step the session is handed in.
+      // Entered directly (drive.mind() at the tab CLI) there is no caller to inherit from,
+      // so this IS an operator action and opens its own — which, like any operator action,
+      // replaces whatever was running.
+      let mine = inheritedSession;
+      if (!mine) { api.stop(); mine = api._session = newSession(); }
+      if (!mine.alive) { log('turn belongs to a stopped session — not thinking'); return null; }
       const secret = (() => { try { return sessionStorage.getItem('brainstem-secret') || ''; } catch (e) { return ''; } })();
       const auth = (typeof window !== 'undefined' && window.NexusAuth);
       const viaCopilot = !secret && auth && auth.signedIn();
@@ -345,7 +359,7 @@
         try {
           const percepts0 = o.vision ? api.sense({ width: 320, send: true }) : api.snapshot();
           const r = await window.NexusBrainstem.turn({
-            turn: myTurn,          // carried, never re-read: turn() awaits a Pyodide load
+            session: mine,         // carried, never re-read: turn() awaits a Pyodide load
             percepts: { me: percepts0.me, world: percepts0.world, portals: percepts0.portals,
                         players: percepts0.players, room: percepts0.room,
                         chat: (percepts0.chat || []).slice(-4), carrying: api._carry || null,
@@ -357,7 +371,7 @@
           // it was carrying: the reply arrives long after the operator pulled the kill
           // switch, and the tower already reports this player stopped. Only the MOVE was
           // guarded before, so a stopped player went on talking to the whole room.
-          if (myTurn !== api._epoch) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null, via: 'vbrainstem' }; }
+          if (!mine.alive) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null, via: 'vbrainstem' }; }
           if (r.words) await api.say(r.words.slice(0, 240));
           return { words: r.words, move: null, calls: r.calls, via: 'vbrainstem' };
         } catch (e) { log('vbrainstem turn failed, falling back:', e.message); }
@@ -398,7 +412,7 @@
       const words = reply.split('|||NEXUS|||')[0].trim();
       // same gate as the vbrainstem path above: the chat call has no timeout, so this
       // reply can land minutes after a stop
-      if (myTurn !== api._epoch) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null }; }
+      if (!mine.alive) { log('turn was stopped while thinking — not speaking'); return { words: '', move: null }; }
       if (words) await api.say(words.slice(0, 240));
       let move = null;
       try { const m = String(block).match(/\{[\s\S]*\}/); if (m) move = JSON.parse(m[0]); } catch (e) {}
@@ -406,7 +420,7 @@
       if (!['look','walk','click','aim','travel','say','ask','press','wait','see','scan','sense','carry'].includes(move.do)) {
         log('refused a move the hands do not have:', move.do); return { words, move: null };
       }
-      if (o.act) await api.run({ steps: [move] }, null, { turn: myTurn });
+      if (o.act) await api.run({ steps: [move] }, null, { session: mine });
       return { words, move };
     },
 
@@ -687,57 +701,32 @@
     async press(selector) { const el = document.querySelector(selector); if (!el) return false; el.click(); await sleep(80); return true; },
     async wait(ms) { await sleep(ms | 0); return true; },
 
-    // run a program: a list of steps, each a verb above
-    // `opts.turn` marks a call ISSUED BY a turn — mind() executing the move the model
+    // run a program: a list of steps, each a verb above.
+    // `opts.session` marks work ISSUED BY a session — mind() executing the move the model
     // chose, or vbrainstem executing a tool call. Anything without it is an operator
     // action: the tower's start button, the per-tab CLI, a view's own program.
-    //
-    // The caller DECLARES which it is; nothing is inferred from _depth. Inferring is
-    // what broke this twice. _depth said "nested" for a turn parked in an
-    // un-timeoutable auth.chat fetch, so every later operator run was silently refused;
-    // and it said "top level" for a drive.mind() typed at the CLI, so the turn's own
-    // first tool call cancelled the turn that issued it. A counter cannot answer
-    // "is the turn that issued this still alive" — only the caller knows.
     async run(program, onStep, opts) {
       const steps = (program && program.steps) || [];
-      // Ask whether the caller DECLARED a turn, not whether the declaration is truthy.
-      // Generation 0 is the generation every freshly loaded page starts in, and `0` is
-      // falsy: testing `opts.turn` sent the first turn of every page down the operator
-      // branch, where it called stop() and cancelled the turn that issued it — this
-      // mechanism's own bug, for the third time, one layer over. The claim is a value;
-      // its presence is the question.
-      if (opts && Object.prototype.hasOwnProperty.call(opts, 'turn')) {
-        // The claim carries the GENERATION it belongs to, not a bare "I am a turn".
-        // A boolean would let a zombie through: a turn parked in auth.chat that wakes
-        // after the operator has already started a different program would claim the
-        // NEW generation and run a step inside someone else's program — two minds
-        // driving one avatar. Naming the generation makes a stale caller answerable.
-        const claim = typeof opts.turn === 'number' ? opts.turn : api._liveTurn;
-        if (claim !== api._epoch) return 'stopped';
+      let session;
+      if (opts && opts.session) {
+        session = opts.session;
+        if (!session.alive) return 'stopped';   // the work that issued this is over
       } else {
-        // An operator run replaces EVERYTHING, including work parked in an await that
-        // may never settle. Bumping the generation is what tells a parked turn it is
-        // over; clearing the depth is what stops its abandoned frames from being
-        // mistaken for this run's parents.
+        // An operator action replaces everything, including work parked in an await that
+        // may never settle. stop() kills the live session and undoes what it installed.
         api.stop();
         api._depth = 0;
-        api._liveTurn = api._epoch;
+        session = api._session = newSession();
       }
-      // The generation THIS invocation belongs to. A zombie frame that settles later
-      // must not decrement the counters of the run that replaced it.
-      const gen = api._epoch;
       api._depth = (api._depth || 0) + 1;
       api._running = true;
       try {
       do {
         for (const s of steps) {
-          // `_running` is ONE global flag, so it answers "is anything running", not "am I
-          // still the thing that should be running". A frame parked in an await when the
-          // operator stopped belongs to a voided generation — and the next operator run
-          // sets _running back to true, which used to wake that zombie and let it step and
-          // loop beside the program that replaced it. The finally below already knows to
-          // ask `gen === api._epoch`; the loop has to ask it too.
-          if (!api._running || gen !== api._epoch) return 'stopped';
+          // Asked of MY session, not of the world. A global flag answers "is anything
+          // running", which the next operator run sets true again — that is how a killed
+          // frame used to wake and loop beside the program that replaced it.
+          if (!session.alive) return 'stopped';
           const verb = s.do;
           try {
             const out = verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
@@ -752,7 +741,7 @@
               : verb === 'see' ? api.see(s)
               : verb === 'sense' ? api.sense(s)
               : verb === 'carry' ? api.carry(s.payload || {})
-              : verb === 'mind' ? await api.mind(s, gen)
+              : verb === 'mind' ? await api.mind(s, session)
               : verb === 'camera' ? await api.camera(s)
               : verb === 'cut' ? api.cut()
               : verb === 'pick' ? await api.pick(s.x, s.y)
@@ -774,33 +763,33 @@
             onStep && onStep(verb, { error: String(e && e.message || e) }, e);
           }
         }
-      } while (api._running && gen === api._epoch && program && program.loop);
+      } while (session.alive && program && program.loop);
       return 'done';
       } finally {
-        // in a finally so a thrown step can never strand the counter. Only the live
-        // generation owns the counters: a frame abandoned by a stop settles into a
-        // world that has moved on, and touching _depth/_running there would end a run
-        // that replaced it.
-        if (gen === api._epoch) {
-          api._depth = Math.max(0, (api._depth || 1) - 1);
-          if (api._depth === 0) api._running = false; // only the outermost run ends the run
-        }
+        // _depth and _running are OBSERVABLE ONLY — nothing decides anything by them any
+        // more. A frame abandoned by a stop still tidies its own depth, but it cannot end
+        // a run that replaced it, because only the live session's frames clear the flag.
+        api._depth = Math.max(0, (api._depth || 1) - 1);
+        if (session === api._session && api._depth === 0) api._running = false;
       }
     },
 
-    // A stop voids the current generation. It deliberately does NOT zero _depth: doing
-    // that made the very next call from inside a running turn look top-level, so it took
-    // the branch that re-arms _running and cancelled the stop. The depth drains on its
-    // own as the stack unwinds.
+    // Kill the session, then undo what it installed. Both halves matter: killing it stops
+    // anything further being issued under it, and release() reverses what earlier work
+    // already put into the world — a held key, the world's movement replaced by a
+    // camera's no-op, a latched pointer. A kill switch that does not reverse what it
+    // killed is not a kill switch.
     stop() {
+      if (api._session) api._session.alive = false;
       api._running = false;
-      api._epoch = (api._epoch || 0) + 1;
-      try { api.release(); } catch (e) {}   // and undo what the dead generation installed
+      try { api.release(); } catch (e) {}
       return true;
     },
-    // _epoch    — bumped by stop(); everything issued before it is void
-    // _liveTurn — the generation the operator program currently on the stack belongs to
-    _running: false, _depth: 0, _epoch: 0, _liveTurn: 0, _filming: false, _filmSeq: 0, _shot: null,
+    // _session — the only authority on whether work is still wanted
+    // _running / _depth — observable state for the tower and the console. NOTHING decides
+    //                     anything by them; that mistake is what this file kept making.
+    _session: null,
+    _running: false, _depth: 0, _filming: false, _filmSeq: 0, _shot: null,
   };
 
   window.__autodrive = api;

@@ -39,7 +39,7 @@ function makeDriver(file) {
     worldNavigator: world, __events: events, __realMove: realMove,
     document: doc, addEventListener: (t, f) => {}, removeEventListener: noop,
     setTimeout, clearTimeout, setInterval, clearInterval,
-    requestAnimationFrame: (cb) => setTimeout(() => cb(Date.now()), 16),
+    requestAnimationFrame: (cb) => { win.__raf = (win.__raf || 0) + 1; return setTimeout(() => cb(Date.now()), 16); },
     performance: { now: () => Date.now() },
     location: { href: 'http://x/', search: '', hash: '', pathname: '/' },
     navigator: { userAgent: 'node' }, console,
@@ -71,129 +71,101 @@ function makeDriver(file) {
   if (!d) { console.log('FAIL: driver did not attach'); process.exit(1); }
   const R = {};
   const step = { do: 'wait', ms: 10 };
+  const win = d.__win;
+  // Start a session the way an operator action does, and hand it back for the cases that
+  // need to issue work under it.
+  const openSession = async () => { await d.run({ steps: [step] }, null); return d._session; };
 
-  // 0) THE FRESH PAGE — this case must run before anything else touches the driver.
-  //    A newly loaded page sits in generation 0, and 0 is falsy. Asking whether the
-  //    caller's claim is TRUTHY instead of whether it EXISTS sent the first turn of
-  //    every page down the operator branch, where it called stop() and cancelled the
-  //    turn that issued it. Every other case here opens with a stop, which moves the
-  //    epoch to 1 and hides it — which is exactly how it got past this file.
-  const freshEpoch = d._epoch;
-  d._liveTurn = d._epoch;                          // what mind() does on entry
-  const v0 = await d.run({ steps: [step] }, null, { turn: freshEpoch });
-  R['0_generation_zero_is_a_real_claim'] =
-    { freshEpoch, verdict: v0, epochAfter: d._epoch, selfCancelled: d._epoch !== freshEpoch };
+  // 0) THE FRESH PAGE. A driver that has never run anything has no session at all; the
+  //    first operator action must open one and work. (Under the old counter model this
+  //    case caught generation 0 being falsy, which sent every page's first turn down the
+  //    operator branch to cancel itself. Sessions are objects, so that shape cannot recur
+  //    — the case stays because the behaviour it pins still matters.)
+  R['0_first_run_on_a_fresh_driver'] =
+    { sessionBefore: d._session, verdict: await d.run({ steps: [step] }, null), alive: !!(d._session && d._session.alive) };
 
-  // A) a turn's own tool calls must not cancel the turn that issued them.
-  //    This is the drive.mind() path: turn() runs with nothing else on the stack and
-  //    issues each tool call itself. Inferring "top level" from a zero depth made the
-  //    first call bump the generation out from under its own turn.
+  // A) work issued BY a session must not cancel the session that issued it
+  const sA = await openSession();
+  const a = [];
+  for (let i = 0; i < 3; i++) a.push(await d.run({ steps: [step] }, null, { session: sA }));
+  R.A_issued_work_does_not_cancel_its_own_session =
+    { verdicts: a, stillAlive: sA.alive, stillCurrent: d._session === sA };
+
+  // B) a stop kills the session
+  const sB = await openSession();
   d.stop();
-  d._liveTurn = d._epoch;                          // what mind() does on entry
-  const e0 = d._epoch;
-  const a1 = await d.run({ steps: [step] }, null, { turn: e0 });
-  const a2 = await d.run({ steps: [step] }, null, { turn: e0 });
-  const a3 = await d.run({ steps: [step] }, null, { turn: e0 });
-  R.A_turn_survives_own_tool_calls =
-    { verdicts: [a1, a2, a3], epochUnchanged: d._epoch === e0 };
+  R.B_stop_kills_the_session = { alive: sB.alive };
 
-  // B) a real operator stop must void the turn
-  const eB = d._epoch;
-  d.stop();
-  R.B_operator_stop_seen = { epochBumped: d._epoch !== eB };
-
-  // C) a turn call belonging to a cancelled generation must refuse, and run no steps
+  // C) work issued by a killed session must refuse, and run no steps
   const ranC = [];
-  const vC = await d.run({ steps: [step, step] }, (v) => ranC.push(v), { turn: eB });
-  R.C_turn_call_after_stop = { verdict: vC, stepsRan: ranC.length, running: d._running };
+  R.C_work_from_a_killed_session_refuses =
+    { verdict: await d.run({ steps: [step, step] }, (v) => ranC.push(v), { session: sB }), stepsRan: ranC.length };
 
   // D) the operator can always start again
   R.D_operator_restart = await d.run({ steps: [step] }, null);
 
-  // E) a throwing onStep escapes run(), but must not strand the depth counter —
-  //    a stranded counter is what used to make every later run look nested for good
+  // E) a throwing onStep escapes run(), but must not strand the depth counter
   const beforeE = d._depth;
   let escaped = null;
   try { await d.run({ steps: [step] }, () => { throw new Error('onStep blew up'); }); }
   catch (e) { escaped = e.message; }
   R.E_depth_after_throwing_onStep = { before: beforeE, after: d._depth, escaped };
 
-  // F) THE CRITICAL: an operator run must work while a turn is PARKED.
-  //    A turn waiting on an un-timeoutable auth.chat fetch holds the depth counter up
-  //    forever. Treating that as "I am nested" made the tower, the per-tab CLI and the
-  //    views' budget silently refuse every new program for the life of the request.
+  // F) an operator run must work while earlier work is PARKED. A turn waiting on an
+  //    un-timeoutable auth.chat holds a frame open forever; treating that as "I am nested"
+  //    made the tower, the CLI and the budget silently refuse every new program.
   d.stop();
   const parked = d.run({ steps: [{ do: 'wait', ms: 60000 }] }, null);   // never awaited
   await new Promise((r) => setTimeout(r, 120));
-  const parkedGen = d._epoch;                  // the generation the parked turn belongs to
+  const parkedSession = d._session;
   const depthWhileParked = d._depth;
-  // the operator hits Stop while that turn is parked — this is the trigger. The turn
-  // cannot notice: it is suspended inside a fetch with no timeout, so it keeps the
-  // depth counter raised for the whole life of the request.
-  d.stop();
-  const vF = await d.run({ steps: [step] }, null);            // operator, after the stop
-  R.F_operator_run_while_turn_parked =
-    { depthWhileParked, verdict: vF, running: d._running, depth: d._depth };
+  d.stop();                                          // the operator kills it
+  R.F_operator_run_while_parked =
+    { depthWhileParked, verdict: await d.run({ steps: [step] }, null), depth: d._depth };
 
-  // G) ...and that operator run must CANCEL the parked turn, not run beside it:
-  //    two programs driving one avatar is the failure on the other side of F.
-  const staleTurn = await d.run({ steps: [step] }, null, { turn: parkedGen });
-  R.G_operator_run_cancels_parked_turn = { staleTurnVerdict: staleTurn };
-  void parked;                                                 // left parked on purpose
+  // G) ...and that operator run must CANCEL the parked work, not run beside it
+  R.G_parked_work_is_cancelled =
+    { parkedStillAlive: parkedSession.alive,
+      staleVerdict: await d.run({ steps: [step] }, null, { session: parkedSession }) };
 
-  // I) A KILLED PROGRAM MUST STAY DEAD once a later operator run re-arms the global
-  //    _running flag. The step loop used to ask only "is anything running", which the new
-  //    run answers yes to — so the zombie woke, finished its steps and re-entered its own
-  //    loop, acting beside the program that replaced it.
+  // I) A KILLED PROGRAM MUST STAY DEAD even while a later operator run is in flight. The
+  //    old model gated the step loop on one global _running flag, which the new run set
+  //    true again — so the zombie woke, finished its steps and re-entered its own loop.
   d.stop();
   let zombieSteps = 0;
   const zombie = d.run({ steps: [{ do: 'wait', ms: 300 }], loop: true }, () => { zombieSteps++; });
-  await new Promise((r) => setTimeout(r, 100));      // parked inside the wait
-  d.stop();                                          // the operator kills it
+  await new Promise((r) => setTimeout(r, 100));
+  d.stop();
   const atKill = zombieSteps;
-  // The later operator run must still be IN FLIGHT when the zombie's wait resolves —
-  // that is the whole trigger. _running is one global flag, so a live run answers "yes"
-  // to a question the dead frame had no business asking. An awaited run that has already
-  // finished leaves _running false and hides the bug completely.
   let liveSteps = 0;
   const live = d.run({ steps: [{ do: 'wait', ms: 250 }], loop: true }, () => { liveSteps++; });
-  await new Promise((r) => setTimeout(r, 1600));     // room for several more loop turns
-  d.stop();                                          // retire the live program
-  void live;
-  // The step already IN FLIGHT when the kill landed has to finish — an awaited sleep
-  // cannot be un-awaited — so exactly one more callback is correct and expected. What
-  // must not happen is the frame going round again.
+  await new Promise((r) => setTimeout(r, 1600));
+  d.stop(); void live; void zombie;
+  // the step already in flight at the kill must finish — an awaited sleep cannot be
+  // un-awaited — so exactly one more callback is right. Going round again is not.
   R.I_killed_program_stays_dead =
-    { atKill, after: zombieSteps, extra: zombieSteps - atKill, liveSteps,
-      resumed: (zombieSteps - atKill) > 1 };
-  void zombie;
+    { atKill, extra: zombieSteps - atKill, liveSteps, resumed: (zombieSteps - atKill) > 1 };
 
-  // J) a `mind` step carried inside an already-voided frame must refuse, rather than
-  //    re-stamping itself with the live generation and speaking from the dead
+  // J) a mind step carried inside killed work must refuse rather than re-adopting whatever
+  //    is live and speaking from the dead
+  const sJ = await openSession();
   d.stop();
-  const staleGen = d._epoch - 1;
   const logs = [];
   const origLog = console.log;
-  console.log = (...a) => { logs.push(a.join(' ')); };
-  try { await d.mind({}, staleGen); } finally { console.log = origLog; }
-  R.J_mind_refuses_an_inherited_stale_generation =
-    { refused: logs.some((l) => /stopped generation/.test(l)) };
+  console.log = (...x) => { logs.push(x.join(' ')); };
+  try { await d.mind({}, sJ); } finally { console.log = origLog; }
+  R.J_mind_refuses_a_killed_session = { refused: logs.some((l) => /stopped session/.test(l)) };
 
-  // K) THE INVARIANT, not one case per door: after a stop, the world must be left as it
-  //    was found. Voiding a generation stops new work starting; it cannot reach what
-  //    earlier work INSTALLED — a key held down by a walk that was awaiting, the world's
-  //    own updateMovement replaced by a camera's no-op, a latched pointer lock. Each of
-  //    those was found separately, one review round at a time; this asserts the property
-  //    they are all instances of.
-  const win = d.__win;
+  // K) THE INVARIANT: after a stop the world is as it was found. Each of these was found
+  //    separately, one review round at a time; this asserts the property they share.
   d.stop();
   win.__events.length = 0;
   const walking = d.run({ steps: [{ do: 'walk', dir: 'forward', ms: 5000 }] }, null);
-  await new Promise((r) => setTimeout(r, 120));      // 'w' is down, the step is awaiting
+  await new Promise((r) => setTimeout(r, 120));
   const heldBefore = win.__events.filter((e) => e.type === 'keydown' && e.key === 'w').length;
-  d.camera({ film: false });                         // a camera stubs the world's legs
+  d.camera({ film: false });
   const stubbedLegs = win.worldNavigator.updateMovement !== win.__realMove;
-  d.stop();                                          // the operator pulls the switch
+  d.stop();
   await new Promise((r) => setTimeout(r, 60));
   R.K_stop_leaves_the_world_as_it_found_it = {
     heldBefore,
@@ -205,19 +177,16 @@ function makeDriver(file) {
   };
   void walking;
 
-  // L) A VERB THAT AWAITS IS A FRAME TOO. travel() is a multi-second chain — aim, walk,
-  //    then a click that OPENS A PORTAL AND NAVIGATES THE TAB. run() re-checks the
-  //    generation between steps but never inside one, so a stop landing mid-travel could
-  //    not reach it: the killed frame walked on, clicked, and left for another world where
-  //    the driver re-armed fresh and the tower's "stopped" described nothing that existed.
+  // L) A VERB THAT AWAITS IS A FRAME TOO. travel() ends in a click that opens a portal and
+  //    NAVIGATES THE TAB; run() checks between steps but never inside one.
   d.stop();
   win.__events.length = 0;
   const clicks = [];
   const realMouse = win.MouseEvent;
-  win.MouseEvent = function (type, o) { this.type = type; if (type === 'click') clicks.push(type); Object.assign(this, o || {}); };
+  win.MouseEvent = function (t, o) { this.type = t; if (t === 'click') clicks.push(t); Object.assign(this, o || {}); };
   const travelling = d.run({ steps: [{ do: 'travel', portal: 'Crystal Caverns' }] }, null);
-  await new Promise((r) => setTimeout(r, 150));     // inside the approach
-  d.stop();                                          // the operator pulls the switch
+  await new Promise((r) => setTimeout(r, 150));
+  d.stop();
   const verdictL = await Promise.race([travelling, new Promise((r) => setTimeout(() => r('HUNG'), 4000))]);
   win.MouseEvent = realMouse;
   R.L_a_stopped_travel_does_not_open_the_door = {
@@ -227,30 +196,50 @@ function makeDriver(file) {
                   win.__events.filter((e) => e.type === 'keyup' && e.key === 'w').length,
   };
 
+  // M) ONE CAMERA, ONE LOOP. A stop lowers _filming and a camera step in the SAME task
+  //    raises it again, so the previous loop's already-scheduled callback woke, saw a bare
+  //    global set to true, and ran beside the new one — two loops over one camera, each
+  //    with its own angle and shot budget, doubling the vision posts. The flag says a
+  //    camera is filming; the serial says which one.
+  d.stop();
+  d.camera({ film: false });
+  await new Promise((r) => setTimeout(r, 260));
+  const oneLoop = win.__raf;                       // frames driven by a single loop
+  win.__raf = 0;
+  d.stop(); d.camera({ film: false });             // restart within one task
+  await new Promise((r) => setTimeout(r, 260));
+  const afterRestart = win.__raf;
+  d.stop();
+  R.M_one_camera_one_loop =
+    { oneLoop, afterRestart, doubled: afterRestart > oneLoop * 1.6 };
+
   console.log(JSON.stringify(R, null, 1));
   const pass =
-    R['0_generation_zero_is_a_real_claim'].freshEpoch === 0 &&
-    R['0_generation_zero_is_a_real_claim'].verdict === 'done' &&
-    R['0_generation_zero_is_a_real_claim'].selfCancelled === false &&
-    R.A_turn_survives_own_tool_calls.verdicts.every((v) => v === 'done') &&
-    R.A_turn_survives_own_tool_calls.epochUnchanged &&
-    R.B_operator_stop_seen.epochBumped &&
-    R.C_turn_call_after_stop.verdict === 'stopped' &&
-    R.C_turn_call_after_stop.stepsRan === 0 &&
+    R['0_first_run_on_a_fresh_driver'].sessionBefore === null &&
+    R['0_first_run_on_a_fresh_driver'].verdict === 'done' &&
+    R['0_first_run_on_a_fresh_driver'].alive === true &&
+    R.A_issued_work_does_not_cancel_its_own_session.verdicts.every((v) => v === 'done') &&
+    R.A_issued_work_does_not_cancel_its_own_session.stillAlive === true &&
+    R.A_issued_work_does_not_cancel_its_own_session.stillCurrent === true &&
+    R.B_stop_kills_the_session.alive === false &&
+    R.C_work_from_a_killed_session_refuses.verdict === 'stopped' &&
+    R.C_work_from_a_killed_session_refuses.stepsRan === 0 &&
     R.D_operator_restart === 'done' &&
     R.E_depth_after_throwing_onStep.after === 0 &&
-    R.F_operator_run_while_turn_parked.verdict === 'done' &&
-    R.G_operator_run_cancels_parked_turn.staleTurnVerdict === 'stopped' &&
+    R.F_operator_run_while_parked.verdict === 'done' &&
+    R.G_parked_work_is_cancelled.parkedStillAlive === false &&
+    R.G_parked_work_is_cancelled.staleVerdict === 'stopped' &&
     R.I_killed_program_stays_dead.resumed === false &&
-    R.J_mind_refuses_an_inherited_stale_generation.refused === true &&
-    R.K_stop_leaves_the_world_as_it_found_it.heldBefore >= 1 &&   // key() fires at window AND document
+    R.J_mind_refuses_a_killed_session.refused === true &&
     R.K_stop_leaves_the_world_as_it_found_it.keyReleased === true &&
     R.K_stop_leaves_the_world_as_it_found_it.legsWereStubbed === true &&
     R.K_stop_leaves_the_world_as_it_found_it.legsRestored === true &&
     R.K_stop_leaves_the_world_as_it_found_it.filming === false &&
     R.K_stop_leaves_the_world_as_it_found_it.pointerHeld === false &&
     R.L_a_stopped_travel_does_not_open_the_door.clicksAfterStop === 0 &&
-    R.L_a_stopped_travel_does_not_open_the_door.keyStillHeld === false;
+    R.L_a_stopped_travel_does_not_open_the_door.keyStillHeld === false &&
+    R.M_one_camera_one_loop.oneLoop > 3 &&          // the baseline loop really ran
+    R.M_one_camera_one_loop.doubled === false;
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();

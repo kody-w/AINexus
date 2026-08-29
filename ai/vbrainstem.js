@@ -173,15 +173,14 @@
                       { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
     const calls = [];
 
-    // The generation is CARRIED IN, not read off the clock. Reading it here was the same
-    // mistake mind() had: line 158 above awaits initPyodide(), which on a cold tab
-    // downloads a wasm runtime and can take tens of seconds — so a turn stopped during
-    // that load re-stamped itself with whatever generation was live when it woke, its
-    // stop-check could never fire, and every tool call it then issued was accepted and
-    // executed. A turn belongs to the generation that invoked it.
-    const epoch0 = typeof o.turn === 'number' ? o.turn : (drive ? drive._epoch : 0);
-    const stopped = () => !!drive && drive._epoch !== epoch0;
-    // ...and the very first thing to check is whether that load outlived us.
+    // The session is CARRIED IN, never read off the driver. Reading it here was the same
+    // mistake mind() had, one boundary further out: the line above awaits initPyodide(),
+    // which on a cold tab downloads a wasm runtime and can take tens of seconds, so a turn
+    // stopped during that load used to wake and adopt whatever was live — its stop-check
+    // could then never fire, and every tool call it issued was accepted and executed.
+    const session = o.session || null;
+    const stopped = () => !!session && !session.alive;
+    // ...and the first thing to ask is whether that load outlived us.
     if (stopped()) return { words: '', calls: [], rounds: 0, note: 'stopped' };
 
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
@@ -202,7 +201,7 @@
         try {
           if (fname && fname.indexOf('world_') === 0) {
             const verb = fname.slice(6);
-            result = await drive.run({ steps: [Object.assign({ do: verb }, args)] }, null, { turn: epoch0 });
+            result = await drive.run({ steps: [Object.assign({ do: verb }, args)] }, null, { session });
             // the step's own return is more useful to a mind than "done"
             if (verb === 'people') result = JSON.stringify(drive.people());
             else if (verb === 'orbs') result = JSON.stringify(drive.orbs().map(x => ({ name: x.name, distance: x.distance })));
