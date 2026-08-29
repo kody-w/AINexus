@@ -806,11 +806,48 @@
   const LENS_POOL = ['plain', 'nightshift', 'closeup', 'wide', 'quiet'];
   const INTENT_POOL = ['hold', 'wander', 'follow', 'approach', 'go', 'talk'];
 
-  function tileRng(parentHash, key) {
-    let st = hashSeed(String(parentHash) + ':' + String(key));
-    return () => { st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0; return st / 4294967296; };
+  // ── the keystream (normative — see WEARING.md §3) ────────────────────────
+  // A spec has to be implementable from the document alone, which rules out the FNV+xorshift
+  // this used to use: 32-bit overflow and >>> mean different things in different languages, and
+  // "it works in mine" is not a specification. SHA-256 is already required by rapp/1, so the
+  // keystream is nothing but SHA-256:
+  //
+  //     block(i) = SHA-256( utf8(record) ‖ 0x3A ‖ utf8(key) ‖ 0x3A ‖ utf8(decimal i) )
+  //     stream   = block(0) ‖ block(1) ‖ block(2) ‖ …
+  //
+  // and every choice consumes octets from that stream, in the fixed order §4 sets out.
+  async function keystream(record, key) {
+    const enc = new TextEncoder();
+    const head = enc.encode(String(record) + ':' + String(key) + ':');
+    let buf = new Uint8Array(0), block = 0, at = 0;
+    async function more() {
+      const tag = enc.encode(String(block++));
+      const msg = new Uint8Array(head.length + tag.length);
+      msg.set(head, 0); msg.set(tag, head.length);
+      const d = new Uint8Array(await crypto.subtle.digest('SHA-256', msg));
+      const next = new Uint8Array(buf.length + d.length);
+      next.set(buf, 0); next.set(d, buf.length); buf = next;
+    }
+    async function octet() { if (at >= buf.length) await more(); return buf[at++]; }
+    // UNIFORM, NOT MODULO. `octet % k` is biased for every k that does not divide 256, and a
+    // spec that ships a bias makes two conformant implementations disagree about fairness.
+    // Rejection sampling is three lines and removes the argument.
+    async function uniform(k) {
+      if (k <= 0) return 0;
+      const limit = 256 - (256 % k);
+      for (;;) { const o = await octet(); if (o < limit) return o % k; }
+    }
+    // some draws need a bigger range than one octet can carry, e.g. a second within a day
+    async function wide(k, n) {
+      const span = Math.pow(256, n), limit = span - (span % k);
+      for (;;) {
+        let v = 0;
+        for (let i = 0; i < n; i++) v = v * 256 + (await octet());
+        if (v < limit) return v % k;
+      }
+    }
+    return { octet, uniform, wide, consumed: () => at };
   }
-  const pick = (r, arr) => arr[Math.floor(r() * arr.length) % arr.length];
 
   // ── WEARING ──────────────────────────────────────────────────────────────
   // wear(frame, key) -> tile. The key is not an index into a list of prepared tiles; it is the
@@ -823,47 +860,61 @@
   // contained on their own.
   async function wear(frame, key, opts) {
     const o = opts || {};
-    const index = key === undefined || key === null ? 0 : key;
+    const keyStr = (key === undefined || key === null) ? '0' : String(key);
     const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
     const F = root.NexusFrames;
-    const r = tileRng(f.frame_hash, index);
+    if (!F) throw new Error('no frames module: wearing needs rapp/1');
     const roster = (o.cast && o.cast.length ? o.cast.slice()
       : (f.payload && f.payload.requires && f.payload.requires.players) || [...players.keys()]);
     if (!roster.length) throw new Error('a tile needs somebody in it');
 
-    // deterministic draw: who, where, doing what, under what lens, with what already wrong
-    const n = Math.max(2, Math.min(roster.length, 2 + Math.floor(r() * (roster.length - 1))));
-    const shuffled = roster.slice();
-    for (let i = shuffled.length - 1; i > 0; i--) {           // Fisher-Yates on the same rng
-      const j = Math.floor(r() * (i + 1));
+    const ks = await keystream(f.frame_hash, keyStr);
+
+    // ── the draw order is normative (WEARING.md §4) ────────────────────────
+    // Every choice consumes octets from the keystream in exactly this sequence. Change the order
+    // and you change every tile in the world, which is why it is written down rather than left
+    // to whatever order the code happens to read in.
+    const R = roster.length;
+    const n = Math.max(2, Math.min(R, 2 + (R > 1 ? await ks.uniform(R - 1) : 0)));   // 1. how many
+    const shuffled = roster.slice();                                                 // 2. who
+    for (let i = R - 1; i > 0; i--) {
+      const j = await ks.uniform(i + 1);
       const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
     }
-    const cast = shuffled.slice(0, n).map(id => ({
-      id,
-      at: { x: Math.round((r() * 2 - 1) * 14), z: Math.round((r() * 2 - 1) * 14) },
-      standing: pick(r, INTENT_POOL),
-      where: pick(r, PLACES),
-    }));
-    const lensName = o.lens || pick(r, LENS_POOL);
-    const mood = pick(r, MOODS);
+    const cast = [];
+    for (let i = 0; i < n; i++) {                                                    // 3. each one
+      const x = (await ks.uniform(29)) - 14;
+      const z = (await ks.uniform(29)) - 14;
+      const standing = INTENT_POOL[await ks.uniform(INTENT_POOL.length)];
+      const where = PLACES[await ks.uniform(PLACES.length)];
+      cast.push({ id: shuffled[i], at: { x, z }, standing, where });
+    }
+    const lensName = o.lens || LENS_POOL[await ks.uniform(LENS_POOL.length)];         // 4. the lens
+    const mood = MOODS[await ks.uniform(MOODS.length)];                               // 5. what is wrong
+    const offset = await ks.wide(86400, 3);                                           // 6. the moment
 
-    // even the stamp is derived, so the same tile is the same BYTES anywhere
     // even the stamp comes out of the key, so two machines that never spoke agree on the bytes
     const base = Date.parse(f.utc || '2026-01-01T00:00:00.000Z') || 0;
-    const utc = F ? F.utcNow(new Date(base + (hashSeed(String(index)) % 86400) * 1000)) : undefined;
+    const utc = F.utcNow(new Date(base + offset * 1000));
+
+    // THE TILE'S STREAM IS DERIVED, NOT MINTED. It used to be minted, which made a tile
+    // reproducible only inside one page load: a fresh process minted a fresh rappid, the
+    // stream_id changed, and the frame_hash changed with it. A worn tile hangs off the record it
+    // was worn from, under a label derived from the key.
+    const bare = String(f.stream_id).split(':').slice(0, 3).join(':');
+    const label = 'wear-' + (await F.H('rapp/1:particle', { wear: keyStr })).slice(0, 12);
+    const stream = F.memoryStream(bare, label);
 
     const payload = {
-      asserts: { tile: String(index), derived_from: f.frame_hash, of_stream: f.stream_id,
+      asserts: { tile: keyStr, derived_from: f.frame_hash, of_stream: f.stream_id,
                  cast, lens: lensName, mood,
-                 // the whole world in one line: which record, worn by which key
-                 seed: String(f.frame_hash).slice(0, 12) + '#' + index },
+                 seed: String(f.frame_hash).slice(0, 12) + '#' + keyStr },
       requires: { players: cast.map(c => c.id) },
     };
-    if (!F) return { payload, deterministic: false };
-    const stream = await streamFor('tile-' + hashSeed(String(index)).toString(16));
-    const genesis = await F.buildFrame({ kind: 'memory.save', streamId: stream, seq: 0, utc, payload, prev: null });
-    return { frame: genesis, seed: payload.asserts.seed, key: String(index), cast, lens: lensName, mood,
-             stream, hash: genesis.frame_hash };
+    const genesis = await F.buildFrame({ kind: 'memory.save', streamId: stream, seq: 0,
+                                         utc, payload, prev: null });
+    return { frame: genesis, seed: payload.asserts.seed, key: keyStr, cast, lens: lensName, mood,
+             stream, hash: genesis.frame_hash, drawn: ks.consumed() };
   }
 
   // the old name, kept because a tile is what wearing produces
