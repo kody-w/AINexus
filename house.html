@@ -95,11 +95,18 @@ frame.addEventListener('load', () => {
 });
 function note(t) { $('rail').innerHTML = '<div class="empty">' + t + '</div>'; }
 
+// A camera's name is not always ours. Line ~122 pushes 'POV · ' + a PRESENCE's name into RIG, and
+// a presence arrives from another machine — so a peer-chosen name reaches the innerHTML below.
+// Upper-casing and truncating it does not make markup inert. holo.js strips these characters on
+// the way in; escaping here is the second lock, at the sink, where it belongs.
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 function buildRail() {
   const rail = $('rail'); rail.innerHTML = '';
   for (const c of RIG) {
     const el = document.createElement('div'); el.className = 'tile';
-    el.innerHTML = `<span class="lbl">${c.name}</span><span class="sc">0</span><img alt="${c.name}">`;
+    el.innerHTML = `<span class="lbl">${esc(c.name)}</span><span class="sc">0</span><img alt="${esc(c.name)}">`;
     rail.appendChild(el);
     tiles.set(c.id, { el, img: el.querySelector('img'), sc: el.querySelector('.sc') });
   }

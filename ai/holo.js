@@ -339,8 +339,12 @@
 
   root.NexusHolo = { publish, attach, ingest, stop,
     speaking: (on) => { root.__holoSpeaking = !!on; },
+    // yaw is part of the contract because a camera following someone needs to know which way they
+    // are facing. cams.js:50 has always read p.yaw from here and always got undefined, so every
+    // POV camera framed its subject as if they faced due north — the presence record has carried
+    // yaw the whole time (it is what turns the projection), it was just never handed out.
     present: () => [...state.others.values()].map(p => ({ id: p.id, name: p.name, world: p.world,
-      speaking: p.speaking, pos: p.pos, painted: !!p.shown })),
+      speaking: p.speaking, pos: p.pos, yaw: p.yaw, painted: !!p.shown })),
     stats: () => ({ sent: state.sent, seen: state.seen, others: state.others.size, me: state.me && state.me.id }),
     // what the calibration currently believes, per presence — visible rather than magic
     calibration: () => [...state.others.values()].map(p => ({ id: p.id, frame: p.f,
