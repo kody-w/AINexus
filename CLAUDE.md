@@ -25,7 +25,7 @@ Each world is a complete, self-contained HTML file with inline CSS and JavaScrip
 ### Core Classes (found in index.html and hub files)
 - **WorldNavigator**: Main controller for 3D scene, camera, and navigation
 - **AIManager**: Handles AI companion chat via Azure Functions endpoint
-- **MultiplayerManager**: PeerJS-based multiplayer with host/client architecture
+- **MultiplayerManager**: PeerJS multiplayer, host/client — extracted out to `net/multiplayer.js`, which `index.html` loads
 - **SceneRecorder**: Records and replays scene interactions
 - **WorldCreator**: Creates new portal worlds from camera captures
 - **PortalManager**: Manages inter-world portal connections

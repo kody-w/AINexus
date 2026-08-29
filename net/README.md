@@ -62,9 +62,13 @@ the exact field `ai/ai_player.js` polls for before it attaches itself as
 - Legacy `?host=` query param is rejected with the same "ask the host for a
   fresh link" notice — old-style unauthenticated invites don't work here
   either.
-- Host-side token verification: a host never accepts a connection whose
-  `conn.metadata.token` doesn't match the host's own `roomSecret`, before
-  any avatar is created or data is sent.
+- Host-side token verification: the token does NOT travel in connection
+  metadata — that rides the public signalling server, where anyone dialling
+  the room could read it. A new connection is held unopened until it sends a
+  `hello` on the data channel carrying the token; a host that doesn't get a
+  matching `roomSecret` within 8s closes it, before any avatar is created or
+  any data is sent. A joiner is equally strict in the other direction: it
+  refuses any connection that isn't the host it dialled.
 - Avatar creation (`createPlayerAvatar`/`createNameTag`), position
   interpolation (`updatePlayerPosition`), chat (`displayChat`,
   `handlePeerData`'s `'chat'` case), and player counting are unchanged.

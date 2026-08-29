@@ -14,8 +14,7 @@
 // world's own MultiplayerManager gets a chance to strip the hash, so the
 // invite is never lost to load order.
 //
-// Traversal: previously the travel agent refused every portal ("navigating
-// away would end this mind"). It doesn't anymore. When the AI walks into a
+// Traversal: when the AI walks into a
 // portal, this script looks up the portal's real URL from world.portals,
 // carries the *same* room invite forward as a fresh `#join=<host>.<token>`
 // fragment (plus `&ai=brainstem`), and navigates. The host's tab is the
