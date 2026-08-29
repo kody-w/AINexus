@@ -563,6 +563,10 @@
 
             // Name tag
             const nameTag = this.createNameTag(peerId, metadata);
+            // The rename path finds this by name and REPLACES it. Without the name it
+            // could never find it, so every rename welded a second label on top of the
+            // first and the host floated two stacked sprites in every joining tab.
+            nameTag.name = 'nametag';
             nameTag.position.y = 3;
             avatarGroup.add(nameTag);
 
