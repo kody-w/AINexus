@@ -660,6 +660,53 @@ async function visibleHelp(page) {
   });
 }
 
+async function clickVisibleHelpClose(page) {
+  const close = await page.evaluate(() => {
+    const helpButton = document.getElementById('help-button');
+    const controlled = helpButton && helpButton.getAttribute('aria-controls');
+    const candidates = [];
+    if (controlled) candidates.push(document.getElementById(controlled));
+    candidates.push(...document.querySelectorAll(
+      'dialog, [role="dialog"], [aria-modal="true"], [popover], [id*="help" i], [class*="help" i]'
+    ));
+    const visible = element => {
+      if (!element) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && !element.hasAttribute('inert') &&
+        style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    for (const surface of [...new Set(candidates)].filter(element =>
+      element && element !== helpButton && visible(element))) {
+      const controls = [...surface.querySelectorAll(
+        'button, [role="button"], input[type="button"], input[type="submit"]'
+      )];
+      for (const control of controls) {
+        if (control === helpButton || !visible(control)) continue;
+        const semantics = [
+          control.id,
+          control.getAttribute('aria-label'),
+          control.getAttribute('title'),
+          control.getAttribute('data-action'),
+          control.textContent,
+          control.value,
+          control.closest('form[method="dialog"]') ? 'dialog close' : ''
+        ].filter(Boolean).join(' ');
+        if (control.id === 'help-close' ||
+            /\b(close|dismiss|done|got it|okay|ok)\b|×/i.test(semantics)) {
+          control.setAttribute('data-dogg-test-help-close', 'true');
+          return { found: true, semantics: semantics.replace(/\s+/g, ' ').trim() };
+        }
+      }
+    }
+    return { found: false, semantics: '' };
+  });
+  requireMeasurement(close.found, 'a visible semantic close control inside the help dialog');
+  await page.locator('[data-dogg-test-help-close="true"]').click();
+  return close.semantics;
+}
+
 async function deterministicRun(page, seed) {
   await api(page, 'pause');
   await api(page, 'restart', seed);
@@ -705,8 +752,10 @@ async function runSuite() {
   const page = await openHeist(primaryContext, 'primary cold boot');
 
   const reach = await auditReachability(page);
+  const coldContextDependent = new Set(['fork-button']);
   const unusable = reach.filter(item => !item.exists || !item.visible || !item.reachable ||
-    (/-button$|play-toggle|speed-select|timeline/.test(item.id) && item.disabled));
+    (/-button$|play-toggle|speed-select|timeline/.test(item.id) && item.disabled &&
+      !coldContextDependent.has(item.id)));
   const cold = await inspect(page);
   const coldValues = ['tick-value', 'branch-value', 'head-value', 'alarm-value', 'objective-value']
     .filter(id => !cold.dom[id]);
@@ -775,13 +824,13 @@ async function runSuite() {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   });
   const keyStepBefore = await inspect(page);
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('.');
   await sleep(150);
   const keyStepAfter = await inspect(page);
   result('the keyboard step path advances exactly one tick',
     keyStepAfter.tick - keyStepBefore.tick === 1 &&
       keyStepAfter.frameCount - keyStepBefore.frameCount === 1,
-    `ArrowRight: tick ${keyStepBefore.tick}→${keyStepAfter.tick}`);
+    `.: tick ${keyStepBefore.tick}→${keyStepAfter.tick}`);
 
   await page.evaluate(() => {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -921,15 +970,16 @@ async function runSuite() {
     `selected ${targetTick}; head ${scrubbed.head.slice(0, 10)}…; ${scrubbed.frameCount} frames`);
 
   const oldBranch = scrubbed.branch;
+  const forkUsable = await page.locator('#fork-button').isEnabled();
   await page.locator('#fork-button').click();
   await api(page, 'pause');
   await sleep(150);
   const forked = await inspect(page);
   result('visible fork creates a branch and truncates the old future',
-    oldBranch && forked.branch && forked.branch !== oldBranch &&
+    forkUsable && oldBranch && forked.branch && forked.branch !== oldBranch &&
       forked.frameCount < liveBeforeScrub.frameCount &&
       forked.tick <= targetTick + 1,
-    `branch ${oldBranch}→${forked.branch}; tick ${forked.tick}; frames ${liveBeforeScrub.frameCount}→${forked.frameCount}`);
+    `enabled after scrub: ${forkUsable}; branch ${oldBranch}→${forked.branch}; tick ${forked.tick}; frames ${liveBeforeScrub.frameCount}→${forked.frameCount}`);
 
   const continuedBefore = forked;
   await page.locator('#step-button').click();
@@ -1039,16 +1089,16 @@ async function runSuite() {
 
   await page.locator('#help-button').click();
   const helpOpened = await poll(() => visibleHelp(page), value => value.count > 0, 2500);
-  await page.locator('#help-button').click();
-  const helpClosedByButton = await poll(() => visibleHelp(page), value => value.count === 0, 2500);
+  const helpCloseControl = await clickVisibleHelpClose(page);
+  const helpClosedByControl = await poll(() => visibleHelp(page), value => value.count === 0, 2500);
   await page.locator('#help-button').click();
   await poll(() => visibleHelp(page), value => value.count > 0, 2500);
   await page.keyboard.press('Escape');
   const helpClosedByEscape = await poll(() => visibleHelp(page), value => value.count === 0, 2500);
   result('help opens, closes, and Escape dismisses it',
-    helpOpened.count > 0 && helpClosedByButton.count === 0 && helpClosedByEscape.count === 0 &&
+    helpOpened.count > 0 && helpClosedByControl.count === 0 && helpClosedByEscape.count === 0 &&
       /help|control|keyboard|key|play|step/i.test(helpOpened.text),
-    helpOpened.text.replace(/\s+/g, ' ').slice(0, 120));
+    `${helpCloseControl}; ${helpOpened.text.replace(/\s+/g, ' ').slice(0, 100)}`);
 
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await serve(mobileContext);
