@@ -70,11 +70,13 @@
       // minted once, kept, and never computed from a name.
       guid: p.guid || guidFor(String(p.id)),
       agents: [],                     // names this player can see, beyond the shared core
-      ticks: 0, acts: 0, journal: [], chain: [], prev: null,
+      ticks: 0, acts: 0, journal: [], chain: [], prev: null, seq: 0, truncated: 0,
       streamId: 'rappid:@kody-w/ainexus/player:' +
         (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2)),
     };
     // this player's own agents, hot-loaded once into the shared runtime and thereafter free
+    // hotload replaces live instances, so it goes through the same lane a turn holds — a player
+    // arriving mid-thought must not swap an agent out from under the player who is thinking
     for (const src of (p.agents || [])) {
       try { const a = await B.hotload(src, {}); rec.agents.push(a.name); }
       catch (e) { (p.log || function () {})('[herd] ' + rec.id + ' could not load ' + src + ': ' + e.message); }
@@ -118,7 +120,7 @@
                 calls: (r.calls || []).map(c => ({ tool: c.tool, failed: /failed|no such/.test(c.result) })) };
       if (F) {
         try {
-          const f = await F.buildFrame({ kind: 'nexus.tick', streamId: rec.streamId, seq: rec.chain.length,
+          const f = await F.buildFrame({ kind: 'nexus.tick', streamId: rec.streamId, seq: rec.seq++,
             payload: { asserts: { tick: rec.ticks, player: rec.id, said: r.words || '',
                                   called: entry.calls.map(c => c.tool + (c.failed ? ' ✗' : '')),
                                   at: (s0 && s0.me) || {},
@@ -135,7 +137,11 @@
                        summoned: ((r.summoned) || []).map(x => x.got + ':' + x.via).slice(0, 4) },
             prev: rec.prev });
           rec.chain.push(f); rec.prev = f.payload_hash; remember(f, rec.id);
-          if (rec.chain.length > 500) rec.chain.shift();
+          // DROPPING THE OLDEST FRAME BREAKS THE LINE. The window that was meant to bound memory
+          // was quietly destroying the genesis link and freezing seq at 500, so after a long
+          // session the exported chain no longer verified at all — a bounded log pretending to
+          // be a chain. seq is now its own counter, and a window says out loud that it is one.
+          if (rec.chain.length > 500) { rec.chain.shift(); rec.truncated++; }
           entry.frame = f.frame_hash;
         } catch (e) {}
       }
@@ -560,7 +566,10 @@
   // round-robin, for when you deliberately want everyone thinking on a clock
   function live(opts) {
     const o = Object.assign({ everyMs: 4000, maxTicks: 0 }, opts || {});
-    if (herd) return herd;
+    // A herd that has been asked to stop is not a herd you can join. Handing the dying one back
+    // meant stop() followed by live() silently returned the corpse and nothing ran again.
+    if (herd && herd.state && herd.state().running) return herd;
+    herd = null;
     const state = { running: true, rounds: 0, stopped: null };
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     (async () => {
@@ -571,14 +580,27 @@
         for (const id of ids) {
           if (!state.running) break;
           const p0 = players.get(id);
-          if (p0 && p0.sleeping) continue;         // woken by anything that changes around it
+          if (!p0) continue;                       // it left between the snapshot and its turn
+          if (p0.sleeping) {
+            // asleep, not exiled: anything changing around it is a reason to look again
+            let changed = false;
+            try { const s0 = p0.drive && p0.drive.snapshot();
+                  const sig = s0 ? ((s0.chat || []).length + '|' + (s0.players || []).length + '|' + s0.world) : '';
+                  if (sig && sig !== p0.lastSig) { changed = true; p0.lastSig = sig; } } catch (e) {}
+            if (!changed) continue;
+            p0.sleeping = false; p0.idle = 0;
+          }
           let e;
-          try { e = await serve(id, o); } catch (err) { e = { player: id, error: err.message }; }
+          if (!players.has(id)) continue;          // left between the snapshot and its turn
+          try { e = await serve(id, o); }
+          catch (err) { e = players.has(id) ? { player: id, error: err.message }
+                                            : { player: id, note: 'left the world mid-round' }; }
           if (o.onTick) { try { o.onTick(e, roster()); } catch (err) {} }
           const rec = players.get(id);
           if (rec && rec.idle >= (o.idleLimit || 4)) {
-            rec.drive = rec.drive;                 // keep the player, stop paying for its silence
-            players.get(id).sleeping = true;
+            rec.sleeping = true;                   // keep the player, stop paying for its silence
+            try { const s0 = rec.drive && rec.drive.snapshot();
+                  rec.lastSig = s0 ? ((s0.chat || []).length + '|' + (s0.players || []).length + '|' + s0.world) : ''; } catch (e) {}
             if (o.onTick) { try { o.onTick({ player: id, note: 'asleep — ' + rec.idle + ' ticks with nothing to say' }, roster()); } catch (err) {} }
           }
           if (e && e.error && /sign-in expired|not signed in|no mind/i.test(e.error)) {
@@ -656,10 +678,17 @@
     return null;
   }
 
-  const chainOf = (id) => { const r = players.get(String(id));
-    return r ? r.chain.map(f => JSON.stringify(f)).join('\n') + (r.chain.length ? '\n' : '') : ''; };
+  // The full line if we still hold all of it; otherwise an explicitly-labelled WINDOW, which
+  // verifies internally but is not a chain from genesis and must not be offered as one.
+  function chainOf(id) {
+    const r = players.get(String(id));
+    if (!r) return '';
+    return r.chain.map(f => JSON.stringify(f)).join('\n') + (r.chain.length ? '\n' : '');
+  }
+  const chainKind = (id) => { const r = players.get(String(id));
+    return !r ? 'none' : r.truncated ? 'window' : 'chain'; };
 
-  root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live,
+  root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
                      epoch: () => Object.assign({}, epoch), rewind, replay,
                      cost: () => {
                        const free = ledger.replayedFrames + ledger.virtualFrames;

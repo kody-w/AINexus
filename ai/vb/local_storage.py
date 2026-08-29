@@ -38,13 +38,28 @@ class AzureFileStorageManager:
         path = file_path or self._file_path()
         localStorage.setItem(_PREFIX + path, json.dumps(data, default=str))
         return True
+    def _scope(self, file_path):
+        """Every path belongs to whoever is asking.
+
+        read_json/write_json were namespaced by user; these were not, so one runtime shared by
+        several players had a set of paths they all wrote to and all read from — one player's
+        notes arriving in another's hands. A path is scoped to the current memory context unless
+        it deliberately names the shared space.
+        """
+        p = str(file_path or "")
+        if p.startswith(self.shared_memory_path) or p.startswith("/"):
+            return p.lstrip("/")
+        if self.current_memory_path and self.current_memory_path != self.shared_memory_path:
+            return self.current_memory_path.rstrip("/") + "/" + p
+        return p
+
     def read_file(self, file_path):
-        return localStorage.getItem(_PREFIX + file_path)
+        return localStorage.getItem(_PREFIX + self._scope(file_path))
     def write_file(self, file_path, content):
-        localStorage.setItem(_PREFIX + file_path, content)
+        localStorage.setItem(_PREFIX + self._scope(file_path), content)
         return True
     def list_files(self, directory=""):
-        prefix = _PREFIX + directory
+        prefix = _PREFIX + self._scope(directory)
         out = []
         n = localStorage.length
         for i in range(n):
@@ -53,9 +68,10 @@ class AzureFileStorageManager:
                 out.append(k[len(_PREFIX):])
         return out
     def delete_file(self, file_path):
-        if localStorage.getItem(_PREFIX + file_path) is not None:
-            localStorage.removeItem(_PREFIX + file_path)
+        key = _PREFIX + self._scope(file_path)
+        if localStorage.getItem(key) is not None:
+            localStorage.removeItem(key)
             return True
         return False
     def file_exists(self, file_path):
-        return localStorage.getItem(_PREFIX + file_path) is not None
+        return localStorage.getItem(_PREFIX + self._scope(file_path)) is not None

@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Views — everyone at once</title>
+<meta name="description" content="Every AI player's own view, side by side, with the focus moving from one to the next.">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:#05050c;color:#e9e9f2;font:13px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0;display:grid;gap:10px;padding:14px}
+.cell{position:relative;border:1px solid #23234a;border-radius:12px;overflow:hidden;background:#0a0a18;
+  transition:transform .6s cubic-bezier(.2,.8,.2,1),border-color .5s,box-shadow .5s;min-height:0}
+.cell img{width:100%;height:100%;object-fit:cover;display:block;opacity:.72;transition:opacity .5s}
+.cell.focus{border-color:#7dffb0;box-shadow:0 0 0 1px #7dffb0,0 18px 60px rgba(125,255,176,.18);z-index:3}
+.cell.focus img{opacity:1}
+.tag{position:absolute;left:8px;top:8px;z-index:2;background:rgba(6,6,16,.78);border:1px solid #2b2b52;
+  border-radius:999px;padding:3px 10px;font:11px ui-monospace,Menlo,monospace;color:#c9c9e6;backdrop-filter:blur(6px)}
+.cell.focus .tag{color:#7dffb0;border-color:#1d6b45}
+.doing{position:absolute;left:8px;bottom:8px;right:8px;z-index:2;font:11px ui-monospace,Menlo,monospace;
+  color:#9a9ac0;background:rgba(6,6,16,.7);border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell.focus .doing{color:#e9e9f2}
+#hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
+  background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
+#hud b{color:#7de3ff;font-weight:600}
+.blank{display:flex;align-items:center;justify-content:center;height:100%;color:#3a3a63;font:11px ui-monospace,monospace}
+</style></head><body>
+<div id="stage"></div>
+<div id="hud"><b id="who">—</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="ep">—</span></div>
+<script>
+// Everyone's own view, at once, with the focus moving around. It plays from a manifest written
+// by tools/record_views.cjs — the same frames a player actually saw, in the order it saw them —
+// or live from a running herd on this origin.
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const MANIFEST = params.get('manifest') || 'recordings/latest/manifest.json';
+const HOLD = +(params.get('hold') || 2400);      // how long each player holds the focus
+const FPS = +(params.get('fps') || 8);
+const BASE = MANIFEST.replace(/[^/]*$/, '');     // shots are named relative to their manifest
+
+function layout(n) {
+  const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  const st = $('stage');
+  st.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  st.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  return { cols, rows };
+}
+
+(async () => {
+  let m;
+  try { m = await (await fetch(MANIFEST, { cache: 'no-cache' })).json(); }
+  catch (e) { $('stage').innerHTML = '<div class="blank">no recording at ' + MANIFEST + '</div>'; return; }
+  const players = m.players || [];
+  const frames = m.frames || 0;
+  layout(players.length);
+  $('of').textContent = frames;
+
+  const cells = players.map(p => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = `<span class="tag">${p.label || p.id}</span><img alt="${p.id}'s view">` +
+                  `<div class="doing"></div>`;
+    $('stage').appendChild(c);
+    return { rec: p, el: c, img: c.querySelector('img'), doing: c.querySelector('.doing') };
+  });
+
+  let i = 0, focus = 0, lastSwap = 0;
+  function paint(now) {
+    const f = Math.min(frames - 1, Math.floor(i));
+    cells.forEach((c, k) => {
+      const shot = (c.rec.shots || [])[f];
+      if (shot) { const want = BASE + shot; if (c.img.getAttribute('src') !== want) c.img.src = want; }
+      const note = (c.rec.doing || [])[f];
+      c.doing.textContent = note || '';
+      c.el.classList.toggle('focus', k === focus);
+      // the focused view gets the room: it grows toward the middle and the others give way
+      c.el.style.transform = k === focus ? 'scale(1.06)' : 'scale(.965)';
+    });
+    $('who').textContent = (cells[focus] && (cells[focus].rec.label || cells[focus].rec.id)) || '—';
+    $('n').textContent = f + 1;
+    $('ep').textContent = ((cells[focus] && (cells[focus].rec.epochs || [])[f]) || '').slice(0, 10) || '—';
+    if (now - lastSwap > HOLD) { focus = (focus + 1) % cells.length; lastSwap = now; }
+    i += 1;
+    if (i >= frames) i = 0;                       // loop, so it can be recorded at any length
+    setTimeout(() => requestAnimationFrame(paint), 1000 / FPS);
+  }
+  requestAnimationFrame(t => { lastSwap = t; paint(t); });
+  window.__viewsReady = true;
+})();
+</script></body></html>

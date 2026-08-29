@@ -64,13 +64,22 @@
   // So turns queue. Every turn takes the next SLOT on the way in, and the slot number goes into
   // the tick frame — which means the interleaving is not merely correct, it is written down: a
   // chain with a repeated or missing slot is a chain that raced, and anyone can see it.
-  let lane = Promise.resolve(), nextSlot = 0;
+  let lane = Promise.resolve(), nextSlot = 0, depth = 0;
   function inLane(fn) {
+    // ALREADY INSIDE IT. A tool call that reaches back into turn() would queue behind the turn
+    // that is running it — and wait for itself, forever, taking every other player down with it.
+    // Re-entering runs directly: it is already the one holding the lane.
+    if (depth > 0) return Promise.resolve(fn(nextSlot++));
     const slot = nextSlot++;
-    const run = lane.then(() => fn(slot), () => fn(slot));
+    const enter = async () => { depth++; try { return await fn(slot); } finally { depth--; } };
+    // depth must fall only when the async body finishes, not when it first awaits
+    const run = lane.then(enter, enter).then(
+      (v) => v, (e) => { throw e; });
     lane = run.then(() => {}, () => {});
     return run;
   }
+  // work that must not interleave with a turn — hot-loading, which replaces live instances
+  function queued(fn) { return inLane(() => fn()); }
   const MAX_ROUNDS = 5;                        // a turn is a few calls, not an afternoon
 
   // ── the world's verbs, described so a model can call them ────────────────
@@ -205,7 +214,8 @@
   // reason the agents run as Python rather than being reimplemented here: an agent written for
   // a brainstem on a laptop is the same file, unchanged, and a player picks it up without a
   // reload, a build, or a deploy.
-  async function hotload(what, opts) {
+  async function hotload(what, opts) { return queued(() => hotloadNow(what, opts)); }
+  async function hotloadNow(what, opts) {
     const o = opts || {};
     await initPyodide(o.log);
     if (!pyodide) throw new Error('no python: cannot hot-load agents');
@@ -229,7 +239,15 @@
     if (!inst) throw new Error('could not instantiate ' + cls);
     const md = inst.metadata;
     const metadata = md && md.toJs ? md.toJs({ dict_converter: Object.fromEntries }) : md;
-    const name = (inst.name && String(inst.name)) || cls.replace(/Agent$/, '');
+    let name = (inst.name && String(inst.name)) || cls.replace(/Agent$/, '');
+    // TWO PLAYERS, ONE NAME, DIFFERENT CODE. Overwriting the live instance would hand a player
+    // somebody else's agent under a name it trusts. A genuine duplicate (same source) is
+    // shared; a different one gets its own name and the caller is told what it actually got.
+    const prior = agentSource[name];
+    if (pyAgents[name] && prior && prior.file !== file) {
+      let n = 2; while (pyAgents[name + '~' + n]) n++;
+      name = name + '~' + n;
+    }
     pyAgents[name] = { instance: inst, metadata };
     agentSource[name] = { what, file, className: cls };
     if (o.log) o.log('[vbrainstem] hot-loaded', name, 'from', file);
@@ -250,11 +268,12 @@
     const want = (names || []).filter(Boolean);
     const resident = [], missing = [];
     for (const n of want) {
-      if (pyAgents[n]) { resident.push(n); continue; }
+      // the same test the tool filter uses, or a player is offered a tool that is not there
+      if (pyAgents[n] && pyAgents[n].metadata) { resident.push(n); continue; }
       const src = agentSource[n];
       if (!src) { missing.push(n); continue; }
       try { await hotload(src.what, { file: src.file, className: src.className, log });
-            if (pyAgents[n]) resident.push(n); else missing.push(n); }
+            if (pyAgents[n] && pyAgents[n].metadata) resident.push(n); else missing.push(n); }
       catch (e) { missing.push(n); if (log) log('[vbrainstem] could not make ' + n + ' resident: ' + e.message); }
     }
     return { resident, missing };
@@ -340,8 +359,20 @@
     } catch (e) { log('[summon] the written agent would not load: ' + e.message); return null; }
   }
 
+  // Does this agent actually declare an identity parameter? Grepping the whole manifest for the
+  // string "user_guid" says yes for an agent that merely mentions it in a description, and says
+  // no for one that names its identity parameter something else — a contract has to be read
+  // where it is written.
+  function takesGuid(info) {
+    const props = info && info.metadata && info.metadata.parameters && info.metadata.parameters.properties;
+    return !!(props && Object.prototype.hasOwnProperty.call(props, 'user_guid'));
+  }
+
   function agentToolDefs(only) {
-    const allow = only && only.length ? new Set(only.concat(CORE_AGENTS)) : null;
+    // `undefined` means "everything"; `[]` means "this player brought none of its own", and
+    // those are not the same sentence. Treating them alike showed every player's agents to
+    // every player who happened to arrive empty-handed — which is most of them.
+    const allow = only == null ? null : new Set(only.concat(CORE_AGENTS));
     return Object.entries(pyAgents).filter(([n, i]) => i && i.metadata && (!allow || allow.has(n))).map(([name, info]) => ({
       type: 'function',
       function: { name, description: info.metadata.description || ('Run ' + name),
@@ -378,22 +409,26 @@
   // every result is returned, so an operator can read exactly what the player did and why.
   async function turn(opts) {
     const o = opts || {};
-    const auth = root.NexusAuth, drive = o.drive || root.__autodrive;
+    const auth = root.NexusAuth;
     if (!auth || !auth.signedIn()) throw new Error('no mind: not signed in');
-    if (!drive) throw new Error('no hands: the driver is not loaded here');
     // ONE BRAINSTEM CAN SERVE MANY PLAYERS, but only one at a time, and the Python side reads
     // the page's driver by name. Binding it for the duration of the call — and restoring it
     // after — is what lets a shared runtime move a different player's hands each turn without
     // any of them noticing. The swap is a pointer, not a load.
     return inLane(async (slot) => {
+      // RESOLVED IN HERE, NOT OUT THERE. Reading the driver before entering the lane meant a
+      // caller that named no driver picked up whatever binding happened to be installed at that
+      // instant — which, mid-herd, is somebody else's body.
       const held = root.__autodrive, heldAgents = root.__nexus_agents;
-      if (o.drive) root.__autodrive = o.drive;
+      const drive = o.drive || held;
+      if (!drive) throw new Error('no hands: the driver is not loaded here');
+      root.__autodrive = drive;
       root.__nexus_agents = (o.agents || []).concat(CORE_AGENTS);
-      try { const r = await think(); r.slot = slot; return r; }
-      finally { if (o.drive) root.__autodrive = held; root.__nexus_agents = heldAgents; }
+      try { const r = await think(drive); r.slot = slot; return r; }
+      finally { root.__autodrive = held; root.__nexus_agents = heldAgents; }
     });
 
-    async function think() {
+    async function think(drive) {
     const log = o.log || function () {};
 
     if (o.python !== false) { try { await initPyodide(log); } catch (e) {} }
@@ -444,7 +479,7 @@
             const got = await summon('a tool called "' + fname + '" called with ' + JSON.stringify(args).slice(0, 200), { log });
             if (got && pyAgents[got.name]) {
               summoned.push({ asked: fname, got: got.name, via: got.via });
-              if (o.guid && /user_guid/.test(JSON.stringify((pyAgents[got.name] || {}).metadata || {}))) args.user_guid = o.guid;
+              if (o.guid && takesGuid(pyAgents[got.name])) args.user_guid = o.guid;
               const r2 = await callAgent(got.name, args);
               result = (r2 === null ? 'no such tool: ' + fname : r2);
             } else result = 'no such tool: ' + fname + ' — and none could be summoned';
@@ -453,7 +488,7 @@
             // is given this player's guid whether the model thought to pass one or not —
             // otherwise one player's recollection is another player's, which in a shared
             // runtime is the only way this can go badly wrong.
-            if (o.guid && /user_guid/.test(JSON.stringify((pyAgents[fname] || {}).metadata || {}))) args.user_guid = o.guid;
+            if (o.guid && takesGuid(pyAgents[fname])) args.user_guid = o.guid;
             const r = await callAgent(fname, args);
             result = r === null ? ('no such tool: ' + fname) : r;
           }
@@ -638,7 +673,7 @@
   root.NexusBrainstem = { turn, lines, live, hotload, summon, ensureResident, initPyodide, slots: () => nextSlot,
                           budget: (patch) => { if (patch) Object.assign(budget, patch); return Object.assign({}, budget); },
                           halt: (why) => { budget.stopped = why || 'stopped by the operator'; },
-                          wasSummoned: (n) => summonedNames.has(n),
+                          wasSummoned: (n) => summonedNames.has(n), takesGuid, queued,
                           resident: () => Object.keys(pyAgents),
                           sourceOf: (name) => agentSource[name] || null, verbToolDefs, agentToolDefs, callAgent,
                           status: () => ({ python: !!pyodide, agents: Object.keys(pyAgents), note: loadNote }),
