@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out the current world
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: source
 
@@ -34,7 +34,7 @@ jobs:
             git -C feed checkout --orphan dogg-live
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
