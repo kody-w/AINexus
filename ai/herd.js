@@ -349,6 +349,41 @@
   //
   // What that gives back is the thing a live session cannot: run it twice and compare. Two runs
   // that agree tick for tick are evidence; one that diverges names the frame where it happened.
+  // ── forking: a rewind is a new dimension, not an edit ────────────────────
+  // Kody's correction, and it is the right one: rolling back in a game re-simulates the SAME
+  // timeline from a corrected state — one history, quietly rewritten. Rewinding here is not
+  // that. The past frame still stands; going back to it starts ANOTHER line from that moment,
+  // and both lines are real from then on.
+  //
+  // rapp/1 has no parent pointer on a frame, and inventing one would break the spec. So a fork
+  // is a genuinely new stream whose genesis SAYS where it split — the fork is recorded in the
+  // data rather than implied by a link, which is also what makes it findable later.
+  async function fork(frame, opts) {
+    const o = opts || {};
+    const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
+    const F = root.NexusFrames;
+    const stream = 'rappid:@kody-w/ainexus/dimension:' +
+      (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : String(Math.random()).slice(2));
+    const woke = rewind(f, o);
+    let genesis = null;
+    if (F) {
+      try {
+        genesis = await F.buildFrame({ kind: 'nexus.fork', streamId: stream, seq: 0,
+          payload: { asserts: { forked_from: f.frame_hash, at_seq: f.seq, at_utc: f.utc || null,
+                                woke: woke.woke, reason: o.reason || 'someone went back' },
+                     requires: { of_stream: f.stream_id } },
+          prev: null });
+      } catch (e) {}
+    }
+    // the new line starts here; the old one is untouched and still true
+    ensembleChain = genesis ? [genesis] : [];
+    ensemblePrev = genesis ? genesis.payload_hash : null;
+    if (genesis) epoch = { id: genesis.frame_hash, seq: 0, at: epoch.at, virtual: 0 };
+    ledger.forks = (ledger.forks || 0) + 1;
+    return { dimension: stream, genesis: genesis && genesis.frame_hash,
+             forkedFrom: f.frame_hash, at: f.seq, woke: woke.woke };
+  }
+
   function rewind(frame, opts) {
     const o = opts || {};
     const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
@@ -689,7 +724,7 @@
     return !r ? 'none' : r.truncated ? 'window' : 'chain'; };
 
   root.NexusHerd = { join, leave, wake, serve, invoke, conduct, ensemble, hangOut, actLocally, watch, live, chainKind,
-                     epoch: () => Object.assign({}, epoch), rewind, replay,
+                     epoch: () => Object.assign({}, epoch), rewind, replay, fork,
                      cost: () => {
                        const free = ledger.replayedFrames + ledger.virtualFrames;
                        const total = ledger.liveFrames + free;

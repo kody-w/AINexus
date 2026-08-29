@@ -42,22 +42,44 @@ await ctx.route('https://kody-w.github.io/AINexus/**', r => {
   r.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
 });
 
+// THEY DO NOT NEED TO SHARE A WORLD TO SEE EACH OTHER. Each page publishes where it is standing
+// and paints everyone else as a 3D projection in its own scene (ai/holo.js). Four tabs, four
+// instances, one shared sense of who is present — which is also why this keeps working when the
+// players are in DIFFERENT worlds entirely.
 console.log(`opening ${N} players in ${WORLD}…`);
 const players = [];
+let joinFrag = '';
 for (let i = 0; i < N; i++) {
   const id = NAMES[i % NAMES.length] + (i >= NAMES.length ? '-' + i : '');
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log('  ! ' + id + ': ' + e.message.slice(0, 80)));
   await page.goto('https://kody-w.github.io/AINexus/' + WORLD + '#as=' + encodeURIComponent('🤖 ' + id + ' (AI)'), { timeout: 60000 });
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/autodrive.js' }).catch(() => {});
-  await page.waitForFunction(() => !!window.__autodrive, { timeout: 30000 }).catch(() => {});
+  await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/holo.js' }).catch(() => {});
+  await page.waitForFunction(() => !!window.__autodrive && !!window.NexusHolo, { timeout: 30000 }).catch(() => {});
+  await page.evaluate((who) => {
+    window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
+    window.NexusHolo.attach();
+  }, id).catch(() => {});
   // each one starts facing somewhere different, so the views are not four copies of one view
-  await page.evaluate(async (k) => {
+  // spread them around a shared spot and turn them to face inward, so each camera has
+  // somebody in it rather than a view of the horizon
+  await page.evaluate(async (k, n) => {
     const d = window.__autodrive; if (!d) return;
-    await d.look(k * 140, 0); await d.walk('forward', 200 + k * 120);
-  }, i).catch(() => {});
+    // spread around a circle and turn inward, so they are looking at each other
+    await d.look(Math.round((360 / n) * k * 2.2), 0);
+    await d.walk('forward', 420);
+    await d.look(180 * 2.2, 0);
+  }, i, N).catch(() => {});
   players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [] });
   console.log('  ' + id + ' is in');
+}
+
+// let the projections find each other before the first frame
+await new Promise(r => setTimeout(r, 1500));
+for (const p of players) {
+  const seen = await p.page.evaluate(() => window.NexusHolo.present().map(x => x.name + (x.painted ? '' : '(unpainted)'))).catch(() => []);
+  console.log('  ' + p.id + ' sees ' + (seen.length ? seen.join(', ') : 'nobody'));
 }
 
 const INTENTS = ['wander', 'hold', 'go', 'wander'];

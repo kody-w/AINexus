@@ -1,0 +1,151 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The House — cameras</title>
+<meta name="description" content="Fixed cameras watching a house of AI residents, cutting to whichever one has something happening in it.">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:#07070d;color:#e9e9f2;font:13px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+#world{position:fixed;left:-4000px;top:0;width:1000px;height:640px;border:0}
+#wrap{position:fixed;inset:0;display:grid;grid-template-columns:1fr 300px;gap:12px;padding:12px}
+#live{position:relative;border:1px solid #2a2a4e;border-radius:14px;overflow:hidden;background:#000;min-height:0}
+#live img{width:100%;height:100%;object-fit:cover;display:block}
+#rail{display:grid;grid-auto-rows:1fr;gap:8px;min-height:0}
+.tile{position:relative;border:1px solid #23234a;border-radius:10px;overflow:hidden;background:#000;min-height:0;
+  transition:border-color .35s,box-shadow .35s,opacity .35s;opacity:.62}
+.tile img{width:100%;height:100%;object-fit:cover;display:block}
+.tile.on{border-color:#ff4d6d;box-shadow:0 0 0 1px #ff4d6d,0 8px 30px rgba(255,77,109,.22);opacity:1}
+.lbl{position:absolute;left:7px;top:6px;font:10px ui-monospace,Menlo,monospace;color:#c9c9e6;
+  background:rgba(4,4,12,.8);border-radius:5px;padding:2px 7px;letter-spacing:.06em}
+.sc{position:absolute;right:7px;top:6px;font:10px ui-monospace,monospace;color:#6f6f95;background:rgba(4,4,12,.8);
+  border-radius:5px;padding:2px 6px}
+.tile.on .sc{color:#ff9db1}
+#rec{position:absolute;left:14px;top:12px;z-index:5;display:flex;align-items:center;gap:8px;
+  font:11px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:#ff4d6d}
+#dot{width:9px;height:9px;border-radius:50%;background:#ff4d6d;animation:blink 1.6s infinite}
+@keyframes blink{0%,45%{opacity:1}55%,100%{opacity:.15}}
+#clock{position:absolute;right:14px;top:12px;z-index:5;font:11px ui-monospace,monospace;color:#9a9ac0;
+  background:rgba(4,4,12,.72);border-radius:6px;padding:3px 9px}
+#cap{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:16px 20px 18px;
+  background:linear-gradient(transparent,rgba(3,3,10,.92));min-height:74px}
+#who{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:#ffb3c1;text-transform:uppercase}
+#line{font:400 20px/1.4 Georgia,'Times New Roman',serif;color:#fff;margin-top:3px;text-shadow:0 2px 14px rgba(0,0,0,.9)}
+#where{position:absolute;left:14px;bottom:96px;z-index:5;font:10px ui-monospace,monospace;color:#8f8fb0;
+  background:rgba(4,4,12,.7);border-radius:6px;padding:3px 8px;letter-spacing:.08em}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:#33335c;font:11px ui-monospace,monospace}
+</style></head><body>
+<iframe id="world" title="the house"></iframe>
+<div id="wrap">
+  <div id="live">
+    <div id="rec"><span id="dot"></span><span>REC</span></div>
+    <div id="clock">--:--:--</div>
+    <img id="big" alt="the live camera">
+    <div id="where">—</div>
+    <div id="cap"><div id="who">&nbsp;</div><div id="line">&nbsp;</div></div>
+  </div>
+  <div id="rail"><div class="empty">no cameras yet</div></div>
+</div>
+<script>
+// A house watched by fixed cameras. The residents are projections (ai/holo.js) — they can be in
+// this instance or in another one entirely and still be in the room. Each camera renders to its
+// own offscreen target, scores what it can see, and the director cuts to whichever camera has
+// the most going on. It does not cut on a timer: it cuts when somewhere else got interesting.
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const WORLD = params.get('world') || 'index.html';
+const EVERY = +(params.get('every') || 220);       // how often each camera takes a look
+const STICK = +(params.get('stick') || 2600);      // don't cut away from a scene faster than this
+const frame = $('world');
+
+// where the cameras are bolted. The nexus floor is y=0, eye height ~2, portals ring at r=15 —
+// so these sit above head height around that ring, each looking back across the middle.
+const RIG = [
+  { id: 'cam1', name: 'CAM 1 · ENTRANCE',  room: 'entrance', pos: { x: 0, y: 4.2, z: 17 },  look: { x: 0, y: 1.6, z: 2 },  pan: { deg: 7, seconds: 26 } },
+  { id: 'cam2', name: 'CAM 2 · WEST WALL', room: 'west',     pos: { x: -16, y: 3.6, z: 2 },  look: { x: 0, y: 1.6, z: 0 },  pan: { deg: 9, seconds: 31 } },
+  { id: 'cam3', name: 'CAM 3 · EAST WALL', room: 'east',     pos: { x: 16, y: 3.6, z: -2 },  look: { x: 0, y: 1.6, z: 0 },  pan: { deg: 9, seconds: 22 } },
+  { id: 'cam4', name: 'CAM 4 · HIGH',      room: 'above',    pos: { x: 0, y: 12, z: -1 },    look: { x: 0, y: 1.2, z: 0 },  fov: 70 },
+  { id: 'cam5', name: 'CAM 5 · FLOOR',     room: 'floor',    pos: { x: -5, y: 1.5, z: -9 },  look: { x: 2, y: 1.6, z: 3 },  pan: { deg: 12, seconds: 18 } },
+  { id: 'cam6', name: 'CAM 6 · BACK',      room: 'back',     pos: { x: 3, y: 3.2, z: -18 },  look: { x: 0, y: 1.6, z: 0 },  pan: { deg: 8, seconds: 29 } },
+];
+
+let W = null, cams = null, holo = null, tiles = new Map(), live = null, liveSince = 0, t0 = Date.now();
+
+frame.src = WORLD;
+frame.addEventListener('load', () => {
+  let tries = 0;
+  (function boot() {
+    let doc = null;
+    try { doc = frame.contentDocument; } catch (e) { return note('the house is on another origin'); }
+    if (!doc || !doc.body || !frame.contentWindow.worldNavigator || !frame.contentWindow.THREE) {
+      if (++tries < 90) return setTimeout(boot, 200);
+      return note('the house never finished building');
+    }
+    W = frame.contentWindow;
+    ['ai/holo.js', 'ai/cams.js'].forEach(src => {
+      const s = doc.createElement('script'); s.src = new URL(src, location.href).href; doc.body.appendChild(s);
+    });
+    (function ready() {
+      if (!W.NexusCams || !W.NexusHolo) return setTimeout(ready, 150);
+      holo = W.NexusHolo; cams = W.NexusCams;
+      holo.attach({ labels: true });          // the residents appear, wherever they really are
+      cams.house(RIG);
+      buildRail();
+      requestAnimationFrame(tick);
+    })();
+  })();
+});
+function note(t) { $('rail').innerHTML = '<div class="empty">' + t + '</div>'; }
+
+function buildRail() {
+  const rail = $('rail'); rail.innerHTML = '';
+  for (const c of RIG) {
+    const el = document.createElement('div'); el.className = 'tile';
+    el.innerHTML = `<span class="lbl">${c.name}</span><span class="sc">0</span><img alt="${c.name}">`;
+    rail.appendChild(el);
+    tiles.set(c.id, { el, img: el.querySelector('img'), sc: el.querySelector('.sc') });
+  }
+}
+
+let lastShot = 0;
+function tick(t) {
+  if (cams) {
+    cams.drift(t);
+    if (t - lastShot > EVERY) {
+      lastShot = t;
+      const survey = cams.survey();                 // every camera scores what it can see
+      for (const s of survey) {
+        const tile = tiles.get(s.id); if (!tile) continue;
+        const uri = cams.shoot(s.id, { quality: 0.62 });
+        if (uri) tile.img.src = uri;
+        tile.sc.textContent = s.score;
+        tile.el.classList.toggle('on', s.id === live);
+      }
+      // CUT TO WHERE IT IS HAPPENING — but hold a shot long enough to be a shot
+      const top = survey[0];
+      if (top && (!live || (t - liveSince > STICK && top.id !== live && top.score > (survey.find(x => x.id === live) || {}).score + 12))) {
+        live = top.id; liveSince = t;
+      }
+      if (!live && top) { live = top.id; liveSince = t; }
+      const shown = survey.find(s => s.id === live);
+      if (shown) {
+        const big = cams.shoot(shown.id, { quality: 0.82 });
+        if (big) $('big').src = big;
+        $('where').textContent = shown.name + '  ·  ' + shown.people.length + ' in shot';
+        const talker = shown.people.find(p => p.speaking);
+        if (talker) { $('who').textContent = talker.name; }
+        else if (!$('line').dataset.hold) { $('who').innerHTML = '&nbsp;'; $('line').innerHTML = '&nbsp;'; }
+      }
+    }
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $('clock').textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60]
+      .map(n => String(n).padStart(2, '0')).join(':');
+  }
+  requestAnimationFrame(tick);
+}
+
+// a beat: somebody says a line, and nothing else starts until they have finished saying it
+window.say = function (who, text, seconds) {
+  $('who').textContent = who; $('line').textContent = text;
+  $('line').dataset.hold = '1';
+  return new Promise(r => setTimeout(() => { delete $('line').dataset.hold; r(); }, (seconds || 3) * 1000));
+};
+window.__houseReady = () => !!(cams && cams.count());
+</script></body></html>
