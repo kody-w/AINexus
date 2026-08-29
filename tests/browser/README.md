@@ -44,13 +44,16 @@ fails twice, then it is real.
 | `agent_contract.cjs` | the eight python agents against the arguments a MODEL sends: every parameter perform() reads is declared and every one declared is read, nothing sent crashes one, the lenses are byte-identical twice and emit no floats, and a player's memory cannot be reached through a crafted key |
 | `frames_conformance.cjs` | `ai/frames.js` against the standard rather than against itself: 18 JCS vectors — non-BMP member names, the 2^53-1 boundary, escaping, empty containers, null against absent — hashing byte-identically here and in kody-w/rapp-1's `rapp.py`, the §5 tags really in the pre-image, and a battery of chains that must be REFUSED (a genesis that is not seq 0, a segment spliced in from another stream, a twelfth key hashed in, a calendar that does not exist) |
 | `slow_frames.cjs` | the camera modules on a machine that is not fast: the same second of looking read at 4, 6, 10, 15, 30 and 60 frames a second landing in ONE place — the origin used to lock after a fixed count of frames, so a slow runner pinned the pointer dead centre and then learned whatever pose it found as straight ahead — one raise still one press at every rate, a missed detection not costing a held look its origin, a NaN landmark not smoothed into the pointer forever, and the pulse refusing an exposure ramp and a slow sway that both used to be reported, confidently, as 42 bpm |
+| `absent_and_infinite.cjs` | the four small modules — cameras, hands, the ring, the AI body — against a subject that is not there and a number that is not a number: a POV camera looking where its resident looks rather than 180° the other way, a presence made of NaN in nobody’s shot instead of inside every camera at once, a blind camera saying so and eventually leaving instead of handing back a picture of the room somebody left, a hand of NaN landmarks reading as no hand, the ring naming the portal that is actually nearest rather than the one that never measured itself, and one Infinity from a mind refused instead of writing NaN into the world camera for the life of the page |
 
-`turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs`, `overlay.cjs`, `frames_conformance.cjs` and
-`slow_frames.cjs` need no credentials at all — and `slow_frames.cjs` needs no camera or network
-either, because it drives the two modules as the pure functions they are.
+`turn.cjs`, `orbs_and_gaze.cjs`, `dialogue_ring.cjs`, `overlay.cjs`, `frames_conformance.cjs`,
+`slow_frames.cjs` and `absent_and_infinite.cjs` need no credentials at all — and `slow_frames.cjs`
+needs no camera or network either, because it drives the two modules as the pure functions they are.
 The eleven that load Pyodide — `vbrainstem_python.cjs`, `slosh.cjs`, `spiral.cjs`, `chat_tile.cjs`,
 `forge.cjs`, `herd.cjs`, `ensemble.cjs`, `world_frame.cjs`, `hotload.cjs`, `time_travel.cjs` and
 `agent_contract.cjs` — need the network. `copilot_auth.cjs` reaches the live worker.
+`absent_and_infinite.cjs` boots the real AI player with Pyodide stubbed at the CDN, so it drives
+the drop-in through its own boot path without pulling the 10MB runtime.
 
 `holo_wire.cjs` and `room.cjs` need the network for one particular thing: the public PeerJS
 signalling server, because they hold a REAL peer room rather than a simulated one. Both say so

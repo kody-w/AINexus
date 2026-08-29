@@ -17,9 +17,18 @@
 
   function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
+  // A LANDMARK THAT IS NOT A NUMBER IS NOT A HAND. The detector can hand back a point whose
+  // coordinates are NaN, and every comparison against NaN is false — so a pinch stopped being a
+  // pinch, the posture came back as a confident 'point' with x and y of NaN, and the caller
+  // multiplied that into a screen position for a cursor that then sat wherever it last was, still
+  // lit, still reporting a hand. There is no hand. Say so, which is a thing the caller can act on.
+  const fin = (v) => typeof v === 'number' && isFinite(v);
+  const pt = (p) => !!(p && fin(p.x) && fin(p.y));
+
   // read a hand into a stable, named posture
   function posture(lm, prev) {
     if (!lm || lm.length < 21) return { kind: 'none' };
+    if (!pt(lm[0]) || !pt(lm[4]) || !pt(lm[8]) || !pt(lm[12])) return { kind: 'none' };
     const pinch = dist(lm[4], lm[8]);
     const wasPinched = prev && prev.pinched;
     const pinched = wasPinched ? pinch < PINCH_OFF : pinch < PINCH_ON;
@@ -39,14 +48,28 @@
   }
 
   // posture + where it is on screen -> one driver verb (or nothing)
+  //
+  // `px`/`py` are the caller's own mapping of the fingertip onto its viewport (frontier.html
+  // mirrors x for the selfie view and multiplies by innerWidth/innerHeight); this module only
+  // owns the normalised 0..1 point the detector gave it.
   function toAction(p, prev) {
     if (!p || p.kind === 'none') return null;
+    if (!fin(p.x) || !fin(p.y)) return null;
     const dx = p.x - 0.5, dy = p.y - 0.5;
 
     // THE HAND IS A CURSOR. The fingertip designates a point on screen and the pinch presses
     // whatever is under it — a button, an input, a portal. This is a mouse made of a hand,
     // not a gamepad, so pointing does NOT steer: the pointer goes where the finger goes.
-    if (p.pinched && !(prev && prev.pinched)) return { do: 'pick', x: p.px, y: p.py };
+    //
+    // A PICK ALWAYS CARRIES A POINT. Fed the posture this file itself produces, this used to hand
+    // back {do:'pick', x: undefined, y: undefined} — a press with nowhere to press, saved only by
+    // the one caller that happened to ignore the coordinates and use its own. The screen point is
+    // reported when the caller supplied one, and the normalised fingertip always is, so anybody
+    // driving through this vocabulary knows where the press landed.
+    if (p.pinched && !(prev && prev.pinched)) {
+      return { do: 'pick', x: fin(p.px) ? p.px : null, y: fin(p.py) ? p.py : null,
+               nx: p.x, ny: p.y };
+    }
 
     // An open palm is the one posture that moves the body: push forward to walk, and lean
     // the palm off-centre to turn as you go. Nothing else drives the camera.

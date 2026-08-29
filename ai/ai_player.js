@@ -37,6 +37,11 @@
         if (frag) window.NEXUS_AI_INVITE = { host: frag[1], token: frag[2] };
     } catch (e) { /* no hash, or a hostile fragment — either way, no AI boot */ }
 
+    // A COORDINATE THAT IS NOT FINITE IS NOT A PLACE. Everything below that reaches a THREE
+    // transform goes through this first — the estate has lost a camera to one NaN twice already,
+    // and a poisoned matrix has no way back: every product with NaN is NaN.
+    const fin = (v) => typeof v === 'number' && isFinite(v);
+
     class AIPlayerManager {
         constructor(worldInstance) {
             this.world = worldInstance;
@@ -79,7 +84,20 @@
             try {
                 window.nexusAI = {
                     observe: () => JSON.stringify(this.observation()),
-                    move: (j) => { const a = JSON.parse(j); this.target = { x: +a.x || 0, z: +a.z || 0 }; return `walking toward (${a.x}, ${a.z})`; },
+                    move: (j) => {
+                        const a = JSON.parse(j);
+                        // `+a.x || 0` mapped NaN to 0 but let Infinity straight through, and one
+                        // Infinity is the whole disaster: update() divides the step by the
+                        // distance, Infinity/Infinity is NaN, and that NaN lands in the camera's
+                        // position for good — every later move then measured a NaN distance,
+                        // failed the "close enough" test, and added NaN again. One bad number
+                        // from one turn killed the body for the life of the page, while this
+                        // function went on reporting that it was walking.
+                        const x = +a.x, z = +a.z;
+                        if (!fin(x) || !fin(z)) return `REFUSED: (${a.x}, ${a.z}) is not a place — x and z must both be finite numbers`;
+                        this.target = { x, z };
+                        return `walking toward (${x}, ${z})`;
+                    },
                     say: (j) => { const a = JSON.parse(j); return this.say(String(a.text || '')); },
                     travel: (j) => {
                         const a = JSON.parse(j);
@@ -110,29 +128,60 @@
             }
         }
 
+        // EVERY PORTAL IT IS TOLD ABOUT IS ONE IT CAN ACTUALLY WALK INTO. This listed
+        // `world.portalIndex`, which only the hub pages build — so on the six world pages that
+        // ship this drop-in without one, observe() reported an empty room while four real portals
+        // stood in it, and `travel` would have accepted any of their names. The mind was offered
+        // nothing and (with no mind, see reflex) did nothing. The index when a page keeps one;
+        // otherwise the same list `travel` matches against, which is the honest one either way.
+        portalsHere() {
+            const idx = Array.isArray(this.world.portalIndex) ? this.world.portalIndex : [];
+            const V = (typeof THREE !== 'undefined' && THREE.Vector3) ? new THREE.Vector3() : null;
+            const src = idx.length ? idx : (this.world.portals || []).map(p => {
+                const u = (p && p.userData) || {};
+                const at = (V && p && p.getWorldPosition) ? p.getWorldPosition(V) : ((p && p.position) || {});
+                return { name: u.name, x: at.x, z: at.z };
+            });
+            const out = [];
+            for (const p of src) {
+                const name = p && p.name != null ? String(p.name) : '';
+                if (!name || !fin(p.x) || !fin(p.z)) continue;   // a door with no name or no place
+                out.push({ name, x: Math.round(p.x), z: Math.round(p.z) });
+                if (out.length >= 16) break;
+            }
+            return out;
+        }
+
         observation() {
-            const cam = this.world.camera.position;
+            const cam = (this.world.camera && this.world.camera.position) || {};
             const players = [];
             this.world.multiplayer?.players?.forEach((pl, id) => {
                 const pos = pl.mesh?.position || pl.position || {};
                 players.push({ id: String(id).slice(0, 6), x: Math.round(pos.x || 0), z: Math.round(pos.z || 0) });
             });
             return {
-                me: { x: Math.round(cam.x), z: Math.round(cam.z) },
+                me: fin(cam.x) && fin(cam.z) ? { x: Math.round(cam.x), z: Math.round(cam.z) }
+                                             : { x: null, z: null, lost: 'this body has no finite position' },
                 players,
-                portals: (this.world.portalIndex || []).slice(0, 16),
+                portals: this.portalsHere(),
                 recentChat: this.world.multiplayer?.chatLog || [],
             };
         }
 
+        // and it is told how far its voice actually carried: "said" used to come back identical
+        // whether the line reached four peers or was never sent at all, so an AI talking into an
+        // empty room had no way to learn that nobody was there
         say(text) {
-            text = text.slice(0, 280);
+            text = String(text == null ? '' : text).slice(0, 280);
+            if (!text.trim()) return 'said nothing — there was no text to say';
             const mp = this.world.multiplayer;
-            if (mp) {
-                mp.connections.forEach(conn => { try { conn.send({ type: 'chat', message: text }); } catch (e) {} });
-                mp.displayChat(mp.peer?.id || 'me', '🤖 ' + text);
+            let heard = 0;
+            if (mp && mp.connections && mp.connections.forEach) {
+                mp.connections.forEach(conn => { try { conn.send({ type: 'chat', message: text }); heard++; } catch (e) {} });
             }
-            return `said: ${text}`;
+            if (mp && mp.displayChat) { try { mp.displayChat(mp.peer?.id || 'me', '🤖 ' + text); } catch (e) {} }
+            return heard ? `said to ${heard} ${heard === 1 ? 'peer' : 'peers'}: ${text}`
+                         : `said: ${text} — but nobody else is connected, so only this tab heard it`;
         }
 
         // Carry the invite forward: same room, next page. `window.NEXUS_AI_INVITE`
@@ -193,12 +242,18 @@
         }
 
         reflex(obs, why) {
-            // legible degradation: no mind -> simple wander-and-greet reflexes, honestly labeled
-            const portals = obs.portals || [];
+            // legible degradation: no mind -> simple wander-and-greet reflexes, honestly labeled.
+            // LEGIBLE MEANS IT SAYS SO EVEN WHEN IT DOES NOTHING: the report lived inside the
+            // `if (portals.length)`, so on a page with nothing to walk to the AI stood still,
+            // silent, under a HUD still reading "alive" — and the reason it was reflexing at all
+            // (no mind granted, mind unreachable) was never printed anywhere.
+            const portals = (obs && obs.portals) || [];
             if (portals.length) {
                 const t = portals[Math.floor(Math.random() * portals.length)];
                 this.dispatch({ agent: 'move', params: { x: t.x * 0.8, z: t.z * 0.8 } });
                 this.hud(null, `reflex (${why}): wandering toward ${t.name}`);
+            } else {
+                this.hud(null, `reflex (${why}): nothing here to walk to — standing still`);
             }
             if (Math.random() < 0.2) this.dispatch({ agent: 'say', params: { text: 'wandering on reflexes — grant my mind with your brainstem secret to wake me up' } });
         }
@@ -215,13 +270,17 @@
             const dt = Math.min(0.05, Math.max(0, (now - (this._lastStep || now)) / 1000));
             this._lastStep = now;
             if (!this.target) return;
-            const cam = this.world.camera.position;
+            const cam = this.world.camera && this.world.camera.position;
+            if (!cam || !fin(cam.x) || !fin(cam.y) || !fin(cam.z)) { this.target = null; return; }
             const dx = this.target.x - cam.x, dz = this.target.z - cam.z;
             const dist = Math.hypot(dx, dz);
-            if (dist < 0.4) { this.target = null; return; }
+            if (!fin(dist) || dist < 0.4) { this.target = null; return; }
             const step = Math.min(dist, this.speed * dt);
-            cam.x += (dx / dist) * step;
-            cam.z += (dz / dist) * step;
+            // the last gate before a matrix: whatever arrived, nothing that is not a number is
+            // written into a position — a body that cannot take a step stops instead
+            const nx = cam.x + (dx / dist) * step, nz = cam.z + (dz / dist) * step;
+            if (!fin(nx) || !fin(nz)) { this.target = null; return; }
+            cam.x = nx; cam.z = nz;
             this.world.camera.lookAt(this.target.x, cam.y, this.target.z);
         }
     }

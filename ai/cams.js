@@ -21,6 +21,18 @@
   let rig = null;
 
   const V = () => new root.THREE.Vector3();
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+  // ── nothing that arrives here is a number until it has been checked ───────
+  // A camera's inputs come from outside this file: a presence published by another machine, the
+  // page's own camera, a rig somebody wrote by hand. One NaN reaching a position or a rotation
+  // poisons that matrix permanently — every product with it is NaN, and there is no value that
+  // brings it back — so a place that is not three finite numbers is not a place, and is treated
+  // exactly like an absent one.
+  const fin = (v) => typeof v === 'number' && isFinite(v);
+  const place = (q) => (q && fin(q.x) && fin(q.y) && fin(q.z)) ? q : null;
+  const size = (v, d) => (fin(v) && v >= 8) ? Math.floor(v) : d;
+  const RETIRE_MS = 15000;      // holo drops a presence 6s after its last pose; this is well past
 
   // ── a camera that rides somebody ─────────────────────────────────────────
   // A fixed camera shows you who is with whom. It can never show you what one of them is looking
@@ -31,60 +43,108 @@
   // It costs what any other camera costs, which is one more render of the scene. That is the
   // real budget here and it is the same budget split-screen has always had.
   function follow(spec) {
+    if (!spec || !spec.follows) return null;   // a camera bound to nobody is a camera at the origin
     const c = add(Object.assign({}, spec, { pos: { x: 0, y: 2, z: 0 } }));
     if (!c) return null;
     c.follows = spec.follows;
-    c.eye = spec.eye === undefined ? 0 : spec.eye;      // 0 = their eyes, >0 = over the shoulder
+    c.eye = fin(spec.eye) ? spec.eye : 0;               // 0 = their eyes, >0 = over the shoulder
+    // BLIND UNTIL IT HAS ACTUALLY FOUND THEM. It stands at the origin looking down until the
+    // first aim, and a camera that has never seen its subject must not be surveyed, shot, or
+    // listed as if it had.
+    c.blind = true; c.blindSince = now();
     return c;
   }
 
+  // a follower with no subject: mark it, and eventually take it out
+  function unsighted(c, t) {
+    if (!c.blind) { c.blind = true; c.blindSince = t; return; }
+    // AND THE CAMERA LEAVES WITH THEM. A camera holds a render target and a pixel buffer for as
+    // long as it is in this map, and nothing ever took one out: a resident who left at noon still
+    // had a camera at midnight, and one who came back got a SECOND one — house.html re-follows on
+    // return — while the first was never disposed. Six seconds of silence is already enough for
+    // holo to drop a presence, so a subject missing this long is gone; their next visit builds a
+    // fresh camera rather than inheriting a stale one.
+    if (c.blindSince && t - c.blindSince > RETIRE_MS) remove(c.id);
+  }
+
   function aimFollowers() {
-    const H = root.NexusHolo, w = root.worldNavigator;
+    const H = root.NexusHolo, w = root.worldNavigator, t = now();
     for (const c of cams.values()) {
       if (!c.follows) continue;
       let pose = null;
       if (c.follows === 'local' && w && w.camera) {
-        pose = { pos: w.camera.position, yaw: (w.rotation && w.rotation.y) || w.camera.rotation.y || 0 };
+        const y = (w.rotation && w.rotation.y) || (w.camera.rotation && w.camera.rotation.y) || 0;
+        pose = { pos: place(w.camera.position), yaw: fin(y) ? y : 0 };
       } else if (H) {
-        const p = H.present().find(x => x.id === c.follows || x.name === c.follows);
-        if (p) pose = { pos: p.pos, yaw: p.yaw || 0 };
+        const p = H.present().find(x => x && (x.id === c.follows || x.name === c.follows));
+        if (p) pose = { pos: place(p.pos), yaw: fin(p.yaw) ? p.yaw : 0 };
       }
-      if (!pose) { c.blind = true; continue; }
-      c.blind = false;
+      // A SUBJECT WHO IS NOT SOMEWHERE IS NOT A SUBJECT. A presence with no pos at all used to
+      // throw out of here on `pose.pos.x`, and this runs first in every survey — so one malformed
+      // presence took down the scoring of every camera in the house and the director, seeing an
+      // empty survey, held its last shot for good. Absent and unusable now mean the same thing:
+      // blind, which is a state the caller can read and act on.
+      if (!pose || !pose.pos) { unsighted(c, t); continue; }
+      c.blind = false; c.blindSince = 0;
       const yaw = pose.yaw;
       const back = c.eye;                                 // how far behind the shoulder
       c.cam.position.set(pose.pos.x + Math.sin(yaw) * back,
                          pose.pos.y + (back ? 0.5 : 0),
                          pose.pos.z + Math.cos(yaw) * back);
-      c.cam.rotation.set(0, yaw + Math.PI, 0);
+      // YAW IS THE PERSON'S, NOT THE AVATAR'S. holo.js turns the projected BODY to yaw + π
+      // because that model faces +Z; a THREE camera already looks down its own -Z, so the same
+      // half turn applied here pointed every POV camera exactly away from what its subject was
+      // looking at — the offset above puts it behind their shoulder and the rotation had it
+      // staring back the way they came. The shot that proves there is somebody in there was the
+      // one shot this could never take.
+      c.cam.rotation.set(0, yaw, 0);
     }
   }
 
   function add(spec) {
     const T = root.THREE, w = root.worldNavigator;
-    if (!T || !w || !w.renderer) return null;
+    if (!T || !w || !w.renderer || !spec || spec.id == null) return null;
+    const pos = place(spec.pos), look = place(spec.look) || { x: 0, y: 1.4, z: 0 };
+    if (!pos) return null;                        // a camera has to be somewhere, and somewhere is
+                                                  // three finite numbers — not a matrix full of NaN
+    const wide = size(spec.width, 480), high = size(spec.height, 300);
+    const fov = (fin(spec.fov) && spec.fov > 0 && spec.fov < 180) ? spec.fov : 58;
+    remove(spec.id);                              // replacing an id disposes the one it replaces
     const c = {
       id: spec.id, name: spec.name || spec.id, room: spec.room || null,
-      pos: spec.pos, look: spec.look || { x: 0, y: 1.4, z: 0 },
-      fov: spec.fov || 58, width: spec.width || 480, height: spec.height || 300,
+      pos: pos, look: look,
+      fov: fov, width: wide, height: high,
       pan: spec.pan || null,                      // {axis:'y', deg: 12, seconds: 20} for a slow sweep
-      cam: new T.PerspectiveCamera(spec.fov || 58, (spec.width || 480) / (spec.height || 300), 0.1, 400),
-      target: new T.WebGLRenderTarget(spec.width || 480, spec.height || 300,
+      cam: new T.PerspectiveCamera(fov, wide / high, 0.1, 400),
+      target: new T.WebGLRenderTarget(wide, high,
         { minFilter: T.LinearFilter, magFilter: T.LinearFilter, format: T.RGBAFormat }),
-      buf: new Uint8Array((spec.width || 480) * (spec.height || 300) * 4),
+      buf: new Uint8Array(wide * high * 4),
       canvas: null, score: 0, saw: [], last: null,
     };
-    c.cam.position.set(spec.pos.x, spec.pos.y, spec.pos.z);
-    c.cam.lookAt(c.look.x, c.look.y, c.look.z);
+    c.cam.position.set(pos.x, pos.y, pos.z);
+    c.cam.lookAt(look.x, look.y, look.z);
     c.baseYaw = c.cam.rotation.y;
     cams.set(c.id, c);
     return c;
+  }
+
+  // taking one out is the other half of putting one in: the render target is GPU memory and it
+  // does not go anywhere on its own
+  function remove(id) {
+    const c = cams.get(id); if (!c) return false;
+    try { c.target.dispose(); } catch (e) {}
+    c.canvas = null; c.buf = null; c.saw = [];
+    return cams.delete(id);
   }
 
   // one camera's picture, as a data URI — rendered without disturbing anybody
   function shoot(id, opts) {
     const o = opts || {};
     const c = cams.get(id); if (!c) return null;
+    // A BLIND CAMERA HAS NO PICTURE TO HAND BACK. It is still pointing wherever its subject stood
+    // when they vanished, and rendering that returns a perfectly good frame of a place nobody is
+    // — a shot it did not take. Nothing, here, is the true answer.
+    if (c.blind) return null;
     const w = root.worldNavigator, R = w && w.renderer;
     if (!R || !w.scene) return null;
     const prev = R.getRenderTarget ? R.getRenderTarget() : null;
@@ -121,16 +181,23 @@
     // holographic presences are the population of this house
     const H = root.NexusHolo;
     if (H) for (const p of H.present()) {
-      const v = new T.Vector3(p.pos.x, p.pos.y - 1.0, p.pos.z);
+      // A PRESENCE THAT IS NOT A PLACE IS IN NOBODY'S FRAME. Frustum.containsPoint asks whether
+      // any plane distance is < 0, and every comparison against NaN is false — so a presence
+      // carrying one NaN was found inside every plane of every camera at once. It appeared in all
+      // eight shots simultaneously, at a distance of NaN, adding ten points of engagement to
+      // cameras pointed at nothing.
+      const q = p && place(p.pos);
+      if (!q) continue;
+      const v = new T.Vector3(q.x, q.y - 1.0, q.z);
       if (!frustum.containsPoint(v)) continue;
-      people.push({ id: p.id, name: p.name, speaking: !!p.speaking, pos: p.pos,
+      people.push({ id: p.id, name: p.name, speaking: !!p.speaking, pos: q,
                     dist: c.cam.position.distanceTo(v) });
     }
     // a camera riding somebody should not score itself for seeing its own host
     const host = c.follows || null;
     if (host) for (let i = people.length - 1; i >= 0; i--) if (people[i].id === host) people.splice(i, 1);
     // and whoever is actually standing here in this instance
-    if (w.camera && !host) {
+    if (w.camera && !host && place(w.camera.position)) {
       const me = w.camera.position.clone(); me.y -= 1.0;
       if (frustum.containsPoint(me)) people.push({ id: 'local', name: 'in the room', speaking: !!root.__holoSpeaking,
         pos: { x: me.x, y: me.y, z: me.z }, dist: c.cam.position.distanceTo(me) });
@@ -156,19 +223,25 @@
     if (c.last && sig !== c.last) score += 8;
     c.last = sig;
     c.saw = people; c.score = Math.round(score);
-    return { id: c.id, name: c.name, room: c.room, score: c.score,
+    return { id: c.id, name: c.name, room: c.room, score: c.score, blind: !!c.blind,
              people: people.map(p => ({ id: p.id, name: p.name, speaking: p.speaking, dist: +p.dist.toFixed(1) })) };
   }
 
   function survey() {
     aimFollowers();                                       // a bound camera moves before it looks
-    return [...cams.keys()].map(look).filter(Boolean)
-      .filter(s => { const c = cams.get(s.id); return !(c && c.blind); })
-      .sort((a, b) => b.score - a.score);
+    const out = [];
+    for (const id of [...cams.keys()]) {
+      const c = cams.get(id);
+      if (!c || c.blind) continue;                        // nothing to score, and nothing to show
+      const s = look(id);
+      if (s) out.push(s);
+    }
+    return out.sort((a, b) => b.score - a.score);
   }
 
   // the slow drift a mounted camera has, so a still room is not a still image
   function drift(t) {
+    if (!fin(t)) return;                                  // a clock that is not a number moves nobody
     for (const c of cams.values()) {
       if (!c.pan) continue;
       const a = (c.pan.deg || 10) * Math.PI / 180;
@@ -180,13 +253,17 @@
     for (const s of (spec || [])) add(s);
     return list();
   }
+  // ABSENCE IS PART OF THE LISTING. Dropping a blind camera out of survey() says "there is no
+  // shot here", but it says it by saying nothing, which is also what a camera that does not exist
+  // says — so a caller holding a rail of tiles could not tell a dead one from a typo. Both facts
+  // belong on the record: who this camera rides, and whether it can currently see them.
   const list = () => [...cams.values()].map(c => ({ id: c.id, name: c.name, room: c.room,
-    pos: c.pos, w: c.width, h: c.height }));
+    pos: c.pos, w: c.width, h: c.height, follows: c.follows || null, blind: !!c.blind }));
   function clear() {
-    for (const c of cams.values()) { try { c.target.dispose(); } catch (e) {} }
+    for (const c of cams.values()) { try { c.target.dispose(); } catch (e) {} c.canvas = null; c.buf = null; }
     cams.clear();
   }
 
-  root.NexusCams = { add, follow, house, shoot, look, survey, drift, list, clear, aimFollowers,
+  root.NexusCams = { add, follow, house, shoot, look, survey, drift, list, clear, remove, aimFollowers,
                      count: () => cams.size, get: (id) => cams.get(id) };
 })(typeof window !== 'undefined' ? window : globalThis);
