@@ -1096,21 +1096,27 @@
     return { child, by, novelty: novelty(child, [a, b]) };
   }
 
-  // ── BRAIDING ─────────────────────────────────────────────────────────────
-  // Slosh pours one thing through another: one pour, one result. BRAIDING is doing it several
-  // ways at once and plaiting the results together — and the strands stay distinct, which is the
-  // whole point.
+  // ── CROSSING AND SELECTING ───────────────────────────────────────────────
+  // Slosh pours one thing through another: one pour, one result. CROSSING is doing it many ways
+  // at once; SELECTING is keeping what came out least like either parent. It is breeding, and
+  // the words are the breeder's, because the operation is exactly theirs.
   //
   // Measured, a single pour of two parents is 90% inheritance: 29 of 32 traits came straight from
-  // one of them. Six routes braided together reached 25% novel, better than the best single route
-  // at 19.4%, and every route contributed something no other route found.
+  // one of them. Six routes crossed and selected reached 25% novel against the best single
+  // route's 19.4%, and every route contributed something no other route found.
   //
-  // A BRAID IS NOT AN AVERAGE. Where strands disagree it keeps the value FURTHEST from both
+  // SELECTION IS NOT AVERAGING. Where attempts disagree it keeps the value FURTHEST from both
   // parents, because averaging is how a population of variants collapses back into the blend you
-  // were trying to escape. That one rule is the difference between braiding and blending.
+  // were trying to escape. That one rule is the whole difference.
   //
-  // (Not called "folding": openrappter's qqdrill already uses fold for absorbing another line
-  // into your own, and a word that already means something is not available.)
+  // This was called BRAIDING until six cold readers were asked what it meant. All six got the
+  // direction right after reading — and all six volunteered, unprompted, that the word had fought
+  // them: "my first guess was exactly backwards", "a divergence operator wearing the name of a
+  // convergence operator". A braid converges; three strands become one rope. This diverges. A
+  // word that has to be corrected every time it is taught will not survive being repeated by
+  // somebody who read it once, which is the only property that matters for a vocabulary.
+  // (Also not "folding": openrappter's qqdrill already uses fold for absorbing another line into
+  // your own, and a word that already means something is not available.)
   // Measured, one combination of two parents is 90% inheritance: 29 of 32 traits came straight
   // from one of them. That is a blend, and calling it emergence would be flattering it.
   //
@@ -1122,7 +1128,7 @@
   // The merge is deliberately not an average. Averaging is how a population of variants collapses
   // back into the blend you were trying to escape. Where variants disagree it takes the one
   // FURTHEST from both parents, because that is the part neither parent could have told you.
-  async function braid(a, b, ways, opts) {
+  async function cross(a, b, ways, opts) {
     const o = opts || {};
     const kids = [];
     for (const way of (ways || [])) {
@@ -1138,7 +1144,7 @@
     return kids;
   }
 
-  function plait(kids, parents, opts) {
+  function select(kids, parents, opts) {
     const o = opts || {};
     const flat = (x, pre, out) => { out = out || {};
       for (const k of Object.keys(x || {})) { const v = x[k], key = pre ? pre + '.' + k : k;
@@ -1169,10 +1175,10 @@
       cur[parts[0]] = e.v;
       if (e.far > 0) credit[e.from] = (credit[e.from] || 0) + 1;
     }
-    merged.braided_from = kids.map(k => k.way);
+    merged.crossed_from = kids.map(k => k.way);
     merged.contributed = credit;
     return { merged, novelty: novelty(merged, parents || []),
-             note: 'a braid is not an average: where strands disagreed, the value furthest from both parents was kept' };
+             note: 'selection is not averaging: where the crosses disagreed, the value furthest from both parents was kept' };
   }
 
   // A DIMENSION IN ONE LINE: where it split, what lens it wears, what seed it runs on. Everything
@@ -1198,9 +1204,11 @@
                      // a dimension in one line: where it split, what it wears, what it runs on
                      wear, tile, enter, slosh, sloshAgent, tiles: async (frame, count, opts) => {
                        const out = []; for (let i = 0; i < (count || 8); i++) out.push(await tile(frame, i, opts)); return out; },
-                     spiral, novelty, braid, plait,
-                     // the older names, because renaming a thing should not break what calls it
-                     blendMany: (...a) => braid(...a), merge: (...a) => plait(...a),
+                     spiral, novelty, cross, select,
+                     // the older names kept as aliases, because renaming a thing should not break
+                     // what calls it — braid/plait were the names until the readers voted
+                     braid: (...a) => cross(...a), plait: (...a) => select(...a),
+                     blendMany: (...a) => cross(...a), merge: (...a) => select(...a),
                      seedOf, fromSeed, reseed: (s2) => { dimension.seed = String(s2); seedRng(hashSeed(dimension.seed)); return seedOf(); },
                      lenses: () => Object.keys(LENSES),
                      cost: () => {

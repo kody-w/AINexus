@@ -76,9 +76,9 @@ const out=await p.evaluate(async()=>{
     { name:'world-through-lens', reverse:true,
       through:[{ with: creature, by:'LensCataclysm', opts:{ aKey:'tile', bKey:'unused', args:{ degree:2 } } }] },
   ];
-  const mixedKids = await H.braid(creature, world.tile, mixed);
-  const kids = await H.braid(creature, world.tile, ways);
-  const m = H.plait(kids, [creature, world.tile]);
+  const mixedKids = await H.cross(creature, world.tile, mixed);
+  const kids = await H.cross(creature, world.tile, ways);
+  const m = H.select(kids, [creature, world.tile]);
   const best = Math.max(...kids.map(k=>k.novelty.novelMilli));
 
   return {
@@ -116,14 +116,14 @@ ok('and values beyond the range both parents spanned', n1.beyondBothParents>0 ||
 ok('it keeps spiralling: the child fed back in is changed again', out.gen2.shapedBy>out.gen1.shapedBy);
 console.log('\n  novelty of gen 1: ' + (n1.novelMilli/10).toFixed(1) + '% of its traits were not in either parent');
 console.log('  novelty of gen 2: ' + (n2.novelMilli/10).toFixed(1) + '%');
-console.log('\n── braiding: six routes, then plaited ──');
+console.log('\n── crossing: six routes, then selected ──');
 for (const w of out.ways) console.log('  ' + w.way.padEnd(18), (w.novel/10).toFixed(1) + '% novel');
 console.log('  best single route :', (out.bestSingle/10).toFixed(1) + '%');
-console.log('  BRAIDED           :', (out.mergedNovelty.novelMilli/10).toFixed(1) + '%',
+console.log('  SELECTED          :', (out.mergedNovelty.novelMilli/10).toFixed(1) + '%',
             JSON.stringify(out.mergedNovelty));
 console.log('  who contributed   :', JSON.stringify(out.contributed));
 console.log('  merged traits     :', JSON.stringify(out.mergedTraits));
-ok('a braid of six routes beats the best single route', out.mergedNovelty.novelMilli > out.bestSingle);
+ok('crossing six ways and selecting beats the best single route', out.mergedNovelty.novelMilli > out.bestSingle);
 ok('more than one route contributed something no other did', Object.keys(out.contributed||{}).length>1);
 console.log('\n── what goes through what, per step ──');
 for (const m of out.mixed) console.log('  ' + m.way.padEnd(24), '->', m.kind.padEnd(16), m.tell);
