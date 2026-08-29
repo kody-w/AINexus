@@ -89,6 +89,21 @@ mutate "camera loops stop carrying their own serial" \
   "        if (!api._filming || api._filmSeq !== myFilm) return;" \
   "        if (!api._filming) return;"
 
+# ── the gate reads the ambient session again (the refactor's own first bug) ─
+mutate "the gate reads the ambient session instead of its own" \
+  "  function liveGate(session) {
+    if (!session) return () => true;
+    return () => session.alive;
+  }" \
+  "  function liveGate(session) {
+    return () => !!api._session && api._session.alive;
+  }"
+
+# ── scan cannot be interrupted ──────────────────────────────────────────────
+mutate "scan ignores the session once started" \
+  "        if (!live()) break;" \
+  "        if (false) break;"
+
 echo
 if [ "$fails" -eq 0 ]; then
   echo "every mutation caught — the suite tests what it claims to"

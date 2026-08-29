@@ -80,11 +80,16 @@
   // clicked, and navigated the tab into another world, where the driver re-armed fresh and
   // the tower's "stopped" no longer described anything that existed. Capture the
   // generation on entry; ask after every await whether it outlived us.
-  // Captured synchronously at verb entry, so it is the very session the calling frame
-  // just checked — a verb is dispatched in the same tick as that check.
-  function liveGate() {
-    const mine = api._session;
-    return () => !!mine && mine.alive;
+  // The gate is HANDED its session; it never reads the ambient one. Reading it meant a
+  // verb that captured after an await (aim, past its calibration look) latched whatever
+  // session was live by then — so a stop-and-restart handed a killed frame the NEW
+  // session and travel clicked through the portal under work the operator had replaced.
+  // A verb called directly, from the console or a HUD, belongs to no session: it has
+  // nothing to be refused by, and gating it on the ambient one silently refused every
+  // direct call on a fresh page or after any plain stop.
+  function liveGate(session) {
+    if (!session) return () => true;
+    return () => session.alive;
   }
 
   function mouse(type, opts) {
@@ -188,8 +193,8 @@
       return api.snapshot().me;
     },
 
-    async walk(dir, ms) {
-      const live = liveGate();
+    async walk(dir, ms, session) {
+      const live = liveGate(session);
       const k = { forward: 'w', back: 's', left: 'a', right: 'd' }[dir] || dir;
       key(k, true);
       await sleep(Math.max(50, ms | 0));
@@ -221,7 +226,8 @@
       return Math.atan2(d.x, d.z);
     },
 
-    async aim(name) {
+    async aim(name, session) {
+      const live = liveGate(session);            // taken before any await, not after
       const w = W(); if (!w) return false;
       const p = (w.portalIndex || []).find(p => p.name.toLowerCase().includes(String(name).toLowerCase()));
       if (!p) { log('no portal called', name); return false; }
@@ -234,7 +240,6 @@
       const perUnit = wrap(api.facing() - before) / 60;
       if (!isFinite(perUnit) || Math.abs(perUnit) < 1e-6) { log('this world does not turn on a mouse look'); return false; }
 
-      const live = liveGate();
       for (let i = 0; i < 40; i++) {
         if (!live()) return false;         // the operator stopped us mid-turn
         const err = wrap(want() - api.facing());
@@ -247,9 +252,10 @@
     },
 
     // walk into it and click — the world's own raycaster decides, exactly as for a person
-    async travel(name) {
+    async travel(name, session) {
       if (api._filming) { log('refused: cut first — a camera never travels while filming'); return false; }
-      if (!(await api.aim(name))) return false;
+      const live = liveGate(session);          // before the aim await, not after
+      if (!(await api.aim(name, session))) return false;
       // the slosh: hand the destination what this traveller is carrying, before the step
       if (api._carry) {
         try {
@@ -257,8 +263,7 @@
           window.__NEXUS_CARRY_FRAGMENT = '&carry=' + b64;
         } catch (e) {}
       }
-      const live = liveGate();
-      await api.walk('forward', 900);
+      await api.walk('forward', 900, session);
       // The click is the irreversible half — it opens a portal and NAVIGATES THE TAB. A
       // stop that landed during the approach must not be followed through: the walk was
       // cut short, so this click would land short of the door anyway, and if it did hit
@@ -321,10 +326,18 @@
     },
 
     // look around and bring back several frames — a turn of the head, not one glance
-    async scan(steps, degPerStep) {
+    async scan(steps, degPerStep, session) {
+      const live = liveGate(session);
       const n = Math.max(1, steps | 0 || 4), d = degPerStep || 90;
       const shots = [];
-      for (let i = 0; i < n; i++) { shots.push(api.see({ send: true })); await api.look(d * 2.2, 0); await sleep(120); }
+      for (let i = 0; i < n; i++) {
+        // eight steps is ~1.5s of turning; without this the operator's stop could not
+        // reach it, and each look() re-latched the pointer that release() had just undone
+        if (!live()) break;
+        shots.push(api.see({ send: true }));
+        await api.look(d * 2.2, 0);
+        await sleep(120);
+      }
       return shots.map(s => s && s.bytes);
     },
 
@@ -730,10 +743,10 @@
           const verb = s.do;
           try {
             const out = verb === 'look' ? await api.look(s.dx || 0, s.dy || 0)
-              : verb === 'walk' ? await api.walk(s.dir || 'forward', s.ms || 600)
+              : verb === 'walk' ? await api.walk(s.dir || 'forward', s.ms || 600, session)
               : verb === 'click' ? await api.click(s.x, s.y)
-              : verb === 'aim' ? await api.aim(s.portal)
-              : verb === 'travel' ? await api.travel(s.portal)
+              : verb === 'aim' ? await api.aim(s.portal, session)
+              : verb === 'travel' ? await api.travel(s.portal, session)
               : verb === 'ask' ? await api.ask(s.text)
               : verb === 'say' ? await api.say(s.text)
               : verb === 'press' ? await api.press(s.selector)
@@ -750,7 +763,7 @@
               : verb === 'people' ? api.people()
               : verb === 'tell' ? await api.tell(s.to, s.text)
               : verb === 'dialogue' ? api.dialogue(s.to)
-              : verb === 'scan' ? await api.scan(s.steps, s.deg)
+              : verb === 'scan' ? await api.scan(s.steps, s.deg, session)
               : (log('unknown step', verb), null);
             onStep && onStep(verb, out);
           } catch (e) {

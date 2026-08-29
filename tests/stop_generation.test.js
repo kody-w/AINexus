@@ -15,9 +15,22 @@ function makeDriver(file) {
       : undefined,
     set: () => true,
   });
+  // see() needs a canvas, and scan() is a loop of see()+look(). Without one the scan step
+  // threw on its first iteration and case O measured a verb that never ran.
+  const canvas = {
+    width: 800, height: 600, getContext: () => ({ drawImage() {}, fillRect() {} }),
+    toDataURL: () => 'data:image/webp;base64,AAAA',
+    // look() aims its mousemove at the canvas, so it needs to accept events too —
+    // without this every scan step died on "target.dispatchEvent is not a function"
+    dispatchEvent: (ev) => win.dispatchEvent(ev),
+    addEventListener() {}, removeEventListener() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+  };
   const doc = {
     documentElement: el, body: el, head: el,
-    createElement: () => el, getElementById: () => null, querySelector: () => null,
+    createElement: (t) => (t === 'canvas' ? canvas : el),
+    getElementById: () => null,
+    querySelector: (q) => (q === 'canvas' ? canvas : null),
     querySelectorAll: () => [], addEventListener: noop, removeEventListener: noop,
     dispatchEvent: noop, hidden: false, visibilityState: 'visible',
   };
@@ -59,6 +72,10 @@ function makeDriver(file) {
   };
   doc.dispatchEvent = win.dispatchEvent;
   win.KeyboardEvent = function (type, o) { this.type = type; this.key = (o || {}).key; };
+  // ...and mouse events must carry their type too. The placeholder above set nothing, so
+  // every mousemove recorded as `type: undefined` and any case filtering for them measured
+  // an empty list — a verb that never ran and a verb that ran perfectly looked identical.
+  win.MouseEvent = function (type, o) { this.type = type; Object.assign(this, o || {}); };
   const ctx = vm.createContext(win);
   vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
   const d = win.__autodrive;
@@ -192,6 +209,10 @@ function makeDriver(file) {
   R.L_a_stopped_travel_does_not_open_the_door = {
     verdict: verdictL,
     clicksAfterStop: clicks.length,
+    // travel -> aim -> look is what actually takes the pointer, so this is the only place
+    // release()'s pointer restore can be observed. Case K asserted it where nothing had
+    // ever taken the pointer, which made the assertion vacuous.
+    pointerReleased: win.worldNavigator.isPointerLocked === false,
     keyStillHeld: win.__events.filter((e) => e.type === 'keydown' && e.key === 'w').length >
                   win.__events.filter((e) => e.type === 'keyup' && e.key === 'w').length,
   };
@@ -212,6 +233,40 @@ function makeDriver(file) {
   d.stop();
   R.M_one_camera_one_loop =
     { oneLoop, afterRestart, doubled: afterRestart > oneLoop * 1.6 };
+
+  // N) STOP *AND RESTART*, not just stop. A verb that captures its session after an await
+  //    latches whatever is live by then — so the operator pressing Start (which kills the
+  //    old session and opens a new one) handed a killed frame the NEW session, and travel
+  //    clicked through the portal under work that had been replaced. Case L only ever
+  //    pressed stop, which leaves a dead session installed and hides this completely.
+  d.stop();
+  win.__events.length = 0;
+  const clicks2 = [];
+  const realMouse2 = win.MouseEvent;
+  win.MouseEvent = function (t, o) { this.type = t; if (t === 'click') clicks2.push(t); Object.assign(this, o || {}); };
+  const t1 = d.run({ steps: [{ do: 'travel', portal: 'Crystal Caverns' }] }, null);
+  await new Promise((r) => setTimeout(r, 10));       // inside aim's calibration await
+  const killed = d._session;
+  await d.run({ steps: [step] }, null);              // the operator starts something else
+  await Promise.race([t1, new Promise((r) => setTimeout(r, 3000))]);
+  win.MouseEvent = realMouse2;
+  R.N_restart_does_not_let_killed_work_click =
+    { killedAlive: killed.alive, clicksAfterRestart: clicks2.length };
+
+  // O) a stopped scan must stop turning, and must not re-latch the pointer that the
+  //    stop's teardown just released
+  d.stop();
+  win.__events.length = 0;
+  const scanning = d.run({ steps: [{ do: 'scan', steps: 8, deg: 90 }] }, null);
+  await new Promise((r) => setTimeout(r, 90));
+  d.stop();
+  const movesAtStop = win.__events.filter((e) => e.type === 'mousemove').length;
+  await Promise.race([scanning, new Promise((r) => setTimeout(r, 2500))]);
+  const movesAfter = win.__events.filter((e) => e.type === 'mousemove').length;
+  R.O_a_stopped_scan_stops_turning = {
+    movesAtStop, movesAfter, keptTurning: movesAfter - movesAtStop > 2,
+    pointerReLatched: win.worldNavigator.isPointerLocked === true,
+  };
 
   console.log(JSON.stringify(R, null, 1));
   const pass =
@@ -239,7 +294,12 @@ function makeDriver(file) {
     R.L_a_stopped_travel_does_not_open_the_door.clicksAfterStop === 0 &&
     R.L_a_stopped_travel_does_not_open_the_door.keyStillHeld === false &&
     R.M_one_camera_one_loop.oneLoop > 3 &&          // the baseline loop really ran
-    R.M_one_camera_one_loop.doubled === false;
+    R.M_one_camera_one_loop.doubled === false &&
+    R.L_a_stopped_travel_does_not_open_the_door.pointerReleased === true &&
+    R.N_restart_does_not_let_killed_work_click.killedAlive === false &&
+    R.N_restart_does_not_let_killed_work_click.clicksAfterRestart === 0 &&
+    R.O_a_stopped_scan_stops_turning.keptTurning === false &&
+    R.O_a_stopped_scan_stops_turning.pointerReLatched === false;
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();
