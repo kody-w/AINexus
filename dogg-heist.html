@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="intro-open">
 <head>
   <script>
     (() => {
@@ -102,8 +102,10 @@
       line-height: 1.45;
     }
 
+    html.intro-open,
     body.intro-open {
       overflow: hidden;
+      overscroll-behavior: none;
     }
 
     .sr-only {
@@ -705,6 +707,10 @@
       font-size: 0.7rem;
     }
 
+    html[data-theme="dark"] .agent-button.selected .agent-cooldown {
+      color: var(--cp-text);
+    }
+
     .agent-cooldown {
       color: var(--cp-text-muted);
       font-family: Consolas, "Courier New", Courier, monospace;
@@ -720,6 +726,7 @@
       margin: 0;
       padding: 8px 12px 12px 34px;
       overflow: auto;
+      overscroll-behavior: contain;
       overscroll-behavior: contain;
     }
 
@@ -839,12 +846,36 @@
       font-weight: 650;
     }
 
+    html[data-theme="dark"] #status-live {
+      color: var(--cp-text-soft);
+    }
+
     #status-live[data-tone="error"] {
-      color: var(--cp-danger);
+      color: var(--cp-text);
     }
 
     #status-live[data-tone="success"] {
-      color: var(--cp-success);
+      color: var(--cp-text);
+    }
+
+    html[data-theme="dark"] #status-live[data-tone="error"],
+    html[data-theme="dark"] #status-live[data-tone="success"] {
+      color: var(--cp-text);
+    }
+
+    #status-live[data-tone="error"]::before,
+    #status-live[data-tone="success"]::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--cp-danger);
+    }
+
+    #status-live[data-tone="success"]::before {
+      background: var(--cp-success);
     }
 
     .intro-overlay {
@@ -1067,6 +1098,15 @@
     }
 
     @media (max-width: 900px) {
+      button,
+      select {
+        min-height: 44px;
+      }
+
+      #timeline {
+        min-height: 44px;
+      }
+
       #game-board {
         width: 792px;
         min-width: 792px;
@@ -1643,6 +1683,7 @@
         selectedRole: document.getElementById("selected-role-pill"),
         agentList: document.getElementById("agent-list"),
         intro: document.getElementById("intro-overlay"),
+        introCard: document.querySelector(".intro-card"),
         introStart: document.getElementById("intro-start"),
         toastRegion: document.getElementById("toast-region")
       };
@@ -1667,6 +1708,9 @@
       let lastTickPaint = 0;
       let boardGesture = null;
       let nextDangerCache = new WeakMap();
+      let introScrollPosition = null;
+      let introTouchY = null;
+      let introScrollGuardsActive = false;
 
       function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -3407,19 +3451,95 @@
         api.ready = true;
       }
 
+      function introScrollAllowed(deltaY) {
+        const card = elements.introCard;
+        if (card.scrollHeight <= card.clientHeight) return false;
+        if (deltaY < 0 && card.scrollTop <= 0) return false;
+        if (deltaY > 0 && card.scrollTop + card.clientHeight >= card.scrollHeight - 1) return false;
+        return true;
+      }
+
+      function handleIntroWheel(event) {
+        if (elements.intro.hidden) return;
+        if (!elements.introCard.contains(event.target) || !introScrollAllowed(event.deltaY)) {
+          event.preventDefault();
+          return;
+        }
+        event.stopPropagation();
+      }
+
+      function handleIntroTouchStart(event) {
+        introTouchY = event.touches[0]?.clientY ?? null;
+      }
+
+      function handleIntroTouchMove(event) {
+        if (elements.intro.hidden || introTouchY === null) return;
+        const nextY = event.touches[0]?.clientY;
+        if (typeof nextY !== "number") return;
+        const deltaY = introTouchY - nextY;
+        introTouchY = nextY;
+        if (!elements.introCard.contains(event.target) || !introScrollAllowed(deltaY)) {
+          event.preventDefault();
+          return;
+        }
+        event.stopPropagation();
+      }
+
+      function handleIntroTouchEnd() {
+        introTouchY = null;
+      }
+
+      function addIntroScrollGuards() {
+        if (introScrollGuardsActive) return;
+        elements.intro.addEventListener("wheel", handleIntroWheel, { passive: false });
+        elements.intro.addEventListener("touchstart", handleIntroTouchStart, { passive: true });
+        elements.intro.addEventListener("touchmove", handleIntroTouchMove, { passive: false });
+        elements.intro.addEventListener("touchend", handleIntroTouchEnd);
+        elements.intro.addEventListener("touchcancel", handleIntroTouchEnd);
+        introScrollGuardsActive = true;
+      }
+
+      function removeIntroScrollGuards() {
+        if (!introScrollGuardsActive) return;
+        elements.intro.removeEventListener("wheel", handleIntroWheel);
+        elements.intro.removeEventListener("touchstart", handleIntroTouchStart);
+        elements.intro.removeEventListener("touchmove", handleIntroTouchMove);
+        elements.intro.removeEventListener("touchend", handleIntroTouchEnd);
+        elements.intro.removeEventListener("touchcancel", handleIntroTouchEnd);
+        introScrollGuardsActive = false;
+        introTouchY = null;
+      }
+
       function activateIntroModal() {
+        introScrollPosition = { x: window.scrollX, y: window.scrollY };
         elements.intro.hidden = false;
         elements.appShell.inert = true;
         elements.appShell.setAttribute("aria-hidden", "true");
+        document.documentElement.classList.add("intro-open");
         document.body.classList.add("intro-open");
+        addIntroScrollGuards();
         window.setTimeout(() => elements.introStart.focus(), 0);
       }
 
       function releaseIntroModal() {
+        const scrollPosition = introScrollPosition;
         elements.intro.hidden = true;
         elements.appShell.inert = false;
         elements.appShell.removeAttribute("aria-hidden");
+        document.documentElement.classList.remove("intro-open");
         document.body.classList.remove("intro-open");
+        removeIntroScrollGuards();
+        introScrollPosition = null;
+        if (scrollPosition && (window.scrollX !== scrollPosition.x || window.scrollY !== scrollPosition.y)) {
+          window.scrollTo(scrollPosition.x, scrollPosition.y);
+        }
+      }
+
+      function focusUsefulControlAfterIntro() {
+        if (elements.helpDialog.open) return;
+        const target = [elements.play, elements.restart, elements.step, elements.help]
+          .find((control) => !control.disabled && !control.hidden && control.getClientRects().length > 0);
+        (target || elements.restart).focus({ preventScroll: true });
       }
 
       function handleIntroKeydown(event) {
@@ -3440,7 +3560,7 @@
         releaseIntroModal();
         if (shouldPlay && liveState.outcome === "active" && !isViewingHistory()) playGame(false);
         completeReadiness();
-        if (!elements.helpDialog.open) elements.play.focus({ preventScroll: true });
+        focusUsefulControlAfterIntro();
       }
 
       function playGame(markCommand = true) {
@@ -3453,7 +3573,8 @@
           toast("This branch is sealed. Restart or inspect another frame.", "error");
           return false;
         }
-        if (!elements.intro.hidden) {
+        const releasedIntro = !elements.intro.hidden;
+        if (releasedIntro) {
           if (introTimer !== null) {
             window.clearTimeout(introTimer);
             introTimer = null;
@@ -3465,6 +3586,7 @@
         renderAll();
         persistState();
         completeReadiness();
+        if (releasedIntro) focusUsefulControlAfterIntro();
         status("Live policy clock running at " + speedMs + " ms per tick.");
         return true;
       }
@@ -3842,7 +3964,7 @@
           guardIds.push(guard.id);
           requirePosition(guard, label + ".guards[" + index + "]", facility);
           requireInteger(guard.dir, label + " guard " + guard.id + " dir", 0, 3);
-          requireArray(guard.patrol, label + " guard " + guard.id + " patrol", 2, 16);
+          requireArray(guard.patrol, label + " guard " + guard.id + " patrol", 1, 16);
           guard.patrol.forEach((point, pointIndex) => {
             requireArray(point, label + " guard " + guard.id + " patrol[" + pointIndex + "]", 2, 2);
             requirePosition({ x: point[0], y: point[1] }, label + " guard " + guard.id + " patrol[" + pointIndex + "]", facility);
@@ -4072,14 +4194,18 @@
           resumeAfterIntro,
           introHidden: elements.intro.hidden,
           introTimerActive: introTimer !== null,
+          introScrollPosition: introScrollPosition ? { ...introScrollPosition } : null,
+          introScrollGuardsActive,
           appInert: elements.appShell.inert,
           appAriaHidden: elements.appShell.getAttribute("aria-hidden"),
+          htmlIntroOpen: document.documentElement.classList.contains("intro-open"),
           bodyIntroOpen: document.body.classList.contains("intro-open")
         };
       }
 
       function restoreRuntimeSnapshot(snapshot) {
         stopTimer();
+        removeIntroScrollGuards();
         frames = snapshot.frames;
         liveState = snapshot.liveState;
         viewIndex = snapshot.viewIndex;
@@ -4098,7 +4224,10 @@
         elements.appShell.inert = snapshot.appInert;
         if (snapshot.appAriaHidden === null) elements.appShell.removeAttribute("aria-hidden");
         else elements.appShell.setAttribute("aria-hidden", snapshot.appAriaHidden);
+        document.documentElement.classList.toggle("intro-open", snapshot.htmlIntroOpen);
         document.body.classList.toggle("intro-open", snapshot.bodyIntroOpen);
+        introScrollPosition = snapshot.introScrollPosition ? { ...snapshot.introScrollPosition } : null;
+        if (snapshot.introScrollGuardsActive) addIntroScrollGuards();
         nextDangerCache = new WeakMap();
         renderAll();
         if (running && !isViewingHistory() && liveState.outcome === "active") startTimer();
