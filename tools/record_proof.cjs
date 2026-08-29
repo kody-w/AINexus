@@ -27,8 +27,12 @@ await ctx.route('https://kody-w.github.io/AINexus/**', r => { const u = new URL(
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 404, body: 'no' });
   r.fulfill({ status: 200, contentType: T[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) }); });
 
+// EVERY page reports its errors. This used to listen on the frontier page alone, so the three
+// resident pages and the house page could throw all they liked and the footer still read clean.
+const errs = [];
+ctx.on('page', pg => pg.on('pageerror', e => errs.push(e.message)));
 const p = await ctx.newPage();
-const errs = []; p.on('pageerror', e => errs.push(e.message));
+p.on('pageerror', e => errs.push(e.message));
 await p.goto('https://kody-w.github.io/AINexus/frontier.html', { timeout: 60000 });
 await p.waitForTimeout(2500);
 console.log('running the claims…');
@@ -52,21 +56,39 @@ const bundle = await p.evaluate(async () => {
   const KEYS = ['the-drowned-hall', 'a-room-with-two-moons', 'nobody-came-back',
                 'the-long-night', 'seven-chairs-six-people'];
 
+  // hash the bytes we actually hold, so "checked" means checked
+  const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map(x => x.toString(16).padStart(2, '0')).join('');
+
   // ── claim 1: a key wears a record into a world, and does it the same way twice ──
   const worlds = [];
   for (const key of KEYS) {
     const t1 = await H.wear(parent, key);
     const t2 = await H.wear(parent, key);
-    const f1 = await H.slosh(t1, [{ lens: 'WorldForge', args: { registry: reg, key } }]);
-    const f2 = await H.slosh(t2, [{ lens: 'WorldForge', args: { registry: reg, key } }]);
+    // PASS 1 tells us which published world this key reaches for. We cannot hash a file before
+    // knowing which file it is, and the forge is what chooses — so ask, then go and read it.
+    const probe = await H.slosh(t1, [{ lens: 'WorldForge', args: { registry: reg, key } }]);
+    const file = probe.tile.provenance.adapted_from_file;
+    // PASS 2 hands the forge the hash of the bytes we really fetched. Without this the forge was
+    // being asked to verify against nothing, and every world in the recording carried
+    // sha256_verified: false under a page that said the bytes had been checked.
+    const bytes = new Uint8Array(await (await fetch(file, { cache: 'no-cache' })).arrayBuffer());
+    const actual = await sha256(bytes);
+    const args = { registry: reg, key, template_sha256: actual };
+    const f1 = await H.slosh(t1, [{ lens: 'WorldForge', args }]);
+    const f2 = await H.slosh(t2, [{ lens: 'WorldForge', args }]);
     worlds.push({
       key,
-      tile: { hash: t1.frame.frame_hash, payload_hash: t1.frame.payload_hash, repeatable: t1.hash === t2.hash },
+      // both runs' hashes travel in the bundle, so the PAGE can assert they agree rather than
+      // reading a boolean the recorder decided for it
+      tile: { hash: t1.frame.frame_hash, hash2: t2.frame.frame_hash,
+              payload_hash: t1.frame.payload_hash, frame: t1.frame },
       world: f1.tile.world,
       cast: t1.cast.map(c => ({ id: c.id, at: c.at, standing: c.standing, where: c.where })),
       mood: f1.tile.mood,
       provenance: f1.tile.provenance,
-      forged: { hash: f1.frame.frame_hash, repeatable: f1.hash === f2.hash },
+      source: { file, bytes: bytes.length, sha256: actual },
+      forged: { hash: f1.frame.frame_hash, hash2: f2.frame.frame_hash },
       frame: f1.frame,
     });
   }
@@ -80,10 +102,20 @@ const bundle = await p.evaluate(async () => {
   const backward = await H.sloshAgent(creature, [dead, dark, moon]);
 
   // ── claim 3: bytes that fail their hash are refused ──
+  // The digest handed over used to be a literal string of zeroes, which meant the heading
+  // "bytes that fail their hash are refused" sat above a run in which no bytes were read and no
+  // hash was computed. Now: fetch the real template, change one byte of it, hash THAT, and see
+  // what the forge does. The number the page prints under "got" is a real digest of real bytes.
   const tam = await H.wear(parent, 'tamper');
+  const tamProbe = await H.slosh(tam, [{ lens: 'WorldForge', args: { registry: reg, key: 'tamper' } }]);
+  const tamFile = tamProbe.tile.provenance.adapted_from_file;
+  const clean = new Uint8Array(await (await fetch(tamFile, { cache: 'no-cache' })).arrayBuffer());
+  const altered = new Uint8Array(clean.length + 1);
+  altered.set(clean); altered[clean.length] = 0x0a;      // one byte added; nothing else touched
+  const alteredHash = await sha256(altered);
   const refused = JSON.parse(await B.callAgent('WorldForge', {
     tile: JSON.stringify(tam.frame.payload.asserts), registry: reg, key: 'tamper',
-    template_sha256: '0'.repeat(64) }));
+    template_sha256: alteredHash }));
 
   return {
     parent, registryCount: registry.count, worlds,
@@ -91,7 +123,8 @@ const bundle = await p.evaluate(async () => {
                order: forward.organism.shaped_by.map(s => s.world),
                differs: JSON.stringify(forward.organism) !== JSON.stringify(backward.organism) },
     refusal: { status: refused.status, generator: refused.generator, reason: refused.reason,
-               expected: refused.expected_sha256, actual: refused.actual_sha256 },
+               expected: refused.expected_sha256, actual: refused.actual_sha256,
+               file: tamFile, cleanBytes: clean.length, alteredBytes: altered.length },
     cost: H.cost(),
   };
 });
@@ -133,8 +166,10 @@ await b.close();
 const proof = Object.assign({ recorded: new Date().toISOString(), house: seen, stills, pageErrors: errs.slice(0, 5) }, bundle);
 fs.writeFileSync(path.join(outDir, 'proof.json'), JSON.stringify(proof, null, 1));
 console.log(`\n${proof.worlds.length} worlds forged from spoken keys`);
-for (const w of proof.worlds) console.log(`  ${w.key.padEnd(24)} -> ${String(w.world.called).padEnd(16)} from ${w.provenance.adapted_from_file}`);
-console.log(`\nrefusal: ${proof.refusal.status}`);
+for (const w of proof.worlds) console.log(`  ${w.key.padEnd(24)} -> ${String(w.world.called).padEnd(16)} from ${w.provenance.adapted_from_file}  ${w.provenance.sha256_verified ? 'bytes verified' : 'UNVERIFIED'}`);
+const verified = proof.worlds.filter(w => w.provenance.sha256_verified).length;
+console.log(`\nbytes verified: ${verified}/${proof.worlds.length}`);
+console.log(`refusal: ${proof.refusal.status} (${proof.refusal.file}, ${proof.refusal.cleanBytes} -> ${proof.refusal.alteredBytes} bytes)`);
 console.log(`cameras: ${seen.survey.length}, residents painted: ${seen.residents.filter(r => r.painted).length}/${seen.residents.length}`);
 console.log(`  ${path.relative(ROOT, path.join(outDir, 'proof.json'))}`);
 })();

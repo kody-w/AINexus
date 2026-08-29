@@ -687,5 +687,120 @@
     "frame_hash": "efd98ab79b925d27dabc484c6cd045fd257072de591d30cbbb032346bfa749f9"
    }
   }
- ]
+ ],
+ "solo": {
+  "record": {
+   "spec": "rapp/1",
+   "kind": "body.pulse",
+   "stream_id": "rappid:@kody-w/ainexus:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+   "seq": 0,
+   "utc": "2026-01-01T00:00:00.000Z",
+   "payload": {
+    "asserts": {
+     "note": "the wearing test record, alone"
+    },
+    "requires": {
+     "players": [
+      "ada"
+     ]
+    }
+   },
+   "payload_hash": "f6b7ef1e1ed7b0fab74ffd8d4088a71d4f4bb476c643d97b4265cc5667a3bb04",
+   "prev": null,
+   "prev_wave": null,
+   "sig": null,
+   "frame_hash": "3c16ee3d0dc6f2b4d9400438452641b4ba2943050b7a267bbadb61de4b5b33fe"
+  },
+  "roster": [
+   "ada"
+  ],
+  "vectors": [
+   {
+    "key": "0",
+    "stable": true,
+    "octets_drawn": 9,
+    "tile": {
+     "spec": "rapp/1",
+     "kind": "memory.save",
+     "stream_id": "rappid:@kody-w/ainexus:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff:wear-447f8e7f8d86",
+     "seq": 0,
+     "utc": "2026-01-01T03:23:39.000Z",
+     "payload": {
+      "asserts": {
+       "tile": "0",
+       "derived_from": "3c16ee3d0dc6f2b4d9400438452641b4ba2943050b7a267bbadb61de4b5b33fe",
+       "of_stream": "rappid:@kody-w/ainexus:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+       "cast": [
+        {
+         "id": "ada",
+         "at": {
+          "x": 5,
+          "z": 6
+         },
+         "standing": "follow",
+         "where": "by the entrance"
+        }
+       ],
+       "lens": "wide",
+       "mood": "something was said earlier and not resolved",
+       "seed": "3c16ee3d0dc6#0"
+      },
+      "requires": {
+       "players": [
+        "ada"
+       ]
+      }
+     },
+     "payload_hash": "193e135fb6993b43e9be1350bcdfe490c0749ef01d2cd374fa890e1e1e88728f",
+     "prev": null,
+     "prev_wave": null,
+     "sig": null,
+     "frame_hash": "b5ad0573fc4bdcbf30d0f97266d048a35677b6f6207dcbd0d6ed3f71663481e5"
+    }
+   },
+   {
+    "key": "alone-in-the-world",
+    "stable": true,
+    "octets_drawn": 9,
+    "tile": {
+     "spec": "rapp/1",
+     "kind": "memory.save",
+     "stream_id": "rappid:@kody-w/ainexus:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff:wear-c9c9bfdb17c5",
+     "seq": 0,
+     "utc": "2026-01-01T01:05:21.000Z",
+     "payload": {
+      "asserts": {
+       "tile": "alone-in-the-world",
+       "derived_from": "3c16ee3d0dc6f2b4d9400438452641b4ba2943050b7a267bbadb61de4b5b33fe",
+       "of_stream": "rappid:@kody-w/ainexus:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+       "cast": [
+        {
+         "id": "ada",
+         "at": {
+          "x": -8,
+          "z": -7
+         },
+         "standing": "approach",
+         "where": "in the middle of the floor"
+        }
+       ],
+       "lens": "wide",
+       "mood": "something was said earlier and not resolved",
+       "seed": "3c16ee3d0dc6#alone-in-the-world"
+      },
+      "requires": {
+       "players": [
+        "ada"
+       ]
+      }
+     },
+     "payload_hash": "86b1dee4c2ada804cfabc9d3b973407bac24e07bec0efaec6c9425efe272cb0d",
+     "prev": null,
+     "prev_wave": null,
+     "sig": null,
+     "frame_hash": "4a3c143ae7e4e14faf6149b62cd711f7438dd74dbcaabb448a41ccdd4083ca5c"
+    }
+   }
+  ]
+ }
 }

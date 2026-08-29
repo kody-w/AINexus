@@ -39,7 +39,13 @@ const got = await p.evaluate(async (V) => {
     const t = await H.wear(V.record, v.key, { cast: V.roster });
     out.push({ key: v.key, frame: t.frame, octets: t.drawn });
   }
-  return { recordHash: rebuilt.frame_hash, tiles: out };
+  // the solo (R=1) vectors go through the roster-from-the-record path, no explicit cast
+  const soloOut = [];
+  if (V.solo) for (const v of V.solo.vectors) {
+    const t = await H.wear(V.solo.record, v.key);
+    soloOut.push({ key: v.key, frame: t.frame, octets: t.drawn });
+  }
+  return { recordHash: rebuilt.frame_hash, tiles: out, solo: soloOut };
 }, V);
 await b.close();
 
@@ -67,7 +73,28 @@ for (let i = 0; i < V.vectors.length; i++) {
                               + '\n        got      ' + String(bq).slice(0, 160));
   }
 }
-console.log('\n' + (bad ? '✗ ' + bad + ' of ' + (V.vectors.length + 1) + ' checks failed — WEARING.md and the code have drifted'
-                        : '✓ all ' + V.vectors.length + ' vectors reproduce exactly'));
+if (V.solo) {
+  console.log('\n  solo record (R = 1) — the case WEARING.md §4 names:');
+  for (let i = 0; i < V.solo.vectors.length; i++) {
+    const want = V.solo.vectors[i], have = got.solo[i];
+    const key = (want.key || '(empty)');
+    if (JSON.stringify(want.tile) === JSON.stringify(have.frame) && want.octets_drawn === have.octets) {
+      console.log('  ✓ ' + key + '  (' + want.tile.payload.asserts.cast.length + ' in it)');
+      continue;
+    }
+    bad++;
+    console.log('  ✗ ' + key);
+    if (want.octets_drawn !== have.octets)
+      console.log('      octets drawn: expected ' + want.octets_drawn + ', got ' + have.octets);
+    for (const k of Object.keys(want.tile)) {
+      const a = JSON.stringify(want.tile[k]), bq = JSON.stringify(have.frame[k]);
+      if (a !== bq) console.log('      ' + k + ':\n        expected ' + String(a).slice(0, 160)
+                                + '\n        got      ' + String(bq).slice(0, 160));
+    }
+  }
+}
+const total = V.vectors.length + (V.solo ? V.solo.vectors.length : 0) + 1;
+console.log('\n' + (bad ? '✗ ' + bad + ' of ' + total + ' checks failed — WEARING.md and the code have drifted'
+                        : '✓ all ' + (total - 1) + ' vectors reproduce exactly (including R = 1)'));
 process.exit(bad ? 1 : 0);
 })();

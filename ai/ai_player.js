@@ -204,13 +204,23 @@
             if (Math.random() < 0.2) this.dispatch({ agent: 'say', params: { text: 'wandering on reflexes — grant my mind with your brainstem secret to wake me up' } });
         }
 
+        // Movement is measured in TIME, not in calls. This used to advance a fixed
+        // this.speed * 0.016 every time it ran, which meant the four pages whose animate() still
+        // calls update() stepped twice per frame — once from the page, once from the drop-in's own
+        // loop below — and the same AI walked at double speed depending which page it had
+        // travelled into. It also made walking speed depend on the machine's frame rate. Both go
+        // away if the step is the elapsed time: extra calls in one frame now measure ~0 seconds
+        // and cost nothing, so this is correct however many times a page calls it.
         update() {
+            const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            const dt = Math.min(0.05, Math.max(0, (now - (this._lastStep || now)) / 1000));
+            this._lastStep = now;
             if (!this.target) return;
             const cam = this.world.camera.position;
             const dx = this.target.x - cam.x, dz = this.target.z - cam.z;
             const dist = Math.hypot(dx, dz);
             if (dist < 0.4) { this.target = null; return; }
-            const step = Math.min(dist, this.speed * 0.016);
+            const step = Math.min(dist, this.speed * dt);
             cam.x += (dx / dist) * step;
             cam.z += (dz / dist) * step;
             this.world.camera.lookAt(this.target.x, cam.y, this.target.z);

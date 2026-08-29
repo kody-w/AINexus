@@ -227,17 +227,68 @@
   // reason the agents run as Python rather than being reimplemented here: an agent written for
   // a brainstem on a laptop is the same file, unchanged, and a player picks it up without a
   // reload, a build, or a deploy.
+  // THE PUBLISHED FINGERPRINTS. Loaded once and consulted by every hot-load, so verification is
+  // what happens by default rather than what a careful caller remembers to ask for. state/
+  // agent_templates.json is built by tools/build_agent_registry.py from the files themselves.
+  let fingerprints = null, fingerprintsTried = false;
+  async function publishedFingerprints(log) {
+    if (fingerprintsTried) return fingerprints;
+    fingerprintsTried = true;
+    try {
+      const r = await fetch(here('../state/agent_templates.json'), { cache: 'no-cache' });
+      if (r.ok) {
+        const reg = await r.json();
+        fingerprints = {};
+        for (const t of (reg.templates || [])) {
+          if (t.file && /^[0-9a-f]{64}$/.test(String(t.sha256 || ''))) {
+            fingerprints[String(t.file).split('/').pop()] = t.sha256;
+          }
+        }
+        if (log) log('[vbrainstem] ' + Object.keys(fingerprints).length + ' published fingerprints loaded');
+      }
+    } catch (e) { if (log) log('[vbrainstem] no fingerprint registry: ' + e.message); }
+    return fingerprints;
+  }
+
   async function hotload(what, opts) { return queued(() => hotloadNow(what, opts)); }
   async function hotloadNow(what, opts) {
     const o = opts || {};
     await initPyodide(o.log);
     if (!pyodide) throw new Error('no python: cannot hot-load agents');
     let source = what, file = o.file;
-    if (/^https?:|^\.|^\//.test(String(what)) && !/\n/.test(String(what))) {
+    // Is this a place to fetch, or the code itself? A one-line string ending in .py is a path,
+    // and treating it as source finds no class and reports a confusing error — which is exactly
+    // what it did to a caller passing 'ai/vb/lens_gravity_agent.py'.
+    const looksLikePath = !/\n/.test(String(what)) && String(what).length < 512
+      && (/^https?:/.test(String(what)) || /^[.\/]/.test(String(what)) || /\.py$/i.test(String(what)));
+    if (looksLikePath) {
       const r = await fetch(what, { cache: 'no-cache' });
       if (!r.ok) throw new Error('could not fetch ' + what + ' (' + r.status + ')');
       source = await r.text();
       file = file || String(what).split('/').pop();
+      // VERIFY OR REFUSE — and this is the general path, not a special case. The teaching page
+      // told strangers that agents fetched from a registry are checked against a published
+      // fingerprint and refused on mismatch. That was true of the two forges and NOT true here,
+      // which meant the one document a newcomer reads was promising a protection the code did
+      // not provide. Refusing is cheap; a page that overclaims safety is not.
+      const reg = await publishedFingerprints(o.log);
+      const expect = o.sha256
+        || (o.registry && o.registry[file] && o.registry[file].sha256)
+        || (reg && reg[file]);
+      if (expect) {
+        const F = root.NexusFrames;
+        const bytes = new TextEncoder().encode(source);
+        const got = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+        if (got !== expect) {
+          throw new Error('REFUSED: ' + file + ' does not match its published sha256 ('
+            + expect.slice(0, 12) + '… expected, ' + got.slice(0, 12) + '… fetched). '
+            + 'Not repaired, not loaded.');
+        }
+        if (o.log) o.log('[vbrainstem] verified ' + file + ' against its published sha256');
+      } else if (o.requireVerified) {
+        throw new Error('REFUSED: no published sha256 for ' + file + ' and verification was required');
+      }
     }
     file = file || ('hot_' + Date.now() + '_agent.py');
     if (!/\.py$/.test(file)) file += '.py';

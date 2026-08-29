@@ -47,7 +47,25 @@ const out = await p.evaluate(async () => {
     const bb = await H.wear(record, k, { cast: ROSTER });
     tiles.push({ key: k, stable: a.hash === bb.hash, octets_drawn: a.drawn, tile: a.frame });
   }
-  return { record, roster: ROSTER, tiles };
+  // THE SOLO RECORD. §4 step 1 names the R=1 case explicitly ("skip the draw and set n = 1"),
+  // and for a long time nothing checked it — every vector used the same five-name roster, so the
+  // one branch the spec bothered to write out was the one branch with no teeth behind it. A
+  // session with one player in it is not exotic; it is how every session starts.
+  const SOLO = ['ada'];
+  const solo = await F.buildFrame({
+    kind: 'body.pulse',
+    streamId: 'rappid:@kody-w/ainexus:' + '00112233445566778899aabbccddeeff'.repeat(2),
+    seq: 0, utc: '2026-01-01T00:00:00.000Z', prev: null,
+    payload: { asserts: { note: 'the wearing test record, alone' }, requires: { players: SOLO } },
+  });
+  const soloTiles = [];
+  for (const k of ['0', 'alone-in-the-world']) {
+    // no explicit cast — the roster resolves from the record, which is the path a stranger takes
+    const a = await H.wear(solo, k);
+    const bb = await H.wear(solo, k);
+    soloTiles.push({ key: k, stable: a.hash === bb.hash, octets_drawn: a.drawn, tile: a.frame });
+  }
+  return { record, roster: ROSTER, tiles, solo: { record: solo, roster: SOLO, vectors: soloTiles } };
 });
 await b.close();
 const vectors = {
@@ -58,6 +76,7 @@ const vectors = {
   record: out.record,
   roster: out.roster,
   vectors: out.tiles,
+  solo: out.solo,
 };
 const f = path.join(ROOT, 'WEARING-VECTORS.json');
 fs.writeFileSync(f, JSON.stringify(vectors, null, 1) + '\n');
@@ -65,6 +84,10 @@ console.log('record frame_hash :', out.record.frame_hash);
 console.log('roster            :', out.roster.join(', '));
 console.log('vectors           :', out.tiles.length, '· all stable:', out.tiles.every(t => t.stable));
 for (const t of out.tiles) {
+  console.log(`  ${JSON.stringify(t.key).padEnd(28)} -> ${t.tile.frame_hash.slice(0,16)}…  ${String(t.octets_drawn).padStart(3)} octets  ${t.tile.payload.asserts.cast.length} in it, ${t.tile.payload.asserts.lens}`);
+}
+console.log('solo (R=1)        :', out.solo.vectors.length, '· all stable:', out.solo.vectors.every(t => t.stable));
+for (const t of out.solo.vectors) {
   console.log(`  ${JSON.stringify(t.key).padEnd(28)} -> ${t.tile.frame_hash.slice(0,16)}…  ${String(t.octets_drawn).padStart(3)} octets  ${t.tile.payload.asserts.cast.length} in it, ${t.tile.payload.asserts.lens}`);
 }
 console.log('\n' + path.relative(ROOT, f));

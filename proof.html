@@ -35,14 +35,16 @@ code{font:12px ui-monospace,Menlo,monospace;color:#c9c9e6;background:#12121f;bor
 </style></head><body><div class="wrap">
 <header>
   <h1>Worlds worn out of one record</h1>
-  <p class="sub">A recorded run, not a description of one. Every hash below is recomputed in <em>your</em> browser
-  from the bytes on this page — if a number here were wrong, this page would say so about itself.</p>
+  <p class="sub">A recorded run, not a description of one. Every frame below is re-hashed in <em>your</em> browser
+  from its own contents, and every fact printed on a card is read from inside the frame that was just
+  re-hashed — so if a number here were wrong, this page would say so about itself.</p>
 </header>
 
 <h2>What is being claimed</h2>
 <p class="lede">One record. A key you can say out loud. Together they produce a complete world that neither
 contained — the same world, byte for byte, on any machine, with nothing sent between them but the key.
-The world is <em>adapted from a real published world</em> whose bytes were checked, never invented from nothing.</p>
+The world is <em>adapted from a real published world</em> whose bytes were fetched and hashed during the
+recording and matched against the registry's published fingerprint, never invented from nothing.</p>
 <div id="verdict"></div>
 
 <h2>The record everything descends from</h2>
@@ -53,7 +55,8 @@ The world is <em>adapted from a real published world</em> whose bytes were check
 <div id="worlds"></div>
 
 <h2>Bytes that fail their hash are refused</h2>
-<p class="lede">Not repaired, not used with a warning. Refused.</p>
+<p class="lede">One real template, fetched during this recording, with a single byte added to it. The digest
+below is of those altered bytes. Not repaired, not used with a warning. Refused.</p>
 <div class="card" id="refusal"></div>
 
 <h2>Worlds shape what lives in them, and the order matters</h2>
@@ -101,27 +104,46 @@ const badge = (ok, text) => `<span class="v ${ok===null?'wait':ok?'ok':'no'}">${
     `<div class="h">frame_hash ${esc(P.parent.frame_hash)}</div>` +
     `<div style="margin-top:10px">${badge(parentOk.payload,'payload hash recomputed here')}${badge(parentOk.frame,'frame hash recomputed here')}</div>`;
 
-  let allOk = parentOk.payload && parentOk.frame, repeatable = true;
+  let allOk = parentOk.payload && parentOk.frame, repeatable = true, verifiedBytes = true;
   const cards = [];
   for (const w of P.worlds) {
+    // BOTH frames are recomputed: the tile the key carved, and the world forged from it.
     const c = await check(w.frame);
-    allOk = allOk && c.payload && c.frame;
-    repeatable = repeatable && w.tile.repeatable && w.forged.repeatable;
-    const g = w.world.gravity_milli;
+    const ct = await check(w.tile.frame);
+    allOk = allOk && c.payload && c.frame && ct.payload && ct.frame;
+
+    // Everything below is read from INSIDE the frame whose hash was just recomputed. It used to
+    // be read from copies sitting beside the frame, which meant the page could verify a hash and
+    // then print numbers the hash said nothing about — the one failure this page exists to catch.
+    const A = w.frame.payload.asserts;
+    const prov = A.provenance || {};
+    const world = A.world || {};
+    const cast = A.cast || [];
+
+    // repeatability is asserted HERE, from two recorded hashes, not read as a boolean the
+    // recorder decided on our behalf
+    const tileSame = w.tile.hash === w.tile.hash2;
+    const worldSame = w.forged.hash === w.forged.hash2;
+    repeatable = repeatable && tileSame && worldSame;
+    const bytesChecked = prov.sha256_verified === true;
+    verifiedBytes = verifiedBytes && bytesChecked;
+
+    const g = world.gravity_milli;
     cards.push(`<div class="card">
       <div class="k">${esc(w.key)}</div>
-      <div class="name">${esc(w.world.called)}</div>
+      <div class="name">${esc(world.called)}</div>
       <div class="row">
-        <span>descends from <b>${esc(w.provenance.adapted_from_title || w.provenance.adapted_from_file)}</b></span>
-        <span>ground <b>${esc(w.world.ground)}</b></span>
-        <span>sky <b>${esc(w.world.sky)}</b></span>
+        <span>descends from <b>${esc(prov.adapted_from_title || prov.adapted_from_file)}</b></span>
+        <span>ground <b>${esc(world.ground)}</b></span>
+        <span>sky <b>${esc(world.sky)}</b></span>
         <span>gravity <b>${(g/1000).toFixed(2)}g</b></span>
-        <span>rooms <b>${w.world.rooms}</b></span>
-        <span>in it <b>${esc(w.cast.map(c=>c.id).join(', '))}</b></span>
+        <span>rooms <b>${world.rooms}</b></span>
+        <span>in it <b>${esc(cast.map(c=>c.id).join(', '))}</b></span>
       </div>
-      <p class="q">${esc(w.world.premise)}<br><span style="color:#9a9ac0">house rule — ${esc(w.world.house_rule)}</span></p>
-      <div class="h">source sha256 ${esc(String(w.provenance.source_sha256).slice(0,32))}… · tile ${esc(w.tile.frame_hash||w.tile.hash).slice(0,24)}…</div>
-      <div style="margin-top:8px">${badge(c.payload && c.frame,'hashes recomputed here')}${badge(w.tile.repeatable,'same key, same tile')}${badge(w.forged.repeatable,'same key, same world')}${badge(w.provenance.method.includes('NOT regenerated'),'adapted, not invented')}</div>
+      <p class="q">${esc(world.premise)}<br><span style="color:#9a9ac0">house rule — ${esc(world.house_rule)}</span></p>
+      <div class="h">source ${esc(prov.adapted_from_file)} · sha256 ${esc(String(prov.source_sha256).slice(0,32))}…
+        <br>tile ${esc(String(w.tile.hash).slice(0,32))}… → world ${esc(String(w.forged.hash).slice(0,32))}…</div>
+      <div style="margin-top:8px">${badge(ct.payload && ct.frame,'tile hash recomputed here')}${badge(c.payload && c.frame,'world hash recomputed here')}${badge(tileSame,'same key, same tile')}${badge(worldSame,'same key, same world')}${badge(bytesChecked,'template bytes read and hashed')}${badge(String(prov.method||'').includes('NOT regenerated'),'adapted, not invented')}</div>
     </div>`);
   }
   $('#worlds').innerHTML = cards.join('');
@@ -129,7 +151,8 @@ const badge = (ok, text) => `<span class="v ${ok===null?'wait':ok?'ok':'no'}">${
   const r = P.refusal;
   $('#refusal').innerHTML = `<div class="row"><span>status <b>${esc(r.status)}</b></span><span>generator <b>${esc(r.generator)}</b></span></div>
     <p class="q">${esc(r.reason)}</p>
-    <div class="h">expected ${esc(String(r.expected).slice(0,32))}… · got ${esc(String(r.actual).slice(0,32))}…</div>
+    <div class="h">${esc(r.file || 'template')} · ${r.cleanBytes} bytes → ${r.alteredBytes} bytes
+      <br>expected ${esc(String(r.expected).slice(0,32))}… · got ${esc(String(r.actual).slice(0,32))}…</div>
     <div style="margin-top:8px">${badge(r.status==='refused','refused rather than repaired')}${badge(r.generator==='none','produced nothing at all')}</div>`;
 
   const s = P.shaping;
@@ -146,12 +169,15 @@ const badge = (ok, text) => `<span class="v ${ok===null?'wait':ok?'ok':'no'}">${
      <div style="margin-top:8px">${badge((P.house.residents||[]).every(x=>x.painted),'every resident is visible to the cameras')}${badge((P.house.survey||[]).length>=6,'more than one angle on the same room')}</div>`;
 
   const c = P.cost;
-  $('#cost').innerHTML = `<table><tr><th>frames</th><th>model calls</th><th>calls per frame</th><th>free frames</th></tr>
-    <tr><td class="n">${c.totalFrames}</td><td class="n">${c.calls}</td><td class="n">${c.callsPerFrame}</td><td class="n">${c.freeFrames}</td></tr></table>
-    <p class="lede" style="margin-top:10px">Deciding is what costs. Everything downstream of a decision — replayed, worn, derived — is arithmetic.</p>`;
+  $('#cost').innerHTML = `<table><tr><th>frames produced</th><th>worn</th><th>sloshed</th><th>decided</th><th>model calls</th></tr>
+    <tr><td class="n">${c.totalFrames}</td><td class="n">${c.wornFrames}</td><td class="n">${c.sloshedFrames}</td><td class="n">${c.liveFrames}</td><td class="n">${c.calls}</td></tr></table>
+    <p class="lede" style="margin-top:10px">Deciding is what costs. Everything downstream of a decision — replayed, worn, derived — is
+    arithmetic. This whole recording decided nothing: ${c.totalFrames} frames came out of it and not one
+    model was asked anything, which is exactly why every number on this page can be recomputed.</p>`;
 
   $('#verdict').innerHTML = badge(allOk,'every hash on this page recomputed correctly') +
-    badge(repeatable,'every key reproduced its world exactly') +
+    badge(repeatable,'every key reproduced its tile and its world exactly') +
+    badge(verifiedBytes,'every template was read and hashed before it was used') +
     badge(P.registryCount>0, P.registryCount + ' real published worlds available to adapt');
 
   $('#foot').innerHTML = `Recorded ${esc(P.recorded)} · ${P.worlds.length} worlds worn from one record · ` +

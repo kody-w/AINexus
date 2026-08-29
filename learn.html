@@ -62,9 +62,11 @@ code{font:14px ui-monospace,Menlo,monospace;background:#14142a;border-radius:5px
   <p class="is">You are about to run a stranger’s file on your own machine. Ask about that.</p>
   <p>It is the right question and it deserves a straight answer rather than a reassuring one.
   An agent is one readable file — you can look at it, which is the first defence and the reason
-  the one-file rule exists at all. Beyond that: agents fetched from a registry are checked
-  against a published fingerprint and <em>refused</em> if the bytes do not match, rather than
-  repaired or run with a warning. But a file that matches its fingerprint is still a file that
+  the one-file rule exists at all. Beyond that: an agent fetched by name is hashed as it arrives
+  and compared against the fingerprint published for it, and it is <em>refused</em> if the bytes
+  do not match &mdash; not repaired, not run with a warning. The same check guards the templates
+  a world is forged from. What it cannot do is vouch for a file nobody has published a fingerprint
+  for; that one you are reading yourself. And a file that matches its fingerprint is still a file that
   does what it says, and what it says might be something you did not want. Read it, or run it
   somewhere you do not mind losing.</p>
   <p class="eg"><b>The honest version:</b> this is the same trust you extend to any package you
@@ -89,11 +91,13 @@ somewhere else.</p>
 
 <div class="word">
   <h2>The join</h2>
-  <p class="is">Every time an agent’s <code>perform()</code> runs, that is one moment — and the
-  moment gets written down as a frame.</p>
-  <p>That is the whole bridge, and it is the sentence the rest of this page hangs from. Your
-  tide-checking file runs; a frame says it ran, what it saw, and what it depended on. Six of
-  those in a row is a life. Everything below is what becomes possible once moments are written
+  <p class="is">A tick is one moment &mdash; and the moment gets written down as a frame.</p>
+  <p>That is the whole bridge, and it is the sentence the rest of this page hangs from. A tick is
+  one turn of the loop: the agents that ran, what they were asked, what they answered. One frame
+  is sealed per tick &mdash; including the quiet ticks where nothing was called, because a moment
+  in which nothing happened is still a moment, and a life with the boring parts deleted is not a
+  record of anything. Your tide-checking file runs inside a tick; the frame says it ran, what it
+  saw, and what had to be present for it. Six of those in a row is a life. Everything below is what becomes possible once moments are written
   down instead of forgotten.</p>
 </div>
 
@@ -173,7 +177,7 @@ somewhere else.</p>
     <li>Explain <em>the first three</em> to somebody. Agent, brainstem, registry. That’s RAPP.</li>
     <li>Ask them to explain it back.</li>
     <li>Whatever they got wrong is what this page got wrong — not what they got wrong.</li>
-    <li>Then teach <em>the join</em> — a <code>perform()</code> runs, a frame says it ran. One
+    <li>Then teach <em>the join</em> &mdash; a tick passes, a frame says what happened in it. One
         sentence, and it is what makes the rest of this page one thing instead of two.</li>
     <li>The other six are how that works once there is more than one machine. Not optional,
         just later.</li>

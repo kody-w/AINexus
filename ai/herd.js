@@ -358,7 +358,8 @@
   // So the meter is not decoration. It tells an operator what they are paying for (novelty) and
   // what they are getting free (everything that has already been decided once), which is the
   // number that decides whether a world with a dozen AIs in it can be left running.
-  const ledger = { liveFrames: 0, calls: 0, replayedFrames: 0, rewinds: 0, virtualFrames: 0 };
+  const ledger = { liveFrames: 0, calls: 0, replayedFrames: 0, rewinds: 0, virtualFrames: 0,
+                   wornFrames: 0, sloshedFrames: 0 };   // derived frames: arithmetic, never a decision
   let epoch = { id: 'genesis', seq: -1, at: Date.now(), virtual: 0 };
   let dimension = { forkedFrom: null, lens: null, seed: 'genesis' };
   const virtualFrame = (rec) => { ledger.virtualFrames++;
@@ -864,10 +865,19 @@
     const f = typeof frame === 'string' ? JSON.parse(frame) : frame;
     const F = root.NexusFrames;
     if (!F) throw new Error('no frames module: wearing needs rapp/1');
-    const roster = (o.cast && o.cast.length ? o.cast.slice()
-      : (f.payload && f.payload.requires && f.payload.requires.players) || [...players.keys()]);
-    if (!roster.length) throw new Error('a tile needs somebody in it');
+    // THE ROSTER MUST COME FROM THE FRAME (or from an explicit cast). It used to fall back to
+    // whoever happened to be in this tab, which quietly broke the one promise wearing makes:
+    // the same frame and the same key carve the same tile on a machine that has never met yours.
+    // With a local fallback, two machines wearing the same bytes got different tiles and neither
+    // could tell. Refusing is the only way that sentence stays true.
+    const roster = (o.cast && o.cast.length) ? o.cast.slice()
+      : ((f.payload && f.payload.requires && f.payload.requires.players) || []);
+    if (!roster.length) throw new Error(
+      'this frame names nobody, so there is no tile to carve from it — a record must carry '
+      + 'payload.requires.players, or the caller must pass { cast: [...] }. Falling back to '
+      + 'whoever is in this session would make the tile unreproducible anywhere else.');
 
+    ledger.wornFrames++;   // a tile is derived, not decided — it belongs in the free column
     const ks = await keystream(f.frame_hash, keyStr);
 
     // ── the draw order is normative (WEARING.md §4) ────────────────────────
@@ -875,7 +885,11 @@
     // and you change every tile in the world, which is why it is written down rather than left
     // to whatever order the code happens to read in.
     const R = roster.length;
-    const n = Math.max(2, Math.min(R, 2 + (R > 1 ? await ks.uniform(R - 1) : 0)));   // 1. how many
+    // WEARING.md §4 step 1 says: when R = 1, skip the draw and set n = 1. The clamp used to be
+    // written so its lower bound of 2 silently overrode that carve-out — Math.max(2, Math.min(1, 2))
+    // is 2 — and the cast loop then read shuffled[1] off a one-element roster and put an undefined
+    // id in the frame, which frames.js rightly refused. A solo session is a real roster of one.
+    const n = R === 1 ? 1 : Math.max(2, Math.min(R, 2 + await ks.uniform(R - 1)));    // 1. how many
     const shuffled = roster.slice();                                                 // 2. who
     for (let i = R - 1; i > 0; i--) {
       const j = await ks.uniform(i + 1);
@@ -889,7 +903,11 @@
       const where = PLACES[await ks.uniform(PLACES.length)];
       cast.push({ id: shuffled[i], at: { x, z }, standing, where });
     }
-    const lensName = o.lens || LENS_POOL[await ks.uniform(LENS_POOL.length)];         // 4. the lens
+    // The octet is drawn UNCONDITIONALLY, even when a caller overrides the lens. Short-circuiting
+    // the draw shifted every later read off the keystream, so passing a lens quietly changed the
+    // mood, the moment and the whole tile. Draw first, override after: the stream stays aligned.
+    const drawnLens = LENS_POOL[await ks.uniform(LENS_POOL.length)];                  // 4. the lens
+    const lensName = o.lens || drawnLens;
     const mood = MOODS[await ks.uniform(MOODS.length)];                               // 5. what is wrong
     const offset = await ks.wide(86400, 3);                                           // 6. the moment
 
@@ -941,6 +959,7 @@
   // A step is: run agent `by`, handing it the subject under one key and the thing under another.
   // That is the whole vocabulary, and both directions fall out of it.
   async function slosh(spec, maybeChain, maybeOpts) {
+    ledger.sloshedFrames++;   // running a tile through a lens is arithmetic: no model decided it
     // tolerate the two older shapes: slosh(tile, [lenses]) and slosh({subject, steps})
     let o = maybeOpts || {};
     let subject, steps, subjectKey, itemKey, kind;
@@ -1212,7 +1231,10 @@
                      seedOf, fromSeed, reseed: (s2) => { dimension.seed = String(s2); seedRng(hashSeed(dimension.seed)); return seedOf(); },
                      lenses: () => Object.keys(LENSES),
                      cost: () => {
-                       const free = ledger.replayedFrames + ledger.virtualFrames;
+                       // worn and sloshed frames are arithmetic too. Leaving them out of the
+                       // ledger made a run that produced a dozen frames report zero of them.
+                       const free = ledger.replayedFrames + ledger.virtualFrames
+                                  + ledger.wornFrames + ledger.sloshedFrames;
                        const total = ledger.liveFrames + free;
                        return Object.assign({}, ledger, { freeFrames: free, totalFrames: total,
                          callsPerFrame: total ? +(ledger.calls / total).toFixed(3) : 0,
