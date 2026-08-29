@@ -30,6 +30,15 @@
     const REPO_OWNER = global.NEXUS_REPO_OWNER || 'kody-w';
     const REPO_NAME = global.NEXUS_REPO_NAME || 'AINexus';
 
+    // `from` on a guest is whatever the HOST typed, and a host is only ever whoever
+    // sent you a link. Every id that legitimately reaches this code was minted by the
+    // broker, so it lives in this alphabet; anything else is a member being invented.
+    const PEER_ID_SHAPE = /^[A-Za-z0-9_-]{1,64}$/;
+    // Each avatar is a Group with its own geometries, material, light and a canvas
+    // texture, all resident on the GPU. A host looping `from:'x'+i` spends nothing and
+    // takes the guest's tab with it, so there is a ceiling far above any real room.
+    const MAX_PLAYER_BODIES = 64;
+
     class MultiplayerManager {
         constructor(worldInstance) {
             this.world = worldInstance;
@@ -352,6 +361,7 @@
 
                 this.removePlayer(peerId);
                 this.connections.delete(peerId);
+                if (this.isHost) this.relayDeparture(peerId);
                 if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                 this.updatePlayerCount();
                 if (!this.isHost && peerId === this.roomId) {
@@ -381,6 +391,7 @@
                 if (this.pending.get(peerId) === conn) this.pending.delete(peerId);
                 if (this.connections.get(peerId) === conn) {
                     this.connections.delete(peerId);
+                    if (this.isHost) this.relayDeparture(peerId);
                     this.removePlayer(peerId);
                     if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                     this.updatePlayerCount();
@@ -475,26 +486,74 @@
             if (data.type === 'hello') return;      // a joiner never needs to admit anybody
             switch (data.type) {
                 case 'playerUpdate': {
+                    // Who this update is about, resolved FIRST because everything below is
+                    // about that peer and not about the connection it arrived on. On the host
+                    // the connection IS the author; a joiner hears about everyone except the
+                    // host second-hand and takes the host's stamp, exactly as it does for chat.
+                    // Keying the rename on the connection instead would have let a relayed
+                    // update rename the HOST with somebody else's name.
+                    const who = this.isHost ? peerId : (data.from || peerId);
+                    if (typeof who !== 'string' || !PEER_ID_SHAPE.test(who)) break;
+                    if (who === (this.peer && this.peer.id)) break;      // never a body for myself
+
                     // A rename is not free: it burns a canvas, a texture upload and a material
                     // every time, and the PEER chooses how often it happens. Twenty a second is
                     // not somebody correcting their name, it is somebody making the host draw.
-                    const known = this.players.get(peerId);
+                    const known = this.players.get(who);
                     if (data.username && known && Date.now() - (known.lastRename || 0) >= 1000) {
-                        const claimed = this.uniqueName(peerId, data.username);
+                        const claimed = this.uniqueName(who, data.username);
                         if (known.username !== claimed) {
                             known.lastRename = Date.now();
                             known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
                                 if (old) { known.avatar.remove(old); this.disposeObject(old); }
-                                const tag = this.createNameTag(peerId, { username: claimed });
+                                const tag = this.createNameTag(who, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
                         }
                     }
-                    this.updatePlayerPosition(peerId, data.position, data.rotation);
+                    // A relayed peer has no connection here, so acceptConnection never ran for
+                    // it and it has no body. Give it one the first time it is heard from —
+                    // without this, chat crosses between two joiners but nothing else does:
+                    // they share a room and remain invisible to each other.
+                    if (!this.players.has(who)) {
+                        if (this.players.size >= MAX_PLAYER_BODIES) {
+                            if (!this.mintCapReported) {
+                                this.mintCapReported = true;
+                                console.warn('[nexus] refusing to build more than ' + MAX_PLAYER_BODIES
+                                           + ' player bodies — this room claims more members than a room can have');
+                            }
+                        } else {
+                            this.createPlayerAvatar(who, { username: data.username });
+                            this.updatePlayerCount();
+                        }
+                    }
+                    if (data.position) this.updatePlayerPosition(who, data.position, data.rotation);
+
+                    // The room is a star: every joiner is wired only to the host. Presence has
+                    // to be passed on for the same reason chat does, and on the same budget —
+                    // it is the host's uplink either way.
+                    if (this.isHost && this.allowRate(peerId, 'presence', 40, 5000)) {
+                        this.connections.forEach((c, id) => {
+                            if (id === peerId) return;
+                            try {
+                                c.send({ type: 'playerUpdate', from: peerId, username: data.username,
+                                         position: data.position, rotation: data.rotation });
+                            } catch (e) {}
+                        });
+                    }
                     break;
                 }
+
+                case 'playerLeft':
+                    // Only the host is wired to everyone, so only the host can tell the room
+                    // that somebody went. Without it a guest keeps a motionless body forever.
+                    if (!this.isHost && typeof data.who === 'string' && PEER_ID_SHAPE.test(data.who)) {
+                        this.removePlayer(data.who);
+                        this.updatePlayerCount();
+                    }
+                    break;
 
                 case 'chat': {
                     // A message may be addressed. Show it if it is for the room or for me...
@@ -596,15 +655,31 @@
         // per rename, which a peer decides the rate of.
         disposeObject(obj) {
             if (!obj) return;
+            // Two things this has to get right, and both are about ownership rather than
+            // thoroughness. A body and its head share ONE material, so a plain traversal
+            // disposes it twice; and in three.js r128 every Sprite on the page shares one
+            // module-level BufferGeometry, so releasing "this avatar's" nametag quad tears
+            // down the buffers behind every other nametag AND every label the world itself
+            // placed. The renderer re-uploads, so nothing stays blank — it just churns the
+            // whole page's sprite buffers on every departure, which is the opposite of what
+            // disposing is for. The material and its canvas texture ARE ours; the quad is not.
+            const seen = new Set();
             const killMaterial = (m) => {
-                if (!m) return;
-                if (m.map && m.map.dispose) m.map.dispose();
+                if (!m || seen.has(m)) return;
+                seen.add(m);
+                if (m.map && m.map.dispose && !seen.has(m.map)) { seen.add(m.map); m.map.dispose(); }
                 if (m.dispose) m.dispose();
             };
             const killOne = (o) => {
-                if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+                const isSprite = o.isSprite || o.type === 'Sprite';
+                if (!isSprite && o.geometry && o.geometry.dispose && !seen.has(o.geometry)) {
+                    seen.add(o.geometry); o.geometry.dispose();
+                }
                 if (Array.isArray(o.material)) o.material.forEach(killMaterial);
                 else killMaterial(o.material);
+                if ((o.isLight || o.type === 'PointLight') && o.dispose && !seen.has(o)) {
+                    seen.add(o); o.dispose();
+                }
             };
             if (typeof obj.traverse === 'function') obj.traverse(killOne);
             else killOne(obj);
@@ -814,8 +889,24 @@
             }
         }
 
+        // The host is the only tab wired to everyone, so a departure reaches the rest of
+        // the room only if the host passes it on — the presence twin of the chat relay.
+        relayDeparture(goneId) {
+            this.connections.forEach((c, id) => {
+                if (id === goneId) return;
+                try { c.send({ type: 'playerLeft', who: goneId }); } catch (e) {}
+            });
+        }
+
         updatePlayerCount() {
-            const count = this.connections.size + 1; // +1 for self
+            // Everyone I know of: the peers I am wired to, plus the ones the host has told
+            // me about. On the host those are the same set; on a joiner they are not, and
+            // counting only my own wires reported "2 players" in a room of three.
+            const seen = new Set(this.connections.keys());
+            this.players.forEach((_, id) => seen.add(id));
+            const mineId = this.peer && this.peer.id;
+            if (mineId) seen.delete(mineId);
+            const count = seen.size + 1; // +1 for self
             const playerCountEl = document.getElementById('player-count');
             if (playerCountEl) playerCountEl.textContent = count;
         }

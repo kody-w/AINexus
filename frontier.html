@@ -107,7 +107,16 @@ const frame = $('f'), cursor = $('cursor');
 let drive = null, hands = null, running = false, prev = null, lastAct = 0, lastHover = 0, rec = null;
 
 const params = new URLSearchParams(location.search);
-const world = params.get('world') || 'index.html';
+// ?world= is chosen by whoever sends the link, and it lands in an iframe src on a
+// page that holds a GitHub token in localStorage. A scheme (javascript:, data:,
+// https://) or a traversal here loads somebody else's content into this origin's
+// frame and then this page tries to DRIVE it. A world is a document sitting next
+// to this one, so that is all the shape it is allowed to have — a rule rather than
+// a list, because the list is 60-odd files and would rot the moment one is added.
+const WORLD_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/;
+const askedWorld = params.get('world');
+const world = (askedWorld && WORLD_SHAPE.test(askedWorld) && !askedWorld.includes('..'))
+  ? askedWorld : 'index.html';
 let joinFrag = location.hash && location.hash.includes('#join=') ? location.hash : '';
 if (!joinFrag) { try { const r = JSON.parse(localStorage.getItem('nexus:room') || 'null');
   if (r && Date.now() - r.at < 6 * 3600e3) joinFrag = '#join=' + r.id + '.' + r.secret; } catch (e) {} }
