@@ -31,7 +31,12 @@ const serve = ctx => ctx.route('https://kody-w.github.io/AINexus/**', r => { con
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({status:404,body:'no'});
   r.fulfill({ status:200, contentType:T[path.extname(f)]||'application/octet-stream', body:fs.readFileSync(f) }); });
 (async () => {
-const b = await chromium.launch({ args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-capture'] });
+// --use-fake-device-for-media-STREAM. The flag here read 'media-capture', which Chromium does
+// not know, so it was silently ignored. On a laptop with a real camera that made no
+// difference; on a headless runner with none, getUserMedia failed, the eyes never came on,
+// and the gaze pointer sat at -1 while every later step waited for a reticle that could not
+// be drawn. A flag a browser does not recognise is not an error, it is a no-op.
+const b = await chromium.launch({ args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
 const ctx = await b.newContext({ permissions:['camera'], viewport:{width:1280,height:820} });
 await serve(ctx);
 const p = await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.message));
@@ -63,7 +68,20 @@ const A = await state();
 console.log('A. no eye tracking — everyone visible :', A);
 console.log('   XSS: a username made of markup did NOT execute:', await p.evaluate(()=>!window.__PWNED));
 
-await p.click('#eyes'); await p.waitForTimeout(9000);
+await p.click('#eyes');
+// Say it here if the camera never started, rather than letting six later checks time out waiting
+// for a reticle that was never going to exist.
+const eyesOn = await p.waitForFunction(() => {
+  const v = document.querySelector('video');
+  return !!(v && v.srcObject && v.videoWidth > 0);
+}, null, { timeout: 30000 }).then(()=>true).catch(()=>false);
+if (!eyesOn) {
+  const why = await p.evaluate(()=>({ state: (document.getElementById('state')||{}).textContent,
+    video: !!document.querySelector('video'),
+    devices: typeof navigator.mediaDevices }));
+  console.log('THE CAMERA NEVER STARTED — every gaze check below is meaningless:', JSON.stringify(why));
+}
+await p.waitForTimeout(6000);
 await p.evaluate(() => { window.__mk=(o={})=>{const lm=new Array(478).fill(null).map(()=>({x:.5,y:.5,z:0}));
   const put=(i,x,y)=>lm[i]={x,y,z:0};
   put(33,.40,.455);put(133,.46,.455);put(159,.443,.443);put(145,.443,.467);put(468,.43+(o.dx||0),.455);

@@ -4,16 +4,13 @@ name: Suites
 # knocks on a live rate-limited endpoint and a third party's throttle must never be able to turn
 # this red.
 #
-# dimension_seed is back, and it was not an environment mystery: it had a hardcoded absolute path
-# to one laptop's scratchpad, so on any other machine every file 404'd and the page loaded with no
-# scripts at all. Its own diagnostic said so the moment the runner stopped truncating it
-# ("scripts":[], readyState complete, no page errors). Proven fixed by running it from a relocated
-# copy of the repo, which is the only honest test of a path.
-#
-# orbs_and_gaze is still out, now with a real mechanism rather than a shrug: in CI the face reader
-# reports a good gaze (ok:true, x:0.5) but the page's own gaze pointer stays at -1, where on a
-# laptop it reaches 1001 — so no reticle is ever drawn and the ring never opens. Something about
-# driving the gaze loop headless on a runner, not the assertions. Still runs in the local sweep.
+# Both suites that used to fail here are back, and neither was an environment mystery.
+# dimension_seed hardcoded an absolute path to one laptop's scratchpad, so everywhere else every
+# file 404'd and the page loaded with no scripts at all. orbs_and_gaze launched Chromium with
+# '--use-fake-device-for-media-capture', a flag Chromium does not know and therefore ignores; with
+# a real camera that costs nothing, and on a runner with none it meant getUserMedia failed, the
+# eyes never came on, and every gaze check waited for a reticle that could not be drawn.
+# Both were only ever visible from a second machine.
 #
 # Run everything locally with:
 
@@ -70,5 +67,5 @@ jobs:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
         run: |
           node tools/run_suites.cjs \
-            dialogue_ring dimension_seed holo_calibration overlay \
+            dialogue_ring dimension_seed holo_calibration orbs_and_gaze overlay \
             proof_red tick_loop tiles turn views_live tick_seal_on_error
