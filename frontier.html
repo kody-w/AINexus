@@ -393,7 +393,7 @@ $('mind').onclick = async () => {
   $('signin-note').textContent = '';
   // ...and the button was left mid-sentence at "checking sign-in…" by any verify() this
   // press just orphaned; nothing else repaints it on this path.
-  $('mind').textContent = 'signing in…';
+  $('mind').textContent = 'signing in…';   // repainted by stop() on every terminal exit
   signingIn = true;
   try {
     let { user_code, verification_uri, interval } = await NexusAuth.startDeviceLogin();
@@ -409,6 +409,11 @@ $('mind').onclick = async () => {
       signingIn = false;
       $('code').textContent = '';
       $('signin-note').textContent = msg;
+      // and put the button back. The press set it to "signing in…"; every terminal exit
+      // below returns without touching it, so a failed flow left the button describing a
+      // sign-in that had already given up.
+      $('mind').textContent = 'grant a mind';
+      $('mind').classList.remove('on');
     };
     const tick = async () => {
       if (Date.now() - started > 900000) { stop('that code expired — press grant a mind again'); return; }

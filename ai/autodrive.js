@@ -46,12 +46,18 @@
   });
 
   // ── real events ───────────────────────────────────────────────────────────
+  // Which keys are currently held. walk() presses a key, awaits, and releases it — so a
+  // stop landing mid-walk used to leave the key down and the avatar walking forever, with
+  // nothing left running to let go of it.
+  const held = new Set();
   function key(code, down) {
     const map = { w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD', ' ': 'Space' };
     const ev = new KeyboardEvent(down ? 'keydown' : 'keyup', {
       key: code, code: map[code] || code, bubbles: true, cancelable: true });
+    if (down) held.add(code); else held.delete(code);
     window.dispatchEvent(ev); document.dispatchEvent(ev);
   }
+  function releaseHeldKeys() { for (const c of Array.from(held)) key(c, false); }
 
   function mouse(type, opts) {
     const ev = new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, view: window,
@@ -315,6 +321,7 @@
         try {
           const percepts0 = o.vision ? api.sense({ width: 320, send: true }) : api.snapshot();
           const r = await window.NexusBrainstem.turn({
+            turn: myTurn,          // carried, never re-read: turn() awaits a Pyodide load
             percepts: { me: percepts0.me, world: percepts0.world, portals: percepts0.portals,
                         players: percepts0.players, room: percepts0.room,
                         chat: (percepts0.chat || []).slice(-4), carrying: api._carry || null,
@@ -462,11 +469,29 @@
     // put the camera down and give the world its legs back
     cut() {
       if (!api._filming) return false;
-      api._filming = false;
-      const w = W();
-      if (w && api._saved) { w.updateMovement = api._saved.updateMovement; if (api._saved.updateHover && w.updateHover) w.updateHover = api._saved.updateHover; }
-      if (api._tookPointer && w) { w.isPointerLocked = false; api._tookPointer = false; }
+      api.release();
       log('cut — camera down, movement and the pointer restored');
+      return true;
+    },
+
+    // Undo everything a generation INSTALLED in the world. Voiding a generation stops new
+    // work from starting, but it cannot reach what earlier work left behind: a camera's
+    // rAF loop reading a bare _filming flag, the world's own updateMovement replaced by a
+    // no-op, a latched pointer lock, a key still held down by a walk that was awaiting
+    // when the stop landed. A kill switch that does not reverse what it killed is not a
+    // kill switch — the operator gets a tab that reports "stopped" and still films, still
+    // refuses to walk, and still holds the mouse.
+    release() {
+      const w = W();
+      api._filming = false;
+      if (w && api._saved) {
+        if (api._saved.updateMovement) w.updateMovement = api._saved.updateMovement;
+        if (api._saved.updateHover && w.updateHover) w.updateHover = api._saved.updateHover;
+      }
+      api._saved = null;
+      if (api._tookPointer && w) { w.isPointerLocked = false; }
+      api._tookPointer = false;
+      releaseHeldKeys();
       return true;
     },
 
@@ -737,7 +762,12 @@
     // that made the very next call from inside a running turn look top-level, so it took
     // the branch that re-arms _running and cancelled the stop. The depth drains on its
     // own as the stack unwinds.
-    stop() { api._running = false; api._epoch = (api._epoch || 0) + 1; return true; },
+    stop() {
+      api._running = false;
+      api._epoch = (api._epoch || 0) + 1;
+      try { api.release(); } catch (e) {}   // and undo what the dead generation installed
+      return true;
+    },
     // _epoch    — bumped by stop(); everything issued before it is void
     // _liveTurn — the generation the operator program currently on the stack belongs to
     _running: false, _depth: 0, _epoch: 0, _liveTurn: 0, _filming: false, _shot: null,

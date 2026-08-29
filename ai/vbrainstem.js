@@ -67,6 +67,9 @@
 
   async function initPyodide(log) {
     if (pyodide && Object.keys(pyAgents).length) return pyodide;
+    // A failed load must not be memoised. The catch below deliberately nulls `pyodide` so a
+    // later call can retry, but this guard handed back the already-settled failure forever,
+    // so one flaky fetch disabled Python for the life of the tab.
     if (loading) return loading;
     loading = (async () => {
       const say = (m) => { loadNote = m; if (log) log('[vbrainstem]', m); };
@@ -122,6 +125,7 @@
       } catch (e) {
         say('python unavailable: ' + e.message + ' — running on verbs alone');
         pyodide = null;
+        loading = null;                      // let the next turn try again
         return null;
       }
     })();
@@ -169,11 +173,16 @@
                       { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
     const calls = [];
 
-    // A stop bumps the driver's generation. Checking it here is what makes the kill
-    // switch actually kill: without it a stopped turn kept running its remaining rounds,
-    // and every one of those rounds is a billed auth.chat call.
-    const epoch0 = drive ? drive._epoch : 0;
+    // The generation is CARRIED IN, not read off the clock. Reading it here was the same
+    // mistake mind() had: line 158 above awaits initPyodide(), which on a cold tab
+    // downloads a wasm runtime and can take tens of seconds — so a turn stopped during
+    // that load re-stamped itself with whatever generation was live when it woke, its
+    // stop-check could never fire, and every tool call it then issued was accepted and
+    // executed. A turn belongs to the generation that invoked it.
+    const epoch0 = typeof o.turn === 'number' ? o.turn : (drive ? drive._epoch : 0);
     const stopped = () => !!drive && drive._epoch !== epoch0;
+    // ...and the very first thing to check is whether that load outlived us.
+    if (stopped()) return { words: '', calls: [], rounds: 0, note: 'stopped' };
 
     for (let round = 0; round < (o.rounds || MAX_ROUNDS); round++) {
       if (stopped()) return { words: '', calls, rounds: round, note: 'stopped' };

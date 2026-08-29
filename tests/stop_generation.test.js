@@ -21,8 +21,18 @@ function makeDriver(file) {
     querySelectorAll: () => [], addEventListener: noop, removeEventListener: noop,
     dispatchEvent: noop, hidden: false, visibilityState: 'visible',
   };
+  const events = [];
+  const realMove = function originalUpdateMovement() {};
+  const world = {
+    camera: { position: { x: 0, y: 0, z: 0, set() {}, clone() { return this; } },
+              rotation: { x: 0, y: 0, z: 0 }, lookAt() {}, quaternion: {} },
+    scene: { children: [], add() {}, remove() {} },
+    updateMovement: realMove, updateHover: function originalUpdateHover() {},
+    isPointerLocked: false, portals: [],
+  };
   const win = {
-    document: doc, addEventListener: noop, removeEventListener: noop,
+    worldNavigator: world, __events: events, __realMove: realMove,
+    document: doc, addEventListener: (t, f) => {}, removeEventListener: noop,
     setTimeout, clearTimeout, setInterval, clearInterval,
     requestAnimationFrame: (cb) => setTimeout(() => cb(Date.now()), 16),
     performance: { now: () => Date.now() },
@@ -32,9 +42,14 @@ function makeDriver(file) {
     parent: null, innerWidth: 800, innerHeight: 600,
   };
   win.window = win; win.self = win; win.top = win;
+  win.dispatchEvent = (ev) => { events.push({ type: ev.type, key: ev.key }); return true; };
+  doc.dispatchEvent = win.dispatchEvent;
+  win.KeyboardEvent = function (type, o) { this.type = type; this.key = (o || {}).key; };
   const ctx = vm.createContext(win);
   vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
-  return win.__autodrive;
+  const d = win.__autodrive;
+  if (d) { d.__win = win; }
+  return d;
 }
 
 (async () => {
@@ -150,6 +165,32 @@ function makeDriver(file) {
   R.J_mind_refuses_an_inherited_stale_generation =
     { refused: logs.some((l) => /stopped generation/.test(l)) };
 
+  // K) THE INVARIANT, not one case per door: after a stop, the world must be left as it
+  //    was found. Voiding a generation stops new work starting; it cannot reach what
+  //    earlier work INSTALLED — a key held down by a walk that was awaiting, the world's
+  //    own updateMovement replaced by a camera's no-op, a latched pointer lock. Each of
+  //    those was found separately, one review round at a time; this asserts the property
+  //    they are all instances of.
+  const win = d.__win;
+  d.stop();
+  win.__events.length = 0;
+  const walking = d.run({ steps: [{ do: 'walk', dir: 'forward', ms: 5000 }] }, null);
+  await new Promise((r) => setTimeout(r, 120));      // 'w' is down, the step is awaiting
+  const heldBefore = win.__events.filter((e) => e.type === 'keydown' && e.key === 'w').length;
+  d.camera({ film: false });                         // a camera stubs the world's legs
+  const stubbedLegs = win.worldNavigator.updateMovement !== win.__realMove;
+  d.stop();                                          // the operator pulls the switch
+  await new Promise((r) => setTimeout(r, 60));
+  R.K_stop_leaves_the_world_as_it_found_it = {
+    heldBefore,
+    keyReleased: win.__events.some((e) => e.type === 'keyup' && e.key === 'w'),
+    legsWereStubbed: stubbedLegs,
+    legsRestored: win.worldNavigator.updateMovement === win.__realMove,
+    filming: d._filming === true,
+    pointerHeld: win.worldNavigator.isPointerLocked === true,
+  };
+  void walking;
+
   console.log(JSON.stringify(R, null, 1));
   const pass =
     R['0_generation_zero_is_a_real_claim'].freshEpoch === 0 &&
@@ -165,7 +206,13 @@ function makeDriver(file) {
     R.F_operator_run_while_turn_parked.verdict === 'done' &&
     R.G_operator_run_cancels_parked_turn.staleTurnVerdict === 'stopped' &&
     R.I_killed_program_stays_dead.resumed === false &&
-    R.J_mind_refuses_an_inherited_stale_generation.refused === true;
+    R.J_mind_refuses_an_inherited_stale_generation.refused === true &&
+    R.K_stop_leaves_the_world_as_it_found_it.heldBefore >= 1 &&   // key() fires at window AND document
+    R.K_stop_leaves_the_world_as_it_found_it.keyReleased === true &&
+    R.K_stop_leaves_the_world_as_it_found_it.legsWereStubbed === true &&
+    R.K_stop_leaves_the_world_as_it_found_it.legsRestored === true &&
+    R.K_stop_leaves_the_world_as_it_found_it.filming === false &&
+    R.K_stop_leaves_the_world_as_it_found_it.pointerHeld === false;
   console.log(pass ? 'ALL PASS' : 'FAIL');
   process.exit(pass ? 0 : 1);
 })();
