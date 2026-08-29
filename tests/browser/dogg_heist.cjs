@@ -1799,11 +1799,13 @@ async function auditRepeatedIntroActivation(browser, mode) {
       element.setAttribute('data-dogg-test-repeat-begin', 'true');
       const rect = element.getBoundingClientRect();
       return {
+        overlayFound: Boolean(document.getElementById('intro-overlay')),
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2
       };
     });
-    requireMeasurement(begin, `${mode} Begin control`);
+    requireMeasurement(begin && begin.overlayFound,
+      `${mode} Begin control inside #intro-overlay`);
     const beforeState = await page.evaluate(async () => {
       const api = window.__doggHeist;
       const state = api && typeof api.state === 'function' ?
@@ -1853,17 +1855,34 @@ async function auditRepeatedIntroActivation(browser, mode) {
         const api = window.__doggHeist;
         const state = api && typeof api.state === 'function' ?
           await Promise.resolve(api.state()) : {};
+        const visible = element => {
+          if (!element || element.hidden || element.hasAttribute('inert') ||
+              element.getAttribute('aria-hidden') === 'true') return false;
+          if (typeof element.checkVisibility === 'function') {
+            return element.checkVisibility({
+              checkOpacity: true,
+              checkVisibilityCSS: true
+            });
+          }
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' &&
+            Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+        };
+        const overlay = document.getElementById('intro-overlay');
+        const card = overlay?.querySelector('.intro-card');
+        const overlayVisible = visible(overlay);
         return {
           ready: api?.ready,
           state: JSON.parse(JSON.stringify(state)),
           hash: location.hash,
-          introVisible: Boolean(document.querySelector('.intro-card') &&
-            getComputedStyle(document.querySelector('.intro-card')).display !== 'none'),
+          overlayFound: Boolean(overlay),
+          introVisible: overlayVisible && (!card || visible(card)),
           event: document.getElementById('event-log')?.textContent || '',
           status: document.getElementById('status-live')?.textContent || ''
         };
       }),
-      value => value.ready === true && !value.introVisible,
+      value => value.ready === true && value.overlayFound && !value.introVisible,
       5000,
       25
     );
