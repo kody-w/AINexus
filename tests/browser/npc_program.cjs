@@ -96,7 +96,27 @@ console.log('the hands moved            :', JSON.stringify(out.acted));
 console.log('in an EMPTY room it said   :', JSON.stringify(out.r2 && out.r2.words), 'and moved', JSON.stringify(out.acted2));
 console.log('through the program step   :', JSON.stringify(out.viaStep).slice(0,140));
 
+// THE WORKED EXAMPLE has to work, or it is a worse lie than no example: somebody copies it.
+const worked = await p.evaluate(async () => {
+  const drive = { snapshot: () => ({ me:{x:0,y:1.6,z:0}, world:'W', room:'r',
+                    portals:[{name:'Ebike World'}], players:[{name:'ada'}], chat:[] }),
+    people:()=>[],orbs:()=>[],dialogue:()=>[],
+    look: async()=>true, say: async()=>true, travel: async()=>true, walk: async()=>true,
+    tell: async()=>true, aim: async()=>true };
+  if (!window.NexusNPC || !window.NexusNPC.doorman) return { missing: true };
+  const npc = window.NexusNPC.doorman();
+  const busy = await window.NexusBrainstem.turn({ percepts: drive.snapshot(), drive, mind: npc, python:false }).catch(e=>({error:e.message}));
+  const emptyDrive = Object.assign({}, drive, { snapshot: () => ({ me:{x:0,y:0,z:0}, world:'W', room:'r', portals:[], players:[], chat:[] }) });
+  const quiet = await window.NexusBrainstem.turn({ percepts: emptyDrive.snapshot(), drive: emptyDrive, mind: npc, python:false }).catch(e=>({error:e.message}));
+  return { busy: busy && busy.words, quiet: quiet && quiet.words };
+});
+console.log('the worked example, busy room :', JSON.stringify(worked.busy));
+console.log('the worked example, empty room:', JSON.stringify(worked.quiet));
+
 console.log('\nchecks:');
+ok('the worked NPC example ships and loads', !worked.missing);
+ok('and it answers a busy room differently from an empty one — the thing a choreography cannot do',
+   !!worked.busy && !!worked.quiet && worked.busy !== worked.quiet);
 ok('nobody is signed in and no brainstem is reachable', out.signedIn === false);
 ok('nothing bought a thought', bought === 0);
 ok('a written mind still produced a thought through the real brainstem', !!(out.r1 && out.r1.words));

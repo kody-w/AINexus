@@ -58,8 +58,25 @@
     return n;
   }
 
-  function beatFor(script, tick, percepts) {
-    if (typeof script === 'function') return script(percepts, tick) || {};
+  // WHAT A CHARACTER IS HANDED IS THE ROOM, NOT THE TRANSCRIPT. The conversation carries the
+  // percepts in a user message as 'PERCEPTS: {...}', and the first version of this passed the raw
+  // message array to the script — so an author reading `percepts.players` got undefined and every
+  // NPC quietly fell through to its dullest branch. My own worked example failed its own test on
+  // exactly that, which is the only reason it was caught before anyone copied it.
+  function perceptsIn(messages) {
+    for (const m of (messages || [])) {
+      if (!m || m.role !== 'user' || typeof m.content !== 'string') continue;
+      const at = m.content.indexOf('PERCEPTS: ');
+      if (at < 0) continue;
+      try { return JSON.parse(m.content.slice(at + 10)); } catch (e) { /* keep looking */ }
+    }
+    return {};
+  }
+
+  function beatFor(script, tick, messages) {
+    const percepts = perceptsIn(messages);
+    // the transcript stays available as a third argument for anyone who wants it
+    if (typeof script === 'function') return script(percepts, tick, messages) || {};
     const list = Array.isArray(script) ? script : [script];
     if (!list.length) return {};
     // A script shorter than the session repeats rather than falling silent, because an NPC that
