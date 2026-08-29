@@ -15,17 +15,14 @@ name: Suites
 # whether this build is green. Both are real suites — room.cjs holds 18 checks over four browser
 # contexts — and both run in the local sweep. agent_contract.cjs is out on time: it loads Pyodide.
 #
-# orbs_and_gaze is still out, and here is exactly how far it got, so nobody starts from zero:
-#   * it launched with '--use-fake-device-for-media-capture', a flag Chromium does not know and
-#     therefore ignores. With a real camera that costs nothing; on a runner with none it meant
-#     getUserMedia failed and the gaze pointer sat at -1. FIXED (the flag is ...-for-media-stream).
-#   * with the camera working, the pointer reaches 640 — dead centre of a 1280 viewport — and
-#     SETTLES there. It is not still easing: the synthetic iris offset the test feeds simply does
-#     not map to a deflection on this runner, where the same step reaches 1001 on a laptop. That
-#     points at the origin/scale the face reader learns before it will deflect at all, not at the
-#     assertions and not at timing (waiting for settle rather than a fixed 1300ms changed nothing).
-# Unresolved, deliberately parked: it is a headless gaze-calibration question, it still runs in the
-# local sweep, and the checks it holds are real.
+# orbs_and_gaze is BACK, and the runner was right all along. It settled at dead centre because
+# readFace locked its gaze origin after a fixed NUMBER of frames, and while settling it recomputes
+# the origin from the current pose every frame — so the deflection is exactly 0.5 by construction
+# and the pointer cannot move. Twenty frames is a third of a second at 60fps and four seconds at
+# five. Worse, when the count ran out whatever pose was current BECAME the origin, so on a slow
+# machine "looking right" was learned as straight ahead and the pointer read centre for the rest of
+# the session — for someone using their face as their pointer, the input dying in silence.
+# Settling is a length of time now. The suite passes unmodified; nothing was loosened.
 #
 # Run everything locally with:
 
@@ -91,5 +88,6 @@ jobs:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/tests
         run: |
           node tools/run_suites.cjs \
-            dialogue_ring dimension_seed holo_calibration overlay \
-            proof_red tick_loop tiles turn views_live tick_seal_on_error
+            dialogue_ring dimension_seed holo_calibration orbs_and_gaze overlay \
+            proof_red tick_loop tiles turn views_live tick_seal_on_error slow_frames \
+            frames_conformance

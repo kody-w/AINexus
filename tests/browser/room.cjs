@@ -205,6 +205,13 @@ const afterSpeaking=await look(bid);
 // `this.emit("open", this.id)` a second time — the same handler that schedules the dial. That
 // re-emission is exactly what is done here; on the old code it opened a duplicate channel, which
 // is the input to the check three above.
+// WAIT for the handshake to finish before reading the log, rather than sampling it at whatever
+// moment the script arrives here. The status list is appended to as the invite is proved, and how
+// far it has got depends on a public signalling server's round trip — so a snapshot taken a beat
+// early made this check fail perhaps one run in three, for no reason anyone could act on. Read it
+// once 'Connected' is there, or once we have waited long enough to say it never came.
+await B.p.waitForFunction(()=>window.__status && window.__status.includes('Connected'),
+                          null, { timeout: 20000 }).catch(()=>{});
 const statusB=await B.p.evaluate(()=>window.__status.slice());
 const dials=await B.p.evaluate(async()=>{ const mp=window.worldNavigator.multiplayer; let n=0;
   const oc=mp.peer.connect.bind(mp.peer); mp.peer.connect=function(...a){n++;return oc(...a);};
