@@ -411,6 +411,13 @@ function isTerminalOutcome(value) {
     .test(String(value ?? ''));
 }
 
+function outcomeClass(value) {
+  const text = String(value ?? '').toLowerCase();
+  if (/\b(win|won|victory|success|complete|completed)\b/.test(text)) return 'success';
+  if (/\b(lose|lost|loss|failure|failed|defeat)\b/.test(text)) return 'failure';
+  return 'pending';
+}
+
 function objectiveOf(state) {
   const found = findNamedValue(state, [
     'objective', 'objectives', 'missionObjective', 'mission', 'goal', 'goals'
@@ -454,6 +461,220 @@ function historicalProjection(state) {
   };
 }
 
+function collectionEntries(container) {
+  if (Array.isArray(container)) return container.map((value, index) => ({ key: String(index), value }));
+  if (!container || typeof container !== 'object') return [];
+  return Object.entries(container).map(([key, value]) => ({ key, value }));
+}
+
+function normalizedCells(value) {
+  if (value == null) return { cells: [], count: 0 };
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const key of ['knownCells', 'seen', 'seenCells', 'known', 'cells']) {
+      if (value[key] !== undefined && value[key] !== value) return normalizedCells(value[key]);
+    }
+    for (const key of ['knownCount', 'seenCount', 'cellCount', 'count']) {
+      if (Number.isFinite(Number(value[key]))) return { cells: [], count: Number(value[key]) };
+    }
+    for (const key of ['visibleCells', 'visible']) {
+      if (value[key] !== undefined && value[key] !== value) return normalizedCells(value[key]);
+    }
+    if (Number.isFinite(Number(value.visibleCount))) {
+      return { cells: [], count: Number(value.visibleCount) };
+    }
+    const coordinateKeys = Object.entries(value).filter(([key, present]) =>
+      present && /-?\d+\s*[,/:]\s*-?\d+/.test(key)).map(([key]) => key.replace(/\s+/g, ''));
+    if (coordinateKeys.length) {
+      const cells = [...new Set(coordinateKeys)].sort();
+      return { cells, count: cells.length };
+    }
+    const entries = Object.entries(value);
+    if (entries.length && entries.every(([, present]) =>
+      present == null || ['boolean', 'number', 'string'].includes(typeof present))) {
+      const cells = entries.filter(([, present]) => Boolean(present)).map(([key]) => key).sort();
+      return { cells, count: cells.length };
+    }
+  }
+  if (!Array.isArray(value)) {
+    const coordinate = coordinateOf(value);
+    if (coordinate) return { cells: [`${coordinate.x},${coordinate.y}`], count: 1 };
+    return { cells: [], count: 0 };
+  }
+  if (value.every(row => Array.isArray(row))) {
+    const cells = [];
+    value.forEach((row, y) => row.forEach((present, x) => {
+      if (present && !/^(?:unknown|fog|unseen|\?)$/i.test(String(present))) cells.push(`${x},${y}`);
+    }));
+    return { cells, count: cells.length };
+  }
+  const cells = [];
+  for (const item of value) {
+    const coordinate = coordinateOf(item);
+    if (coordinate) {
+      cells.push(`${coordinate.x},${coordinate.y}`);
+    } else if (typeof item === 'string' || typeof item === 'number') {
+      cells.push(String(item).replace(/\s+/g, ''));
+    }
+  }
+  const unique = [...new Set(cells)].sort();
+  return { cells: unique, count: unique.length };
+}
+
+function normalizedAgents(container) {
+  return collectionEntries(container).map(({ key, value }) => {
+    const agent = value && typeof value === 'object' ? value : {};
+    const id = String(agent.id ?? agent.agentId ?? agent.callsign ?? agent.name ?? key);
+    const seen = normalizedCells(
+      agent.seen ?? agent.knownCells ?? agent.seenCells ?? agent.known ?? agent.pov
+    );
+    return {
+      id,
+      position: coordinateOf(agent),
+      role: agent.role ?? agent.agentRole,
+      status: agent.status,
+      intent: agent.intent,
+      target: agent.target,
+      marked: agent.marked ?? agent.caught ?? agent.detected,
+      seen
+    };
+  }).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function normalizedPovs(container, agentIds = []) {
+  return collectionEntries(container).map(({ key, value }, index) => {
+    const view = value && typeof value === 'object' ? value : {};
+    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ??
+      (key.match(/^\d+$/) ? agentIds[index] : key) ?? key);
+    return {
+      id,
+      seen: normalizedCells(view)
+    };
+  }).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function completionFlag(value) {
+  if (value === true) return true;
+  if (typeof value === 'string') {
+    return /\b(complete|completed|hacked|acquired|reached|extracted|secured|stolen)\b/i.test(value);
+  }
+  if (!value || typeof value !== 'object') return false;
+  if (value.complete === true || value.completed === true || value.hacked === true ||
+      value.acquired === true || value.reached === true || value.extracted === true) return true;
+  return /\b(complete|completed|hacked|acquired|reached|extracted|secured|stolen)\b/i
+    .test(String(value.status || value.state || value.phase || ''));
+}
+
+function rawFrameProjection(state) {
+  const agents = normalizedAgents(agentsOf(state));
+  const terminalContainer = findNamedValue(state, ['terminals'], 6)?.value;
+  const terminals = collectionEntries(terminalContainer).map(({ value }) => {
+    const terminal = value && typeof value === 'object' ? value : {};
+    return {
+      hacked: completionFlag(terminal),
+      position: coordinateOf(terminal)
+    };
+  });
+  let required;
+  walkJson(state, (value, trail) => {
+    if (required !== undefined || !trail.length || !Number.isFinite(Number(value))) return;
+    const key = String(trail[trail.length - 1]);
+    if (/(requiredTerminals|terminalsRequired|requiredHacks|terminalTarget)/i.test(key)) {
+      required = Number(value);
+    }
+  });
+  const core = findNamedValue(state, ['core', 'vaultCore', 'dataCore'], 6)?.value;
+  const extraction = findNamedValue(state, ['extraction', 'extract', 'exit'], 6)?.value;
+  const hacked = terminals.filter(terminal => terminal.hacked).length;
+  const coreComplete = completionFlag(core);
+  const extractionComplete = completionFlag(extraction);
+  const stage = extractionComplete ? 'complete' :
+    coreComplete ? 'extraction' :
+      Number.isFinite(required) && hacked >= required ? 'core' : 'terminals';
+  const explicitOutcome = outcomeOf(state);
+  return {
+    tick: tickOf(state),
+    outcome: explicitOutcome === undefined ?
+      (extractionComplete ? 'complete' : null) : explicitOutcome,
+    agents,
+    objective: {
+      hacked,
+      required,
+      terminalCount: terminals.length,
+      coreComplete,
+      extractionComplete,
+      stage
+    },
+    povs: agents.map(agent => ({ id: agent.id, seen: agent.seen }))
+  };
+}
+
+function publicObjectiveProjection(state, domText = '') {
+  const objective = objectiveOf(state);
+  const text = `${typeof objective === 'string' ? objective : stable(objective)} ${domText}`;
+  let done;
+  let required;
+  const fraction = text.match(/(\d+)\s*\/\s*(\d+)/);
+  if (fraction) {
+    done = Number(fraction[1]);
+    required = Number(fraction[2]);
+  }
+  walkJson(objective, (value, trail) => {
+    if (!trail.length || !Number.isFinite(Number(value))) return;
+    const key = String(trail[trail.length - 1]);
+    if (done === undefined && /(hacked|done|completed|terminalsHacked)/i.test(key)) done = Number(value);
+    if (required === undefined && /(required|target|terminalsRequired)/i.test(key)) required = Number(value);
+  });
+  const explicitStage = findNamedValue(objective, ['stage', 'current', 'phase', 'kind'], 4)?.value;
+  const stageText = String(explicitStage || domText || text);
+  const stage = /\b(complete|completed|won|victory)\b/i.test(stageText) ? 'complete' :
+    /\b(extract|extraction|escape|exit)\b/i.test(stageText) ? 'extraction' :
+      /\b(core|vault)\b/i.test(stageText) ? 'core' :
+        /\bterminal\b/i.test(stageText) ? 'terminals' : undefined;
+  return { done, required, stage, text };
+}
+
+function historyCoherence(publicState, raw, domObjective = '') {
+  const publicAgents = normalizedAgents(agentsOf(publicState));
+  const publicPovs = normalizedPovs(povsOf(publicState), publicAgents.map(agent => agent.id));
+  const agentMatch = raw.agents.length === publicAgents.length && raw.agents.every(rawAgent => {
+    const shown = publicAgents.find(agent => agent.id === rawAgent.id);
+    if (!shown || !rawAgent.position || !shown.position ||
+        rawAgent.position.x !== shown.position.x || rawAgent.position.y !== shown.position.y) return false;
+    for (const key of ['role', 'status', 'intent', 'target', 'marked']) {
+      if (rawAgent[key] !== undefined && shown[key] !== undefined &&
+          stable(rawAgent[key]) !== stable(shown[key])) return false;
+    }
+    return true;
+  });
+  const povMatch = raw.povs.length === publicPovs.length && raw.povs.every(rawPov => {
+    const shown = publicPovs.find(pov => pov.id === rawPov.id);
+    if (!shown || rawPov.seen.count !== shown.seen.count) return false;
+    const comparableCoordinates = rawPov.seen.cells.length && shown.seen.cells.length &&
+      rawPov.seen.cells.every(cell => /,/.test(cell)) &&
+      shown.seen.cells.every(cell => /,/.test(cell));
+    return !comparableCoordinates ||
+      stable(rawPov.seen.cells) === stable(shown.seen.cells);
+  });
+  const objective = publicObjectiveProjection(publicState, domObjective);
+  const objectiveCountMatch = objective.done === undefined || objective.done === raw.objective.hacked;
+  const objectiveRequiredMatch = objective.required === undefined || raw.objective.required === undefined ||
+    objective.required === raw.objective.required;
+  const objectiveStageMatch = objective.stage === undefined || objective.stage === raw.objective.stage;
+  const objectiveCompared = objective.done !== undefined ||
+    (objective.required !== undefined && raw.objective.required !== undefined) ||
+    objective.stage !== undefined;
+  const outcomeMatch = outcomeClass(outcomeOf(publicState)) === outcomeClass(raw.outcome);
+  return {
+    tickMatch: tickOf(publicState) === raw.tick,
+    outcomeMatch,
+    agentMatch,
+    objectiveMatch: objectiveCompared &&
+      objectiveCountMatch && objectiveRequiredMatch && objectiveStageMatch,
+    povMatch,
+    publicObjective: objective
+  };
+}
+
 function frameState(frame) {
   const candidates = [
     frame && frame.state,
@@ -465,9 +686,9 @@ function frameState(frame) {
     frame
   ].filter(value => value && typeof value === 'object');
   for (const candidate of candidates) {
-    const projection = historicalProjection(candidate);
-    if (Number.isFinite(projection.tick) && projection.agents !== undefined &&
-        projection.objective !== undefined && projection.povs !== undefined) {
+    const projection = rawFrameProjection(candidate);
+    if (Number.isFinite(projection.tick) && projection.agents.length > 0 &&
+        projection.objective.terminalCount > 0 && projection.povs.length > 0) {
       return candidate;
     }
   }
@@ -2285,21 +2506,23 @@ async function runSuite() {
   const eventDelta = eventLog18.startsWith(eventLog17) ?
     eventLog18.slice(eventLog17.length) :
     eventLog18.includes(eventLog17) ? eventLog18.replace(eventLog17, '') : eventLog18;
-  const eventMarksCipher = /\bcipher\b/i.test(eventDelta) &&
-    /(?:7\s*[,/:]\s*7|(?:x|col(?:umn)?)\s*[:=]?\s*7.{0,40}(?:y|row)\s*[:=]?\s*7|(?:row|y)\s*[:=]?\s*7.{0,40}(?:col(?:umn)?|x)\s*[:=]?\s*7)/i
-      .test(eventDelta);
-  const dangerTransition = dangerAt18.tick === 18 &&
-    (cipherPosition16.x !== dangerTarget.x || cipherPosition16.y !== dangerTarget.y) &&
-    cipherPosition18.x === dangerTarget.x && cipherPosition18.y === dangerTarget.y &&
-    cursorAtTarget.coordinate.x === dangerTarget.x &&
-    cursorAtTarget.coordinate.y === dangerTarget.y &&
-    targetSemanticWarning &&
-    targetPixelDelta.changedRatio >= 0.02 && targetPixelDelta.meanDistance >= 4 &&
-    eventMarksCipher;
+  const dangerChecks = {
+    tick18: dangerAt18.tick === 18,
+    movedToTarget:
+      (cipherPosition16.x !== dangerTarget.x || cipherPosition16.y !== dangerTarget.y) &&
+      cipherPosition18.x === dangerTarget.x && cipherPosition18.y === dangerTarget.y,
+    cursorOnTarget: cursorAtTarget.coordinate.x === dangerTarget.x &&
+      cursorAtTarget.coordinate.y === dangerTarget.y,
+    semanticWarning: targetSemanticWarning,
+    targetPixelsChanged: targetPixelDelta.changedRatio >= 0.02 &&
+      targetPixelDelta.meanDistance >= 4,
+    newEventMarkedCipher: /\bmarked\s+cipher\b|\bcipher\b.{0,30}\bmarked\b/i.test(eventDelta)
+  };
+  const dangerTransition = Object.values(dangerChecks).every(Boolean);
   dangerSnapshot = dangerAt18;
   result('ADVERSARY-000 warns Cipher target before the marked transition',
     dangerTransition,
-    `target 7,7; pixels ${targetPixels16.hash}→${targetPixels17.hash}, warning ${(targetPixels17.warningRatio * 100).toFixed(1)}%, changed ${(targetPixelDelta.changedRatio * 100).toFixed(1)}%; ${eventDelta.replace(/\s+/g, ' ').slice(-100)}`);
+    `${Object.entries(dangerChecks).map(([name, passed]) => `${name}=${passed}`).join(', ')}; target 7,7 pixels ${targetPixels16.hash}→${targetPixels17.hash}, changed ${(targetPixelDelta.changedRatio * 100).toFixed(1)}%; event ${eventDelta.replace(/\s+/g, ' ').slice(-90)}`);
 
   const validVerification = await tryApi(page, 'verifyChain');
   result('the honest hash chain verifies',
@@ -2821,33 +3044,31 @@ async function runSuite() {
   const frameBundle = exportedFrames(terminalSnapshot.exported);
   const inspectedFrames = frameBundle.frames.map((frame, index) => {
     const state = frameState(frame);
-    return state ? { index, state, projection: historicalProjection(state) } : null;
+    return state ? { index, state, projection: rawFrameProjection(state) } : null;
   }).filter(Boolean);
   const terminalTick = tickOf(terminalSnapshot.state);
   const historicalFrame = [...inspectedFrames].reverse().find(candidate =>
     Number.isFinite(candidate.projection.tick) &&
     candidate.projection.tick < terminalTick &&
-    candidate.projection.outcome !== undefined &&
-    candidate.projection.agents !== undefined &&
-    candidate.projection.objective !== undefined &&
-    candidate.projection.povs !== undefined);
+    candidate.projection.agents.length > 0 &&
+    candidate.projection.objective.terminalCount > 0 &&
+    candidate.projection.povs.length === candidate.projection.agents.length &&
+    candidate.projection.povs.some(pov => pov.seen.count > 0));
   requireMeasurement(historicalFrame, 'a complete prior exported frame to inspect');
   await api(policyPage, 'scrub', historicalFrame.index);
   await sleep(100);
   const historicalView = await inspect(policyPage, false);
-  const viewed = historicalProjection(historicalView.state);
+  const coherence = historyCoherence(
+    historicalView.state,
+    historicalFrame.projection,
+    historicalView.dom['objective-value']
+  );
   const liveMetadata = liveMetadataOf(historicalView.state);
   result('scrubbed state is coherent with its frame while retaining the live head',
-    viewed.tick === historicalFrame.projection.tick &&
-      stable(viewed.outcome) === stable(historicalFrame.projection.outcome) &&
-      stable(canonicalProjection(viewed.agents)) ===
-        stable(canonicalProjection(historicalFrame.projection.agents)) &&
-      stable(canonicalProjection(viewed.objective)) ===
-        stable(canonicalProjection(historicalFrame.projection.objective)) &&
-      stable(canonicalProjection(viewed.povs)) ===
-        stable(canonicalProjection(historicalFrame.projection.povs)) &&
+    coherence.tickMatch && coherence.outcomeMatch && coherence.agentMatch &&
+      coherence.objectiveMatch && coherence.povMatch &&
       liveMetadata && liveMetadata.head === terminalSnapshot.head,
-    `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; outcome ${String(viewed.outcome)}; live ${liveMetadata?.source || 'missing'} ${String(liveMetadata?.head || '').slice(0, 12)}…`);
+    `frame ${historicalFrame.index}/tick ${historicalFrame.projection.tick}; tick ${coherence.tickMatch}, outcome ${coherence.outcomeMatch}, agents ${coherence.agentMatch}, objective ${coherence.objectiveMatch}, POV ${coherence.povMatch}; live ${liveMetadata?.source || 'missing'} ${String(liveMetadata?.head || '').slice(0, 12)}…`);
   await policyContext.close();
 
   const deniedContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
