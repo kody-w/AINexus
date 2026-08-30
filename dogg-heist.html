@@ -4476,6 +4476,9 @@
           if (terminal.hacked !== (terminal.progress >= terminal.required)) throw new Error(label + " terminal " + terminal.id + " progress disagrees with hacked state.");
         });
         requireUniqueStrings(terminalIds, label + ".terminal ids");
+        if (state.stats.hacks !== hackedTerminalCount(state)) {
+          throw new Error(label + ".stats.hacks disagrees with terminal state.");
+        }
 
         requireRecord(state.core, label + ".core");
         requirePosition(state.core, label + ".core", facility);
@@ -4552,16 +4555,35 @@
         requireArray(state.decoyPosts, label + ".decoyPosts", 1, 8);
         state.decoyPosts.forEach((post, index) => requirePosition(post, label + ".decoyPosts[" + index + "]", facility));
 
-        if (state.outcome === "won" && (!state.core.acquired || !state.agents.every((agent) => agent.status === "active" && isAtExtraction(state, agent)))) {
-          throw new Error(label + " claims a win without complete extraction.");
+        const hackedCount = hackedTerminalCount(state);
+        const captured = state.agents.some((agent) => agent.status === "captured");
+        const timedOut = state.tick >= state.maxTicks;
+        const alarmedOut = state.alarm >= 100;
+        const allExtracted = state.agents.every((agent) =>
+          agent.status === "active" && isAtExtraction(state, agent));
+        const expectedLossReason = captured
+          ? "An agent was captured. DOGG doctrine leaves no one behind."
+          : alarmedOut
+            ? "Alarm reached 100. The facility sealed every route."
+            : timedOut
+              ? "The 180-tick operation window expired."
+              : "";
+        if (state.outcome === "won") {
+          if (hackedCount < state.requiredTerminals || !state.core.acquired || !allExtracted) {
+            throw new Error(label + " claims a win without the complete objective.");
+          }
+          if (expectedLossReason) throw new Error(label + " claims a win after a terminal loss condition.");
+          if (state.outcomeReason !== "The full crew extracted with the DOGG core.") {
+            throw new Error(label + " has an invalid win reason.");
+          }
+        } else if (state.outcome === "lost") {
+          if (!expectedLossReason) throw new Error(label + " claims a loss without a real loss condition.");
+          if (state.outcomeReason !== expectedLossReason) throw new Error(label + " loss reason disagrees with its state.");
+        } else {
+          if (expectedLossReason) throw new Error(label + " is active despite a terminal loss condition.");
+          if (state.core.acquired && allExtracted) throw new Error(label + " is active despite completing the objective.");
+          if (state.outcomeReason) throw new Error(label + " active outcome cannot carry a terminal reason.");
         }
-        if (state.outcome === "won" && (state.alarm >= 100 || state.tick >= state.maxTicks)) {
-          throw new Error(label + " claims a win after a terminal loss condition.");
-        }
-        if (state.outcome === "active" && (state.alarm >= 100 || state.tick >= state.maxTicks || state.agents.some((agent) => agent.status === "captured"))) {
-          throw new Error(label + " is active despite a terminal loss condition.");
-        }
-        if (state.outcome === "lost" && !state.outcomeReason) throw new Error(label + " lost outcome requires a reason.");
       }
 
       function requireExactTransition(actualState, actualEvents, expectedState, expectedEvents, frameIndex, kind) {

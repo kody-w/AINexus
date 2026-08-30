@@ -797,6 +797,56 @@ function inflateForkCounter(json, count = 999999) {
   };
 }
 
+function forgeImpossibleOutcome(json, outcome) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const convention = frameHashConvention(parsed);
+  const frames = valueAt(parsed, convention.framesPath);
+  const frameIndex = frames.length - 1;
+  const frame = frames[frameIndex];
+  const state = frameState(frame);
+  requireMeasurement(state && frameIndex >= 1,
+    `a non-genesis head for forged ${outcome}`);
+  state.outcome = outcome;
+  if (outcome === 'won') {
+    state.outcomeReason = 'The full crew extracted with the DOGG core.';
+    state.alarm = 0;
+    state.terminals.forEach(terminal => {
+      terminal.progress = 0;
+      terminal.hacked = false;
+    });
+    state.stats.hacks = 0;
+    state.agents.forEach((agent, index) => {
+      agent.x = state.extraction.x;
+      agent.y = state.extraction.y;
+      agent.status = 'active';
+      agent.carryingCore = index === 0;
+    });
+    state.core.progress = state.core.required;
+    state.core.acquired = true;
+    state.core.carrier = state.agents[0].id;
+  } else {
+    state.outcomeReason = 'The 180-tick operation window expired.';
+    state.alarm = 0;
+    state.agents.forEach(agent => {
+      agent.status = 'active';
+    });
+  }
+  frame.events = [`Forged ${outcome} outcome.`];
+  state.lastEvents = cloneJson(frame.events);
+  const heads = rehashFrameDescendants(parsed, convention, frameIndex);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(verifyRehashedFrames(parsed, convention),
+    `fully rehashed forged ${outcome} frame`);
+  return {
+    json: JSON.stringify(parsed),
+    outcome,
+    frameIndex,
+    heads,
+    checksumPath: checksumConvention.path.join('.')
+  };
+}
+
 function findNamedValue(root, names, maxDepth = 8) {
   const wanted = new Set(names.map(name => name.toLowerCase()));
   const queue = [{ value: root, trail: [], depth: 0 }];
@@ -8291,6 +8341,35 @@ async function runSuite() {
       duplicateGenesisAttempt.unchanged &&
       duplicateGenesisAttempt.stateCallable,
     `frame ${duplicateGenesis.frameIndex}; checksum ${duplicateGenesis.checksumPath}`);
+  const activeGenesis = appendRehashedGenesis(roundTripSource.exportText);
+  const activeGenesisAttempt = await rejectedTransactionalImport(
+    policyPage,
+    activeGenesis.json,
+    terminalSnapshot
+  );
+  const forgedWin = forgeImpossibleOutcome(roundTripSource.exportText, 'won');
+  const forgedWinAttempt = await rejectedTransactionalImport(
+    policyPage,
+    forgedWin.json,
+    terminalSnapshot
+  );
+  const forgedLoss = forgeImpossibleOutcome(roundTripSource.exportText, 'lost');
+  const forgedLossAttempt = await rejectedTransactionalImport(
+    policyPage,
+    forgedLoss.json,
+    terminalSnapshot
+  );
+  result('fully rehashed active genesis and impossible outcomes are rejected',
+    activeGenesisAttempt.rejected &&
+      activeGenesisAttempt.unchanged &&
+      activeGenesisAttempt.stateCallable &&
+      forgedWinAttempt.rejected &&
+      forgedWinAttempt.unchanged &&
+      forgedWinAttempt.stateCallable &&
+      forgedLossAttempt.rejected &&
+      forgedLossAttempt.unchanged &&
+      forgedLossAttempt.stateCallable,
+    `active genesis frame ${activeGenesis.frameIndex}; forged win frame ${forgedWin.frameIndex}; forged loss frame ${forgedLoss.frameIndex}`);
   const inflatedFork = inflateForkAbandonedCount(roundTripSource.exportText);
   const inflatedForkAttempt = await rejectedTransactionalImport(
     policyPage,
