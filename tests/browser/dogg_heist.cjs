@@ -2312,6 +2312,177 @@ async function auditShortIntroCardAndUnlock(page) {
   };
 }
 
+async function auditLandscapeIntroFocusReachability(page) {
+  const intro = await markIntro(page);
+  requireMeasurement(intro.found && intro.ready === false,
+    'the 836x224 intro modal before readiness');
+  const setup = await page.evaluate(() => {
+    const modal = document.querySelector('[data-dogg-test-intro="true"]');
+    const visible = element => {
+      if (!element || element.hidden || element.hasAttribute('inert') ||
+          element.getAttribute('aria-hidden') === 'true') return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const controls = modal ? [...modal.querySelectorAll(
+      'button, [role="button"], input[type="button"], input[type="submit"]'
+    )].filter(visible) : [];
+    const begin = controls.find(control => {
+      const text = [
+        control.id,
+        control.getAttribute('aria-label'),
+        control.getAttribute('title'),
+        control.textContent,
+        control.value
+      ].filter(Boolean).join(' ');
+      return /\b(begin|start|enter|continue|deploy|ready)\b/i.test(text);
+    });
+    if (!modal || !begin) return { found: false };
+    begin.setAttribute('data-dogg-test-landscape-begin', 'true');
+    const ancestors = [];
+    for (let element = begin.parentElement; element; element = element.parentElement) {
+      ancestors.push(element);
+      if (element === modal) break;
+    }
+    const scrollables = ancestors.filter(element => {
+      const style = getComputedStyle(element);
+      return /(auto|scroll|overlay)/.test(style.overflowY) &&
+        element.scrollHeight > element.clientHeight + 1;
+    }).map((element, index) => {
+      element.setAttribute('data-dogg-test-landscape-scroller', String(index));
+      return {
+        index,
+        identity: `${element.tagName.toLowerCase()}#${element.id}.${String(element.className)}`,
+        scrollTop: element.scrollTop,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight
+      };
+    });
+    const card = begin.closest('.intro-card') || modal;
+    card.setAttribute('data-dogg-test-landscape-card', 'true');
+    return {
+      found: true,
+      ready: window.__doggHeist?.ready,
+      viewport: { width: innerWidth, height: innerHeight },
+      document: document.scrollingElement?.scrollTop || 0,
+      window: scrollY,
+      scrollables
+    };
+  });
+  requireMeasurement(setup.found, 'the visible 836x224 Begin control');
+
+  await page.locator('[data-dogg-test-landscape-card="true"]').focus();
+  const wheelSurface = setup.scrollables.length ?
+    page.locator('[data-dogg-test-landscape-scroller="0"]') :
+    page.locator('[data-dogg-test-intro="true"]');
+  const scrollerBox = await wheelSurface.boundingBox();
+  requireMeasurement(scrollerBox, 'the visible modal/card wheel surface');
+  await page.mouse.move(
+    Math.max(1, Math.min(setup.viewport.width - 1, scrollerBox.x + scrollerBox.width / 2)),
+    Math.max(1, Math.min(setup.viewport.height - 1, scrollerBox.y + scrollerBox.height / 2))
+  );
+  const wheelSamples = [];
+  for (const delta of [1000, -1000]) {
+    await page.mouse.wheel(0, delta);
+    await sleep(80);
+    wheelSamples.push(await page.evaluate(() => ({
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0,
+      modal: [...document.querySelectorAll('[data-dogg-test-landscape-scroller]')]
+        .map(element => element.scrollTop)
+    })));
+  }
+
+  const measureFocus = () => page.evaluate(() => {
+    const modal = document.querySelector('[data-dogg-test-intro="true"]');
+    const begin = document.querySelector('[data-dogg-test-landscape-begin="true"]');
+    const active = document.activeElement;
+    const rect = active?.getBoundingClientRect();
+    const beginRect = begin?.getBoundingClientRect();
+    const style = active && getComputedStyle(active);
+    const full = Boolean(rect && rect.left >= 0 && rect.top >= 0 &&
+      rect.right <= innerWidth && rect.bottom <= innerHeight);
+    const beginFull = Boolean(beginRect && beginRect.left >= 0 && beginRect.top >= 0 &&
+      beginRect.right <= innerWidth && beginRect.bottom <= innerHeight);
+    return {
+      ready: window.__doggHeist?.ready,
+      active: active?.id || active?.className || active?.tagName || '',
+      beginFocused: active === begin,
+      inside: Boolean(modal && active && modal.contains(active)),
+      control: Boolean(active?.matches(
+        'button, [role="button"], input, select, textarea, a[href]'
+      )),
+      visible: Boolean(rect && style && style.display !== 'none' &&
+        style.visibility !== 'hidden' && Number(style.opacity) > 0 &&
+        rect.width > 0 && rect.height > 0 && full),
+      full,
+      beginFull,
+      skip: Boolean(active?.matches(
+        '.skip-link, a[href="#game-board"], a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
+      )),
+      rect: rect ? {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom
+      } : null,
+      beginRect: beginRect ? {
+        left: beginRect.left,
+        top: beginRect.top,
+        right: beginRect.right,
+        bottom: beginRect.bottom
+      } : null,
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0,
+      modalScroll: [...document.querySelectorAll('[data-dogg-test-landscape-scroller]')]
+        .map(element => ({
+          scrollTop: element.scrollTop,
+          scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight
+        }))
+    };
+  });
+  const challenge = await measureFocus();
+  const focusSamples = [];
+  for (const key of ['Tab', 'Shift+Tab', 'Tab', 'Shift+Tab']) {
+    await page.keyboard.press(key);
+    await page.evaluate(() => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    focusSamples.push(Object.assign({ key }, await measureFocus()));
+  }
+  const firstFocus = focusSamples[0];
+  const focusScrolledModal = firstFocus.modalScroll.some((item, index) =>
+    item.scrollTop !== challenge.modalScroll[index]?.scrollTop);
+  const wheelPositions = [
+    setup.scrollables.map(item => item.scrollTop),
+    ...wheelSamples.map(sample => sample.modal)
+  ];
+  const wheelMovedModal = wheelPositions.some((positions, index) =>
+    index > 0 && positions.some((value, itemIndex) =>
+      value !== wheelPositions[index - 1][itemIndex]));
+  const documentLocked = [setup, challenge, ...wheelSamples, ...focusSamples]
+    .every(sample => sample.window === setup.window &&
+      sample.document === setup.document);
+  return {
+    intro,
+    setup,
+    challenge,
+    focusSamples,
+    focusScrolledModal,
+    wheelMovedModal,
+    documentLocked,
+    scrollabilityIfOutside: challenge.beginFull ||
+      challenge.modalScroll.some(item => item.scrollHeight > item.clientHeight + 1),
+    focusReachable: firstFocus.beginFocused && firstFocus.full &&
+      (challenge.beginFull || focusScrolledModal),
+    focusContained: focusSamples.every(sample =>
+      sample.ready === false && sample.inside && sample.control &&
+      sample.visible && !sample.skip)
+  };
+}
+
 async function markIntro(page) {
   return page.evaluate(() => {
     const visible = element => {
@@ -5790,6 +5961,34 @@ async function runSuite() {
       shortSkip.after.boardFocused,
     `${shortSkip.before.width.toFixed(1)}x${shortSkip.before.height.toFixed(1)} ${shortSkip.before.href}; hash ${shortSkip.after.hash}`);
   await firstPaintContext.close();
+
+  const landscapeIntroContext = await browser.newContext({
+    viewport: { width: 836, height: 224 },
+    screen: { width: 836, height: 224 },
+    hasTouch: true,
+    isMobile: true
+  });
+  await serve(landscapeIntroContext);
+  const landscapeIntroPage = await navigateHeist(
+    landscapeIntroContext,
+    '836x224 intro focus page'
+  );
+  const landscapeIntroFocus = await auditLandscapeIntroFocusReachability(
+    landscapeIntroPage
+  );
+  const initialBegin = landscapeIntroFocus.challenge.beginRect;
+  const focusedBegin = landscapeIntroFocus.focusSamples[0].rect;
+  result('836x224 intro keeps focused Begin visible and Skip unreachable',
+    landscapeIntroFocus.setup.viewport.width === 836 &&
+      landscapeIntroFocus.setup.viewport.height === 224 &&
+      landscapeIntroFocus.scrollabilityIfOutside &&
+      (landscapeIntroFocus.challenge.beginFull ||
+        landscapeIntroFocus.wheelMovedModal) &&
+      landscapeIntroFocus.documentLocked &&
+      landscapeIntroFocus.focusReachable &&
+      landscapeIntroFocus.focusContained,
+    `Begin ${JSON.stringify(initialBegin)}→${JSON.stringify(focusedBegin)}; modal scroll ${landscapeIntroFocus.challenge.modalScroll.map(item => item.scrollTop).join('/')}→${landscapeIntroFocus.focusSamples[0].modalScroll.map(item => item.scrollTop).join('/')}; keys ${landscapeIntroFocus.focusSamples.map(sample => `${sample.key}:${sample.active}:${sample.full}`).join('→')}; document locked=${landscapeIntroFocus.documentLocked}`);
+  await landscapeIntroContext.close();
 
   const immediateSkipContext = await browser.newContext({
     viewport: { width: 836, height: 224 },
