@@ -10,15 +10,19 @@
       const earlyIntroKeyGuard = (event) => {
         if (!document.documentElement.classList.contains("intro-open") || event.key !== "Tab") return;
         const start = document.getElementById("intro-start");
-        if (!start) return;
+        const skip = document.getElementById("intro-skip");
+        const controls = [start, skip].filter((control) => control && !control.disabled);
+        if (!controls.length) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        const target = start.disabled ? document.querySelector(".intro-card") : start;
+        const currentIndex = controls.indexOf(document.activeElement);
+        const target = currentIndex < 0
+          ? controls[event.shiftKey ? controls.length - 1 : 0]
+          : controls[(currentIndex + (event.shiftKey ? -1 : 1) + controls.length) % controls.length];
         target?.focus();
         target?.scrollIntoView({ behavior: "auto", block: "nearest" });
       };
       document.addEventListener("keydown", earlyIntroKeyGuard, true);
-      document.addEventListener("keyup", earlyIntroKeyGuard, true);
       window.__doggIntroKeyGuard = earlyIntroKeyGuard;
       const earlyStartHandler = (event) => {
         const start = event.target instanceof Element ? event.target.closest("#intro-start") : null;
@@ -38,11 +42,53 @@
       document.addEventListener("click", earlyStartHandler, true);
       window.__doggEarlyStartHandler = earlyStartHandler;
       const earlySkipHandler = (event) => {
-        const skip = event.target instanceof Element ? event.target.closest(".skip-link") : null;
+        const skip = event.target instanceof Element
+          ? event.target.closest("#intro-skip, .skip-link")
+          : null;
         if (!skip || window.__doggHeist?.ready) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         window.__doggPendingSkip = true;
+        if (skip.id !== "intro-skip") return;
+        const overlay = document.getElementById("intro-overlay");
+        const shell = document.querySelector(".app-shell");
+        const board = document.getElementById("game-board");
+        if (overlay) overlay.hidden = true;
+        if (shell) {
+          shell.inert = false;
+          shell.removeAttribute("aria-hidden");
+        }
+        document.documentElement.classList.remove("intro-open");
+        document.body?.classList.remove("intro-open");
+        if (window.location.hash === "#game-board") {
+          history.replaceState(history.state, "", "#game-board");
+        } else {
+          history.pushState(history.state, "", "#game-board");
+        }
+        const rootStyle = document.documentElement.style;
+        const bodyStyle = document.body?.style;
+        const rootScroll = [rootStyle.getPropertyValue("scroll-behavior"), rootStyle.getPropertyPriority("scroll-behavior")];
+        const bodyScroll = bodyStyle
+          ? [bodyStyle.getPropertyValue("scroll-behavior"), bodyStyle.getPropertyPriority("scroll-behavior")]
+          : null;
+        rootStyle.setProperty("scroll-behavior", "auto", "important");
+        bodyStyle?.setProperty("scroll-behavior", "auto", "important");
+        const placeBoard = () => {
+          board?.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+          board?.focus({ preventScroll: true });
+        };
+        placeBoard();
+        requestAnimationFrame(() => {
+          placeBoard();
+          requestAnimationFrame(() => {
+            if (rootScroll[0]) rootStyle.setProperty("scroll-behavior", rootScroll[0], rootScroll[1]);
+            else rootStyle.removeProperty("scroll-behavior");
+            if (bodyStyle && bodyScroll) {
+              if (bodyScroll[0]) bodyStyle.setProperty("scroll-behavior", bodyScroll[0], bodyScroll[1]);
+              else bodyStyle.removeProperty("scroll-behavior");
+            }
+          });
+        });
       };
       document.addEventListener("click", earlySkipHandler, true);
       window.__doggEarlySkipHandler = earlySkipHandler;
@@ -1031,6 +1077,16 @@
       color: var(--cp-text-soft);
     }
 
+    .intro-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .intro-actions button {
+      min-height: 44px;
+    }
+
     .intro-brief {
       display: grid;
       gap: 8px;
@@ -1461,7 +1517,8 @@
         line-height: 1.25;
       }
 
-      #intro-start {
+      #intro-start,
+      #intro-skip {
         min-height: 44px;
         padding: 5px 10px;
         font-size: 0.82rem;
@@ -1516,7 +1573,7 @@
 </head>
 <body class="intro-open">
   <div class="app-shell" inert aria-hidden="true">
-    <a class="skip-link" href="#game-board">Skip to tactical board</a>
+    <a class="skip-link" href="#game-board">Jump to tactical board</a>
     <header class="topline">
       <div>
         <p class="eyebrow">DOGG / Deterministic Operations Graph Game</p>
@@ -1624,7 +1681,7 @@
             <ol class="objective-steps">
               <li class="objective-step" id="objective-terminals">
                 <span class="step-mark">1</span>
-                <span class="step-copy"><strong>Open the vault lattice</strong><span>Hack any two terminals</span></span>
+                <span class="step-copy"><strong>Open the vault lattice</strong><span>Hack both terminals</span></span>
                 <span class="step-value" id="terminal-progress">0 / 2</span>
               </li>
               <li class="objective-step" id="objective-core">
@@ -1728,7 +1785,10 @@
           <p class="eyebrow">Operation begins in one breath</p>
           <h2 id="intro-title">Every tick becomes evidence.</h2>
           <p>Your crew already has a plan. Watch their intent arrows, intervene only when the future looks expensive, and fork history when it does.</p>
-          <button class="primary" id="intro-start" type="button">Begin operation now</button>
+          <div class="intro-actions">
+            <button class="primary" id="intro-start" type="button">Begin operation now</button>
+            <button id="intro-skip" type="button">Skip to tactical board</button>
+          </div>
         </div>
         <div class="intro-brief" aria-label="Mission briefing">
           <div class="brief-beat"><b>01</b><span><strong>Autonomy first.</strong><br>Four roles pursue the objective without micromanagement.</span></div>
@@ -1749,7 +1809,7 @@
       <div>
         <h3>The objective</h3>
         <ol>
-          <li>Hack any two terminal nodes to release the vault lattice. Amber marks unhacked terminals; green means hacked.</li>
+          <li>Hack both terminal nodes to release the vault lattice. Amber marks unhacked terminals; green means hacked.</li>
           <li>Download the amber core in the upper-right vault.</li>
           <li>Return all four active agents to the extraction ring before alarm 100 or tick 180.</li>
         </ol>
@@ -1793,6 +1853,7 @@
       const MAX_SPEED = 10000;
       const MAX_DIRECTIVE_FRAMES = 1000;
       const MAX_CHAIN_FRAMES = 1200;
+      const MAX_BRANCH_COUNTER = MAX_CHAIN_FRAMES;
       const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
       const START_SHIELD_MS = 380;
       const DEFAULT_SEED = "DOGG-BRAVO-17";
@@ -1869,6 +1930,7 @@
         intro: document.getElementById("intro-overlay"),
         introCard: document.querySelector(".intro-card"),
         introStart: document.getElementById("intro-start"),
+        introSkip: document.getElementById("intro-skip"),
         toastRegion: document.getElementById("toast-region")
       };
 
@@ -2135,8 +2197,9 @@
           [[8, 8], [10, 9], [8, 7], [10, 6]],
           [[14, 8], [16, 9], [14, 7], [16, 6]]
         ];
-        const terminals = terminalGroups.map((group, index) => {
-          const point = chooseFloor(group, tiles, rng, occupied);
+        const terminalPlacements = terminalGroups.map((group) =>
+          chooseFloor(group, tiles, rng, occupied));
+        const terminals = [terminalPlacements[0], terminalPlacements[2]].map((point, index) => {
           return { id: "terminal-" + (index + 1), x: point.x, y: point.y, progress: 0, required: 3, hacked: false };
         });
 
@@ -3085,6 +3148,63 @@
         return computeNextProjection(state).danger;
       }
 
+      function computeKnownCurrentDanger(state, visible, privateAgentId = null) {
+        const danger = new Set();
+        const addTraversable = (cell) => {
+          const [x, y] = cell.split(",").map(Number);
+          if (tileAt(state, x, y) === "F") danger.add(cell);
+        };
+        state.guards.forEach((guard) => {
+          if (!guard.active || guard.stunned > 0 || !visible.has(keyOf(guard.x, guard.y))) return;
+          guardVision(state, guard).forEach(addTraversable);
+          addTraversable(keyOf(guard.x, guard.y));
+        });
+        state.cameras.forEach((camera) => {
+          if (!camera.active || !visible.has(keyOf(camera.x, camera.y))) return;
+          cameraVision(state, camera).forEach(addTraversable);
+        });
+        state.hazards.forEach((hazard) => {
+          const discovered = privateAgentId
+            ? hazard.discoveredBy.includes(privateAgentId)
+            : hazard.discoveredBy.length > 0;
+          if (hazard.active && discovered && visible.has(keyOf(hazard.x, hazard.y))) {
+            addTraversable(keyOf(hazard.x, hazard.y));
+          }
+        });
+        return danger;
+      }
+
+      function computeKnownNextDanger(state, visible, privateAgentId = null, projectedState = null) {
+        const projected = projectedState || computeNextProjection(state).state;
+        const danger = new Set();
+        const addTraversable = (cell) => {
+          const [x, y] = cell.split(",").map(Number);
+          if (tileAt(projected, x, y) === "F") danger.add(cell);
+        };
+        state.guards.forEach((guard) => {
+          if (!guard.active || !visible.has(keyOf(guard.x, guard.y))) return;
+          const nextGuard = projected.guards.find((candidate) => candidate.id === guard.id);
+          if (!nextGuard?.active || nextGuard.stunned > 0) return;
+          guardVision(projected, nextGuard).forEach(addTraversable);
+          addTraversable(keyOf(nextGuard.x, nextGuard.y));
+        });
+        state.cameras.forEach((camera) => {
+          if (!camera.active || !visible.has(keyOf(camera.x, camera.y))) return;
+          const nextCamera = projected.cameras.find((candidate) => candidate.id === camera.id);
+          if (!nextCamera?.active) return;
+          cameraVision(projected, nextCamera).forEach(addTraversable);
+        });
+        state.hazards.forEach((hazard) => {
+          const discovered = privateAgentId
+            ? hazard.discoveredBy.includes(privateAgentId)
+            : hazard.discoveredBy.length > 0;
+          if (!hazard.active || !discovered || !visible.has(keyOf(hazard.x, hazard.y))) return;
+          const nextHazard = projected.hazards.find((candidate) => candidate.id === hazard.id);
+          if (nextHazard?.active) addTraversable(keyOf(nextHazard.x, nextHazard.y));
+        });
+        return danger;
+      }
+
       function currentFrame() {
         return frames[viewIndex];
       }
@@ -3339,7 +3459,7 @@
       function drawHazard(ctx, metrics, hazard, alpha = 1) {
         const rect = cellRect(metrics, hazard.x, hazard.y);
         const remembered = alpha < 0.99;
-        const symbolColor = hazard.active ? palette["canvas-danger"] : palette["canvas-neutral"];
+        const symbolColor = "#000000";
         const outerWidth = Math.max(3.5, metrics.ratio * 2.2);
         const innerWidth = Math.max(1.7, metrics.ratio * 1.1);
         const drawX = () => {
@@ -3353,7 +3473,7 @@
         ctx.save();
         ctx.globalAlpha = 1;
         ctx.lineCap = "round";
-        ctx.strokeStyle = palette["canvas-ink"];
+        ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = outerWidth;
         drawX();
         ctx.strokeStyle = symbolColor;
@@ -3502,7 +3622,7 @@
             (occupants.length ? "Known static markers: " + occupants.join(", ") + ". " : "No remembered static marker. ") +
             "Enemy and danger status unknown outside current team sight. " + selectedDescription;
         }
-        const currentThreat = currentDangerCells(state).has(cell);
+        const currentThreat = computeKnownCurrentDanger(state, knowledge.visible).has(cell);
         const futureThreat = nextDanger.has(cell);
         return "Board cursor [" + x + "," + y + "] at tick " + state.tick + ". " +
           tileDescription + ". " +
@@ -3513,7 +3633,8 @@
       }
 
       function updateBoardAccessibility(state, nextDanger, announce = false, knowledge = sharedKnowledge(state)) {
-        const description = boardCursorDescription(state, nextDanger, knowledge);
+        const knownDanger = nextDanger || computeKnownNextDanger(state, knowledge.visible);
+        const description = boardCursorDescription(state, knownDanger, knowledge);
         elements.board.setAttribute("aria-label", description);
         if (announce || document.activeElement === elements.board) {
           elements.boardCursorLive.textContent = description;
@@ -3551,11 +3672,11 @@
         const { visible, seen } = knowledge;
         drawFacilityBase(ctx, metrics, state, seen, visible);
         const nextProjection = computeNextProjection(state);
-        const nextDanger = nextProjection.danger;
+        const nextDanger = computeKnownNextDanger(state, visible, null, nextProjection.state);
         nextDanger.forEach((cell) => {
           if (!visible.has(cell)) return;
           const [x, y] = cell.split(",").map(Number);
-          fillCell(ctx, metrics, x, y, palette.danger, visible.has(cell) ? 0.13 : 0.055);
+          fillCell(ctx, metrics, x, y, palette["canvas-danger"], 0.65);
         });
         drawKnownStatics(ctx, metrics, state, seen, visible);
         drawThreats(ctx, metrics, state, visible);
@@ -3605,11 +3726,11 @@
         const visible = agent.status === "active" ? visibleCellsForAgent(state, agent) : new Set();
         const seen = new Set(agent.seen);
         drawFacilityBase(ctx, metrics, state, seen, visible);
-        const nextDanger = computeNextDanger(state);
+        const nextDanger = computeKnownNextDanger(state, visible, agent.id);
         nextDanger.forEach((cell) => {
           if (!visible.has(cell)) return;
           const [x, y] = cell.split(",").map(Number);
-          fillCell(ctx, metrics, x, y, palette.danger, 0.12);
+          fillCell(ctx, metrics, x, y, palette["canvas-danger"], 0.65);
         });
         drawKnownStatics(ctx, metrics, state, seen, visible, agent.id);
         drawThreats(ctx, metrics, state, visible);
@@ -3831,7 +3952,7 @@
       }
 
       function focusIntroTarget() {
-        const target = elements.introStart.disabled ? elements.introCard : elements.introStart;
+        const target = elements.introStart.disabled ? elements.introSkip : elements.introStart;
         target.focus({ preventScroll: true });
         target.scrollIntoView({ behavior: "auto", block: "nearest" });
       }
@@ -3872,7 +3993,18 @@
         if (elements.intro.hidden) return;
         if (event.key === "Tab") {
           event.preventDefault();
-          focusIntroTarget();
+          const controls = [elements.introStart, elements.introSkip]
+            .filter((control) => !control.disabled && !control.hidden && control.getClientRects().length);
+          if (!controls.length) {
+            elements.introCard.focus({ preventScroll: true });
+            return;
+          }
+          const currentIndex = controls.indexOf(document.activeElement);
+          const target = currentIndex < 0
+            ? controls[event.shiftKey ? controls.length - 1 : 0]
+            : controls[(currentIndex + (event.shiftKey ? -1 : 1) + controls.length) % controls.length];
+          target.focus({ preventScroll: true });
+          target.scrollIntoView({ behavior: "auto", block: "nearest" });
         } else if (event.key === "Escape") {
           event.preventDefault();
         }
@@ -4057,7 +4189,9 @@
       }
 
       function createForkTransition(parentFrame, counter, abandonedCount) {
-        if (!Number.isInteger(counter) || counter < 1) throw new Error("Fork counter is invalid.");
+        if (!Number.isInteger(counter) || counter < 1 || counter > MAX_BRANCH_COUNTER) {
+          throw new Error("Fork counter is outside the bounded branch namespace.");
+        }
         if (!Number.isInteger(abandonedCount) || abandonedCount < 1) throw new Error("Fork must abandon at least one future frame.");
         if (parentFrame.state.outcome !== "active") throw new Error("Only an active historical frame can be forked.");
         const state = clone(parentFrame.state);
@@ -4075,6 +4209,10 @@
         dismissIntro(false);
         if (!isViewingHistory()) {
           toast("Choose a prior frame before forking.", "error");
+          return false;
+        }
+        if (branchCounter >= MAX_BRANCH_COUNTER) {
+          toast("Branch limit reached. Export or restart before creating another fork.", "error");
           return false;
         }
         running = false;
@@ -4157,7 +4295,8 @@
         const agent = state.agents.find((item) => item.id === agentId);
         keyboardCursor = { x: agent.x, y: agent.y };
         renderAll();
-        updateBoardAccessibility(state, computeNextDanger(state), true);
+        revealBoardCursorHorizontally();
+        updateBoardAccessibility(state, null, true);
         persistState();
         status(ROLE[agentId].name + " selected. Tap a floor tile to queue one waypoint.");
         return true;
@@ -4252,7 +4391,10 @@
         requireString(state.seed, label + ".seed", 1, 80);
         requireInteger(state.tick, label + ".tick", 0, MAX_TICKS);
         requireString(state.branchId, label + ".branchId", 4, 32);
-        if (!/^B\d+-[A-F0-9]{7}$/.test(state.branchId)) throw new Error(label + ".branchId has an invalid format.");
+        const stateBranchMatch = /^B(0|[1-9]\d*)-([A-F0-9]{7})$/.exec(state.branchId);
+        if (!stateBranchMatch || Number(stateBranchMatch[1]) > MAX_BRANCH_COUNTER) {
+          throw new Error(label + ".branchId is outside the bounded branch namespace.");
+        }
         requireInteger(state.alarm, label + ".alarm", 0, 100);
         if (!["active", "won", "lost"].includes(state.outcome)) throw new Error(label + ".outcome is invalid.");
         requireString(state.outcomeReason, label + ".outcomeReason", 0, 240);
@@ -4263,8 +4405,8 @@
 
         requireRecord(state.stats, label + ".stats");
         requireInteger(state.stats.detections, label + ".stats.detections", 0, 1000000);
-        requireInteger(state.stats.hacks, label + ".stats.hacks", 0, 4);
-        requireInteger(state.stats.forks, label + ".stats.forks", 0, 1000000);
+        requireInteger(state.stats.hacks, label + ".stats.hacks", 0, REQUIRED_TERMINALS);
+        requireInteger(state.stats.forks, label + ".stats.forks", 0, MAX_BRANCH_COUNTER);
         requireArray(state.lastEvents, label + ".lastEvents", 0, 32);
         state.lastEvents.forEach((event, index) => requireString(event, label + ".lastEvents[" + index + "]", 1, 600));
 
@@ -4321,7 +4463,7 @@
         });
         requireUniqueStrings(doorIds, label + ".door ids");
 
-        requireArray(state.terminals, label + ".terminals", 4, 4);
+        requireArray(state.terminals, label + ".terminals", REQUIRED_TERMINALS, REQUIRED_TERMINALS);
         const terminalIds = [];
         state.terminals.forEach((terminal, index) => {
           requireRecord(terminal, label + ".terminals[" + index + "]");
@@ -4460,13 +4602,18 @@
         if (frame.events.length !== 1) throw new Error("Frame " + frameIndex + " fork must contain exactly one event.");
         const eventMatch = /^Forked (B\d+-[A-F0-9]{7}) at tick (\d+)\. (\d+) future (frame|frames) abandoned\.$/.exec(frame.events[0]);
         if (!eventMatch) throw new Error("Frame " + frameIndex + " fork event is malformed.");
-        const branchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(frame.branchId);
-        const parentBranchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(previousFrame.branchId);
+        const branchMatch = /^B(0|[1-9]\d*)-([A-F0-9]{7})$/.exec(frame.branchId);
+        const parentBranchMatch = /^B(0|[1-9]\d*)-([A-F0-9]{7})$/.exec(previousFrame.branchId);
         if (!branchMatch || !parentBranchMatch) throw new Error("Frame " + frameIndex + " fork branch is malformed.");
         const counter = Number(branchMatch[1]);
         const parentCounter = Number(parentBranchMatch[1]);
         const abandonedCount = Number(eventMatch[3]);
         if (counter <= parentCounter) throw new Error("Frame " + frameIndex + " fork counter did not advance.");
+        if (counter > MAX_BRANCH_COUNTER) throw new Error("Frame " + frameIndex + " fork counter exceeds the bounded branch namespace.");
+        if (!Number.isSafeInteger(abandonedCount) || abandonedCount < 1 ||
+            abandonedCount > MAX_CHAIN_FRAMES - frameIndex) {
+          throw new Error("Frame " + frameIndex + " fork abandoned-frame count exceeds the bounded timeline.");
+        }
         if (eventMatch[1] !== previousFrame.branchId || Number(eventMatch[2]) !== previousFrame.tick) {
           throw new Error("Frame " + frameIndex + " fork event disagrees with its parent.");
         }
@@ -4536,6 +4683,7 @@
               const expectedGenesis = createInitialState(seed);
               requireExactTransition(frame.state, frame.events, expectedGenesis, expectedGenesis.lastEvents, index, "genesis");
             } else {
+              if (frame.kind === "genesis") throw new Error("Only frame 0 may be a genesis frame.");
               if (frame.parentHash !== previousHash) throw new Error("Frame " + index + " does not point to its actual parent.");
               const expectedTick = frame.kind === "tick" ? previousFrame.tick + 1 : previousFrame.tick;
               if (frame.tick !== expectedTick) throw new Error("Frame " + index + " tick does not match its frame kind.");
@@ -4626,7 +4774,7 @@
         requireString(data.seed, "Export seed", 1, 80);
         if (!ROLE[data.selectedAgentId]) throw new Error("Export selected agent is invalid.");
         requireInteger(data.viewIndex, "Export timeline cursor", 0, MAX_CHAIN_FRAMES - 1);
-        requireInteger(data.branchCounter, "Export branch counter", 0, 1000000);
+        requireInteger(data.branchCounter, "Export branch counter", 0, MAX_BRANCH_COUNTER);
         requireInteger(data.newSeedCounter, "Export new-seed counter", 0, 1000000);
         requireInteger(data.speedMs, "Export clock speed", MIN_SPEED, MAX_SPEED);
         requireBoolean(data.running, "Export running state");
@@ -4635,7 +4783,7 @@
         if (verification.seed !== data.seed) throw new Error("Export seed disagrees with the frame chain.");
         if (data.viewIndex < 0 || data.viewIndex >= data.frames.length) throw new Error("Export timeline cursor is out of range.");
         const finalFrame = data.frames[data.frames.length - 1];
-        const finalBranchMatch = /^B(\d+)-[A-F0-9]{7}$/.exec(finalFrame.branchId);
+        const finalBranchMatch = /^B(0|[1-9]\d*)-([A-F0-9]{7})$/.exec(finalFrame.branchId);
         if (!finalBranchMatch || Number(finalBranchMatch[1]) !== data.branchCounter) {
           throw new Error("Export branch counter disagrees with the live branch.");
         }
@@ -4919,11 +5067,21 @@
           localStorage.removeItem(STORAGE_KEY + "-probe");
           storageAvailable = true;
         } catch (error) {
-          storageAvailable = false;
-          console.warn("DOGG persistence unavailable:", error);
+          markStorageUnavailable("Storage denied · export still works", error);
         }
         elements.storageLine.classList.toggle("offline", !storageAvailable);
         elements.storageValue.textContent = storageAvailable ? "Local chain persistence on" : "Storage denied · export still works";
+      }
+
+      function markStorageUnavailable(message, error) {
+        storageAvailable = false;
+        elements.storageLine.classList.add("offline");
+        elements.storageValue.textContent = message;
+        console.warn("DOGG persistence unavailable:", error);
+        if (!storageFailureShown) {
+          storageFailureShown = true;
+          toast(message + (error?.message ? " " + error.message : ""), "error");
+        }
       }
 
       function persistState() {
@@ -4932,14 +5090,8 @@
           localStorage.setItem(STORAGE_KEY, exportState());
           return true;
         } catch (error) {
-          storageAvailable = false;
-          elements.storageLine.classList.add("offline");
-          elements.storageValue.textContent = "Persistence stopped · export still works";
+          markStorageUnavailable("Persistence stopped · export still works", error);
           console.error("DOGG persistence failed:", error);
-          if (!storageFailureShown) {
-            storageFailureShown = true;
-            toast("Browser storage failed: " + error.message + ". Use Export to preserve this chain.", "error");
-          }
           return false;
         }
       }
@@ -4950,8 +5102,7 @@
         try {
           saved = localStorage.getItem(STORAGE_KEY);
         } catch (error) {
-          storageAvailable = false;
-          status("Browser storage could not be read: " + error.message, "error");
+          markStorageUnavailable("Storage read denied · export still works", error);
           return false;
         }
         if (!saved) return false;
@@ -4967,6 +5118,7 @@
           try {
             localStorage.removeItem(STORAGE_KEY);
           } catch (removeError) {
+            markStorageUnavailable("Storage cleanup denied · export still works", removeError);
             console.error("Could not remove corrupt saved DOGG chain:", removeError);
           }
           return false;
@@ -5147,6 +5299,13 @@
         return performSkipToBoard();
       }
 
+      function skipIntroToBoard() {
+        window.__doggPendingSkip = true;
+        userCommanded = true;
+        if (!elements.intro.hidden) return dismissIntro(resumeAfterIntro);
+        return consumePendingSkip();
+      }
+
       function boardPoint(event) {
         const rect = elements.board.getBoundingClientRect();
         return {
@@ -5155,11 +5314,30 @@
         };
       }
 
+      function revealBoardCursorHorizontally() {
+        const viewport = elements.boardViewport;
+        const cellWidth = elements.board.clientWidth / GRID_W;
+        if (!cellWidth || viewport.scrollWidth <= viewport.clientWidth) return;
+        const padding = Math.min(12, cellWidth * 0.25);
+        const cellLeft = keyboardCursor.x * cellWidth;
+        const cellRight = cellLeft + cellWidth;
+        const visibleLeft = viewport.scrollLeft + padding;
+        const visibleRight = viewport.scrollLeft + viewport.clientWidth - padding;
+        if (cellLeft < visibleLeft) {
+          viewport.scrollLeft = Math.max(0, cellLeft - padding);
+        } else if (cellRight > visibleRight) {
+          viewport.scrollLeft = Math.min(
+            viewport.scrollWidth - viewport.clientWidth,
+            cellRight - viewport.clientWidth + padding
+          );
+        }
+      }
+
       function handleBoardPointer(event) {
         const point = boardPoint(event);
         keyboardCursor = point;
         const state = currentFrame().state;
-        updateBoardAccessibility(state, computeNextDanger(state), true);
+        updateBoardAccessibility(state, null, true);
         const clickedAgent = agentAt(state, point.x, point.y);
         if (clickedAgent) selectAgent(clickedAgent.id);
         else queueDirective(selectedAgentId, point.x, point.y);
@@ -5214,7 +5392,8 @@
           keyboardCursor.x = Math.max(0, Math.min(GRID_W - 1, keyboardCursor.x + moves[event.key].x));
           keyboardCursor.y = Math.max(0, Math.min(GRID_H - 1, keyboardCursor.y + moves[event.key].y));
           drawMainBoard(currentFrame().state);
-          updateBoardAccessibility(currentFrame().state, computeNextDanger(currentFrame().state), true);
+          revealBoardCursorHorizontally();
+          updateBoardAccessibility(currentFrame().state, null, true);
         } else if (event.key === "Enter") {
           event.preventDefault();
           queueDirective(selectedAgentId, keyboardCursor.x, keyboardCursor.y);
@@ -5305,7 +5484,7 @@
         elements.board.addEventListener("pointerup", handleBoardPointerUp);
         elements.board.addEventListener("pointercancel", cancelBoardGesture);
         elements.board.addEventListener("keydown", handleBoardKey);
-        elements.board.addEventListener("focus", () => updateBoardAccessibility(currentFrame().state, computeNextDanger(currentFrame().state), true));
+        elements.board.addEventListener("focus", () => updateBoardAccessibility(currentFrame().state, null, true));
         elements.agentList.addEventListener("click", (event) => {
           const button = event.target.closest(".agent-button");
           if (button) selectAgent(button.dataset.agentId);
@@ -5313,12 +5492,11 @@
         elements.introStart.addEventListener("click", () => {
           requestStart();
         });
+        elements.introSkip.addEventListener("click", skipIntroToBoard);
         window.addEventListener("keydown", handleGlobalKey);
         document.addEventListener("keydown", handleIntroKeydown, true);
-        document.addEventListener("keyup", handleIntroKeydown, true);
         if (window.__doggIntroKeyGuard) {
           document.removeEventListener("keydown", window.__doggIntroKeyGuard, true);
-          document.removeEventListener("keyup", window.__doggIntroKeyGuard, true);
           delete window.__doggIntroKeyGuard;
         }
         if (window.__doggEarlyStartHandler) {
@@ -5373,10 +5551,19 @@
           resumeAfterIntro = true;
         }
         wireEvents();
-        activateIntroModal();
+        const skipRequested = Boolean(window.__doggPendingSkip);
+        if (skipRequested) releaseIntroModal();
+        else activateIntroModal();
         renderAll();
-        status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
-        if (!schedulePendingStart()) {
+        if (skipRequested) {
+          completeReadiness();
+          if (resumeAfterIntro && liveState.outcome === "active") playGame(false);
+          consumePendingSkip();
+          status(restored ? "Saved chain verified. Operation resumed." : "Genesis verified. Autonomous operation started.", "success");
+        } else {
+          status(restored ? "Saved chain verified. Briefing before resumption." : "Genesis verified. Autonomous launch in a moment.", "success");
+        }
+        if (!skipRequested && !schedulePendingStart()) {
           introTimer = window.setTimeout(() => {
             introTimer = null;
             if (!userCommanded) dismissIntro(resumeAfterIntro);

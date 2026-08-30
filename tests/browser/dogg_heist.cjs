@@ -686,6 +686,117 @@ function appendPostTerminalFrame(json, kind) {
   };
 }
 
+function appendRehashedGenesis(json) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const convention = frameHashConvention(parsed);
+  const frames = valueAt(parsed, convention.framesPath);
+  requireMeasurement(frames.length > 0, 'a chain head for duplicate genesis mutation');
+  const appended = cloneJson(frames[frames.length - 1]);
+  const kindKey = Object.keys(appended).find(key =>
+    /^(?:kind|type|frameType)$/i.test(key));
+  requireMeasurement(kindKey, 'a frame-kind field for duplicate genesis mutation');
+  appended[kindKey] = 'genesis';
+  frames.push(appended);
+  const data = parsed.data;
+  if (data && typeof data === 'object') {
+    for (const key of ['cursor', 'selectedFrame', 'frameIndex', 'viewIndex']) {
+      if (Number.isFinite(Number(data[key]))) data[key] = frames.length - 1;
+    }
+    for (const key of ['frameCount', 'framesCount', 'historyCount']) {
+      if (Number.isFinite(Number(data[key]))) data[key] = frames.length;
+    }
+  }
+  const heads = rehashFrameDescendants(parsed, convention, frames.length - 1);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(verifyRehashedFrames(parsed, convention),
+    'fully rehashed duplicate genesis frame');
+  return {
+    json: JSON.stringify(parsed),
+    frameIndex: frames.length - 1,
+    heads,
+    checksumPath: checksumConvention.path.join('.')
+  };
+}
+
+function inflateForkAbandonedCount(json, count = 999999) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const convention = frameHashConvention(parsed);
+  const frames = valueAt(parsed, convention.framesPath);
+  const frameIndex = frames.findIndex(frame =>
+    String(frame.kind ?? frame.type ?? frame.frameType).toLowerCase() === 'fork');
+  requireMeasurement(frameIndex >= 1, 'an exported fork frame to inflate');
+  const frame = frames[frameIndex];
+  const eventKey = Object.keys(frame).find(key =>
+    /^(?:events|messages|log)$/i.test(key) && Array.isArray(frame[key]));
+  requireMeasurement(eventKey && frame[eventKey].length === 1,
+    'the fork event list to inflate');
+  const event = String(frame[eventKey][0]);
+  const inflated = event.replace(
+    /(\. )\d+( future frames? abandoned\.)$/,
+    (_, prefix, suffix) => `${prefix}${count}${suffix}`
+  );
+  requireMeasurement(inflated !== event, 'the fork abandoned-frame count mutation');
+  frame[eventKey][0] = inflated;
+  const state = frameState(frame);
+  requireMeasurement(state && Array.isArray(state.lastEvents),
+    'fork state events for abandoned-frame count mutation');
+  state.lastEvents = cloneJson(frame[eventKey]);
+  const heads = rehashFrameDescendants(parsed, convention, frameIndex);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(verifyRehashedFrames(parsed, convention),
+    'fully rehashed inflated fork count');
+  return {
+    json: JSON.stringify(parsed),
+    frameIndex,
+    count,
+    heads,
+    checksumPath: checksumConvention.path.join('.')
+  };
+}
+
+function inflateForkCounter(json, count = 999999) {
+  const parsed = JSON.parse(json);
+  const checksumConvention = findChecksumConvention(parsed);
+  const convention = frameHashConvention(parsed);
+  const frames = valueAt(parsed, convention.framesPath);
+  const frameIndex = frames.findIndex(frame =>
+    String(frame.kind ?? frame.type ?? frame.frameType).toLowerCase() === 'fork');
+  requireMeasurement(frameIndex >= 1, 'an exported fork frame to renumber');
+  const frame = frames[frameIndex];
+  const previous = frames[frameIndex - 1];
+  const oldBranch = String(frame.branchId);
+  const parentHash = hashBody(previous[convention.hashKey])?.hex;
+  requireMeasurement(parentHash, 'the fork parent hash for branch renumbering');
+  const suffix = crypto.createHash('sha256')
+    .update(`${parentHash}|${count}`, 'utf8')
+    .digest('hex').slice(0, 7).toUpperCase();
+  const nextBranch = `B${count}-${suffix}`;
+  for (let index = frameIndex; index < frames.length; index++) {
+    const candidate = frames[index];
+    if (candidate.branchId === oldBranch) candidate.branchId = nextBranch;
+    const state = frameState(candidate);
+    if (state?.branchId === oldBranch) state.branchId = nextBranch;
+  }
+  if (parsed.data && typeof parsed.data === 'object') {
+    parsed.data.branchCounter = count;
+  }
+  const heads = rehashFrameDescendants(parsed, convention, frameIndex);
+  rewriteChecksum(parsed, checksumConvention);
+  requireMeasurement(verifyRehashedFrames(parsed, convention),
+    'fully rehashed fork branch-counter jump');
+  return {
+    json: JSON.stringify(parsed),
+    frameIndex,
+    oldBranch,
+    nextBranch,
+    count,
+    heads,
+    checksumPath: checksumConvention.path.join('.')
+  };
+}
+
 function findNamedValue(root, names, maxDepth = 8) {
   const wanted = new Set(names.map(name => name.toLowerCase()));
   const queue = [{ value: root, trail: [], depth: 0 }];
@@ -1493,6 +1604,18 @@ async function denyStorage(context) {
     Object.defineProperty(Storage.prototype, 'length', {
       configurable: true,
       get: denied
+    });
+  });
+}
+
+async function denyStorageReads(context) {
+  await context.addInitScript(() => {
+    Object.defineProperty(Storage.prototype, 'getItem', {
+      configurable: true,
+      writable: true,
+      value: () => {
+        throw new DOMException('Storage read denied by black-box test', 'SecurityError');
+      }
     });
   });
 }
@@ -3695,6 +3818,34 @@ function canvasSampleDelta(before, after) {
   };
 }
 
+function averageSampleColor(sample) {
+  requireMeasurement(sample && Array.isArray(sample.colors) && sample.colors.length,
+    'canvas colors for average contrast');
+  const totals = sample.colors.reduce((sum, color) => {
+    sum[0] += color[0];
+    sum[1] += color[1];
+    sum[2] += color[2];
+    return sum;
+  }, [0, 0, 0]);
+  return totals.map(value => value / sample.colors.length);
+}
+
+function rgbContrast(first, second) {
+  const luminance = color => {
+    const channel = value => {
+      const unit = value / 255;
+      return unit <= 0.03928 ? unit / 12.92 :
+        Math.pow((unit + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(color[0]) +
+      0.7152 * channel(color[1]) +
+      0.0722 * channel(color[2]);
+  };
+  const one = luminance(first);
+  const two = luminance(second);
+  return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+}
+
 async function sampleCanvasCellCore(page, dimensions, target) {
   const sample = await page.evaluate(({ dimensions, target }) => {
     const board = document.getElementById('game-board');
@@ -3735,6 +3886,58 @@ async function sampleCanvasCellCore(page, dimensions, target) {
   requireMeasurement(sample && sample.colors.length === 121,
     `readable core canvas pixels at ${target.x},${target.y}`);
   return sample;
+}
+
+async function measureDangerPreviewContrast(page) {
+  const target = { x: 7, y: 7 };
+  await api(page, 'restart', 'ADVERSARY-000');
+  await api(page, 'pause');
+  await api(page, 'step', 16);
+  const beforeSnapshot = await inspect(page);
+  const dimensions = facilityDimensions(beforeSnapshot);
+  requireMeasurement(dimensions, 'danger-preview facility dimensions');
+  const before = await sampleCanvasCellCore(page, dimensions, target);
+  await api(page, 'step', 1);
+  const afterSnapshot = await inspect(page);
+  const cursor = await moveBoardCursorTo(page, target, dimensions);
+  const after = await sampleCanvasCellCore(page, dimensions, target);
+  const beforeColor = averageSampleColor(before);
+  const afterColor = averageSampleColor(after);
+  return {
+    ratio: rgbContrast(beforeColor, afterColor),
+    beforeColor,
+    afterColor,
+    warning: /\bwarning:\s*inside next-tick danger\b/i.test(cursor.semantic.text),
+    tick: afterSnapshot.tick
+  };
+}
+
+async function measureWallDangerSuppression(page) {
+  const target = { x: 6, y: 1 };
+  await api(page, 'restart', 'LEAK-0');
+  await api(page, 'pause');
+  await api(page, 'step', 6);
+  const dangerSnapshot = await inspect(page);
+  const dimensions = facilityDimensions(dangerSnapshot);
+  requireMeasurement(dimensions, 'wall-danger facility dimensions');
+  const dangerCursor = await moveBoardCursorTo(page, target, dimensions);
+  const dangerSample = await sampleCanvasCellCore(page, dimensions, target);
+  await api(page, 'step', 3);
+  const clearSnapshot = await inspect(page);
+  const clearCursor = await moveBoardCursorTo(page, target, dimensions);
+  const clearSample = await sampleCanvasCellCore(page, dimensions, target);
+  const dangerColor = averageSampleColor(dangerSample);
+  const clearColor = averageSampleColor(clearSample);
+  return {
+    dangerTick: dangerSnapshot.tick,
+    clearTick: clearSnapshot.tick,
+    dangerSemantic: dangerCursor.semantic.text,
+    clearSemantic: clearCursor.semantic.text,
+    ratio: rgbContrast(dangerColor, clearColor),
+    delta: canvasSampleDelta(dangerSample, clearSample),
+    dangerColor,
+    clearColor
+  };
 }
 
 function boardTacticalDisclosure(text) {
@@ -3968,6 +4171,126 @@ async function auditSemanticFogPrivacy(page) {
         /\b(unknown|fog|unseen|hidden|remembered|last seen|not currently visible)\b/i
           .test(sample.semantic) &&
         !boardTacticalDisclosure(sample.semantic))
+  };
+}
+
+async function auditProjectedThreatPrivacy(page) {
+  const seed = 'LEAK-0';
+  const source = { x: 9, y: 7 };
+  const target = { x: 3, y: 9 };
+  await api(page, 'pause');
+  await api(page, 'restart', seed);
+  await api(page, 'pause');
+  await api(page, 'step', 6);
+  await api(page, 'pause');
+  const snapshot = await inspect(page);
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, `${seed} facility dimensions`);
+  const rawState = frameState(latestExportFrame(snapshot.exported));
+  requireMeasurement(rawState, `${seed} tick-6 sealed state`);
+  const guard = collectionEntries(rawState.guards).map(({ value }) => value)
+    .find(value => String(value?.id).toLowerCase() === 'guard-1' &&
+      coordinateOf(value)?.x === source.x && coordinateOf(value)?.y === source.y);
+  requireMeasurement(guard, `${seed} guard-1 at [${source.x},${source.y}]`);
+  const views = collectionEntries(povsOf(snapshot.state)).map(({ key, value }, index) => {
+    const view = value && typeof value === 'object' ? value : {};
+    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ?? key ?? index);
+    return {
+      id,
+      visible: new Set(normalizedCells(
+        view.visibleCells ?? view.visible ?? view.currentlyVisible ?? view.inSight
+      ).cells)
+    };
+  });
+  const sourceKey = `${source.x},${source.y}`;
+  const targetKey = `${target.x},${target.y}`;
+  const targetVisibleTo = views.filter(view => view.visible.has(targetKey)).map(view => view.id);
+  const semantic = await moveBoardCursorTo(page, target, dimensions);
+  const pixels = await page.evaluate(({ target, dimensions, targetVisibleTo }) => {
+    const sample = canvas => {
+      if (!(canvas instanceof HTMLCanvasElement) || !canvas.width || !canvas.height) return null;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return null;
+      const cellWidth = canvas.width / dimensions.cols;
+      const cellHeight = canvas.height / dimensions.rows;
+      const totals = [0, 0, 0];
+      let count = 0;
+      for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 7; col++) {
+          const x = Math.floor((target.x + 0.35 + 0.3 * col / 6) * cellWidth);
+          const y = Math.floor((target.y + 0.35 + 0.3 * row / 6) * cellHeight);
+          const color = context.getImageData(x, y, 1, 1).data;
+          totals[0] += color[0];
+          totals[1] += color[1];
+          totals[2] += color[2];
+          count++;
+        }
+      }
+      const average = totals.map(value => value / count);
+      return {
+        average,
+        redBias: average[0] - (average[1] + average[2]) / 2
+      };
+    };
+    const board = sample(document.getElementById('game-board'));
+    const povs = [...document.querySelectorAll('canvas[data-pov-agent]')]
+      .filter(canvas => targetVisibleTo.includes(canvas.dataset.povAgent))
+      .map(canvas => ({
+        id: canvas.dataset.povAgent,
+        sample: sample(canvas)
+      }));
+    return { board, povs };
+  }, { target, dimensions, targetVisibleTo });
+  return {
+    seed,
+    source,
+    target,
+    hiddenByAll: views.every(view => !view.visible.has(sourceKey)),
+    targetVisibleTo,
+    semantic: semantic.semantic.text,
+    board: pixels.board,
+    povs: pixels.povs
+  };
+}
+
+async function auditCurrentThreatPrivacy(page) {
+  const seed = 'FOGF-0';
+  const source = { x: 7, y: 2 };
+  const target = { x: 8, y: 2 };
+  await api(page, 'pause');
+  await api(page, 'restart', seed);
+  await api(page, 'pause');
+  await api(page, 'step', 25);
+  await api(page, 'pause');
+  const snapshot = await inspect(page);
+  const dimensions = facilityDimensions(snapshot);
+  requireMeasurement(dimensions, `${seed} facility dimensions`);
+  const rawState = frameState(latestExportFrame(snapshot.exported));
+  requireMeasurement(rawState, `${seed} tick-25 sealed state`);
+  const camera = collectionEntries(rawState.cameras).map(({ value }) => value)
+    .find(value => String(value?.id).toLowerCase() === 'camera-4' &&
+      coordinateOf(value)?.x === source.x && coordinateOf(value)?.y === source.y);
+  requireMeasurement(camera, `${seed} camera-4 at [${source.x},${source.y}]`);
+  const views = collectionEntries(povsOf(snapshot.state)).map(({ key, value }, index) => {
+    const view = value && typeof value === 'object' ? value : {};
+    const id = String(view.id ?? view.agentId ?? view.callsign ?? view.name ?? key ?? index);
+    return {
+      id,
+      visible: new Set(normalizedCells(
+        view.visibleCells ?? view.visible ?? view.currentlyVisible ?? view.inSight
+      ).cells)
+    };
+  });
+  const sourceKey = `${source.x},${source.y}`;
+  const targetKey = `${target.x},${target.y}`;
+  const cursor = await moveBoardCursorTo(page, target, dimensions);
+  return {
+    seed,
+    source,
+    target,
+    hiddenByAll: views.every(view => !view.visible.has(sourceKey)),
+    targetVisibleTo: views.filter(view => view.visible.has(targetKey)).map(view => view.id),
+    semantic: cursor.semantic.text
   };
 }
 
@@ -5820,26 +6143,53 @@ async function auditImmediateLandscapeSkip(page) {
       else element.style.removeProperty('scroll-behavior');
     });
   });
-  const skip = page.locator(
-    '.skip-link, a[href="#game-board"], a[href="#app-shell"], a[href="#main"], a[href="#main-content"]'
-  ).first();
-  requireMeasurement(await skip.count() === 1, 'the 836x224 skip link');
-  await skip.focus();
-  const before = await page.evaluate(() => ({
-    hash: location.hash,
-    window: scrollY,
-    document: document.scrollingElement?.scrollTop || 0,
-    viewport: { width: innerWidth, height: innerHeight }
-  }));
+  const skip = page.locator('#intro-skip');
+  requireMeasurement(await skip.count() === 1, 'the 836x224 modal Skip control');
+  const accessibleCount = await page.getByRole('button', {
+    name: /skip to tactical board/i
+  }).count();
+  const before = await skip.evaluate((element, count) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const intro = document.getElementById('intro-overlay');
+    return {
+      hash: location.hash,
+      window: scrollY,
+      document: document.scrollingElement?.scrollTop || 0,
+      viewport: { width: innerWidth, height: innerHeight },
+      ready: window.__doggHeist?.ready,
+      introVisible: Boolean(intro && !intro.hidden &&
+        getComputedStyle(intro).display !== 'none'),
+      accessible: count === 1,
+      inertAncestor: Boolean(element.closest('[inert]')),
+      ariaHiddenAncestor: Boolean(element.closest('[aria-hidden="true"]')),
+      visible: style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0,
+      full: rect.left >= 0 && rect.top >= 0 &&
+        rect.right <= innerWidth && rect.bottom <= innerHeight,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height
+      }
+    };
+  }, accessibleCount);
   requireMeasurement(before.window === 0 && before.document === 0,
     'the landscape skip starting at scrollY 0');
-  await page.keyboard.press('Enter');
+  const startedAt = Date.now();
+  await skip.click();
   const after = await page.evaluate(() => new Promise(resolve => {
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const board = document.getElementById('game-board');
+      const intro = document.getElementById('intro-overlay');
       const rect = board?.getBoundingClientRect();
       resolve({
         hash: location.hash,
+        ready: window.__doggHeist?.ready,
+        introHidden: Boolean(intro?.hidden || getComputedStyle(intro).display === 'none'),
         boardFocused: document.activeElement === board ||
           Boolean(board?.contains(document.activeElement)),
         boardIntersects: Boolean(rect && rect.right > 0 && rect.left < innerWidth &&
@@ -5854,9 +6204,74 @@ async function auditImmediateLandscapeSkip(page) {
         bodyWidth: document.body.scrollWidth,
         viewport: { width: innerWidth, height: innerHeight }
       });
-    });
+    }));
   }));
-  return { before, after };
+  return { before, after, elapsedMs: Date.now() - startedAt };
+}
+
+async function auditNarrowKeyboardPan(page) {
+  await api(page, 'pause');
+  await api(page, 'restart', 'KEYBOARD-PAN-320');
+  await api(page, 'pause');
+  await page.locator('#board-viewport').evaluate(element => {
+    element.scrollLeft = 0;
+  });
+  await page.locator('#game-board').focus();
+  for (let index = 0; index < 20; index++) await page.keyboard.press('ArrowLeft');
+  for (let index = 0; index < 17; index++) await page.keyboard.press('ArrowRight');
+  const right = await page.evaluate(() => {
+    const board = document.getElementById('game-board');
+    const viewport = document.getElementById('board-viewport');
+    const match = String(board.getAttribute('aria-label') || '').match(
+      /Board cursor \[(\d+),(\d+)\]/
+    );
+    const x = Number(match?.[1]);
+    const y = Number(match?.[2]);
+    const boardRect = board.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const cellWidth = boardRect.width / 18;
+    const cellLeft = boardRect.left + x * cellWidth;
+    const cellRight = cellLeft + cellWidth;
+    return {
+      x,
+      y,
+      scrollLeft: viewport.scrollLeft,
+      maxScroll: viewport.scrollWidth - viewport.clientWidth,
+      visible: cellLeft >= viewportRect.left - 1 &&
+        cellRight <= viewportRect.right + 1,
+      cellLeft,
+      cellRight,
+      viewportLeft: viewportRect.left,
+      viewportRight: viewportRect.right
+    };
+  });
+  for (let index = 0; index < 17; index++) await page.keyboard.press('ArrowLeft');
+  const left = await page.evaluate(() => {
+    const board = document.getElementById('game-board');
+    const viewport = document.getElementById('board-viewport');
+    const match = String(board.getAttribute('aria-label') || '').match(
+      /Board cursor \[(\d+),(\d+)\]/
+    );
+    const x = Number(match?.[1]);
+    const y = Number(match?.[2]);
+    const boardRect = board.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const cellWidth = boardRect.width / 18;
+    const cellLeft = boardRect.left + x * cellWidth;
+    const cellRight = cellLeft + cellWidth;
+    return {
+      x,
+      y,
+      scrollLeft: viewport.scrollLeft,
+      visible: cellLeft >= viewportRect.left - 1 &&
+        cellRight <= viewportRect.right + 1,
+      cellLeft,
+      cellRight,
+      viewportLeft: viewportRect.left,
+      viewportRight: viewportRect.right
+    };
+  });
+  return { right, left };
 }
 
 async function deterministicRun(page, seed) {
@@ -5978,7 +6393,7 @@ async function runSuite() {
   );
   const initialBegin = landscapeIntroFocus.challenge.beginRect;
   const focusedBegin = landscapeIntroFocus.focusSamples[0].rect;
-  result('836x224 intro keeps focused Begin visible and Skip unreachable',
+  result('836x224 intro keeps every focused modal control visible',
     landscapeIntroFocus.setup.viewport.width === 836 &&
       landscapeIntroFocus.setup.viewport.height === 224 &&
       landscapeIntroFocus.scrollabilityIfOutside &&
@@ -5997,21 +6412,55 @@ async function runSuite() {
     isMobile: true
   });
   await serve(immediateSkipContext);
-  const immediateSkipPage = await openHeist(
+  const immediateSkipPage = await navigateHeist(
     immediateSkipContext,
     '836x224 immediate skip page'
   );
   const immediateSkip = await auditImmediateLandscapeSkip(immediateSkipPage);
-  result('836x224 skip reaches the focused visible board within one frame',
+  result('836x224 modal Skip reaches the focused visible board immediately',
     immediateSkip.before.viewport.width === 836 &&
       immediateSkip.before.viewport.height === 224 &&
+      immediateSkip.before.ready === false &&
+      immediateSkip.before.introVisible &&
+      immediateSkip.before.accessible &&
+      immediateSkip.before.visible &&
+      immediateSkip.before.full &&
+      immediateSkip.before.rect.height >= 44 &&
+      !immediateSkip.before.inertAncestor &&
+      !immediateSkip.before.ariaHiddenAncestor &&
+      immediateSkip.elapsedMs < 700 &&
       immediateSkip.after.hash === '#game-board' &&
+      immediateSkip.after.ready === true &&
+      immediateSkip.after.introHidden &&
       immediateSkip.after.boardFocused &&
       immediateSkip.after.boardIntersects &&
       immediateSkip.after.documentWidth <= immediateSkip.after.viewport.width + 1 &&
       immediateSkip.after.bodyWidth <= immediateSkip.after.viewport.width + 1,
-    `hash ${immediateSkip.after.hash}; focused ${immediateSkip.after.boardFocused}; rect ${JSON.stringify(immediateSkip.after.boardRect)}; width ${Math.max(immediateSkip.after.documentWidth, immediateSkip.after.bodyWidth)}/${immediateSkip.after.viewport.width}`);
+    `${immediateSkip.before.rect.width.toFixed(1)}x${immediateSkip.before.rect.height.toFixed(1)} at ${immediateSkip.before.rect.top.toFixed(1)}; ${immediateSkip.elapsedMs}ms; hash ${immediateSkip.after.hash}; focused ${immediateSkip.after.boardFocused}; rect ${JSON.stringify(immediateSkip.after.boardRect)}; width ${Math.max(immediateSkip.after.documentWidth, immediateSkip.after.bodyWidth)}/${immediateSkip.after.viewport.width}`);
   await immediateSkipContext.close();
+
+  const narrowKeyboardContext = await browser.newContext({
+    viewport: { width: 320, height: 700 },
+    screen: { width: 320, height: 700 },
+    hasTouch: true,
+    isMobile: true
+  });
+  await serve(narrowKeyboardContext);
+  const narrowKeyboardPage = await openHeist(
+    narrowKeyboardContext,
+    '320px keyboard board pan page'
+  );
+  const narrowKeyboardPan = await auditNarrowKeyboardPan(narrowKeyboardPage);
+  result('320px keyboard cursor pans the board viewport in both directions',
+    narrowKeyboardPan.right.x === 17 &&
+      narrowKeyboardPan.right.maxScroll > 0 &&
+      narrowKeyboardPan.right.scrollLeft > 0 &&
+      narrowKeyboardPan.right.visible &&
+      narrowKeyboardPan.left.x === 0 &&
+      narrowKeyboardPan.left.scrollLeft <= 1 &&
+      narrowKeyboardPan.left.visible,
+    `right x${narrowKeyboardPan.right.x} scroll ${narrowKeyboardPan.right.scrollLeft.toFixed(1)}/${narrowKeyboardPan.right.maxScroll.toFixed(1)} cell ${narrowKeyboardPan.right.cellLeft.toFixed(1)}-${narrowKeyboardPan.right.cellRight.toFixed(1)} in ${narrowKeyboardPan.right.viewportLeft.toFixed(1)}-${narrowKeyboardPan.right.viewportRight.toFixed(1)}; left x${narrowKeyboardPan.left.x} scroll ${narrowKeyboardPan.left.scrollLeft.toFixed(1)}`);
+  await narrowKeyboardContext.close();
 
   const primaryContext = await browser.newContext({
     viewport: { width: 1100, height: 800 },
@@ -6340,6 +6789,27 @@ async function runSuite() {
   result('SEMANTIC-LEAK-01 keeps unseen and remembered tactics private',
     Object.values(fogPrivacyChecks).every(Boolean),
     `${Object.entries(fogPrivacyChecks).map(([name, passed]) => `${name}=${passed}`).join(', ')}; hidden pixels ${fogPrivacy.hiddenPixels.hash}/${fogPrivacy.emptyPixels.hash}; visible ${fogPrivacy.visibleThreat.id}@${fogPrivacy.visibleThreat.cell.x},${fogPrivacy.visibleThreat.cell.y} Δ${(fogPrivacy.visibleVsFog.changedRatio * 100).toFixed(1)}%; remembered ${fogPrivacy.rememberedInterval.cell}@${fogPrivacy.rememberedInterval.start}-${fogPrivacy.rememberedInterval.end} ${fogPrivacy.rememberedSamples.map(sample => `${sample.tick}:${sample.known}/${sample.visible}/${sample.warningRatio.toFixed(3)}`).join(',')}→visible@${fogPrivacy.rememberedVisibleTick}`);
+  const projectedFogPrivacy = await auditProjectedThreatPrivacy(page);
+  result('LEAK-0 hides next-tick danger generated by an unseen threat source',
+    projectedFogPrivacy.hiddenByAll &&
+      projectedFogPrivacy.targetVisibleTo.length >= 3 &&
+      /\bno next-tick danger predicted\b/i.test(projectedFogPrivacy.semantic) &&
+      !/\bwarning:\s*inside next-tick danger\b/i.test(projectedFogPrivacy.semantic) &&
+      projectedFogPrivacy.board &&
+      projectedFogPrivacy.board.redBias <= 8 &&
+      projectedFogPrivacy.povs.length === projectedFogPrivacy.targetVisibleTo.length &&
+      projectedFogPrivacy.povs.every(entry => entry.sample && entry.sample.redBias <= 8),
+    `guard-1 [${projectedFogPrivacy.source.x},${projectedFogPrivacy.source.y}] hidden; target [${projectedFogPrivacy.target.x},${projectedFogPrivacy.target.y}] visible to ${projectedFogPrivacy.targetVisibleTo.join('/')}; board red bias ${projectedFogPrivacy.board?.redBias.toFixed(1) || 'missing'}; POV ${projectedFogPrivacy.povs.map(entry => `${entry.id}:${entry.sample?.redBias.toFixed(1) || 'missing'}`).join('/')}; ${projectedFogPrivacy.semantic}`);
+  const currentFogPrivacy = await auditCurrentThreatPrivacy(page);
+  result('FOGF-0 hides current danger generated by an unseen camera',
+    currentFogPrivacy.hiddenByAll &&
+      currentFogPrivacy.targetVisibleTo.length > 0 &&
+      /\bnot inside a current threat zone\b/i.test(currentFogPrivacy.semantic) &&
+      !/\binside a current threat zone\b/i.test(
+        currentFogPrivacy.semantic.replace(/\bnot inside a current threat zone\b/ig, '')
+      ) &&
+      !/\bcamera[-\s#]*4\b/i.test(currentFogPrivacy.semantic),
+    `camera-4 [${currentFogPrivacy.source.x},${currentFogPrivacy.source.y}] hidden; target [${currentFogPrivacy.target.x},${currentFogPrivacy.target.y}] visible to ${currentFogPrivacy.targetVisibleTo.join('/')}; ${currentFogPrivacy.semantic}`);
 
   const sameA = await deterministicRun(page, 'dogg-heist-repeatable-42');
   const sameB = await deterministicRun(page, 'dogg-heist-repeatable-42');
@@ -7292,7 +7762,7 @@ async function runSuite() {
   await api(mobilePage, 'pause');
   await api(mobilePage, 'setSpeed', 20);
   let wonSnapshot = await inspect(mobilePage, false);
-  while (wonSnapshot.tick < 13) {
+  while (wonSnapshot.tick < 12) {
     await api(mobilePage, 'step', 1);
     wonSnapshot = await inspect(mobilePage, false);
   }
@@ -7405,7 +7875,7 @@ async function runSuite() {
     await api(contrastPage, 'pause');
     await api(contrastPage, 'setSpeed', 20);
     let completedContrastState = await inspect(contrastPage, false);
-    while (completedContrastState.tick < 13) {
+    while (completedContrastState.tick < 12) {
       await api(contrastPage, 'step', 1);
       completedContrastState = await inspect(contrastPage, false);
     }
@@ -7437,6 +7907,8 @@ async function runSuite() {
       povMarkerContrast.transform,
       'completed'
     );
+    const dangerPreviewContrast = await measureDangerPreviewContrast(contrastPage);
+    const wallDangerSuppression = await measureWallDangerSuppression(contrastPage);
     contrastByTheme[scheme] = {
       intro: introContrast.intro,
       roles: readyContrast.roles,
@@ -7451,6 +7923,8 @@ async function runSuite() {
       doorContrast,
       tacticalActive,
       tacticalCompleted,
+      dangerPreviewContrast,
+      wallDangerSuppression,
       disabledReturnLive,
       disabledFork,
       disabledTerminalPlay,
@@ -7486,6 +7960,29 @@ async function runSuite() {
       darkSpecificContrast.neutralStatus.text.length > 0 &&
       /\b(cooldown|ready|available|wait|tick|turn)\b|\d/i.test(darkSpecificContrast.selectedMetadata.text),
     `status ${darkSpecificContrast.neutralStatus?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.neutralStatus?.text || 'none'}); metadata ${darkSpecificContrast.selectedMetadata?.ratio.toFixed(2) || 'missing'}:1 (${darkSpecificContrast.selectedMetadata?.text || 'none'})`);
+  result('next-tick danger tint maintains 3:1 contrast in both themes',
+    ['light', 'dark'].every(scheme => {
+      const measurement = contrastByTheme[scheme].dangerPreviewContrast;
+      return measurement.warning && measurement.tick === 17 && measurement.ratio >= 3;
+    }),
+    ['light', 'dark'].map(scheme => {
+      const measurement = contrastByTheme[scheme].dangerPreviewContrast;
+      return `${scheme} ${measurement.ratio.toFixed(2)}:1 rgb(${measurement.beforeColor.map(value => Math.round(value)).join(',')})→rgb(${measurement.afterColor.map(value => Math.round(value)).join(',')})`;
+    }).join(' | '));
+  result('non-traversable wall cells do not receive low-contrast danger tint',
+    ['light', 'dark'].every(scheme => {
+      const measurement = contrastByTheme[scheme].wallDangerSuppression;
+      return measurement.dangerTick === 6 &&
+        measurement.clearTick === 9 &&
+        /\bwall, obstructed\b/i.test(measurement.dangerSemantic) &&
+        /\bno next-tick danger predicted\b/i.test(measurement.dangerSemantic) &&
+        measurement.ratio <= 1.1 &&
+        measurement.delta.meanDistance <= 2;
+    }),
+    ['light', 'dark'].map(scheme => {
+      const measurement = contrastByTheme[scheme].wallDangerSuppression;
+      return `${scheme} ${measurement.ratio.toFixed(2)}:1 Δ${measurement.delta.meanDistance.toFixed(2)} rgb(${measurement.dangerColor.map(value => Math.round(value)).join(',')})/rgb(${measurement.clearColor.map(value => Math.round(value)).join(',')})`;
+    }).join(' | '));
   const disabledContrastMeasurements = ['light', 'dark'].flatMap(scheme => [
     Object.assign({ scheme }, contrastByTheme[scheme].disabledReturnLive),
     Object.assign({ scheme }, contrastByTheme[scheme].disabledFork),
@@ -7682,32 +8179,54 @@ async function runSuite() {
   const policyContext = await browser.newContext({ viewport: { width: 1000, height: 720 } });
   await serve(policyContext);
   const policyPage = await openHeist(policyContext, 'ADVERSARY-007 policy page');
+  const terminalInventories = [];
+  for (const seed of ['DOGG-HEIST-01', 'ADVERSARY-007', 'NO-SURPLUS-2', 'NO-SURPLUS-3']) {
+    await api(policyPage, 'restart', seed);
+    await api(policyPage, 'pause');
+    const inventory = policyState(await inspect(policyPage));
+    terminalInventories.push({
+      seed,
+      required: inventory.required,
+      count: inventory.terminals.length,
+      ids: inventory.terminals.map(terminal => terminal.id)
+    });
+  }
+  result('generated facilities expose exactly the required terminal inventory',
+    terminalInventories.every(inventory =>
+      inventory.required === 2 &&
+      inventory.count === inventory.required &&
+      new Set(inventory.ids).size === inventory.count),
+    terminalInventories.map(inventory =>
+      `${inventory.seed}:${inventory.count}/${inventory.required}`).join(' | '));
+
   await api(policyPage, 'restart', 'ADVERSARY-007');
   await api(policyPage, 'pause');
   await api(policyPage, 'setSpeed', 20);
   await api(policyPage, 'pause');
   let policySnapshot = await inspect(policyPage);
-  while (policySnapshot.tick < 13) {
+  let thresholdPolicy = policyState(policySnapshot);
+  while (policySnapshot.tick < 80 &&
+      !isTerminalOutcome(outcomeOf(policySnapshot.state)) &&
+      thresholdPolicy.hacked < thresholdPolicy.required) {
     await api(policyPage, 'step', 1);
     policySnapshot = await inspect(policyPage);
+    thresholdPolicy = policyState(policySnapshot);
   }
-  requireMeasurement(policySnapshot.tick === 13, 'ADVERSARY-007 tick 13 policy frame');
-  const thresholdPolicy = policyState(policySnapshot);
-  requireMeasurement(thresholdPolicy.terminals.length > 2,
-    'ADVERSARY-007 current exported frame terminals, including untouched extras');
-  const thresholdCoreIntent = thresholdPolicy.agentIntent.find(agent =>
+  requireMeasurement(thresholdPolicy.hacked === thresholdPolicy.required,
+    'ADVERSARY-007 reaching its exact terminal threshold');
+  let thresholdCoreIntent = thresholdPolicy.agentIntent.find(agent =>
     /\b(core|vault)\b/i.test(agent.text));
   let priorPolicyFeedback =
     `${policySnapshot.dom['status-live']} ${policySnapshot.dom['event-log']}`;
   let postThresholdSnapshot = policySnapshot;
   let postThresholdPolicy = thresholdPolicy;
-  let extraTerminalHacked = false;
   let acquisitionEvidence = '';
   for (let step = 0; step < 10 && !acquisitionEvidence; step++) {
     await api(policyPage, 'step', 1);
     postThresholdSnapshot = await inspect(policyPage);
     postThresholdPolicy = policyState(postThresholdSnapshot);
-    if (postThresholdPolicy.hacked > thresholdPolicy.hacked) extraTerminalHacked = true;
+    thresholdCoreIntent ||= postThresholdPolicy.agentIntent.find(agent =>
+      /\b(core|vault)\b/i.test(agent.text));
     const feedback = `${postThresholdSnapshot.dom['status-live']} ${postThresholdSnapshot.dom['event-log']}`;
     const feedbackDelta = feedback.startsWith(priorPolicyFeedback) ?
       feedback.slice(priorPolicyFeedback.length) :
@@ -7719,11 +8238,12 @@ async function runSuite() {
     }
     priorPolicyFeedback = feedback;
   }
-  result('ADVERSARY-007 pursues the core without hacking surplus terminals',
+  result('ADVERSARY-007 has no surplus terminals and pivots to the core',
     thresholdPolicy.required === 2 && thresholdPolicy.hacked === 2 &&
-      thresholdPolicy.untouched.length > 0 && Boolean(thresholdCoreIntent) &&
-      !extraTerminalHacked,
-    `tick 13: 2/2 with ${thresholdPolicy.untouched.length} untouched; ${thresholdCoreIntent ? `${thresholdCoreIntent.id}: ${thresholdCoreIntent.text}` : 'no core/vault intent'}; ${acquisitionEvidence || 'pursuit observed before acquisition'}`);
+      thresholdPolicy.terminals.length === thresholdPolicy.required &&
+      thresholdPolicy.untouched.length === 0 && Boolean(thresholdCoreIntent) &&
+      postThresholdPolicy.hacked === thresholdPolicy.hacked,
+    `tick ${policySnapshot.tick}: ${thresholdPolicy.hacked}/${thresholdPolicy.required} with ${thresholdPolicy.untouched.length} untouched; ${thresholdCoreIntent ? `${thresholdCoreIntent.id}: ${thresholdCoreIntent.text}` : 'no core/vault intent'}; ${acquisitionEvidence || 'pursuit observed before acquisition'}`);
 
   let terminalSnapshot = postThresholdSnapshot;
   for (let step = 0; step < 120 && !isTerminalOutcome(outcomeOf(terminalSnapshot.state)); step++) {
@@ -7760,6 +8280,39 @@ async function runSuite() {
           postTerminalDirectiveAttempt.unchanged &&
           postTerminalDirectiveAttempt.stateCallable)),
     `fork tick ${postTerminalFork.tick}: ${postTerminalFork.detail}; directive ${postTerminalDirective ? `${postTerminalDirective.tick}: ${postTerminalDirective.detail}` : 'not represented by this runtime'}`);
+  const duplicateGenesis = appendRehashedGenesis(terminalSnapshot.exportText);
+  const duplicateGenesisAttempt = await rejectedTransactionalImport(
+    policyPage,
+    duplicateGenesis.json,
+    terminalSnapshot
+  );
+  result('fully rehashed duplicate genesis is rejected after a terminal outcome',
+    duplicateGenesisAttempt.rejected &&
+      duplicateGenesisAttempt.unchanged &&
+      duplicateGenesisAttempt.stateCallable,
+    `frame ${duplicateGenesis.frameIndex}; checksum ${duplicateGenesis.checksumPath}`);
+  const inflatedFork = inflateForkAbandonedCount(roundTripSource.exportText);
+  const inflatedForkAttempt = await rejectedTransactionalImport(
+    policyPage,
+    inflatedFork.json,
+    terminalSnapshot
+  );
+  result('fully rehashed fork metadata cannot exceed the bounded timeline',
+    inflatedForkAttempt.rejected &&
+      inflatedForkAttempt.unchanged &&
+      inflatedForkAttempt.stateCallable,
+    `frame ${inflatedFork.frameIndex}; abandoned ${inflatedFork.count}; checksum ${inflatedFork.checksumPath}`);
+  const inflatedBranch = inflateForkCounter(roundTripSource.exportText);
+  const inflatedBranchAttempt = await rejectedTransactionalImport(
+    policyPage,
+    inflatedBranch.json,
+    terminalSnapshot
+  );
+  result('fully rehashed fork branch counters stay within the runtime namespace',
+    inflatedBranchAttempt.rejected &&
+      inflatedBranchAttempt.unchanged &&
+      inflatedBranchAttempt.stateCallable,
+    `frame ${inflatedBranch.frameIndex}; ${inflatedBranch.oldBranch}→${inflatedBranch.nextBranch}; checksum ${inflatedBranch.checksumPath}`);
   const frameBundle = exportedFrames(terminalSnapshot.exported);
   const inspectedFrames = frameBundle.frames.map((frame, index) => {
     const state = frameState(frame);
@@ -7902,6 +8455,33 @@ async function runSuite() {
       /(storage|persist|saving|save).{0,60}(denied|unavailable|disabled|degraded|failed|not available|session|memory)|(?:denied|unavailable|disabled|degraded|failed).{0,60}(storage|persist|saving|save)/i.test(deniedSurface),
     `ticks ${deniedBefore.tick}→${deniedStepped.tick}→${deniedPlayed.tick}; ${deniedSurface.slice(0, 150)}`);
   await deniedContext.close();
+
+  const readDeniedContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
+  await denyStorageReads(readDeniedContext);
+  await serve(readDeniedContext);
+  const readDeniedPage = await openHeist(readDeniedContext, 'storage-read-denied page');
+  await api(readDeniedPage, 'pause');
+  await api(readDeniedPage, 'step', 2);
+  await api(readDeniedPage, 'pause');
+  const readDenied = await readDeniedPage.evaluate(async () => {
+    const state = await Promise.resolve(window.__doggHeist.state());
+    const line = document.getElementById('storage-line');
+    const value = document.getElementById('storage-value');
+    return {
+      storageAvailable: state.storageAvailable,
+      offline: Boolean(line?.classList.contains('offline')),
+      text: String(value?.textContent || '').replace(/\s+/g, ' ').trim(),
+      status: String(document.getElementById('status-live')?.textContent || '')
+        .replace(/\s+/g, ' ').trim()
+    };
+  });
+  result('storage read denial leaves a persistent truthful offline badge',
+    readDenied.storageAvailable === false &&
+      readDenied.offline &&
+      /(storage|persistence).{0,40}(denied|unavailable|disabled|stopped)|(?:denied|unavailable|disabled|stopped).{0,40}(storage|persistence)/i.test(readDenied.text) &&
+      !/\bpersistence\s+on\b/i.test(readDenied.text),
+    `${readDenied.text}; later status: ${readDenied.status}`);
+  await readDeniedContext.close();
 
   await primaryContext.close();
 }
