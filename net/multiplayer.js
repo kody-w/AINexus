@@ -30,6 +30,32 @@
     const REPO_OWNER = global.NEXUS_REPO_OWNER || 'kody-w';
     const REPO_NAME = global.NEXUS_REPO_NAME || 'AINexus';
 
+    // `from` on a guest is whatever the HOST typed, and a host is only ever whoever
+    // sent you a link. Every id that legitimately reaches this code was minted by the
+    // broker, so it lives in this alphabet; anything else is a member being invented.
+    const PEER_ID_SHAPE = /^[A-Za-z0-9_-]{1,64}$/;
+    // Each avatar is a Group with its own geometries, material, light and a canvas
+    // texture, all resident on the GPU. A host looping `from:'x'+i` spends nothing and
+    // takes the guest's tab with it, so there is a ceiling far above any real room.
+    const MAX_PLAYER_BODIES = 64;
+    const MAX_NAME = 40;                 // what uniqueName/display already truncate to
+    // Above the 20/s this class sends at (updateInterval = 50), so an honest peer never
+    // trips it, while a peer sending far faster than its own loop can still be cut off.
+    const PRESENCE_BUDGET = 150;         // per 5000ms = 30/s
+    // Relayed bodies are fed by the host, not by a channel we hold. Their liveness is the
+    // HOST's to report (it sends 'playerLeft'), so silence here needs a long grace: a
+    // backgrounded tab stops the sender's frame loop entirely, and reaping on five seconds
+    // announced departures that never happened.
+    const RELAY_GRACE = 90000;
+    // Only the three numbers the room reads, and only if they are real numbers. This is what
+    // bounds the size of anything the host passes on.
+    function vec3(v) {
+        if (!v || typeof v !== 'object') return null;
+        const x = v.x, y = v.y, z = v.z;
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+        return { x, y, z };
+    }
+
     class MultiplayerManager {
         constructor(worldInstance) {
             this.world = worldInstance;
@@ -352,6 +378,7 @@
 
                 this.removePlayer(peerId);
                 this.connections.delete(peerId);
+                if (this.isHost) this.relayDeparture(peerId);
                 if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                 this.updatePlayerCount();
                 if (!this.isHost && peerId === this.roomId) {
@@ -381,6 +408,7 @@
                 if (this.pending.get(peerId) === conn) this.pending.delete(peerId);
                 if (this.connections.get(peerId) === conn) {
                     this.connections.delete(peerId);
+                    if (this.isHost) this.relayDeparture(peerId);
                     this.removePlayer(peerId);
                     if (this.rates) for (const k of [...this.rates.keys()]) if (k.endsWith(':' + peerId)) this.rates.delete(k);
                     this.updatePlayerCount();
@@ -475,26 +503,97 @@
             if (data.type === 'hello') return;      // a joiner never needs to admit anybody
             switch (data.type) {
                 case 'playerUpdate': {
+                    // Who this update is about, resolved FIRST because everything below is
+                    // about that peer and not about the connection it arrived on. On the host
+                    // the connection IS the author; a joiner hears about everyone except the
+                    // host second-hand and takes the host's stamp, exactly as it does for chat.
+                    // Keying the rename on the connection instead would have let a relayed
+                    // update rename the HOST with somebody else's name.
+                    const who = this.isHost ? peerId : (data.from || peerId);
+                    if (typeof who !== 'string' || !PEER_ID_SHAPE.test(who)) break;
+                    if (who === (this.peer && this.peer.id)) break;      // never a body for myself
+
                     // A rename is not free: it burns a canvas, a texture upload and a material
                     // every time, and the PEER chooses how often it happens. Twenty a second is
                     // not somebody correcting their name, it is somebody making the host draw.
-                    const known = this.players.get(peerId);
+                    const known = this.players.get(who);
                     if (data.username && known && Date.now() - (known.lastRename || 0) >= 1000) {
-                        const claimed = this.uniqueName(peerId, data.username);
+                        const claimed = this.uniqueName(who, data.username);
                         if (known.username !== claimed) {
                             known.lastRename = Date.now();
                             known.username = claimed;
                             try { if (known.avatar && this.createNameTag) {           // re-tag the body above their head
                                 const old = known.avatar.getObjectByName('nametag');
                                 if (old) { known.avatar.remove(old); this.disposeObject(old); }
-                                const tag = this.createNameTag(peerId, { username: claimed });
+                                const tag = this.createNameTag(who, { username: claimed });
                                 if (tag) { tag.name = 'nametag'; tag.position.y = 3; known.avatar.add(tag); }
                             } } catch (e) {}
                         }
                     }
-                    this.updatePlayerPosition(peerId, data.position, data.rotation);
+                    // A relayed peer has no connection here, so acceptConnection never ran for
+                    // it and it has no body. Give it one the first time it is heard from —
+                    // without this, chat crosses between two joiners but nothing else does:
+                    // they share a room and remain invisible to each other.
+                    if (!this.players.has(who)) {
+                        if (this.players.size >= MAX_PLAYER_BODIES) {
+                            if (!this.mintCapReported) {
+                                this.mintCapReported = true;
+                                console.warn('[nexus] refusing to build more than ' + MAX_PLAYER_BODIES
+                                           + ' player bodies — this room claims more members than a room can have');
+                            }
+                        } else {
+                            this.createPlayerAvatar(who, { username: data.username });
+                            this.updatePlayerCount();
+                        }
+                    }
+                    if (data.position) this.updatePlayerPosition(who, data.position, data.rotation);
+
+                    // The room is a star: every joiner is wired only to the host. Presence has
+                    // to be passed on for the same reason chat does, and on the same budget —
+                    // it is the host's uplink either way.
+                    //
+                    // The budget has to sit ABOVE the rate this class itself sends at, or the
+                    // fix delivers guests who are visible and frozen. broadcastPlayerUpdate
+                    // sends every `updateInterval` ms with no dirty check, so a stationary peer
+                    // sends as fast as a moving one; and allowRate's window is over ALLOWED
+                    // timestamps, so a budget under the send rate does not throttle smoothly —
+                    // it passes a burst and then blocks solid until the oldest token ages out.
+                    // At 40/5s against a 20/s sender that was ~3s of every 5 with no relayed
+                    // motion at all: Alice walks, freezes for three seconds, teleports. The
+                    // host, wired directly, sees none of it.
+                    //
+                    // The host also forwards a frame IT builds, out of the fields the room
+                    // actually reads — never the frame it received. Extra keys ride along
+                    // unnoticed, and peerjs refuses to send any json frame at or above its
+                    // 16300-byte chunk limit: it raises MessageToBig on that DataConnection,
+                    // and conn.on('error') here treats that as the peer being gone. So one
+                    // oversize relayed frame evicted every OTHER member of the room, and
+                    // permanently — the door check drops their later messages once they are
+                    // out of `connections`. A clamped frame cannot reach that size.
+                    if (this.isHost && this.allowRate(peerId, 'presence', PRESENCE_BUDGET, 5000)) {
+                        const relayed = { type: 'playerUpdate', from: peerId };
+                        if (typeof data.username === 'string') relayed.username = data.username.slice(0, MAX_NAME);
+                        const pos = vec3(data.position), rot = vec3(data.rotation);
+                        if (pos) relayed.position = pos;
+                        if (rot) relayed.rotation = rot;
+                        // a snapshot: a send that fails fires that connection's error handler
+                        // synchronously, which deletes from the very map being walked
+                        for (const [id, c] of [...this.connections]) {
+                            if (id === peerId) continue;
+                            try { c.send(relayed); } catch (e) {}
+                        }
+                    }
                     break;
                 }
+
+                case 'playerLeft':
+                    // Only the host is wired to everyone, so only the host can tell the room
+                    // that somebody went. Without it a guest keeps a motionless body forever.
+                    if (!this.isHost && typeof data.who === 'string' && PEER_ID_SHAPE.test(data.who)) {
+                        this.removePlayer(data.who);
+                        this.updatePlayerCount();
+                    }
+                    break;
 
                 case 'chat': {
                     // A message may be addressed. Show it if it is for the room or for me...
@@ -596,15 +695,31 @@
         // per rename, which a peer decides the rate of.
         disposeObject(obj) {
             if (!obj) return;
+            // Two things this has to get right, and both are about ownership rather than
+            // thoroughness. A body and its head share ONE material, so a plain traversal
+            // disposes it twice; and in three.js r128 every Sprite on the page shares one
+            // module-level BufferGeometry, so releasing "this avatar's" nametag quad tears
+            // down the buffers behind every other nametag AND every label the world itself
+            // placed. The renderer re-uploads, so nothing stays blank — it just churns the
+            // whole page's sprite buffers on every departure, which is the opposite of what
+            // disposing is for. The material and its canvas texture ARE ours; the quad is not.
+            const seen = new Set();
             const killMaterial = (m) => {
-                if (!m) return;
-                if (m.map && m.map.dispose) m.map.dispose();
+                if (!m || seen.has(m)) return;
+                seen.add(m);
+                if (m.map && m.map.dispose && !seen.has(m.map)) { seen.add(m.map); m.map.dispose(); }
                 if (m.dispose) m.dispose();
             };
             const killOne = (o) => {
-                if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+                const isSprite = o.isSprite || o.type === 'Sprite';
+                if (!isSprite && o.geometry && o.geometry.dispose && !seen.has(o.geometry)) {
+                    seen.add(o.geometry); o.geometry.dispose();
+                }
                 if (Array.isArray(o.material)) o.material.forEach(killMaterial);
                 else killMaterial(o.material);
+                if ((o.isLight || o.type === 'PointLight') && o.dispose && !seen.has(o)) {
+                    seen.add(o); o.dispose();
+                }
             };
             if (typeof obj.traverse === 'function') obj.traverse(killOne);
             else killOne(obj);
@@ -814,8 +929,24 @@
             }
         }
 
+        // The host is the only tab wired to everyone, so a departure reaches the rest of
+        // the room only if the host passes it on — the presence twin of the chat relay.
+        relayDeparture(goneId) {
+            this.connections.forEach((c, id) => {
+                if (id === goneId) return;
+                try { c.send({ type: 'playerLeft', who: goneId }); } catch (e) {}
+            });
+        }
+
         updatePlayerCount() {
-            const count = this.connections.size + 1; // +1 for self
+            // Everyone I know of: the peers I am wired to, plus the ones the host has told
+            // me about. On the host those are the same set; on a joiner they are not, and
+            // counting only my own wires reported "2 players" in a room of three.
+            const seen = new Set(this.connections.keys());
+            this.players.forEach((_, id) => seen.add(id));
+            const mineId = this.peer && this.peer.id;
+            if (mineId) seen.delete(mineId);
+            const count = seen.size + 1; // +1 for self
             const playerCountEl = document.getElementById('player-count');
             if (playerCountEl) playerCountEl.textContent = count;
         }
@@ -892,14 +1023,30 @@
             // A channel that died without ever saying 'close' is the other half, and it is why
             // this looks at `conn.open` rather than merely at the map: a member whose data
             // channel is gone must stop being counted, not just stop being drawn.
+            //
+            // A body with NO connection at all is the case this class did not have before the
+            // relay existed, and it fell through both guards: `conn` was undefined, so the
+            // liveness check could not apply and the count was never refreshed. A guest then
+            // announced "Player left" for a peer the HOST could still see, deleted its avatar,
+            // and re-minted the whole body when that peer came back — every cycle burning a
+            // canvas, texture, material and nametag, and leaving its chat under a raw id.
+            //
+            // updatePlayerCount also has to run AFTER removePlayer, not before: the count is
+            // the union of connections and players, so counting first counts the body that is
+            // about to go and then never counts again.
             const now = Date.now();
-            this.players.forEach((player, peerId) => {
-                if (now - player.lastUpdate <= 5000) return;
+            for (const [peerId, player] of [...this.players]) {
+                const silent = now - player.lastUpdate;
                 const conn = this.connections.get(peerId);
-                if (conn && conn.open !== false) return;
-                if (conn) { this.connections.delete(peerId); this.updatePlayerCount(); }
-                this.removePlayer(peerId);
-            });
+                if (conn) {
+                    if (conn.open !== false || silent <= 5000) continue;   // an open channel: silence is not absence
+                    this.connections.delete(peerId);
+                    this.removePlayer(peerId);
+                    this.updatePlayerCount();
+                    continue;
+                }
+                if (silent > RELAY_GRACE) { this.removePlayer(peerId); this.updatePlayerCount(); }
+            }
         }
     }
 
