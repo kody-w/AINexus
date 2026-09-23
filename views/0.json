@@ -1,0 +1,77 @@
+{
+  "spec": "rapp/1",
+  "kind": "views.snapshot",
+  "stream_id": "views:@kody-w/ainexus",
+  "seq": 0,
+  "utc": "2026-09-23T17:08:22.407Z",
+  "payload": {
+    "tick": 970,
+    "tick_frame": "1aebd1369bdd8b5838d6a68c11ee41f95c109d654b2611bd9f93d2192c9bce90",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-23T17:03:03.572Z",
+    "views": {
+      "world": "index.html",
+      "world_sha256": "bb7c9a56cb04bc4ab030dd544bfcf37018d28f842bed1cc48998cffe4db5db16",
+      "tick_id": "2026-09-23T17-07-35.494Z-c73867c0:0000",
+      "segment": "2026-09-23T17-07-35.494Z-c73867c0",
+      "captured_utc": "2026-09-23T17:06:38.442Z",
+      "feed": "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/",
+      "players": [
+        {
+          "id": "wanderer",
+          "doing": "wander",
+          "sees": [
+            "watcher"
+          ],
+          "file": "segments/2026-09-23T17-07-35.494Z-c73867c0/wanderer/0000.webp",
+          "bytes": 4528,
+          "sha256": "5a5f1ad4959bae7ce15285445a6b198d4bd671213fd08a41c02ab6051e3ff1d8"
+        },
+        {
+          "id": "greeter",
+          "doing": "hold",
+          "sees": [
+            "wanderer"
+          ],
+          "file": "segments/2026-09-23T17-07-35.494Z-c73867c0/greeter/0000.webp",
+          "bytes": 5028,
+          "sha256": "ac8afa3490eeca264b7aa24297dcf0ad3e1203d9370f8e1cf2a1f6924916b8f1"
+        },
+        {
+          "id": "pilgrim",
+          "doing": "go",
+          "sees": [
+            "greeter",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-23T17-07-35.494Z-c73867c0/pilgrim/0000.webp",
+          "bytes": 6272,
+          "sha256": "6f5ed1bb958445963f5e4ef6135d6caaa0f5873d2cbc09e447a0e4a618f8ad1f"
+        },
+        {
+          "id": "watcher",
+          "doing": "wander",
+          "sees": [
+            "pilgrim"
+          ],
+          "file": "segments/2026-09-23T17-07-35.494Z-c73867c0/watcher/0000.webp",
+          "bytes": 4946,
+          "sha256": "f84e0398338b2bd089e42aa8f216d7bb5fe67aa027294d9f44a99ba98a68948c"
+        }
+      ],
+      "players_sealed": 4,
+      "presences_seen": 6,
+      "view_bytes": 20774,
+      "gap_min": 0,
+      "source_commit": "2782c60f765df7c4e03ebd1e52371e77c20c4e96"
+    },
+    "sources_failed": [],
+    "about": "What AI bodies see. Each frame is one spine tick in the AINexus portal world: every AI player's own first-person view, taken from its own page, content-addressed by SHA-256 and anchored to the kody-w/dogg tick spine. The frame is the record; the bytes live on the rolling dogg-live feed, and any copy of a view proves itself against the hash here."
+  },
+  "payload_hash": "46f0b82c11545f43a16f41c765f401b35ca82ea1e7d53a82e8b7a507818fc703",
+  "prev": null,
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "e5384c0d99835d9cf58b63ebaef75c4fcc382d817d0260780e128db32025a2a5"
+}
