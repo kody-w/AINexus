@@ -103,23 +103,33 @@ Stated in words, deliberately, with no exploit written.
 
 ---
 
-### 8. The heartbeat is a fraction of what the schedules say, here and on the spine
+### 8. The heartbeat was a fraction of what the schedules say, here and on the spine
+**Narrowed, not closed.** Since 2026-09-23 18:36Z a Mac mini has been beating the spine again:
+kody-w/dogg's `tools/primary_beat.py` runs under the launchd agent `com.rapp.dogg-beat` every ten
+minutes, and `com.rapp.ainexus-views` seals this line under each new tick. What is still open is
+the backup for the views feed. `dogg-live.yml` force-pushes the feed on a schedule, so it is
+disabled while the Mac mini publishes. It can return only as a staleness-gated fallback, and that
+edit to a workflow file needs a token with the `workflow` scope.
 **Found:** 2026-09-23, by measuring the public feed and the spine instead of reading cron lines.
 
 **Evidence.** `dogg-live.yml` asks for a tick every five minutes (288 a day). The feed received
 178 live ticks in 25.3 days, about 7 a day, with a median gap of 3.3 hours and a longest of 7.8.
 Every run of the workflow succeeded, because GitHub only schedules it every few hours. The spine
-(kody-w/dogg) promises roughly ten minutes. Every tick since at least 2026-09-10 was minted by
-`fallback-beat (primary stale)`, about 7 a day with a median gap of 3.8 hours: the primary beat's
-machine is dark, and the fallback's own `*/15` schedule is throttled the same way.
+(kody-w/dogg) promises roughly ten minutes. Its primary beat minted 810 ticks at a median gap of
+10.1 minutes and then went dark on 2026-08-31 at 04:40Z (tick 810). Every tick after that was
+minted by `fallback-beat (primary stale)`, about 7 a day with a median gap of 3.8 hours, because
+the fallback's own `*/15` schedule is throttled the same way. (This entry first said "since at
+least 2026-09-10"; the spine's own history says August 31.)
 
-**Consequence.** Every DOGG dimension, this one included, resolves time at three to four hours
-rather than ten minutes. The views line seals at most one frame per spine tick, so it can never be
-finer than the spine.
+**Consequence.** Every DOGG dimension, this one included, resolved time at three to four hours
+rather than ten minutes. Each node's collector refuses to record twice under one tick, so a slow
+spine caps every dimension. The views line seals at most one frame per spine tick, so it can never
+be finer than the spine.
 
-**Not closable with a cron line.** A best-effort scheduler cannot be a heartbeat. The fix is a real
+**Not closable with a cron line.** A best-effort scheduler cannot be a heartbeat. The fix was a real
 beat, a machine that ticks the spine and runs this capture, with the Actions schedules kept as the
-fallbacks they were written to be.
+fallbacks they were written to be. The spine's fallback already stands down while the primary is
+fresh. The views feed's fallback does not yet.
 
 ---
 

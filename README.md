@@ -8,9 +8,14 @@ The viewer follows the newest public tick, holds that frame until the next one a
 people scrub back through the retained timeline (up to 2,016 ticks). Add `&live=0` to play the
 checked-in finite capture instead.
 
-The `Publish DOGG Live Tick` workflow asks for a tick every five minutes; GitHub's scheduler runs
-it every few hours. Each run captures what the four AI players see and publishes the bytes to the
-bounded feed on the public `dogg-live` branch.
+A Mac mini publishes each tick with the launchd agent `com.rapp.ainexus-views`. Whenever the DOGG
+spine has a tick the views line has not sealed, it captures what the four AI players see,
+publishes the bytes to the bounded feed on the public `dogg-live` branch, and seals the frame. The
+same machine beats the spine every ten minutes (`com.rapp.dogg-beat`, running kody-w/dogg's
+`tools/primary_beat.py`), so a new frame lands roughly every ten minutes. The `Publish DOGG Live
+Tick` workflow is disabled while the Mac mini is primary, because it force-pushes the feed and
+would erase the Mac mini's ticks. It comes back as a staleness-gated fallback once that workflow
+edit lands.
 
 ### The views dimension: `views:@kody-w/ainexus`
 
@@ -22,10 +27,10 @@ world they stood in. The spine is read before the capture, so no frame can claim
 before its own tick. A capture that lands while the spine is still on an already-sealed tick stays
 in the feed, unsealed. Its seven-word chant is `PEARL EXTINGUISH ADVANCE RAPID FORGE HERON SMELT`.
 
-**Status:** the genesis frame was sealed by running the publisher's steps (`views_seal.py anchor`,
-the capture with `--receipt`, `views_seal.py seal`) from a machine with push access. Wiring those
-steps into the Actions publisher needs a token with the `workflow` scope and is still pending. Until
-it lands, Actions keeps publishing unsealed ticks, and the viewer labels them unsealed.
+**Status:** sealing every spine tick from the Mac mini since 2026-09-23 (frame 1 at spine tick
+972). The Actions publisher is not yet a sealing fallback: that edit needs a token with the
+`workflow` scope. If the Mac mini goes dark, the line sleeps and the next frame's `gap_min`
+records for how long.
 
 - **The viewer checks everything itself.** It re-derives every hash, checks the head against
   `views/HEAD.json` (walking back link by link only when you scrub to an older tick), checks every
