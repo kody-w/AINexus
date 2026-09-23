@@ -15,12 +15,17 @@ bounded feed on the public `dogg-live` branch.
 ### The views dimension: `views:@kody-w/ainexus`
 
 The feed is bytes. The record is a dimension on the [DOGG global tick network](https://github.com/kody-w/dogg).
-When the spine has advanced since the last seal, the same run seals the tick into [`views/`](views/):
+When the spine has advanced since the last seal, the tick is sealed into [`views/`](views/):
 one native dogg/0 frame per spine tick, anchored to that tick (`tick`, `tick_frame`) and carrying
 the SHA-256 and size of every player's view, who each player could see, and which build of the
 world they stood in. The spine is read before the capture, so no frame can claim a view from
 before its own tick. A capture that lands while the spine is still on an already-sealed tick stays
 in the feed, unsealed. Its seven-word chant is `PEARL EXTINGUISH ADVANCE RAPID FORGE HERON SMELT`.
+
+**Status:** the genesis frame was sealed by running the publisher's steps (`views_seal.py anchor`,
+the capture with `--receipt`, `views_seal.py seal`) from a machine with push access. Wiring those
+steps into the Actions publisher needs a token with the `workflow` scope and is still pending. Until
+it lands, Actions keeps publishing unsealed ticks, and the viewer labels them unsealed.
 
 - **The viewer checks everything itself.** It re-derives every hash, checks the head against
   `views/HEAD.json` (walking back link by link only when you scrub to an older tick), checks every
