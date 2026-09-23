@@ -1,5 +1,13 @@
 name: Publish DOGG Live Tick
 
+# The fallback publisher for the views:@kody-w/ainexus dimension. The primary is a machine on
+# the DOGG heartbeat (a Mac mini running the launchd agent com.rapp.ainexus-views), which
+# captures and seals every spine tick. This workflow stands down while the feed is fresh. When
+# the primary has been dark for 25 minutes it does the same job: capture what the four AI
+# players see, publish the bytes to the dogg-live feed, and seal one frame per spine tick into
+# views/ on main. The spine is read BEFORE the capture, so no frame can claim a view from before
+# its own tick. The feed is pushed with a lease, so neither publisher can erase the other's tick.
+
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -15,14 +23,60 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
+      - name: Stand down while the primary publisher is fresh
+        id: fresh
+        run: |
+          python3 - <<'PY'
+          import datetime, json, os, time, urllib.request
+          url = "https://raw.githubusercontent.com/%s/dogg-live/recordings/live/manifest.json?_=%d" % (
+              os.environ["GITHUB_REPOSITORY"], time.time_ns())
+          age = None
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  updated = json.load(response)["updated"]
+              when = datetime.datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=datetime.timezone.utc)
+              age = (datetime.datetime.now(datetime.timezone.utc) - when).total_seconds()
+          except Exception as error:
+              print("the feed could not be read (%s), so this run publishes" % error)
+          stale = age is None or age > 25 * 60
+          if age is not None:
+              print("the feed's newest tick is %ds old: %s" % (age, "stale, so this run publishes" if stale else "fresh, standing down"))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("stale=%s\n" % ("true" if stale else "false"))
+          PY
+
       - name: Check out the current world
+        if: steps.fresh.outputs.stale == 'true'
         uses: actions/checkout@v5
         with:
           path: source
 
+      - uses: actions/setup-python@v5
+        if: steps.fresh.outputs.stale == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Read the spine tick this capture happens under
+        id: anchor
+        if: steps.fresh.outputs.stale == 'true'
+        run: |
+          set +e
+          python3 source/tools/views_seal.py anchor --chain source/views --out "$RUNNER_TEMP/anchor.json"
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "sealable=true" >> "$GITHUB_OUTPUT" ;;
+            10) echo "sealable=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "sealable=false" >> "$GITHUB_OUTPUT"
+               echo "failed=true" >> "$GITHUB_OUTPUT"
+               echo "::warning title=Unanchored tick::The spine could not be read and checked, so this tick will be published unsealed." ;;
+          esac
+
       - name: Prepare the public DOGG feed
+        id: feed
+        if: steps.fresh.outputs.stale == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -30,18 +84,23 @@ jobs:
           git -C feed remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if git -C feed fetch --depth=1 origin dogg-live; then
             git -C feed checkout --detach FETCH_HEAD
+            echo "lease=$(git -C feed rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
             git -C feed checkout --orphan dogg-live
+            echo "lease=" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v5
+        if: steps.fresh.outputs.stale == 'true'
         with:
           node-version: '22'
 
       - name: Install the browser driver
+        if: steps.fresh.outputs.stale == 'true'
         run: npm install --prefix source/.dogg-runtime --no-save --no-package-lock playwright-core@1.62.1
 
       - name: Capture and append one tick
+        if: steps.fresh.outputs.stale == 'true'
         env:
           PLAYWRIGHT_DIR: ${{ github.workspace }}/source/.dogg-runtime
         run: |
@@ -55,10 +114,14 @@ jobs:
             --output-root "${{ github.workspace }}/feed" \
             --stream recordings/live \
             --max-frames 2016 \
-            --tick-seconds 300
+            --tick-seconds 600 \
+            --receipt "$RUNNER_TEMP/receipt.json"
 
       - name: Publish the tick
+        if: steps.fresh.outputs.stale == 'true'
         working-directory: feed
+        env:
+          LEASE: ${{ steps.feed.outputs.lease }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -69,4 +132,40 @@ jobs:
           fi
           tree=$(git write-tree)
           commit=$(printf 'dogg: tick %s [skip ci]\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | git commit-tree "$tree")
-          git push --force origin "$commit:refs/heads/dogg-live"
+          # the lease: if the primary published while this run captured, its tick stands and ours is dropped
+          git push --force-with-lease="dogg-live:${LEASE}" origin "$commit:refs/heads/dogg-live"
+
+      - name: Seal the tick into the views dimension
+        if: steps.fresh.outputs.stale == 'true' && steps.anchor.outputs.sealable == 'true'
+        working-directory: source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch --depth=1 origin main
+            git reset --hard FETCH_HEAD
+            set +e
+            python3 tools/views_seal.py seal \
+              --anchor "$RUNNER_TEMP/anchor.json" \
+              --receipt "$RUNNER_TEMP/receipt.json" \
+              --feed-dir "$GITHUB_WORKSPACE/feed/recordings/live" \
+              --feed-url "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dogg-live/recordings/live/" \
+              --summary "$RUNNER_TEMP/seal.txt"
+            code=$?
+            set -e
+            if [ "$code" = "10" ]; then echo "This spine tick is already on the line."; exit 0; fi
+            if [ "$code" != "0" ]; then exit "$code"; fi
+            python3 tools/verify_thread.py
+            git add views
+            git commit -q -m "views: $(cat "$RUNNER_TEMP/seal.txt") [skip ci]"
+            if git push origin HEAD:main; then exit 0; fi
+            echo "main moved while sealing; sealing again on top of it (attempt $attempt)"
+            sleep $((attempt * 4))
+          done
+          exit 1
+
+      - name: Say that this tick went unsealed
+        if: steps.fresh.outputs.stale == 'true' && steps.anchor.outputs.failed == 'true'
+        run: |
+          echo "::error title=Unsealed tick::The views were published, but no frame was sealed because the spine could not be read and checked."
+          exit 1

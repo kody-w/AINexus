@@ -1,0 +1,59 @@
+name: Views chain
+
+# The oracle for the views:@kody-w/ainexus dimension, under the rule every DOGG node keeps: a red
+# verification blocks a merge. Tick commits come from the publisher, which verifies before it
+# pushes. This holds everything else to the same line: the sealer against forgeries, the vendored
+# reference tools, the stream the receipts are cut from, and the published line itself, with every
+# anchor checked against the spine and the newest views re-hashed from the feed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'views/**'
+      - 'mission.json'
+      - 'tools/views_seal.py'
+      - 'tools/rapp.py'
+      - 'tools/chainio.py'
+      - 'tools/verify_thread.py'
+      - 'tools/dogg_stream.cjs'
+      - 'tools/record_views.cjs'
+      - 'tests/views_seal_test.py'
+      - 'tests/views_fixture.py'
+      - 'tests/dogg_stream.cjs'
+      - '.github/workflows/views-chain.yml'
+      - '.github/workflows/dogg-live.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+
+      - name: the sealer against every forgery it claims to refuse
+        run: python3 tests/views_seal_test.py
+
+      - name: the stream the receipts are cut from
+        run: node tests/dogg_stream.cjs
+
+      - name: every chain here verifies under the spine's own oracle
+        run: python3 tools/verify_thread.py
+
+      - name: the views line, its anchors, and the newest views the feed still holds
+        run: |
+          if [ -f views/HEAD.json ]; then
+            python3 tools/views_seal.py verify --feed-last 24 \
+              --feed "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dogg-live/recordings/live/"
+          else
+            echo "no views line yet: the first sealed tick after this lands is its genesis"
+          fi

@@ -104,12 +104,16 @@ Stated in words, deliberately, with no exploit written.
 ---
 
 ### 8. The heartbeat was a fraction of what the schedules say, here and on the spine
-**Narrowed, not closed.** Since 2026-09-23 18:36Z a Mac mini has been beating the spine again:
-kody-w/dogg's `tools/primary_beat.py` runs under the launchd agent `com.rapp.dogg-beat` every ten
-minutes, and `com.rapp.ainexus-views` seals this line under each new tick. What is still open is
-the backup for the views feed. `dogg-live.yml` force-pushes the feed on a schedule, so it is
-disabled while the Mac mini publishes. It can return only as a staleness-gated fallback, and that
-edit to a workflow file needs a token with the `workflow` scope.
+**Closed.** Since 2026-09-23 18:36Z a Mac mini has been beating the spine again: kody-w/dogg's
+`tools/primary_beat.py` runs under the launchd agent `com.rapp.dogg-beat` every ten minutes, and
+`com.rapp.ainexus-views` seals this line under each new tick. `dogg-live.yml` is now the views
+feed's fallback. It stands down while the feed is fresh, takes over after 25 minutes of silence,
+and pushes the feed with a lease, the same as the primary, so neither publisher can erase the
+other's tick. Since 2026-09-25 the spine also has a second machine: RappterTwo's Mac mini runs the
+same beat as a standby (`com.rapp.dogg-standby-beat`, `standby-beat (rapptertwo mac mini)`). It
+mints only once the newest tick is 15 minutes old, so it beats only when the primary has missed. In
+a drill with the primary paused, it minted tick 1159 sixteen minutes after tick 1158, and the spine
+verified.
 **Found:** 2026-09-23, by measuring the public feed and the spine instead of reading cron lines.
 
 **Evidence.** `dogg-live.yml` asks for a tick every five minutes (288 a day). The feed received
@@ -128,8 +132,7 @@ be finer than the spine.
 
 **Not closable with a cron line.** A best-effort scheduler cannot be a heartbeat. The fix was a real
 beat, a machine that ticks the spine and runs this capture, with the Actions schedules kept as the
-fallbacks they were written to be. The spine's fallback already stands down while the primary is
-fresh. The views feed's fallback does not yet.
+fallbacks they were written to be. Both fallbacks now stand down while their primary is fresh.
 
 ---
 

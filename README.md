@@ -12,10 +12,11 @@ A Mac mini publishes each tick with the launchd agent `com.rapp.ainexus-views`. 
 spine has a tick the views line has not sealed, it captures what the four AI players see,
 publishes the bytes to the bounded feed on the public `dogg-live` branch, and seals the frame. The
 same machine beats the spine every ten minutes (`com.rapp.dogg-beat`, running kody-w/dogg's
-`tools/primary_beat.py`), so a new frame lands roughly every ten minutes. The `Publish DOGG Live
-Tick` workflow is disabled while the Mac mini is primary, because it force-pushes the feed and
-would erase the Mac mini's ticks. It comes back as a staleness-gated fallback once that workflow
-edit lands.
+`tools/primary_beat.py`), so a new frame lands roughly every ten minutes. A second Mac mini stands
+by on the spine and mints only once the newest tick is 15 minutes old. The `Publish DOGG Live
+Tick` workflow is the fallback. It stands down while the feed is fresh, and when the Mac mini has
+been dark for 25 minutes it captures and seals in its place. Both publishers push the feed with a
+lease, so neither can erase the other's tick.
 
 ### The views dimension: `views:@kody-w/ainexus`
 
@@ -28,9 +29,8 @@ before its own tick. A capture that lands while the spine is still on an already
 in the feed, unsealed. Its seven-word chant is `PEARL EXTINGUISH ADVANCE RAPID FORGE HERON SMELT`.
 
 **Status:** sealing every spine tick from the Mac mini since 2026-09-23 (frame 1 at spine tick
-972). The Actions publisher is not yet a sealing fallback: that edit needs a token with the
-`workflow` scope. If the Mac mini goes dark, the line sleeps and the next frame's `gap_min`
-records for how long.
+972). If the Mac mini goes dark, the Actions fallback keeps sealing (as often as GitHub schedules
+it), and each frame's `gap_min` records how long the line went without a frame.
 
 - **The viewer checks everything itself.** It re-derives every hash, checks the head against
   `views/HEAD.json` (walking back link by link only when you scrub to an older tick), checks every
