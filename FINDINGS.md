@@ -103,6 +103,26 @@ Stated in words, deliberately, with no exploit written.
 
 ---
 
+### 8. The heartbeat is a fraction of what the schedules say, here and on the spine
+**Found:** 2026-09-23, by measuring the public feed and the spine instead of reading cron lines.
+
+**Evidence.** `dogg-live.yml` asks for a tick every five minutes (288 a day). The feed received
+178 live ticks in 25.3 days, about 7 a day, with a median gap of 3.3 hours and a longest of 7.8.
+Every run of the workflow succeeded, because GitHub only schedules it every few hours. The spine
+(kody-w/dogg) promises roughly ten minutes. Every tick since at least 2026-09-10 was minted by
+`fallback-beat (primary stale)`, about 7 a day with a median gap of 3.8 hours: the primary beat's
+machine is dark, and the fallback's own `*/15` schedule is throttled the same way.
+
+**Consequence.** Every DOGG dimension, this one included, resolves time at three to four hours
+rather than ten minutes. The views line seals at most one frame per spine tick, so it can never be
+finer than the spine.
+
+**Not closable with a cron line.** A best-effort scheduler cannot be a heartbeat. The fix is a real
+beat, a machine that ticks the spine and runs this capture, with the Actions schedules kept as the
+fallbacks they were written to be.
+
+---
+
 ## DE-RISK LOG
 
 A night of 207 commits touched every module here. These are the calls that could plausibly have
@@ -191,6 +211,25 @@ without you, and I agree with that call.
 ---
 
 ## CLOSED
+
+### C8. The live views were bytes, not a record
+`recordings/live` held 208 ticks and no hash of anything. It was an orphan branch force-pushed on
+every run, with `epochs` always empty and no anchor to any clock. Nothing could prove what any
+player had seen, or when, and "DOGG" named the feed without the feed being on the DOGG network.
+**Closed by:** `views:@kody-w/ainexus`, one native dogg/0 frame per spine tick on main (`views/`),
+anchored to the kody-w/dogg spine and carrying the SHA-256 of every view. `views.html` verifies
+the line itself and paints a sealed tick only from bytes that hash to what its frame says.
+**Retested by:** `tests/views_seal_test.py` (17 checks, the real sealer against forgeries) and
+`tests/browser/views_sealed.cjs` (17 checks). Each of nine viewer mutations turns its own checks
+red: accepting any bytes, skipping links, trusting the anchor, trusting HEAD, painting while a seal
+is still unknown, leaving the previous picture on a refused tick, walking the whole line on every
+visit, calling every line the published one, and calling every newer capture "awaiting".
+**Found by review, before it shipped:** the first cut painted a tick's bytes before its seal was
+known and only dimmed them once refused, a quick scrub could strand a verified view as pending,
+`?chain=` could put an attacker's line under the green seal, every visit walked the whole line, and
+an unsealable capture said it was awaiting a seal. All five are held down by the checks above.
+**The honest part:** the 208 ticks before genesis stay unsealed and say so. Sealing them now
+would anchor them to ticks they were never captured under.
 
 ### C5. A fatal peer error left a destroyed peer nobody rebuilt
 `disconnected` called `reconnect()`, which is right for a dropped socket and useless after a fatal

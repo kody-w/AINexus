@@ -182,6 +182,35 @@ function appendCapture(options) {
   return manifest;
 }
 
+// What the newest tick of a stream shows, in the shape tools/views_seal.py seals. It names files
+// and nothing else about them: the sealer hashes the bytes itself, because a receipt that carried
+// its own hashes would be asking to be believed.
+function captureReceipt(options) {
+  const manifest = options.manifest;
+  const frames = frameCount(manifest);
+  if (!frames) throw new Error('stream has no frames to describe');
+  const index = frames - 1;
+  const tick = Array.isArray(manifest.ticks) ? manifest.ticks[index] : null;
+  if (!tick || !tick.segment || !tick.id || !tick.capturedAt) throw new Error('the newest tick names no segment');
+  const sees = options.sees || {};
+  const receipt = {
+    schema: 'ainexus/views-receipt/1',
+    world: options.world || manifest.world || '',
+    world_sha256: options.worldSha256 || '',
+    segment: tick.segment,
+    tick_id: tick.id,
+    captured_utc: tick.capturedAt,
+    players: (manifest.players || []).map(player => ({
+      id: player.id,
+      doing: (Array.isArray(player.doing) && player.doing[index]) || '',
+      sees: Array.isArray(sees[player.id]) ? sees[player.id].filter(id => typeof id === 'string') : [],
+      file: (Array.isArray(player.shots) && player.shots[index]) || null
+    }))
+  };
+  if (options.sourceCommit) receipt.source_commit = options.sourceCommit;
+  return receipt;
+}
+
 function arg(name, fallback) {
   const index = process.argv.indexOf('--' + name);
   return index > 0 ? process.argv[index + 1] : fallback;
@@ -204,4 +233,4 @@ if (require.main === module) {
   console.log(`${manifest.frames} DOGG frames at ${target}`);
 }
 
-module.exports = { appendCapture, frameCount };
+module.exports = { appendCapture, captureReceipt, frameCount };

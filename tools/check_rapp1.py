@@ -104,11 +104,18 @@ def check(path, kinds, out):
     return frames, seen_kinds
 
 
+def dogg_epoch(p):
+    """A sealed epoch of a native dogg/0 chain (views/epochs/<k>.jsonl). Native DOGG keeps the
+    rapp/1 envelope but names streams `theme:@owner/repo`, which PROTOCOL.md says is NOT a claim of
+    rapp/1 stream-id conformance — so its frames are checked by tools/verify_thread.py, not here."""
+    return p.parent.name == "epochs" and (p.parent.parent / "HEAD.json").exists()
+
+
 def main():
     kinds, src = registry()
     print("registry: %d kinds from %s\n" % (len(kinds), src))
     targets = sys.argv[1:] or [str(p) for p in sorted(ROOT.rglob("*.jsonl"))
-                               if "node_modules" not in str(p)]
+                               if "node_modules" not in str(p) and not dogg_epoch(p)]
     out, total, allkinds = [], 0, set()
     for t in targets:
         frames, ks = check(t, kinds, out)

@@ -1,0 +1,31 @@
+{
+ "schema": "dogg/0-mission",
+ "dimension": "views:@kody-w/ainexus",
+ "fields": [
+  {
+   "name": "players_sealed",
+   "path": "views.players_sealed",
+   "unit": "AI players whose own first-person view is sealed at this tick"
+  },
+  {
+   "name": "presences_seen",
+   "path": "views.presences_seen",
+   "unit": "other players painted in those views, summed across players"
+  },
+  {
+   "name": "gap_min",
+   "path": "views.gap_min",
+   "unit": "minutes since the previous sealed view (0 at genesis)"
+  },
+  {
+   "name": "view_bytes",
+   "path": "views.view_bytes",
+   "unit": "bytes of sealed view images"
+  }
+ ],
+ "default": [
+  "players_sealed",
+  "presences_seen",
+  "gap_min"
+ ]
+}
