@@ -1,0 +1,78 @@
+{
+  "spec": "rapp/1",
+  "kind": "views.snapshot",
+  "stream_id": "views:@kody-w/ainexus",
+  "seq": 6,
+  "utc": "2026-09-23T19:35:02.349Z",
+  "payload": {
+    "tick": 977,
+    "tick_frame": "76553e7b1a9d3578efe0fce40864c6aceb5432639088b314cae5f917a025d040",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-23T19:31:27.070Z",
+    "views": {
+      "world": "index.html",
+      "world_sha256": "bb7c9a56cb04bc4ab030dd544bfcf37018d28f842bed1cc48998cffe4db5db16",
+      "tick_id": "2026-09-23T19-34-58.178Z-66f6040a:0000",
+      "segment": "2026-09-23T19-34-58.178Z-66f6040a",
+      "captured_utc": "2026-09-23T19:34:10.866Z",
+      "feed": "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/",
+      "players": [
+        {
+          "id": "wanderer",
+          "doing": "wander",
+          "sees": [],
+          "file": "segments/2026-09-23T19-34-58.178Z-66f6040a/wanderer/0000.webp",
+          "bytes": 5582,
+          "sha256": "a29c94ea396838dac07a0b3875daf22869672e44121da3d4ec1305433000b594"
+        },
+        {
+          "id": "greeter",
+          "doing": "hold",
+          "sees": [
+            "pilgrim",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-23T19-34-58.178Z-66f6040a/greeter/0000.webp",
+          "bytes": 5240,
+          "sha256": "26be03c426914855326052bd13050a8f462e7fecc098664296ba82ad2358a244"
+        },
+        {
+          "id": "pilgrim",
+          "doing": "go",
+          "sees": [
+            "greeter",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-23T19-34-58.178Z-66f6040a/pilgrim/0000.webp",
+          "bytes": 4884,
+          "sha256": "c2be2221127f2c109eaf17b8f16d59551cfec43074a8765dfcb4ce239548ef88"
+        },
+        {
+          "id": "watcher",
+          "doing": "wander",
+          "sees": [
+            "greeter",
+            "pilgrim",
+            "wanderer"
+          ],
+          "file": "segments/2026-09-23T19-34-58.178Z-66f6040a/watcher/0000.webp",
+          "bytes": 4818,
+          "sha256": "bfac79c0cec4e17f894bb14ff889ec2fbdbeae5eedae0c9769fec0cba637f323"
+        }
+      ],
+      "players_sealed": 4,
+      "presences_seen": 9,
+      "view_bytes": 20524,
+      "gap_min": 8,
+      "source_commit": "838daf008d3505b660d033dc18c08a417f626829"
+    },
+    "sources_failed": []
+  },
+  "payload_hash": "6f689a96757d6e9d715d9c2cfcd45a105a37d460abee9a59d5f42136c730a4bb",
+  "prev": "44823a45eb1cd3d5a4950a8f0124f06978559725bc68908b059b95ccacf482aa",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "a385dcb185989496c01c41f4c6ae4b742f5c4d911d7fa6142245a5a276c2e8e7"
+}
