@@ -31,11 +31,20 @@ button,input{font:inherit}
 #scrub{min-width:100px;flex:1;accent-color:#7de3ff}
 #when{min-width:172px;text-align:right;color:#8f8fb0;font:11px ui-monospace,Menlo,monospace}
 .blank{display:flex;align-items:center;justify-content:center;height:100%;color:#55557d;font:11px ui-monospace,monospace}
+#seal{display:block;margin-top:3px;max-width:min(620px,calc(100vw - 32px));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ffd479}
+#seal[hidden]{display:none}
+#seal.ok{color:#7dffb0}
+#seal.bad{color:#ff8a8a}
+#seal.dim{color:#8f8fb0}
+.cell.forged{border-color:#ff5d73;box-shadow:0 0 0 1px #ff5d73}
+.cell.forged img{opacity:.1;filter:grayscale(1)}
+.cell.forged::after{content:"✗ not the sealed view";position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;
+  color:#ff8a8a;font:12px ui-monospace,Menlo,monospace}
 @media(max-width:700px){#hud{left:14px;right:auto}#when{display:none}#stage{gap:6px;padding:8px;bottom:48px}
   #transport{height:48px;padding:7px 8px;gap:7px}#transport button{padding:0 8px}}
 </style></head><body>
 <div id="stage"><div class="blank">waiting for the first DOGG frame...</div></div>
-<div id="hud"><b id="who">-</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="state" class="waiting">CONNECTING</span></div>
+<div id="hud"><b id="who">-</b> · frame <span id="n">0</span>/<span id="of">0</span> · <span id="state" class="waiting">CONNECTING</span><span id="seal" hidden></span></div>
 <div id="transport">
   <button id="play" type="button" aria-label="Play timeline">Play</button>
   <input id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="DOGG timeline">
@@ -77,6 +86,445 @@ const view = {
   refreshStarted: 0,
   refreshApplied: 0
 };
+
+// ── the sealed line ─────────────────────────────────────────────────────────
+// The feed is bytes, and bytes are not a record. The record is views:@kody-w/ainexus: a DOGG
+// dimension on main (views/), one frame per spine tick, each anchored to the kody-w/dogg tick
+// spine and carrying the SHA-256 of every view it names. Nothing here takes the line's word for
+// anything. This page re-derives every hash, walks every link back from the published head,
+// checks every anchor against the spine, and paints a sealed tick only from bytes that hash to
+// what its frame says. While a tick's seal is still being checked its cells hold what they were
+// showing, and bytes that are refused are cleared, so a view that is not the sealed one never
+// reaches the screen.
+//
+// Frames are unsigned: what makes this THE line is where it is published. A line read from
+// anywhere else (?chain= / ?spine= / ?stream=, which the tests need) is still verified, but the
+// page says it is not the published one and never shows the green seal for it.
+const slash = url => url.endsWith('/') ? url : url + '/';
+const PUBLISHED = {
+  chain: 'https://raw.githubusercontent.com/kody-w/ainexus/main/views/',
+  spine: 'https://raw.githubusercontent.com/kody-w/dogg/main/ticks/',
+  stream: 'views:@kody-w/ainexus'
+};
+const CHAIN = params.has('chain') ? params.get('chain') :
+  (USE_DOGG ? 'https://raw.githubusercontent.com/kody-w/AINexus/main/views/' : '');
+const SPINE = params.get('spine') || PUBLISHED.spine;
+const STREAM = params.get('stream') || PUBLISHED.stream;
+const SPINE_STREAM = 'tick:@kody-w/global';
+const LINE_POLL = params.has('poll') ? POLL : 30000;
+const LINE_BATCH = 16;
+const LINE_CAP = 4096;
+const AWAIT_MS = 15 * 60 * 1000;       // a seal lands within a minute or two of its capture
+const HEX64 = /^[0-9a-f]{64}$/;
+const FIXED_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const KIND = /^[a-z0-9]+(-[a-z0-9]+)*\.[a-z0-9]+(-[a-z0-9]+)*$/;
+const FRAME_KEYS = ['spec', 'kind', 'stream_id', 'seq', 'utc', 'payload', 'payload_hash',
+  'frame_hash', 'prev', 'prev_wave', 'sig'];
+const ENCODER = new TextEncoder();
+const line = {
+  on: !!CHAIN,
+  base: CHAIN ? slash(new URL(CHAIN, location.href).href) : '',
+  spine: slash(new URL(SPINE, location.href).href),
+  published: false,
+  meta: null,
+  frames: new Map(),
+  byTick: new Map(),
+  top: -1,
+  low: -1,
+  genesis: false,
+  gap: '',
+  state: CHAIN ? 'loading' : 'off',
+  reason: '',
+  bundles: new Map(),
+  spineMeta: null,
+  spineBundles: new Map(),
+  anchors: new Map(),
+  busy: false,
+  walking: false,
+  walkFailedAt: 0
+};
+line.published = line.on && line.base.toLowerCase() === PUBLISHED.chain &&
+  line.spine.toLowerCase() === PUBLISHED.spine && STREAM === PUBLISHED.stream;
+
+const isObject = value => Object.prototype.toString.call(value) === '[object Object]';
+
+// RFC 8785 over the domain a frame may carry: exact integers, well-formed strings, plain objects.
+function jcs(value) {
+  if (value === null || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) throw new Error('a number that is not an exact integer');
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'string') {
+    if (typeof value.isWellFormed === 'function' && !value.isWellFormed()) throw new Error('a broken string');
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return '[' + value.map(jcs).join(',') + ']';
+  if (isObject(value)) {
+    return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + jcs(value[key])).join(',') + '}';
+  }
+  throw new Error('something that is not JSON');
+}
+
+async function sha256hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+const H = (space, value) => sha256hex(ENCODER.encode(space + '\n' + jcs(value)));
+
+// rapp/1 §7.5, everything one frame can show on its own. The link is checked by linkProblem.
+async function frameProblem(frame, stream) {
+  if (!isObject(frame)) return 'is not a frame';
+  const keys = Object.keys(frame);
+  if (keys.length !== FRAME_KEYS.length || !FRAME_KEYS.every(key => keys.includes(key))) {
+    return 'does not carry exactly the eleven keys';
+  }
+  if (frame.spec !== 'rapp/1' || typeof frame.kind !== 'string' || !KIND.test(frame.kind)) return 'is not a rapp/1 envelope';
+  if (frame.stream_id !== stream) return 'belongs to another stream';
+  if (!Number.isSafeInteger(frame.seq) || frame.seq < 0) return 'has no usable seq';
+  if (typeof frame.utc !== 'string' || !FIXED_UTC.test(frame.utc)) return 'is not dated in the fixed form';
+  if (!isObject(frame.payload)) return 'has no payload';
+  if (!HEX64.test(String(frame.payload_hash)) || !HEX64.test(String(frame.frame_hash))) return 'has malformed hashes';
+  if (frame.prev_wave !== null) return 'names a wave parent off a swarm';
+  if (frame.seq === 0 ? frame.prev !== null : !HEX64.test(String(frame.prev))) {
+    return frame.seq === 0 ? 'is a genesis that names a parent' : 'names no parent';
+  }
+  try {
+    if (await H('rapp/1:particle', frame.payload) !== frame.payload_hash) return 'carries a payload its hash does not name';
+    const pre = {};
+    for (const key of FRAME_KEYS) if (key !== 'frame_hash' && key !== 'sig') pre[key] = frame[key];
+    if (await H('rapp/1:wave', pre) !== frame.frame_hash) return 'carries a frame_hash that is not its own';
+  } catch (error) {
+    return 'cannot be canonicalised: it holds ' + error.message;
+  }
+  return '';
+}
+
+function linkProblem(older, newer) {
+  if (newer.seq !== older.seq + 1) return `frame ${newer.seq} does not follow frame ${older.seq}`;
+  if (newer.prev !== older.payload_hash) return `frame ${newer.seq} does not name frame ${older.seq} as its parent`;
+  if (newer.utc < older.utc) return `frame ${newer.seq} is dated before its parent`;
+  if (!(newer.payload.tick > older.payload.tick)) return `frame ${newer.seq} does not advance the spine tick`;
+  return '';
+}
+
+function viewsOf(frame) {
+  const payload = frame && frame.payload;
+  const views = payload && payload.views;
+  if (!payload || !Number.isSafeInteger(payload.tick) || !HEX64.test(String(payload.tick_frame)) ||
+      !isObject(views) || typeof views.tick_id !== 'string' || typeof views.captured_utc !== 'string' ||
+      !Array.isArray(views.players)) return null;
+  const players = new Map();
+  for (const player of views.players) {
+    if (!isObject(player) || typeof player.id !== 'string' || typeof player.file !== 'string' ||
+        !HEX64.test(String(player.sha256))) return null;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(player.file) || player.file.startsWith('/') ||
+        player.file.split('/').some(part => part === '' || part === '.' || part === '..')) return null;
+    players.set(player.id, player);
+  }
+  return { tick: payload.tick, tickFrame: payload.tick_frame, tickId: views.tick_id,
+    captured: views.captured_utc, players };
+}
+
+async function viewsFrameProblem(frame) {
+  const bad = await frameProblem(frame, STREAM);
+  if (bad) return bad;
+  return viewsOf(frame) ? '' : 'does not describe any views';
+}
+
+async function fetchJson(url, fresh) {
+  const response = await fetch(fresh ? resolvedUrl(url, true) : url, { cache: fresh ? 'no-store' : 'default' });
+  if (!response.ok) {
+    const error = new Error(`${response.status} for ${new URL(url).pathname.split('/').slice(-2).join('/')}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+// dogg/0 storage: HEAD.json, sealed epochs/<k>.jsonl, and a flat tail. Readers use HEAD, never
+// listings, and a frame found in either place is the same content-addressed frame.
+async function chainFrame(base, meta, bundles, seq) {
+  const E = Number.isSafeInteger(meta.epoch_size) && meta.epoch_size > 0 ? meta.epoch_size : 288;
+  const K = Number.isSafeInteger(meta.sealed_epochs) && meta.sealed_epochs > 0 ? meta.sealed_epochs : 0;
+  if (seq >= K * E) return fetchJson(base + seq + '.json', false);
+  const k = Math.floor(seq / E);
+  if (!bundles.has(k)) {
+    const load = fetch(base + 'epochs/' + k + '.jsonl').then(response => {
+      if (!response.ok) throw new Error(`${response.status} for epochs/${k}.jsonl`);
+      return response.text();
+    }).then(text => text.split('\n').filter(row => row.trim()).map(row => JSON.parse(row)));
+    load.catch(() => bundles.delete(k));
+    bundles.set(k, load);
+  }
+  const frame = (await bundles.get(k))[seq - k * E];
+  if (!frame) throw new Error(`epoch ${k} holds no frame ${seq}`);
+  return frame;
+}
+
+async function lineFrame(meta, seq) {
+  try {
+    return await chainFrame(line.base, meta, line.bundles, seq);
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    // a tail that outgrew its window is sealed into an epoch between two reads of HEAD
+    const now = await fetchJson(line.base + 'HEAD.json', true);
+    return chainFrame(line.base, Object.assign({}, meta, {
+      epoch_size: now.epoch_size, sealed_epochs: now.sealed_epochs }), line.bundles, seq);
+  }
+}
+
+function setLine(state, reason) {
+  line.state = state;
+  line.reason = reason || '';
+}
+
+function breakLine(reason) {
+  // A published line that contradicts itself stays broken for the life of this page: it was
+  // shown, and what it showed was false. A reload starts over rather than quietly forgetting.
+  setLine('broken', reason);
+  paint();
+}
+
+function remember(frame) {
+  line.frames.set(frame.seq, frame);
+  line.byTick.set(viewsOf(frame).tickId, frame.seq);
+}
+
+async function refreshLine() {
+  if (!line.on || line.busy || line.state === 'broken') return;
+  if (!(window.crypto && crypto.subtle)) {
+    setLine('unverifiable', 'this page cannot hash outside https');
+    paint();
+    return;
+  }
+  line.busy = true;
+  try {
+    const meta = await fetchJson(line.base + 'HEAD.json', true);
+    if (!isObject(meta) || meta.stream_id !== STREAM || !Number.isSafeInteger(meta.count) || meta.count < 1 ||
+        !HEX64.test(String(meta.head_frame))) return breakLine(`HEAD.json does not describe ${STREAM}`);
+    const old = line.meta;
+    if (old && meta.count < old.count) return breakLine('the published line got shorter');
+    if (old && meta.count === old.count) {
+      if (meta.head_frame !== old.head_frame) return breakLine('the head changed without the line growing');
+      line.meta = meta;
+      if (line.state !== 'ok') setLine('ok');
+      return;
+    }
+    const from = old ? line.top + 1 : meta.count - 1;
+    const fresh = [];
+    for (let start = from; start < meta.count; start += LINE_BATCH) {
+      const seqs = [];
+      for (let seq = start; seq < Math.min(meta.count, start + LINE_BATCH); seq++) seqs.push(seq);
+      fresh.push(...await Promise.all(seqs.map(seq => lineFrame(meta, seq))));
+    }
+    let previous = old ? line.frames.get(line.top) : null;
+    for (const frame of fresh) {
+      const bad = await viewsFrameProblem(frame);
+      if (bad) return breakLine(`frame ${frame.seq} ${bad}`);
+      if (previous) {
+        const broken = linkProblem(previous, frame);
+        if (broken) return breakLine(broken);
+      }
+      previous = frame;
+    }
+    if (previous.frame_hash !== meta.head_frame) return breakLine('HEAD.json does not name the newest frame');
+    // Where the spine is now decides whether a newer capture can still be sealed. It is read before
+    // the new frames are taken in, so nothing ever sees the new head without it.
+    const spine = await fetchJson(line.spine + 'HEAD.json', true).catch(() => null);
+    if (isObject(spine) && spine.stream_id === SPINE_STREAM && Number.isSafeInteger(spine.count) &&
+        (!line.spineMeta || spine.count >= line.spineMeta.count)) line.spineMeta = spine;
+    fresh.forEach(remember);
+    line.meta = meta;
+    line.top = meta.count - 1;
+    if (line.low < 0) line.low = from;
+    if (line.low === 0) line.genesis = true;
+    setLine('ok');
+  } catch (error) {
+    setLine('unreachable', 'the line could not be read: ' + error.message);
+  } finally {
+    line.busy = false;
+    paint();
+  }
+}
+
+// The head is proven first. An older frame is proven only when somebody looks at an older tick,
+// by walking back from the head one link at a time until that tick is reached, so a visit that
+// stays on the live edge costs two requests rather than the whole line. A link that does not hold
+// stops the walk there, and everything below it stays unproven.
+function wantedBack() {
+  const tick = tickAt(view.frame);
+  const at = tick && tick.capturedAt || '';
+  const low = viewsOf(line.frames.get(line.low));
+  return !!(at && low && at < low.captured && !line.byTick.has(tickId(view.frame)));
+}
+
+async function walkBack() {
+  if (line.walking || !line.on) return;
+  line.walking = true;
+  try {
+    while (line.state !== 'broken' && line.top >= 0 && !line.gap && line.low > 0 &&
+           line.top - line.low < LINE_CAP && wantedBack()) {
+      const seqs = [];
+      for (let seq = line.low - 1; seq >= Math.max(0, line.low - LINE_BATCH); seq--) seqs.push(seq);
+      const older = await Promise.all(seqs.map(seq => lineFrame(line.meta, seq)));
+      for (const frame of older) {
+        const bad = await viewsFrameProblem(frame);
+        const broken = bad ? `frame ${frame.seq} ${bad}` : linkProblem(frame, line.frames.get(line.low));
+        if (broken) {
+          line.gap = broken;
+          break;
+        }
+        remember(frame);
+        line.low = frame.seq;
+      }
+      if (line.low === 0) line.genesis = true;
+      line.walkFailedAt = 0;
+      paint();
+    }
+  } catch (error) {
+    line.walkFailedAt = Date.now();     // the network, not the line: shown as such, tried again
+    paint();
+  } finally {
+    line.walking = false;
+  }
+}
+
+function anchorFor(views) {
+  const known = line.anchors.get(views.tick);
+  if (known && (known.ok !== null || Date.now() - known.at < 30000)) return known;
+  const pending = { ok: null, reason: 'checking the spine', at: Date.now() };
+  line.anchors.set(views.tick, pending);
+  (async () => {
+    let meta = line.spineMeta;
+    if (!meta || views.tick >= meta.count) meta = line.spineMeta = await fetchJson(line.spine + 'HEAD.json', true);
+    if (!isObject(meta) || meta.stream_id !== SPINE_STREAM || !Number.isSafeInteger(meta.count)) {
+      return { ok: false, reason: 'the spine HEAD is not the global tick spine' };
+    }
+    if (views.tick >= meta.count) return { ok: null, reason: `the spine has not published tick ${views.tick} yet` };
+    const tick = await chainFrame(line.spine, meta, line.spineBundles, views.tick);
+    const bad = await frameProblem(tick, SPINE_STREAM);
+    if (bad) return { ok: false, reason: `spine tick ${views.tick} ${bad}` };
+    if (tick.seq !== views.tick || tick.kind !== 'tick.anchor' || tick.payload.tick !== views.tick) {
+      return { ok: false, reason: `the spine frame at ${views.tick} is not that tick` };
+    }
+    if (tick.frame_hash !== views.tickFrame) {
+      return { ok: false, reason: `spine tick ${views.tick} is not the tick this frame names` };
+    }
+    if (views.captured < tick.utc) {
+      return { ok: false, reason: `the view was captured before spine tick ${views.tick} was minted` };
+    }
+    return { ok: true, reason: '' };
+  })().then(result => {
+    line.anchors.set(views.tick, Object.assign(result, { at: Date.now() }));
+  }, error => {
+    line.spineMeta = null;
+    line.anchors.set(views.tick, { ok: null, reason: 'the spine could not be read: ' + error.message, at: Date.now() });
+  }).then(paint);
+  return pending;
+}
+
+function sealAt(index) {
+  if (!line.on) return { status: 'off', reason: '' };
+  if (line.state === 'broken') return { status: 'broken', reason: line.reason };
+  const seq = line.byTick.get(tickId(index));
+  if (seq !== undefined) {
+    const frame = line.frames.get(seq);
+    return { status: 'sealed', seq, frame, views: viewsOf(frame), reason: '' };
+  }
+  if (line.top < 0) return { status: line.state === 'loading' ? 'verifying' : line.state, reason: line.reason };
+  const tick = tickAt(index);
+  const at = tick && tick.capturedAt || '';
+  const top = viewsOf(line.frames.get(line.top));
+  const low = viewsOf(line.frames.get(line.low));
+  if (at && at > top.captured) {
+    // A capture made while the spine still stood on the newest sealed tick can never be sealed:
+    // its tick already has its frame. Only a fresh capture under a newer tick is worth waiting on.
+    const spineHead = line.spineMeta ? line.spineMeta.count - 1 : null;
+    if (spineHead !== null && spineHead <= top.tick) {
+      return { status: 'unsealed', reason: `captured while spine tick ${top.tick} was current, and that tick is already sealed` };
+    }
+    if (Date.now() - Date.parse(at) < AWAIT_MS) return { status: 'awaiting', reason: 'captured moments ago; its seal follows the capture' };
+    return { status: 'unsealed', reason: 'no frame names this tick' };
+  }
+  if (at && at < low.captured) {
+    if (line.genesis) return { status: 'unsealed', reason: 'captured before the line began' };
+    if (line.gap) return { status: 'unproven', reason: line.gap };
+    if (line.walkFailedAt) return { status: 'unreachable', reason: 'the older part of the line could not be read' };
+    return { status: 'verifying', reason: 'walking the line back to this tick' };
+  }
+  return { status: 'unsealed', reason: 'no frame names this tick (one is sealed per spine tick)' };
+}
+
+function keyOf(url, sha) {
+  return sha ? url + '#sha256=' + sha : url;
+}
+
+// What a cell's bytes are for one sealed key. The answer is read off what the cell actually holds,
+// so a scrub that leaves a load behind can never strand a verified view as "pending".
+function judged(cell, key) {
+  if (cell.current === key) return 'sealed';
+  if (cell.refused === key) return 'forged';
+  if (cell.failed === key) return cell.failedWhy;
+  return 'pending';
+}
+
+function verdictAt(index) {
+  const seal = sealAt(index);
+  if (seal.status !== 'sealed') return Object.assign({ verdict: seal.status }, seal);
+  const anchor = anchorFor(seal.views);
+  const counts = { sealed: 0, forged: 0, pending: 0, missing: 0 };
+  let expected = 0;
+  for (const cell of view.cells) {
+    const player = seal.views.players.get(cell.rec.id);
+    if (!player) continue;
+    expected += 1;
+    const verdict = judged(cell, keyOf(imageUrl(player.file), player.sha256));
+    if (verdict === 'sealed' || verdict === 'forged' || verdict === 'pending') counts[verdict] += 1;
+    else counts.missing += 1;
+  }
+  let verdict = 'verifying';
+  if (counts.forged || anchor.ok === false) verdict = 'forged';
+  else if (anchor.ok === true && expected && counts.sealed === expected) verdict = 'sealed';
+  return { verdict, status: 'sealed', seq: seal.seq, tick: seal.views.tick, anchor, counts, expected,
+    reason: anchor.ok === false ? anchor.reason : '' };
+}
+
+function paintSeal() {
+  const badge = $('seal');
+  if (!line.on || !view.manifest) {
+    badge.hidden = true;
+    return;
+  }
+  const v = verdictAt(view.frame);
+  const plural = n => n === 1 ? 'view' : 'views';
+  const elsewhere = line.published ? '' : ` · ⚠ not the published line: ${new URL(line.base).host}${new URL(line.base).pathname}`;
+  const text = {
+    sealed: () => `⛓ sealed · views #${v.seq} · ⚓ spine tick ${v.tick} ✓ · ${v.counts.sealed}/${v.expected} ${plural(v.expected)} ✓`,
+    forged: () => v.counts && v.counts.forged
+      ? `✗ ${v.counts.forged} ${plural(v.counts.forged)} not the sealed one · views #${v.seq}`
+      : `✗ anchor · ${v.reason}`,
+    verifying: () => v.seq === undefined ? '⛓ verifying the line…'
+      : `⛓ verifying views #${v.seq} · ⚓ ${v.anchor.ok ? '✓' : '…'} · ${v.counts.sealed}/${v.expected} ${plural(v.expected)}`
+        + (v.counts.missing ? ` · ${v.counts.missing} no longer in the feed` : ''),
+    awaiting: () => '⛓ awaiting its seal',
+    unsealed: () => `○ unsealed · ${v.reason}`,
+    unproven: () => `✗ unproven · ${v.reason}`,
+    broken: () => `✗ line broken · ${v.reason}`,
+    unreachable: () => `⛓ ${v.reason || 'the line is unreachable'} · retrying`,
+    unverifiable: () => `⛓ ${v.reason}`,
+    loading: () => '⛓ reading the line…'
+  }[v.verdict];
+  badge.hidden = false;
+  badge.textContent = (text ? text() : `⛓ ${v.verdict}`) + elsewhere;
+  badge.className = v.verdict === 'sealed' ? (line.published ? 'ok' : '')
+    : ['forged', 'unproven', 'broken'].includes(v.verdict) ? 'bad'
+    : ['unsealed', 'unverifiable'].includes(v.verdict) ? 'dim' : '';
+  badge.title = v.verdict === 'sealed'
+    ? `Frame ${v.seq} of ${STREAM}: every hash re-derived here, linked back from ${line.published ? 'the published head' : 'the head of a line that is NOT the published one'}, anchored to tick ${v.tick} of ${SPINE_STREAM}, and every view painted from bytes that hash to what the frame says.`
+    : (v.reason || badge.textContent);
+}
 
 function layout(n) {
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
@@ -154,7 +602,8 @@ function rebuildCells(players) {
     doing.className = 'doing';
     cell.append(tag, image, doing);
     stage.appendChild(cell);
-    return { rec: player, el: cell, tag, img: image, doing, current: '', pending: '', loadToken: 0 };
+    return { rec: player, el: cell, tag, img: image, doing, label: '', current: '', pending: '', loadToken: 0,
+      refused: '', failed: '', failedWhy: '', failedAt: 0, blob: '' };
   });
   layout(players.length);
 }
@@ -162,10 +611,14 @@ function rebuildCells(players) {
 function updateRoster(players) {
   const roster = players.map(player => player.id || '').join('|');
   const current = view.cells.map(cell => cell.rec.id || '').join('|');
-  if (roster !== current) rebuildCells(players);
+  if (roster !== current) {
+    for (const cell of view.cells) if (cell.blob) URL.revokeObjectURL(cell.blob);
+    rebuildCells(players);
+  }
   view.cells.forEach((cell, index) => {
     cell.rec = players[index];
-    cell.tag.textContent = players[index].label || players[index].id || `player ${index + 1}`;
+    cell.label = players[index].label || players[index].id || `player ${index + 1}`;
+    cell.tag.textContent = cell.label;
   });
 }
 
@@ -174,34 +627,107 @@ function imageUrl(shot) {
   return new URL(shot, view.base).href;
 }
 
-function holdThenSwap(cell, wanted) {
-  if (!wanted || cell.current === wanted) {
-    if (cell.pending && cell.pending !== wanted) {
+// While a tick's seal is still being checked, a cell keeps what it shows and starts nothing new:
+// painting the feed's bytes first and judging them afterwards would put unverified bytes on screen.
+function holdCell(cell) {
+  if (cell.pending) {
+    cell.pending = '';
+    cell.loadToken += 1;
+  }
+}
+
+// `sealed` is the SHA-256 a verified frame names for this view, or '' when no frame seals the tick.
+function holdThenSwap(cell, wanted, sealed) {
+  const key = keyOf(wanted, sealed);
+  if (cell.refused === key) {
+    // back on a tick whose bytes were refused: nothing of another tick may stand in for it
+    holdCell(cell);
+    if (cell.current) {
+      cell.img.removeAttribute('src');
+      if (cell.blob) URL.revokeObjectURL(cell.blob);
+      cell.blob = '';
+      cell.current = '';
+    }
+    return;
+  }
+  if (!wanted || cell.current === key ||
+      (cell.failed === key && Date.now() - cell.failedAt < Math.min(5000, POLL))) {
+    if (cell.pending && cell.pending !== key) {
       cell.pending = '';
       cell.loadToken += 1;
     }
     return;
   }
-  if (cell.pending === wanted) return;
+  if (cell.pending === key) return;
   const token = ++cell.loadToken;
-  cell.pending = wanted;
-  const preload = new Image();
-  preload.onload = () => {
-    if (cell.loadToken !== token || cell.pending !== wanted) return;
-    cell.img.src = preload.src;
-    cell.current = wanted;
-    cell.pending = '';
-    if (view.live && view.followingLive) setStatus('LIVE', false);
+  cell.pending = key;
+  const swapIn = (source, blob) => {
+    const preload = new Image();
+    preload.onload = () => {
+      if (cell.loadToken !== token || cell.pending !== key) {
+        if (blob) URL.revokeObjectURL(blob);
+        return;
+      }
+      cell.img.src = preload.src;
+      if (cell.blob && cell.blob !== blob) URL.revokeObjectURL(cell.blob);
+      cell.blob = blob;
+      cell.current = key;
+      cell.pending = '';
+      if (view.live && view.followingLive) setStatus('LIVE', false);
+      if (sealed) paint();
+    };
+    preload.onerror = () => {
+      if (blob) URL.revokeObjectURL(blob);
+      if (cell.loadToken !== token || cell.pending !== key) return;
+      cell.pending = '';
+      if (view.live && view.followingLive) setStatus('WAITING FOR FRAME', true);
+      clearTimeout(view.imageRetry);
+      view.imageRetry = setTimeout(paint, Math.min(5000, POLL));
+    };
+    preload.src = source;
   };
-  preload.onerror = () => {
-    if (cell.loadToken !== token || cell.pending !== wanted) return;
+  if (!sealed) {
+    const separator = wanted.includes('?') ? '&' : '?';
+    swapIn(wanted + separator + '_dogg_frame=' + Date.now(), '');
+    return;
+  }
+  // Hashed here and shown from these same bytes, so what was verified and what is seen cannot
+  // differ. Bytes that are not the sealed ones are refused and never painted.
+  fetch(wanted).then(response => {
+    if (!response.ok) {
+      const error = new Error(String(response.status));
+      error.status = response.status;
+      throw error;
+    }
+    const type = response.headers.get('content-type') || 'image/webp';
+    return response.arrayBuffer().then(bytes => ({ bytes, type }));
+  }).then(async ({ bytes, type }) => {
+    const digest = await sha256hex(bytes);
+    if (cell.loadToken !== token || cell.pending !== key) return;
+    if (digest !== sealed) {
+      // Refused, and whatever the cell showed before goes too: another tick's picture under
+      // this tick's name would be the same lie told a different way.
+      cell.pending = '';
+      cell.refused = key;
+      cell.img.removeAttribute('src');
+      if (cell.blob) URL.revokeObjectURL(cell.blob);
+      cell.blob = '';
+      cell.current = '';
+      paint();
+      return;
+    }
+    const blob = URL.createObjectURL(new Blob([bytes], { type }));
+    swapIn(blob, blob);
+  }).catch(error => {
+    if (cell.loadToken !== token || cell.pending !== key) return;
     cell.pending = '';
-    if (view.live && view.followingLive) setStatus('WAITING FOR FRAME', true);
+    cell.failed = key;
+    cell.failedWhy = error.status === 404 ? 'pruned' : 'unreachable';
+    cell.failedAt = Date.now();
+    paintSeal();
     clearTimeout(view.imageRetry);
     view.imageRetry = setTimeout(paint, Math.min(5000, POLL));
-  };
-  const separator = wanted.includes('?') ? '&' : '?';
-  preload.src = wanted + separator + '_dogg_frame=' + Date.now();
+  });
 }
 
 function paint() {
@@ -214,9 +740,21 @@ function paint() {
   }
   view.frame = Math.max(0, Math.min(frames - 1, Math.floor(view.frame)));
   view.focus = view.cells.length ? view.focus % view.cells.length : 0;
+  const seal = sealAt(view.frame);
+  if (seal.status === 'verifying' && line.top >= 0 && wantedBack() && !line.walking &&
+      Date.now() - line.walkFailedAt > 10000) walkBack();
+  if (seal.status === 'unreachable' && line.walkFailedAt && !line.walking &&
+      Date.now() - line.walkFailedAt > 10000) walkBack();
   view.cells.forEach((cell, index) => {
     const shot = Array.isArray(cell.rec.shots) ? cell.rec.shots[view.frame] : '';
-    holdThenSwap(cell, imageUrl(shot));
+    // the frame decides WHICH bytes this tick is; the feed's own location decides where they are
+    const sealed = seal.status === 'sealed' ? seal.views.players.get(cell.rec.id) : null;
+    const wanted = imageUrl(sealed ? sealed.file : shot);
+    if (seal.status === 'verifying') holdCell(cell);
+    else holdThenSwap(cell, wanted, sealed ? sealed.sha256 : '');
+    const verdict = sealed ? judged(cell, keyOf(wanted, sealed.sha256)) : '';
+    cell.tag.textContent = cell.label + (verdict === 'sealed' ? ' ✓' : verdict === 'forged' ? ' ✗' : '');
+    cell.el.classList.toggle('forged', verdict === 'forged');
     const note = Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
     cell.doing.textContent = note || '';
     cell.el.classList.toggle('focus', index === view.focus);
@@ -231,6 +769,7 @@ function paint() {
   $('when').textContent = tickTime(view.frame);
   $('live').classList.toggle('off', !view.live || !view.followingLive);
   $('play').textContent = view.playing ? 'Pause' : 'Play';
+  paintSeal();
 }
 
 function applyManifest(manifest, url) {
@@ -271,6 +810,8 @@ function applyManifest(manifest, url) {
   window.__viewsReady = true;
   setStatus(view.live && view.followingLive ? 'LIVE' : view.live ? 'HISTORY' : 'RECORDING', false);
   paint();
+  // a new tick in the feed is the moment its seal may have landed, and older ticks may need proving
+  refreshLine();
 }
 
 async function refreshManifest() {
@@ -357,18 +898,37 @@ function animate(now) {
   requestAnimationFrame(animate);
 }
 
-window.__viewsState = () => ({
-  frames: frameCount(view.manifest),
-  frame: view.frame,
-  followingLive: view.followingLive,
-  playing: view.playing,
-  live: view.live,
-  source: view.manifestUrl,
-  tick: tickId(view.frame)
-});
+window.__viewsState = () => {
+  const seal = verdictAt(view.frame);
+  return {
+    frames: frameCount(view.manifest),
+    frame: view.frame,
+    followingLive: view.followingLive,
+    playing: view.playing,
+    live: view.live,
+    source: view.manifestUrl,
+    tick: tickId(view.frame),
+    // what the sealed line says about the tick on screen, for anyone driving this page
+    seal: {
+      line: line.state,
+      published: line.published,
+      head: line.meta ? line.meta.count : 0,
+      proven: line.top < 0 ? 0 : line.top - line.low + 1,
+      genesis: line.genesis,
+      verdict: seal.verdict,
+      seq: seal.seq === undefined ? null : seal.seq,
+      spineTick: seal.tick === undefined ? null : seal.tick,
+      anchor: seal.anchor ? seal.anchor.ok : null,
+      views: seal.counts || null,
+      expected: seal.expected || 0,
+      reason: seal.reason || ''
+    }
+  };
+};
 
 refreshManifest();
 setInterval(refreshManifest, POLL);
+if (line.on) setInterval(refreshLine, LINE_POLL);
 requestAnimationFrame(now => {
   view.frameAt = now;
   view.focusAt = now;

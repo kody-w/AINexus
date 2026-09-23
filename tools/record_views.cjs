@@ -2,17 +2,21 @@
  *
  * Each player gets its own page, so these are genuinely different points of view rather than
  * one camera relabelled. A finite run still writes recordings/<stamp> plus recordings/latest.
- * Passing --stream appends the run as immutable ticks in a cumulative DOGG manifest.
+ * Passing --stream appends the run as immutable ticks in a cumulative DOGG manifest, and
+ * --receipt writes what the newest tick shows for tools/views_seal.py to seal.
  *
  *   node tools/record_views.cjs [--players 4] [--seconds 30] [--fps 4]
  *   node tools/record_views.cjs --seconds 1 --fps 1 --stream recordings/live \
- *     --output-root /path/to/public-feed --max-frames 2016 --tick-seconds 300
+ *     --output-root /path/to/public-feed --max-frames 2016 --tick-seconds 300 \
+ *     --receipt /tmp/receipt.json
  */
 const { createRequire } = require('module');
+const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { appendCapture } = require('./dogg_stream.cjs');
+const { appendCapture, captureReceipt } = require('./dogg_stream.cjs');
 
 function loadPlaywright() {
   const bases = [
@@ -67,9 +71,11 @@ const OUTPUT_ROOT = path.resolve(arg('output-root', ROOT));
 const MAX_FRAMES = Math.floor(positive('max-frames', 2016));
 const TICK_SECONDS = Number(arg('tick-seconds', 0));
 const BROWSER_CHANNEL = arg('browser-channel', '');
+const RECEIPT = arg('receipt', '');
 const NAMES = ['wanderer', 'greeter', 'pilgrim', 'watcher', 'scribe', 'runner', 'herald', 'tinker'];
 if (!Number.isFinite(QUALITY) || QUALITY <= 0 || QUALITY > 1) throw new Error('--quality must be between 0 and 1');
 if (!Number.isFinite(TICK_SECONDS) || TICK_SECONDS < 0) throw new Error('--tick-seconds must be zero or positive');
+if (RECEIPT && !STREAM) throw new Error('--receipt describes a stream tick, so it needs --stream');
 
 function inside(root, candidate, label) {
   const relative = path.relative(root, candidate);
@@ -77,6 +83,18 @@ function inside(root, candidate, label) {
     return candidate;
   }
   throw new Error(`${label} escapes ${root}`);
+}
+
+// Which build of the world the players stood in: the commit, when there is one to name.
+function sourceCommit() {
+  if (/^[0-9a-f]{40}$/.test(process.env.GITHUB_SHA || '')) return process.env.GITHUB_SHA;
+  try {
+    const head = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return /^[0-9a-f]{40}$/.test(head) ? head : '';
+  } catch (error) {
+    return '';
+  }
 }
 
 (async () => {
@@ -130,7 +148,7 @@ for (let index = 0; index < N; index++) {
     await drive.walk('forward', 420);
     await drive.look(180 * 2.2, 0);
   }, index, N).catch(() => {});
-  players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [] });
+  players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [], sees: [] });
   console.log('  ' + id + ' is in');
 }
 
@@ -189,6 +207,10 @@ for (let frame = 0; frame < total; frame++) {
     } else {
       player.shots[frame] = player.shots[frame - 1] || null;
     }
+    // who this player's world was painting at the moment of the shot: the herd seeing itself
+    player.sees[frame] = await player.page.evaluate(() => window.NexusHolo
+      ? window.NexusHolo.present().filter(item => item.painted).map(item => item.id)
+      : []).catch(() => []);
   }
   if (frame % Math.max(1, Math.round(FPS * 4)) === 0) {
     process.stdout.write('  ' + frame + '/' + total + '\r');
@@ -238,6 +260,17 @@ if (STREAM) {
   fs.rmSync(outDir, { recursive: true, force: true });
   console.log(`\n${players.length} views · ${total} new ticks · ${live.frames} retained`);
   console.log('  ' + streamDir + ` (${sizeKb(streamDir)}KB)`);
+  if (RECEIPT) {
+    const receipt = captureReceipt({
+      manifest: live,
+      world: WORLD,
+      worldSha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, WORLD))).digest('hex'),
+      sourceCommit: sourceCommit(),
+      sees: Object.fromEntries(players.map(player => [player.id, player.sees[total - 1] || []]))
+    });
+    fs.writeFileSync(path.resolve(RECEIPT), JSON.stringify(receipt, null, 1) + '\n');
+    console.log('  receipt for ' + receipt.tick_id + ' -> ' + path.resolve(RECEIPT));
+  }
   return;
 }
 

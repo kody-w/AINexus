@@ -2,7 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { appendCapture } = require('../tools/dogg_stream.cjs');
+const { appendCapture, captureReceipt } = require('../tools/dogg_stream.cjs');
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dogg-stream-test-'));
 const streamDir = path.join(root, 'stream');
@@ -79,6 +79,28 @@ try {
   assert.equal(fs.existsSync(path.join(streamDir, 'segments', manifest.ticks[1].segment)), true);
   assert.equal(JSON.parse(fs.readFileSync(path.join(streamDir, 'manifest.json'))).frames, 2);
   console.log('DOGG stream appends immutable ticks and trims its rolling window');
+
+  const receipt = captureReceipt({
+    manifest,
+    world: 'index.html',
+    worldSha256: 'ab'.repeat(32),
+    sourceCommit: 'cd'.repeat(20),
+    sees: { wanderer: ['greeter', 7, 'pilgrim'] }
+  });
+  assert.equal(receipt.schema, 'ainexus/views-receipt/1');
+  assert.equal(receipt.segment, manifest.ticks[1].segment);
+  assert.equal(receipt.tick_id, manifest.ticks[1].id);
+  assert.equal(receipt.captured_utc, manifest.ticks[1].capturedAt);
+  assert.equal(receipt.source_commit, 'cd'.repeat(20));
+  assert.deepEqual(receipt.players, [{
+    id: 'wanderer',
+    doing: 'tick-four',
+    sees: ['greeter', 'pilgrim'],
+    file: manifest.players[0].shots[1]
+  }]);
+  assert.equal(Object.values(receipt.players[0]).some(value => /^[0-9a-f]{64}$/.test(String(value))), false);
+  assert.throws(() => captureReceipt({ manifest: { frames: 0, ticks: [], players: [] } }));
+  console.log('a capture receipt names the newest tick\'s files and carries no hash of its own');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }
