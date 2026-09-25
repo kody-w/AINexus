@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import pathlib
+import shutil
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -98,6 +99,9 @@ def rehash(frame, **payload_changes):
                          prev=frame["prev"], prev_wave=frame["prev_wave"], sig=frame["sig"])
 
 
+PATROL_ASKED = [{"do": "walk", "dir": "forward", "ms": 1200.9}, {"do": "look", "dx": 400}, {"do": "wait", "ms": 500}]
+PATROL = [{"do": "walk", "dir": "forward", "ms": 1200}, {"do": "look", "dx": 400, "dy": 0}, {"do": "wait", "ms": 500}]
+
 # Two players think on the second tick, one rests, and one is still scripted: every state a live
 # frame can hold. The evidence is in the shape tools/minds.cjs writes (tests/minds.cjs holds the two
 # to each other through the real capture path).
@@ -107,7 +111,9 @@ MINDS = {
                            # U+2028 and U+0085 are what a model may write, and what must never reach a frame raw
                            ["world_say", {"text": "Hello,\u2028greeter! 👋", "why": "someone is here"}, False, "0"],
                            ["world_tell", {"to": "nobody", "text": "psst, over here", "why": "a private\x85word"}, True,
-                            "failed: tell did not happen"]],
+                            "failed: tell did not happen"],
+                           ["world_routine", {"steps": PATROL_ASKED, "why": "patrol until I think again"}, False,
+                            "routine set: walk, look, wait (3 steps, looped until you next think)"]],
                  "words": "", "voiced": None, "saw": 3, "tokens": [1480, 61], "ms": 2210},
     "pilgrim": {"asked": "gpt-5-mini", "answered": "gpt-5-mini-2026-08-07", "multiplier_x100": 0,
                 "calls": [["world_aim", {"portal": "Nowhere", "why": "I want to see where it leads"}, True,
@@ -117,6 +123,16 @@ MINDS = {
                 "tokens": [1302, 40], "ms": 1675},
 }
 RESTING = {"greeter": "resting between thoughts (thinks every 3 ticks)"}
+# the world's own routines (ai/playout.js DEFAULTS) for the players these tests use
+DEFAULTS = {
+    "greeter": [{"do": "wait", "ms": 2500}, {"do": "look", "dx": 350, "dy": 0}, {"do": "wait", "ms": 2500},
+                {"do": "look", "dx": -350, "dy": 0}],
+    "pilgrim": [{"do": "walk", "dir": "forward", "ms": 2200}, {"do": "wait", "ms": 1200}, {"do": "look", "dx": 785, "dy": 0}],
+}
+CLOCKS = {"wanderer": "Asia/Tokyo", "greeter": "America/New_York", "pilgrim": "Europe/London"}
+LATER_POSES = {"wanderer": {"x_cm": -1600, "y_cm": 200, "z_cm": 900, "yaw_mrad": -1200, "pitch_mrad": 0},
+               "pilgrim": {"x_cm": 300, "y_cm": 200, "z_cm": 1100, "yaw_mrad": 400, "pitch_mrad": 0},
+               "greeter": {"x_cm": 0, "y_cm": 200, "z_cm": 0, "yaw_mrad": 700, "pitch_mrad": 0}}
 POSES = {"wanderer": {"x_cm": 412, "y_cm": 160, "z_cm": -233, "yaw_mrad": 1571, "pitch_mrad": 0},
          "pilgrim": {"x_cm": -80, "y_cm": 160, "z_cm": 905, "yaw_mrad": -3142, "pitch_mrad": -120},
          "greeter": {"x_cm": 0, "y_cm": 160, "z_cm": 0, "yaw_mrad": 0, "pitch_mrad": 0}}
@@ -147,9 +163,9 @@ def exchange_for(pid, spec, picture):
             "calls": calls, "words": spec["words"], "voiced": spec["voiced"], "note": ""}
 
 
-def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None):
+def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None, routines=None, clocks=None):
     """Give a capture's players the minds tools/record_views.cjs gives them: evidence files beside
-    the view and a receipt that says only where they are."""
+    the view, and a receipt that says only where they are and which routine ran."""
     feed_dir = pathlib.Path(feed_dir)
     segment = receipt["segment"]
     for q in receipt["players"]:
@@ -171,6 +187,13 @@ def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None):
             q["mind"] = {"kind": "rest", "why": (RESTING if resting is None else resting)[pid]}
         if pid in (POSES if poses is None else poses):
             q["at"] = dict((POSES if poses is None else poses)[pid])
+        ran = ({"wanderer": {"set_at": "this"}, "greeter": {"set_at": None, "by": "default", "steps": DEFAULTS["greeter"]},
+                "pilgrim": {"set_at": None, "by": "default", "steps": DEFAULTS["pilgrim"]}}
+               if routines is None else routines)
+        if pid in ran and "mind" in q:
+            q["routine"] = dict(ran[pid])
+        if pid in (CLOCKS if clocks is None else clocks) and "mind" in q:
+            q["clock"] = (CLOCKS if clocks is None else clocks)[pid]
     return receipt
 
 
@@ -228,11 +251,34 @@ def build(out):
     head = json.loads((spine / "HEAD.json").read_text())
     head.update({"count": 4, "head_frame": tick3["frame_hash"], "updated": at})
     (extra / "spine-HEAD-4.json").write_text(json.dumps(head, indent=2) + "\n")
+
+    # The next minded frame, which the line has not received yet: sealed on copies of the chain and
+    # the spine (with tick 3 minted), from a capture made after tick 3. Its wanderer rests and runs
+    # the routine its thought on tick 2 set, from somewhere new; the viewer tests deliver it while a
+    # page is open and watch each body walk to meet its twin.
+    later = out / "later"
+    later.mkdir(exist_ok=True)
+    shutil.copytree(spine, later / "spine")
+    shutil.copytree(chain, later / "chain")
+    add_tick(later / "spine", T0 + datetime.timedelta(minutes=30))
+    fourth = add_capture(feed, json.loads(published), "2026-09-23T12-31-00.000Z-minded04",
+                         T0 + datetime.timedelta(minutes=31), 25)
+    add_minds(feed, fourth, minds={"pilgrim": MINDS["pilgrim"]},
+              resting={"wanderer": "resting between thoughts (thinks every 3 ticks)", "greeter": "resting"},
+              poses=LATER_POSES,
+              routines={"wanderer": {"set_at": 2}, "greeter": {"set_at": None, "steps": DEFAULTS["greeter"]},
+                        "pilgrim": {"set_at": None, "steps": DEFAULTS["pilgrim"]}})
+    frame2 = V.seal(V.read_anchor(str(later / "spine")), fourth, feed, later / "chain",
+                    feed_url="https://kody-w.github.io/AINexus/test/live/")
+    (later / "chain-2.json").write_text(json.dumps(frame2, indent=2) + "\n")
+    (later / "HEAD-3.json").write_text((later / "chain" / "HEAD.json").read_text())
+    (later / "manifest-5.json").write_text((feed / "manifest.json").read_text())
+    (feed / "manifest.json").write_text(published)
     return {"root": str(out), "spine": str(spine), "feed": str(feed), "chain": str(chain),
             "ticks": [legacy["tick_id"], first["tick_id"], second["tick_id"], third["tick_id"]],
             "frames": [frame0["frame_hash"], frame1["frame_hash"]],
             "anchors": [anchor1["tick"], anchor2["tick"]],
-            "first": first, "second": second, "third": third, "players": PLAYERS,
+            "first": first, "second": second, "third": third, "fourth": fourth, "players": PLAYERS,
             "minds": {q["id"]: q["mind"] for q in frame1["payload"]["views"]["players"] if "mind" in q}}
 
 

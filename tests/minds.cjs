@@ -10,7 +10,9 @@
 //           first attempt bought still counts, so the premium mind is over the day's budget and
 //           rests where its last frame left it; a mind between thoughts rests and says why; and the
 //           free mind remembers what it did and hears what the others said a tick ago.
-//   tick 3  with no seat, every mind rests and says so, and nobody is asked anything.
+//   tick 3  with no seat nobody is asked anything, but the world does not stop: each body runs the
+//           routine it was left, to the centimetre where anyone playing the line forward puts it,
+//           and one whose clock says night sleeps in its bed with its routine kept for the morning.
 //
 //   node tests/minds.cjs     (PLAYWRIGHT_DIR as for the suites; BROWSER_CHANNEL=chrome to use an installed Chrome)
 const { createRequire } = require('module');
@@ -108,6 +110,36 @@ check('a mind that thinks every 288 ticks is read back far enough to know it tho
   JSON.stringify({ length: deepLine.length, ada: deepPlan.players.ada }));
 fs.rmSync(deep, { recursive: true, force: true });
 
+// A routine is made canonical twice, by the capture in JavaScript and by the sealer in Python, and
+// the two must agree on every input a model might write, or a routine would run as one thing and be
+// sealed as another.
+const ROUTINES = [
+  [{ do: 'walk', dir: 'forward', ms: 1800.9 }, { do: 'look', dx: -0.5 }, { do: 'wait', ms: 1e30 }],
+  [{ do: 'look', dx: 99999, dy: -99999 }, { do: 'wait', ms: 50 }],
+  [{ do: 'walk', dir: 'up', ms: 500 }],
+  [{ do: 'walk', dir: 'left', ms: '500' }],
+  [{ do: 'walk', dir: 'left', ms: true }],
+  [{ do: 'look', dx: null }],
+  [{ do: 'look' }, { do: 'look' }],
+  [{ do: 'wait', ms: 299 }],
+  [{ do: 'fly', ms: 500 }],
+  [[{ do: 'wait', ms: 500 }]],
+  [],
+  Array.from({ length: 9 }, () => ({ do: 'wait', ms: 500 })),
+  [{ do: 'wait', ms: -0.9 }, { do: 'walk', dir: 'back', ms: 3000, extra: 'ignored' }],
+  'not a list',
+];
+let parity = 'unchecked';
+try {
+  const python = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
+print(json.dumps([V.canonical_routine(r) for r in json.loads(sys.stdin.read())]))`], { cwd: ROOT, encoding: 'utf8',
+    input: JSON.stringify(ROUTINES) }));
+  const js = ROUTINES.map(r => minds.Playout.canonical(r));
+  parity = ROUTINES.map((r, i) => JSON.stringify(js[i]) === JSON.stringify(python[i]) ? '' : `#${i}: js ${JSON.stringify(js[i])} python ${JSON.stringify(python[i])}`)
+    .filter(Boolean).join('; ');
+} catch (error) { parity = String(error.message || error); }
+check('the capture and the sealer make every routine a model might write canonical in exactly the same way', parity === '', parity);
+
 // A model that answered was paid for: if the hands fail after that, the thought is still sealed,
 // with the picture it was shown found in the request itself.
 const pixel = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAQAcJaQAA3AA/v3AgAA=';
@@ -138,10 +170,13 @@ const heardByStub = [];
 const SCRIPT = {
   wanderer: { tool_calls: [['world_look', { dx: 80, why: 'turning toward the portals' }],
                            ['world_walk', { dir: 'forward', ms: 600, why: 'closer, to see them' }],
-                           ['world_say', { text: 'Hello from wanderer 👋', why: 'the others should know I am here' }]] },
+                           ['world_say', { text: 'Hello from wanderer 👋', why: 'the others should know I am here' }],
+                           ['world_routine', { steps: [{ do: 'walk', dir: 'forward', ms: 1200.7 }, { do: 'look', dx: 400 },
+                             { do: 'wait', ms: 500 }], why: 'patrol the portals until I think again' }]] },
   pilgrim: { tool_calls: [['world_travel', { portal: 'Crystal', why: 'somewhere new' }],
                           ['world_aim', { portal: 'Nowhere At All', why: 'a portal I made up' }],
-                          ['world_say', { text: 'Is anyone near the portals?', why: 'looking for company' }]] },
+                          ['world_say', { text: 'Is anyone near the portals?', why: 'looking for company' }],
+                          ['world_routine', { steps: [{ do: 'fly', ms: 500 }], why: 'try to fly' }]] },
   greeter: { content: 'Welcome, everyone.',
              tool_calls: [['world_walk', { dir: 'forward', ms: 1500, why: 'meeting the newcomers' }]] },
 };
@@ -174,10 +209,24 @@ const feed = path.join(feedRoot, 'recordings', 'live');
 for (const dir of [spine, chain, feedRoot]) fs.mkdirSync(dir, { recursive: true });
 const configFile = path.join(out, 'minds.json');
 const journal = path.join(out, 'journal.jsonl');
-fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, players: {
-  wanderer: { model: 'stub-premium', every: 1, multiplier_x100: 100, vision: true },
-  greeter: { model: 'stub-free', every: 1, multiplier_x100: 0, vision: false },
-  pilgrim: { model: 'stub-premium', every: 3, multiplier_x100: 100, vision: true } } }));
+// A clock where it is day for hours yet, and one where it is night for hours yet, found now.
+const ZONES = ['Pacific/Honolulu', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London',
+  'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'];
+const hourIn = tz => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' })
+  .format(new Date())) % 24;
+const DAY = ZONES.find(tz => hourIn(tz) >= 9 && hourIn(tz) <= 19);
+const NIGHT = ZONES.find(tz => hourIn(tz) >= 0 && hourIn(tz) <= 4);
+const writeConfig = (pilgrimClock) => fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, players: {
+  wanderer: { model: 'stub-premium', every: 1, multiplier_x100: 100, vision: true, clock: DAY },
+  greeter: { model: 'stub-free', every: 1, multiplier_x100: 0, vision: false, clock: DAY },
+  pilgrim: { model: 'stub-premium', every: 3, multiplier_x100: 100, vision: true, clock: pilgrimClock } } }));
+writeConfig(DAY);
+const P = minds.Playout;
+const frameAt = f => Date.parse(f.payload.views.captured_utc);
+// where anyone playing a frame forward puts a body at the next frame's moment
+const played = (prev, id, prevFrame, nextFrame, clock) =>
+  P.stateAt(Object.assign({}, prev, { id, clock }), frameAt(prevFrame), frameAt(nextFrame)).pose;
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const py = (code, ...args) => execFileSync(PYTHON, ['-c', code, ...args], { cwd: ROOT, encoding: 'utf8' });
 const mintTick = () => py(`import sys, datetime; sys.path.insert(0, "tests"); import views_fixture as FX
@@ -217,6 +266,10 @@ function capture(tick, withSeat, port) {
   });
 }
 const byId = f => Object.fromEntries(f.payload.views.players.map(p => [p.id, p]));
+const lastDoingOf = id => {
+  const live = JSON.parse(fs.readFileSync(path.join(feed, 'manifest.json'), 'utf8')).players.find(x => x.id === id);
+  return live.doing[live.doing.length - 1];
+};
 const percepts = request => {
   const content = request.body.messages[1].content;
   const text = Array.isArray(content) ? content[0].text : content;
@@ -269,9 +322,10 @@ check('a vision mind is shown what its eyes see, as a picture beside its percept
   askedBy('wanderer').headers['copilot-vision-request'] === 'true' &&
   typeof askedBy('greeter').body.messages[1].content === 'string' && !askedBy('greeter').headers['copilot-vision-request'],
   JSON.stringify(askedBy('greeter').headers));
-check('every verb a mind may call asks it why, and a recorded mind is never offered travel out of its world',
+check('every verb a mind may call asks it why; it may leave a routine running, and is never offered travel out of its world',
   asked1.every(r => r.body.tools.length >= 10 && r.body.tools.every(t => t.function.parameters.properties.why) &&
-    !r.body.tools.some(t => t.function.name === 'world_travel')),
+    !r.body.tools.some(t => t.function.name === 'world_travel') &&
+    r.body.tools.some(t => t.function.name === 'world_routine')),
   JSON.stringify(asked1[0].body.tools.map(t => t.function.name)));
 const leaked = [...everyFile(feedRoot), ...everyFile(chain), ...fs.readdirSync(out).filter(f => f.endsWith('.json'))
   .map(f => path.join(out, f))].filter(f => fs.readFileSync(f).includes(TOKEN));
@@ -284,15 +338,31 @@ const w = p.wanderer.mind, g = p.greeter.mind, pi = p.pilgrim.mind;
 check('the frame says who answered and what it did, why, and what it said, exactly as the exchange has it',
   w.asked === 'stub-premium' && w.model === 'stub-premium-2026-09' && w.said === 'Hello from wanderer 👋' &&
   w.did.map(d => d.verb + ':' + d.why + ':' + d.failed).join('|') ===
-    'world_look:turning toward the portals:false|world_walk:closer, to see them:false|world_say:the others should know I am here:false' &&
-  w.saw && w.exchange && w.tokens_out === 23, JSON.stringify(w));
+    'world_look:turning toward the portals:false|world_walk:closer, to see them:false|world_say:the others should know I am here:false' +
+    '|world_routine:patrol the portals until I think again:false' &&
+  w.saw && w.exchange && w.tokens_out === 24, JSON.stringify(w));
 check('a verb it was not given and a verb the hands could not do are sealed as failed, and words said without a say are said for it',
   pi.did[0].verb === 'world_travel' && pi.did[0].failed === true && pi.did[1].verb === 'world_aim' && pi.did[1].failed === true &&
-  pi.said === 'Is anyone near the portals?' && p.pilgrim.doing === '🧠 stub-premium-2026-09: travel, aim, say' &&
+  pi.said === 'Is anyone near the portals?' && p.pilgrim.doing === '🧠 stub-premium-2026-09: travel, aim, say, routine' &&
   g.said === 'Welcome, everyone.' && !g.saw && p.greeter.doing === '🧠 stub-free-2026-09: walk', JSON.stringify({ pi, g }));
 check('the scripted player keeps its script, and the ledger counts the thoughts and what they cost',
   !p.watcher.mind && !p.watcher.at && f1.payload.views.thoughts === 3 && f1.payload.views.premium_x100 === 200,
   JSON.stringify(f1.payload.views));
+const patrol = [{ do: 'walk', dir: 'forward', ms: 1200 }, { do: 'look', dx: 400, dy: 0 }, { do: 'wait', ms: 500 }];
+check('a routine a mind sets is sealed as it runs, from its tick, in the name of the model that answered',
+  same(w.routine_set, patrol) && same(p.wanderer.routine, { steps: patrol, set_at: f1.payload.tick, by: 'stub-premium-2026-09' }),
+  JSON.stringify({ set: w.routine_set, routine: p.wanderer.routine }));
+check('a routine the hands refuse changes nothing: the body keeps the world\'s default until a mind sets one it can run',
+  pi.did[3].verb === 'world_routine' && pi.did[3].failed === true && !('routine_set' in pi) &&
+  same(p.pilgrim.routine, { steps: P.defaultRoutine('pilgrim'), set_at: null, by: 'default' }) &&
+  same(p.greeter.routine, { steps: P.defaultRoutine('greeter'), set_at: null, by: 'default' }),
+  JSON.stringify({ pilgrim: p.pilgrim.routine, greeter: p.greeter.routine }));
+const woke = percepts(askedBy('wanderer'));
+check('a body the line has never seen wakes in its own bed, and its mind is told its routine and its clock',
+  Math.abs(woke.me.x - 17) <= 1 && Math.abs(woke.me.z - 17) <= 1 && woke.your_routine.set_by === 'default' &&
+  same(woke.your_routine.steps, P.defaultRoutine('wanderer')) && /local; you sleep from 23:00 to 07:00$/.test(woke.your_clock) &&
+  p.wanderer.clock === DAY, JSON.stringify({ me: woke.me, at: [p.wanderer.at, p.greeter.at, p.pilgrim.at],
+    routine: woke.your_routine, clock: woke.your_clock }) + '\n' + log);
 const manifest = JSON.parse(fs.readFileSync(path.join(feed, 'manifest.json'), 'utf8'));
 const lastDoing = id => { const q = manifest.players.find(x => x.id === id); return q.doing[q.doing.length - 1]; };
 check('the feed says what the frame says, before its seal and after it',
@@ -323,30 +393,43 @@ check('over the day\'s budget a premium mind rests, between thoughts a mind rest
   JSON.stringify({ asked: asked2.map(r => r.who), wanderer: q.wanderer.mind, pilgrim: q.pilgrim.mind }) + '\n' + log);
 const near = (a, b, cm, mrad) => a && b && Math.abs(a.x_cm - b.x_cm) <= cm && Math.abs(a.z_cm - b.z_cm) <= cm &&
   Math.abs(a.yaw_mrad - b.yaw_mrad) <= mrad;
-check('a resting body holds still where its last frame left it',
-  near(q.wanderer.at, p.wanderer.at, 5, 5) && near(q.pilgrim.at, p.pilgrim.at, 5, 5),
-  JSON.stringify({ before: [p.wanderer.at, p.pilgrim.at], after: [q.wanderer.at, q.pilgrim.at] }));
+const aheadW = played(p.wanderer, 'wanderer', f1, f2, DAY), aheadP = played(p.pilgrim, 'pilgrim', f1, f2, DAY);
+check('between thoughts a body runs its routine, and the next frame finds it exactly where anyone playing the last one forward puts it',
+  same(q.wanderer.at, aheadW) && same(q.pilgrim.at, aheadP) && !same(q.pilgrim.at, p.pilgrim.at) &&
+  same(q.wanderer.routine, p.wanderer.routine) && same(q.pilgrim.routine, p.pilgrim.routine) &&
+  q.wanderer.doing === "↻ stub-premium-2026-09's routine: walk, look, wait" &&
+  q.pilgrim.doing === '↻ default routine: walk, wait, look',
+  JSON.stringify({ sealed: [q.wanderer.at, q.pilgrim.at], played: [aheadW, aheadP], doing: [q.wanderer.doing, q.pilgrim.doing] }));
 const seen = percepts(asked2[0]);
 // how far a walk goes depends on the frame rate (a slow CI renderer walks a few centimetres a
 // second), so moving is judged against the same 5 cm a resting body is held to, not a distance
-check('a thinking body starts where it last stood, and its mind moves it on from there',
-  Math.abs(seen.me.x * 100 - p.greeter.at.x_cm) <= 100 && Math.abs(seen.me.z * 100 - p.greeter.at.z_cm) <= 100 &&
+const aheadG = played(p.greeter, 'greeter', f1, f2, DAY);
+check('a thinking body wakes into the day where its routine took it, and its mind moves it on from there',
+  Math.abs(seen.me.x * 100 - aheadG.x_cm) <= 100 && Math.abs(seen.me.z * 100 - aheadG.z_cm) <= 100 &&
   q.greeter.mind.did[0].verb === 'world_walk' && q.greeter.mind.did[0].failed === false &&
-  !near(q.greeter.at, p.greeter.at, 5, 5), JSON.stringify({ seen: seen.me, before: p.greeter.at, after: q.greeter.at }));
+  !near(q.greeter.at, aheadG, 5, 5), JSON.stringify({ seen: seen.me, played: aheadG, after: q.greeter.at }));
 check('a mind remembers what it did and why, and hears what the others said a tick ago',
   seen.you_recently.length === 1 && seen.you_recently[0].said === 'Welcome, everyone.' &&
   seen.you_recently[0].did[0] === 'world_walk: meeting the newcomers' &&
   seen.you_heard.map(h => h.who + ': ' + h.said).sort().join(' / ') ===
     'pilgrim: Is anyone near the portals? / wanderer: Hello from wanderer 👋', JSON.stringify(seen));
 
-// tick 3: no seat
+// tick 3: no seat, and night where the pilgrim keeps its hours
+writeConfig(NIGHT);
 mintTick();
 log = await capture(3, false, port);
 const f3 = seal(3);
 const r3 = byId(f3);
-check('with no seat, nobody is asked anything, and every mind rests and says so',
-  heardByStub.length === 0 && ['wanderer', 'greeter', 'pilgrim'].every(id => r3[id].mind.kind === 'rest' &&
-    r3[id].mind.why === 'no Copilot seat to think on') && f3.payload.views.thoughts === 0, JSON.stringify(r3) + '\n' + log);
+check('with no seat nobody is asked anything, and the bodies still run their routines exactly as anyone plays them',
+  heardByStub.length === 0 && f3.payload.views.thoughts === 0 &&
+  ['wanderer', 'greeter'].every(id => r3[id].mind.kind === 'rest' && r3[id].mind.why === 'no Copilot seat to think on') &&
+  same(r3.wanderer.at, played(q.wanderer, 'wanderer', f2, f3, DAY)) && same(r3.greeter.at, played(q.greeter, 'greeter', f2, f3, DAY)) &&
+  same(r3.wanderer.routine, p.wanderer.routine), JSON.stringify(r3) + '\n' + log);
+check('where its clock says night, a body sleeps in its bed with its eyes on the sky, and keeps its routine for the morning',
+  r3.pilgrim.mind.kind === 'sleep' && /^asleep: night in /.test(r3.pilgrim.mind.why) && r3.pilgrim.clock === NIGHT &&
+  same(r3.pilgrim.at, P.bed('pilgrim')) && same(r3.pilgrim.routine, q.pilgrim.routine) &&
+  r3.pilgrim.doing === '💤 ' + r3.pilgrim.mind.why && lastDoingOf(r3.pilgrim.id) === r3.pilgrim.doing,
+  JSON.stringify(r3.pilgrim));
 verified = verify();
 check('and the whole line of three ticks verifies from its evidence',
   verified.code === 0 && /line: 3 frame\(s\) verify/.test(verified.out), verified.out);

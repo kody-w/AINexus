@@ -139,15 +139,20 @@ await context.route('https://kody-w.github.io/AINexus/**', route => {
 
 // Pages publish where they stand and paint the others as projections, so the herd can still see
 // itself even when its members occupy different worlds.
+// THE MOMENT THIS TICK IS. With minds, every body is placed where the last frame's routines have
+// taken it by now, played forward exactly as every viewer plays it, and the frame is dated to that
+// same moment, so a viewer that has been playing along arrives at the state this tick starts from.
+const TICK_AT = Date.now();
 let thinking = null;
 if (minds) {
   const config = JSON.parse(fs.readFileSync(path.resolve(MINDS), 'utf8'));
-  thinking = minds.prepare(config, LINE, { seat: !!SEAT, journal: JOURNAL,
+  thinking = minds.prepare(config, LINE, { seat: !!SEAT, journal: JOURNAL, now: TICK_AT,
                                             seatWhy: process.env.NEXUS_MIND_UNAVAILABLE || '' });
   console.log(`minds: ${thinking.spent_x100 / 100} of ${thinking.cap_x100 / 100} premium requests spent in the last day`
     + ` (${thinking.on_line_x100 / 100} on the line, ${thinking.journaled_x100 / 100} in this machine's journal)`);
   for (const [id, planned] of Object.entries(thinking.players)) {
-    console.log(`  ${id}: ${planned.think ? 'thinks on ' + planned.model : 'rests: ' + planned.why}`);
+    console.log(`  ${id} (${planned.local}): ${planned.think ? 'thinks on ' + planned.model
+      : planned.sleep ? planned.why : 'runs ' + minds.routineLine(planned.routine) + ' (' + planned.why + ')'}`);
   }
 }
 console.log(`opening ${N} players in ${WORLD}...`);
@@ -171,9 +176,12 @@ for (let index = 0; index < N; index++) {
     window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
     window.NexusHolo.attach();
   }, id).catch(() => {});
-  // A remembered body stands where its last sealed frame left it; a new one takes its place in the ring.
-  const restored = planned && planned.restore ? await minds.restorePose(page, planned.restore) : false;
-  if (!restored) {
+  // A minded body stands where the night and its routine have taken it; any other takes its place
+  // in the ring.
+  const restored = planned ? await minds.restorePose(page, planned.start) : false;
+  // a body that cannot be put where the line says it is would be sealed somewhere the line never took it
+  if (planned && !restored) throw new Error(id + ': its world never became ready, so its body could not be placed');
+  if (!planned) {
     await page.evaluate(async (position, count) => {
       const drive = window.__autodrive;
       if (!drive) return;
@@ -188,7 +196,7 @@ for (let index = 0; index < N; index++) {
                                         cost: planned.multiplier_x100, journal: JOURNAL }) : null;
   players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [], sees: [], extras: [],
                  planned, record, mind: null, at: null });
-  console.log('  ' + id + ' is in' + (restored ? ' (where it last stood)' : ''));
+  console.log('  ' + id + ' is in' + (restored ? (planned.sleep ? ' (asleep in its bed)' : ' (where its routine took it)') : ''));
 }
 
 await new Promise(resolve => setTimeout(resolve, 1500));
@@ -227,9 +235,15 @@ async function mindOf(player, tick) {
       }
     }
   }
-  player.doing[0] = minds.summary(planned, outcome, player.record);
+  // the routine the body runs from here: the one this thought set, or the one it already had
+  const set = outcome && player.record && player.record.routine;
+  const answered = player.record && player.record.rounds.length
+    ? player.record.rounds[player.record.rounds.length - 1].response.model : null;
+  const running = set ? { steps: set, set_at: 'this', by: answered || planned.model } : planned.routine;
+  player.routine = running;
+  player.doing[0] = minds.summary(planned, outcome, player.record, running);
   if (!outcome) {
-    player.mind = { kind: 'rest', why: planned.why };
+    player.mind = { kind: planned.sleep ? 'sleep' : 'rest', why: planned.why };
     return;
   }
   const directory = path.join(outDir, player.id);
@@ -245,7 +259,7 @@ console.log(`recording ${total} frames at ${FPS}fps...`);
 for (let frame = 0; frame < total; frame++) {
   ticks[frame] = {
     id: `${stamp}:${String(frame).padStart(4, '0')}`,
-    capturedAt: new Date().toISOString()
+    capturedAt: new Date(frame === 0 && thinking ? TICK_AT : Date.now()).toISOString()
   };
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
@@ -352,7 +366,9 @@ if (STREAM) {
       sourceCommit: sourceCommit(),
       sees: Object.fromEntries(players.map(player => [player.id, player.sees[total - 1] || []])),
       minds: Object.fromEntries(players.filter(player => player.mind).map(player => [player.id, player.mind])),
-      at: Object.fromEntries(players.filter(player => player.at).map(player => [player.id, player.at]))
+      at: Object.fromEntries(players.filter(player => player.at).map(player => [player.id, player.at])),
+      routines: Object.fromEntries(players.filter(player => player.routine).map(player => [player.id, player.routine])),
+      clocks: Object.fromEntries(players.filter(player => player.planned).map(player => [player.id, player.planned.clock]))
     });
     fs.writeFileSync(path.resolve(RECEIPT), JSON.stringify(receipt, null, 1) + '\n');
     console.log('  receipt for ' + receipt.tick_id + ' -> ' + path.resolve(RECEIPT));
