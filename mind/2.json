@@ -1,0 +1,209 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 2,
+  "utc": "2026-09-25T23:57:10.954Z",
+  "payload": {
+    "tick": 1282,
+    "tick_frame": "9d25ffe3b7c1bf41aa443f0861ef1ec6cc884104d6744dcce89d8cdd0ade4c6c",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-25T23:56:13.843Z",
+    "charter": {
+      "seq": 2,
+      "frame_hash": "eb50391569d689768196f9ff944b9c8a8ba4bb78f1a4230f1a1454a224539bee"
+    },
+    "state": {
+      "views_seq": 300,
+      "views_frame": "c13bcac081ba27d1605061e3d4a1ff97642eb3fb7babbe75b81ac48aaf73f872"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 23400,
+      "prompt": {
+        "sha256": "79a6a337779f3f1a1f5dc6af61030cd97b06e6abe180d6d92a4dbc7b756c84db",
+        "bytes": 5002
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Circling toward the western portal — I'll wait by the ring.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1800},{\"do\":\"look\",\"dx\":200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1200}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"look\",\"dx\":300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1200},{\"do\":\"wait\",\"ms\":600}]},\"pilgrim\":{\"say\":\"Slow steps to the heart; I spot movement westward.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":800},{\"do\":\"look\",\"dx\":200,\"dy\":0}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":785,\"dy\":0}]},\"watcher\":{\"say\":\"Holding this angle — paths converge beneath my gaze.\",\"act\":[{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":1500},{\"do\":\"look\",\"dx\":60,\"dy\":0}],\"routine\":[{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"look\",\"dx\":60,\"dy\":0}]},\"greeter\":{\"say\":\"Evening, travelers — the plaza gathers warm light; westbound, welcome.\",\"act\":[{\"do\":\"wait\",\"ms\":1000},{\"do\":\"look\",\"dx\":350,\"dy\":0},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":350,\"dy\":0},{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":-350,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Evening, travelers — the plaza gathers warm light; westbound, welcome.",
+        "act": [
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": -350,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Slow steps to the heart; I spot movement westward.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 785,
+            "dy": 0
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Circling toward the western portal — I'll wait by the ring.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1800
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1200
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Holding this angle — paths converge beneath my gaze.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-25T23-57-08.778Z-001ebdea/world-mind.json",
+      "bytes": 7125,
+      "sha256": "1122023f5b152b6d21ce1b9ce0f499a981f7edf6de3640ee6d8b82728ab44362"
+    }
+  },
+  "payload_hash": "6292cfc4b5dea6fde70da8ac6f8b6096b5c430b5588138e2db22cdab691dc244",
+  "prev": "59326fae0116b555024ead7a8a43c7753f37f7da45091766f228f2668aeec997",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "de1842b48c0a1428378403fa0130c799bea4d405e1fa13551a3c59b1bed731d7"
+}
