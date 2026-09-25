@@ -36,6 +36,14 @@ which helped — but a broker intermittently erroring is a better explanation of
 latency, and I should not have settled on latency without checking this.
 
 ### 2. No model call has ever run in this estate
+**Narrowed to the seat itself.** The recorded players can now think: `record_views.cjs --minds`
+puts one model call per player per tick through `NexusBrainstem.turn`, with the player's picture
+and a `why` on every verb, and seals each thought with its evidence (`mind.json`, `saw.webp`), from
+which the sealer, `verify` and the viewer each derive what the frame says. `tests/minds.cjs` drives
+three real captures through that path against a stand-in for the Copilot endpoint: thinking,
+resting over budget and between thoughts, memory and hearing read back from the line, and no seat.
+Every piece past the endpoint is exercised. What is still unproven is a real endpoint's answer:
+the heartbeat's own Copilot seat (`copilot_seat.py login`) waits on a device-code approval.
 **Narrowed further.** The ceiling, the round cap and the autonomous loop have now all been driven
 to their limits by a scripted mind — 4,000 free turns, a runaway mind that never stops calling, and
 six `live()` loops to their various deaths. The machinery is exercised; the mind still is not.
@@ -214,6 +222,30 @@ any of them.
 **The allowlist survived.** All four hosts GitHub actually serves from pass, every near-miss is
 refused, and a refusal does not poison the next good endpoint. Its only fault was silence, now a
 warning — worth having, because GitHub served Copilot from another host for years.
+
+### D6. The first real minds would have broken the views line, bought thoughts off the books, and walked out of the world
+A review of the minds change, before anything was sealed, found three things the tests had not.
+- **A model's words could have broken the line at its first epoch seal.** JSON leaves U+0085,
+  U+2028 and U+2029 raw, and the spine's own reader (`chainio.load_chain`) splits an epoch bundle
+  with `str.splitlines()`, which splits on all three. A mind that said one would have sealed fine,
+  verified fine, and then, the day frames 0-287 were compacted, stopped every `seal`, `anchor` and
+  `verify_thread` run, while the viewer (which splits on `\n`) went on showing the line as healthy.
+  The sealer and the viewer now make all three a space, the same way, and the shape gate refuses
+  a frame that carries one. A test compacts a minded frame and reads it back with chainio itself.
+  The hazard is the reader's, so it applies to any node that seals free text.
+- **`world_travel` navigated the capture page mid-thought.** The thought the model answered was
+  lost, the tick's capture failed for all four players, and the heartbeat's retry five minutes
+  later bought the same thought again, outside the cap. A recorded mind is no longer given
+  `travel` (`turn()` takes an opt-in list of verbs), and a minded page answers any navigation with
+  204 No Content, so its document stays.
+- **The cap counted only what was sealed.** A thought is paid for when the model answers, so any
+  failure between the answer and the seal (a publish, a seal, a crash) let a retry buy it again.
+  Every answer is now journaled as it arrives, and the cap holds to the larger of the journal and
+  the line. A thought whose hands fail after the answer is sealed as bought, with nothing done.
+- **A cadence longer than 200 ticks was silently shorter.** The planner read back 200 frames, so
+  `every: 288` thought again after 201 ticks with no memory. It now reads as far back as the
+  config needs.
+All four are held by tests that fail with the fix removed.
 
 ### Left for you, deliberately
 `dead(status)` signs the user out on ANY 401/403 — including one from the Cloudflare worker rather

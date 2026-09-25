@@ -17,6 +17,7 @@ button,input{font:inherit}
 .doing{position:absolute;left:8px;bottom:8px;right:8px;z-index:2;font:11px ui-monospace,Menlo,monospace;
   color:#9a9ac0;background:rgba(6,6,16,.7);border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell.focus .doing{color:#e9e9f2}
+.doing.bad,.cell.focus .doing.bad{color:#ff8a8a}
 #hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
   background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
 #hud b{color:#7de3ff;font-weight:600}
@@ -217,15 +218,17 @@ function viewsOf(frame) {
       !Array.isArray(views.players)) return null;
   const players = new Map();
   for (const player of views.players) {
-    if (!isObject(player) || typeof player.id !== 'string' || typeof player.file !== 'string' ||
+    if (!isObject(player) || typeof player.id !== 'string' || !feedFile(player.file) ||
         !HEX64.test(String(player.sha256))) return null;
-    if (/^[a-z][a-z0-9+.-]*:/i.test(player.file) || player.file.startsWith('/') ||
-        player.file.split('/').some(part => part === '' || part === '.' || part === '..')) return null;
     players.set(player.id, player);
   }
   return { tick: payload.tick, tickFrame: payload.tick_frame, tickId: views.tick_id,
     captured: views.captured_utc, players };
 }
+
+// a path inside the feed, never an address of its own
+const feedFile = file => typeof file === 'string' && !/^[a-z][a-z0-9+.-]*:/i.test(file) && !file.startsWith('/') &&
+  !file.split('/').some(part => part === '' || part === '.' || part === '..');
 
 async function viewsFrameProblem(frame) {
   const bad = await frameProblem(frame, STREAM);
@@ -470,11 +473,175 @@ function judged(cell, key) {
   return 'pending';
 }
 
+// ── minds: what a thought says is derived again here, from what crossed the wire ──
+// A sealed thought names two files beside its view: its exchange with the model, and the picture
+// the model was shown. Both are hashed here, and every word the frame says about the thought (who
+// answered, what it did and why, what it said, what it cost) is derived again from the exchange by
+// the rules tools/views_seal.py seals it with. A frame that says a model said something its own
+// evidence does not contain is refused, however right its hashes are.
+const MIND_SCHEMA = 'ainexus/mind-exchange/1';
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
+const VERB_ID = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+const LONE = /[\ud800-\udfff]/gu;
+const BREAKS = /[\u0085\u2028\u2029]/g;     // made spaces by the sealer: JSON leaves them raw, and they split lines
+const DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+const mindChecks = new Map();
+
+const clipped = (value, max) => {
+  const chars = Array.from(typeof value === 'string' ? value.replace(LONE, '\ufffd').replace(BREAKS, ' ') : '');
+  return chars.length <= max ? chars.join('') : chars.slice(0, max - 1).join('') + '…';
+};
+const countOf = (value, cap = Number.MAX_SAFE_INTEGER) =>
+  Number.isSafeInteger(value) && value >= 0 && value <= cap ? value : null;
+const doingOf = mind => mind.kind === 'rest' ? clipped('💤 ' + mind.why, 64)
+  : clipped('🧠 ' + mind.model + (mind.did.length
+    ? ': ' + mind.did.map(d => d.verb.startsWith('world_') ? d.verb.slice(6) : d.verb).join(', ') : ''), 64);
+
+function deriveMind(x, pid) {
+  const refuse = why => { throw new Error(why); };
+  if (!isObject(x) || x.schema !== MIND_SCHEMA) refuse('it is not an ' + MIND_SCHEMA);
+  if (x.player !== pid) refuse("it is another player's");
+  if (x.provider !== 'github-copilot') refuse('it names a provider this line does not know');
+  const asked = x.asked, cost = countOf(x.multiplier_x100, 100000);
+  if (!(typeof asked === 'string' && MODEL_ID.test(asked))) refuse('it names no model it asked');
+  if (cost === null) refuse('it names no cost');
+  const { rounds, calls, words, voiced } = x;
+  if (!(Array.isArray(rounds) && rounds.length >= 1 && rounds.length <= 8 && rounds.every(isObject))) refuse('it has no rounds');
+  if (!(Array.isArray(calls) && calls.length <= 64 && calls.every(isObject))) refuse('its actions are not a list');
+  if (typeof words !== 'string' || !(voiced == null || typeof voiced === 'string')) refuse('its words are not text');
+  let ms = 0, tokensIn = 0, tokensOut = 0;
+  const pictures = new Set();
+  for (const round of rounds) {
+    const spent = countOf(round.ms);
+    if (spent === null || countOf(round.status) === null || !isObject(round.request) || !isObject(round.response)) {
+      refuse('a round of it is not a round');
+    }
+    ms += spent;
+    const usage = isObject(round.response.usage) ? round.response.usage : {};
+    tokensIn += countOf(usage.prompt_tokens) || 0;
+    tokensOut += countOf(usage.completion_tokens) || 0;
+    for (const message of Array.isArray(round.request.messages) ? round.request.messages : []) {
+      const content = isObject(message) ? message.content : null;
+      for (const part of Array.isArray(content) ? content : []) {
+        if (!isObject(part) || part.type !== 'image_url') continue;
+        const shown = isObject(part.image_url) ? part.image_url : {};
+        if (!(typeof shown.sha256 === 'string' && HEX64.test(shown.sha256))) refuse('it shows a picture it does not name by hash');
+        pictures.add(shown.sha256);
+      }
+    }
+  }
+  const last = rounds[rounds.length - 1];
+  if (countOf(last.status) !== 200 || !isObject(last.response.message)) refuse('the model never answered');
+  if (pictures.size > 1) refuse('it shows more than one picture');
+  const spoken = [];
+  for (const call of calls) {
+    const args = isObject(call.args) ? call.args : {};
+    if ((call.tool === 'world_say' || call.tool === 'world_tell') && call.failed === false &&
+        typeof args.text === 'string' && args.text) spoken.push(args.text);
+  }
+  if (voiced) spoken.push(voiced);
+  const did = calls.slice(0, 6).map(call => {
+    const args = isObject(call.args) ? call.args : {};
+    return { verb: typeof call.tool === 'string' && VERB_ID.test(call.tool) ? call.tool : '?',
+      why: typeof args.why === 'string' ? clipped(args.why, 160) : '', failed: call.failed !== false };
+  });
+  const answered = last.response.model;
+  return {
+    mind: { kind: 'model', provider: 'github-copilot', asked,
+      model: typeof answered === 'string' && MODEL_ID.test(answered) ? answered : asked,
+      multiplier_x100: cost, said: clipped(spoken.join(' '), 240), did, ms, tokens_in: tokensIn, tokens_out: tokensOut },
+    picture: pictures.size ? [...pictures][0] : null
+  };
+}
+
+async function fetchBytes(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const error = new Error(`${response.status} for ${new URL(url).pathname.split('/').slice(-2).join('/')}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.arrayBuffer();
+}
+
+// One sealed thought, checked once: 'pending', 'ok', 'forged' (with why), 'pruned' once its
+// evidence has rolled out of the feed, or 'unreachable', which is asked again.
+function mindCheck(player) {
+  const mind = player.mind;
+  if (!isObject(mind) || mind.kind !== 'model') return null;
+  const evidence = isObject(mind.exchange) ? mind.exchange : {};
+  const key = keyOf(feedFile(evidence.file) ? imageUrl(evidence.file) : 'nowhere', String(evidence.sha256));
+  const known = mindChecks.get(key);
+  if (known && (known.state !== 'unreachable' || Date.now() - known.at < 15000)) return known;
+  const pending = { state: 'pending', why: '', at: Date.now() };
+  mindChecks.set(key, pending);
+  (async () => {
+    const forged = why => ({ state: 'forged', why });
+    if (!feedFile(evidence.file) || (mind.saw !== undefined && !(isObject(mind.saw) && feedFile(mind.saw.file)))) {
+      return forged('it names a file outside the feed');
+    }
+    const bytes = await fetchBytes(imageUrl(evidence.file));
+    if (await sha256hex(bytes) !== evidence.sha256 || bytes.byteLength !== evidence.bytes) {
+      return forged('its evidence is not the one sealed');
+    }
+    let derived;
+    try {
+      derived = deriveMind(JSON.parse(DECODER.decode(bytes)), player.id);
+    } catch (error) {
+      return forged('its evidence is not the evidence of a thought: ' + error.message);
+    }
+    const claimed = {};
+    for (const key of Object.keys(derived.mind)) claimed[key] = mind[key];
+    let same = false;
+    try { same = jcs(claimed) === jcs(derived.mind); } catch (error) {}
+    if (!same || player.doing !== doingOf(derived.mind)) return forged('the frame says what its evidence does not');
+    if (derived.picture !== (mind.saw ? mind.saw.sha256 : null)) return forged('the frame names a picture it was not shown');
+    if (mind.saw) {
+      const shown = await fetchBytes(imageUrl(mind.saw.file)).catch(error => {
+        if (error.status === 404) return null;
+        throw error;
+      });
+      if (shown && (await sha256hex(shown) !== mind.saw.sha256 || shown.byteLength !== mind.saw.bytes)) {
+        return forged('its picture is not the one it was shown');
+      }
+    }
+    return { state: 'ok', why: '' };
+  })().then(result => {
+    mindChecks.set(key, Object.assign(result, { at: Date.now() }));
+  }, error => {
+    mindChecks.set(key, { state: error.status === 404 ? 'pruned' : 'unreachable', why: error.message, at: Date.now() });
+  }).then(paint);
+  return pending;
+}
+
+// the words under a cell for a sealed player, and everything else about its mind for a hover
+function mindNote(player) {
+  const mind = player.mind;
+  if (!isObject(mind)) return null;
+  if (mind.kind === 'rest') return { text: '💤 ' + mind.why, title: 'resting: ' + mind.why, bad: false };
+  const check = mindCheck(player);
+  if (!check) return null;
+  if (check.state === 'forged') return { text: '✗ thought refused: ' + check.why, title: check.why, bad: true };
+  const mark = { ok: ' ✓', pending: ' …', pruned: '', unreachable: ' …' }[check.state] || '';
+  const did = (Array.isArray(mind.did) ? mind.did : []).map(d =>
+    `• ${String(d.verb).replace(/^world_/, '')}${d.failed ? ' (failed)' : ''}${d.why ? ' — ' + d.why : ''}`);
+  const title = [
+    `asked ${mind.asked} · answered by ${mind.model}`,
+    `${mind.multiplier_x100 / 100}× premium · ${mind.tokens_in} tokens in, ${mind.tokens_out} out · ${mind.ms} ms`,
+    ...did,
+    mind.said ? `said: “${mind.said}”` : 'said nothing',
+    check.state === 'ok' ? 'every word re-derived here from the exchange, whose hash the frame names'
+      : check.state === 'pruned' ? 'its evidence has rolled out of the feed; the frame still names its hash' : 'checking its evidence…'
+  ].join('\n');
+  return { text: '🧠 ' + mind.model + (mind.said ? ' “' + mind.said + '”' : '') + mark, title, bad: false };
+}
+
 function verdictAt(index) {
   const seal = sealAt(index);
   if (seal.status !== 'sealed') return Object.assign({ verdict: seal.status }, seal);
   const anchor = anchorFor(seal.views);
   const counts = { sealed: 0, forged: 0, pending: 0, missing: 0 };
+  const minds = { thoughts: 0, ok: 0, forged: 0, pending: 0, gone: 0 };
   let expected = 0;
   for (const cell of view.cells) {
     const player = seal.views.players.get(cell.rec.id);
@@ -483,11 +650,16 @@ function verdictAt(index) {
     const verdict = judged(cell, keyOf(imageUrl(player.file), player.sha256));
     if (verdict === 'sealed' || verdict === 'forged' || verdict === 'pending') counts[verdict] += 1;
     else counts.missing += 1;
+    const check = mindCheck(player);
+    if (check) {
+      minds.thoughts += 1;
+      minds[['ok', 'forged', 'pending'].includes(check.state) ? check.state : 'gone'] += 1;
+    }
   }
   let verdict = 'verifying';
-  if (counts.forged || anchor.ok === false) verdict = 'forged';
-  else if (anchor.ok === true && expected && counts.sealed === expected) verdict = 'sealed';
-  return { verdict, status: 'sealed', seq: seal.seq, tick: seal.views.tick, anchor, counts, expected,
+  if (counts.forged || minds.forged || anchor.ok === false) verdict = 'forged';
+  else if (anchor.ok === true && expected && counts.sealed === expected && !minds.pending) verdict = 'sealed';
+  return { verdict, status: 'sealed', seq: seal.seq, tick: seal.views.tick, anchor, counts, expected, minds,
     reason: anchor.ok === false ? anchor.reason : '' };
 }
 
@@ -499,12 +671,17 @@ function paintSeal() {
   }
   const v = verdictAt(view.frame);
   const plural = n => n === 1 ? 'view' : 'views';
+  const thoughts = n => n === 1 ? 'thought' : 'thoughts';
+  const minded = v.minds && v.minds.thoughts
+    ? ` · 🧠 ${v.minds.ok}/${v.minds.thoughts} ${thoughts(v.minds.thoughts)} ✓` + (v.minds.gone ? ` (${v.minds.gone} rolled out)` : '') : '';
   const elsewhere = line.published ? '' : ` · ⚠ not the published line: ${new URL(line.base).host}${new URL(line.base).pathname}`;
   const text = {
-    sealed: () => `⛓ sealed · views #${v.seq} · ⚓ spine tick ${v.tick} ✓ · ${v.counts.sealed}/${v.expected} ${plural(v.expected)} ✓`,
+    sealed: () => `⛓ sealed · views #${v.seq} · ⚓ spine tick ${v.tick} ✓ · ${v.counts.sealed}/${v.expected} ${plural(v.expected)} ✓` + minded,
     forged: () => v.counts && v.counts.forged
       ? `✗ ${v.counts.forged} ${plural(v.counts.forged)} not the sealed one · views #${v.seq}`
-      : `✗ anchor · ${v.reason}`,
+      : v.minds && v.minds.forged
+        ? `✗ ${v.minds.forged} ${thoughts(v.minds.forged)} not what ${v.minds.forged === 1 ? 'its' : 'their'} evidence says · views #${v.seq}`
+        : `✗ anchor · ${v.reason}`,
     verifying: () => v.seq === undefined ? '⛓ verifying the line…'
       : `⛓ verifying views #${v.seq} · ⚓ ${v.anchor.ok ? '✓' : '…'} · ${v.counts.sealed}/${v.expected} ${plural(v.expected)}`
         + (v.counts.missing ? ` · ${v.counts.missing} no longer in the feed` : ''),
@@ -755,8 +932,12 @@ function paint() {
     const verdict = sealed ? judged(cell, keyOf(wanted, sealed.sha256)) : '';
     cell.tag.textContent = cell.label + (verdict === 'sealed' ? ' ✓' : verdict === 'forged' ? ' ✗' : '');
     cell.el.classList.toggle('forged', verdict === 'forged');
-    const note = Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
+    // a sealed tick says what its frame says; anything else is the feed's own unsealed note
+    const mind = sealed ? mindNote(sealed) : null;
+    const note = mind ? mind.text : sealed ? sealed.doing : Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
     cell.doing.textContent = note || '';
+    cell.doing.title = mind ? mind.title : note || '';
+    cell.doing.classList.toggle('bad', !!(mind && mind.bad));
     cell.el.classList.toggle('focus', index === view.focus);
     cell.el.style.transform = index === view.focus ? 'scale(1.06)' : 'scale(.965)';
   });
@@ -920,6 +1101,7 @@ window.__viewsState = () => {
       spineTick: seal.tick === undefined ? null : seal.tick,
       anchor: seal.anchor ? seal.anchor.ok : null,
       views: seal.counts || null,
+      minds: seal.minds || null,
       expected: seal.expected || 0,
       reason: seal.reason || ''
     }

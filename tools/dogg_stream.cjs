@@ -91,7 +91,7 @@ function appendCapture(options) {
     if (copied.has(relativeShot)) return copied.get(relativeShot);
     const source = inside(captureDir, path.resolve(captureDir, relativeShot), 'shot');
     if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
-      throw new Error(`missing capture shot ${relativeShot}`);
+      throw new Error(`missing capture file ${relativeShot}`);
     }
     const normalized = path.relative(captureDir, source);
     const destination = inside(segmentDir, path.resolve(segmentDir, normalized), 'shot destination');
@@ -118,6 +118,10 @@ function appendCapture(options) {
       previous.shots.push(lastShot);
       previous.doing.push(incoming && Array.isArray(incoming.doing) ? incoming.doing[frame] || '' : '');
       previous.epochs.push(incoming && Array.isArray(incoming.epochs) ? incoming.epochs[frame] || '' : '');
+      // what a player left beside its view (a thought's evidence) travels in the same segment, and
+      // is named by the tick's receipt rather than by the stream
+      const extras = incoming && Array.isArray(incoming.extras) ? incoming.extras[frame] : null;
+      if (Array.isArray(extras)) for (const extra of extras) if (typeof extra === 'string' && extra) copyShot(extra);
     }
     previous.label = incoming && (incoming.label || incoming.id) || previous.label || id;
     return previous;
@@ -193,6 +197,24 @@ function captureReceipt(options) {
   const tick = Array.isArray(manifest.ticks) ? manifest.ticks[index] : null;
   if (!tick || !tick.segment || !tick.id || !tick.capturedAt) throw new Error('the newest tick names no segment');
   const sees = options.sees || {};
+  const minds = options.minds || {};
+  const at = options.at || {};
+  // a capture-relative file, named where appendCapture put it: this tick's own segment
+  const streamed = relative => {
+    const parts = String(relative || '').split('/');
+    if (!relative || parts.some(part => part === '' || part === '.' || part === '..')) {
+      throw new Error(`a mind names a file that is not in its capture: ${relative}`);
+    }
+    return path.posix.join('segments', tick.segment, ...parts);
+  };
+  const mindOf = mind => {
+    if (!mind || typeof mind !== 'object') return null;
+    if (mind.kind === 'rest') return { kind: 'rest', why: String(mind.why || '') };
+    if (mind.kind !== 'model') return null;
+    const entry = { kind: 'model', exchange: streamed(mind.exchange) };
+    if (mind.saw) entry.saw = streamed(mind.saw);
+    return entry;
+  };
   const receipt = {
     schema: 'ainexus/views-receipt/1',
     world: options.world || manifest.world || '',
@@ -200,12 +222,18 @@ function captureReceipt(options) {
     segment: tick.segment,
     tick_id: tick.id,
     captured_utc: tick.capturedAt,
-    players: (manifest.players || []).map(player => ({
-      id: player.id,
-      doing: (Array.isArray(player.doing) && player.doing[index]) || '',
-      sees: Array.isArray(sees[player.id]) ? sees[player.id].filter(id => typeof id === 'string') : [],
-      file: (Array.isArray(player.shots) && player.shots[index]) || null
-    }))
+    players: (manifest.players || []).map(player => {
+      const entry = {
+        id: player.id,
+        doing: (Array.isArray(player.doing) && player.doing[index]) || '',
+        sees: Array.isArray(sees[player.id]) ? sees[player.id].filter(id => typeof id === 'string') : [],
+        file: (Array.isArray(player.shots) && player.shots[index]) || null
+      };
+      const mind = mindOf(minds[player.id]);
+      if (mind) entry.mind = mind;
+      if (at[player.id]) entry.at = at[player.id];
+      return entry;
+    })
   };
   if (options.sourceCommit) receipt.source_commit = options.sourceCommit;
   return receipt;

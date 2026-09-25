@@ -175,6 +175,258 @@ def read_anchor(spine):
             "tick_utc": frame["utc"]}
 
 
+# ── minds: a thought is sealed as what its own evidence says ─────────────────
+# A player that thought this tick leaves two files beside its view: mind.json, its exchange with the
+# model as it crossed the wire, and saw.webp, the picture the model was shown. The sealer hashes
+# both. Everything a frame says about the thought (which model answered, what it did and why, what
+# it said, what it cost) is DERIVED from mind.json and never taken from the receipt, and verify
+# derives it again: a line whose words disagree with its evidence is a forgery even when every hash
+# is right. views.html derives it the same way, so the rules below are written to mean the same
+# thing in JavaScript: integral numbers are integers, a cut is by code point, and a lone surrogate
+# becomes U+FFFD.
+MIND_SCHEMA = "ainexus/mind-exchange/1"
+PROVIDER = "github-copilot"
+MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}")
+VERB = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,39}")
+LONE = re.compile("[\ud800-\udfff]")
+# JSON leaves these three raw, and the spine's own reader (chainio) splits an epoch bundle's lines on
+# them, so a frame that carried one would break the line the day its epoch is sealed.
+BREAKS = re.compile("[\x85\u2028\u2029]")
+# whitespace as both Python's str.split() and JavaScript's \s find it, the union of the two
+SPACES = re.compile("[\\s\x1c-\x1f\x85\ufeff]+")
+POSE = ("x_cm", "y_cm", "z_cm", "yaw_mrad", "pitch_mrad")
+MAX_DID = 6
+MAX_COUNT = 2 ** 53 - 1
+MIND_KEYS = {"kind", "provider", "asked", "model", "multiplier_x100", "said", "did", "ms", "tokens_in",
+             "tokens_out", "exchange"}
+
+
+def isint(x):
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def count(x, cap=MAX_COUNT):
+    """A non-negative integer as JSON means one, whichever way it was spelled; else None."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    if isinstance(x, float) and not x.is_integer():
+        return None
+    return int(x) if 0 <= x <= cap else None
+
+
+def clip(s, n):
+    """Cut by code point and mark the cut, as tools/minds.cjs and views.html do."""
+    s = BREAKS.sub(" ", LONE.sub("\ufffd", s)) if isinstance(s, str) else ""
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _no_constant(name):
+    raise ValueError(f"{name} is not JSON")
+
+
+def pose_ok(at):
+    return (isinstance(at, dict) and set(at) == set(POSE) and all(isint(at[k]) for k in POSE)
+            and all(abs(at[k]) <= 10_000_000 for k in ("x_cm", "y_cm", "z_cm"))
+            and abs(at["yaw_mrad"]) <= 3142 and abs(at["pitch_mrad"]) <= 3142)
+
+
+def in_segment(f, segment):
+    parts = f.split("/") if isinstance(f, str) else []
+    return (isinstance(f, str) and len(f) <= 256 and f.startswith(f"segments/{segment}/")
+            and all(part not in ("", ".", "..") for part in parts))
+
+
+def doing_of(mind):
+    """The one line a frame shows for a minded player, a function of the mind and checked as one."""
+    if mind["kind"] == "rest":
+        return clip("💤 " + mind["why"], 64)
+    verbs = [d["verb"][6:] if d["verb"].startswith("world_") else d["verb"] for d in mind["did"]]
+    return clip("🧠 " + mind["model"] + (": " + ", ".join(verbs) if verbs else ""), 64)
+
+
+def derive_mind(x, pid):
+    """What a frame may say about one thought, from its exchange alone: (mind, picture), where
+    picture is the SHA-256 of the image the model was shown, or None."""
+    def refuse(why):
+        raise Refusal(f"{pid}: {why}")
+    if not isinstance(x, dict) or x.get("schema") != MIND_SCHEMA:
+        refuse(f"its thought's evidence is not an {MIND_SCHEMA}")
+    if x.get("player") != pid:
+        refuse("its thought's evidence is another player's")
+    if x.get("provider") != PROVIDER:
+        refuse("its thought names a provider this line does not know")
+    asked, cost = x.get("asked"), count(x.get("multiplier_x100"), 100000)
+    if not (isinstance(asked, str) and MODEL.fullmatch(asked)):
+        refuse("its thought names no model it asked")
+    if cost is None:
+        refuse("its thought names no cost")
+    rounds, calls, words, voiced = x.get("rounds"), x.get("calls"), x.get("words"), x.get("voiced")
+    if not (isinstance(rounds, list) and 1 <= len(rounds) <= 8 and all(isinstance(r, dict) for r in rounds)):
+        refuse("its thought has no rounds with the model")
+    if not (isinstance(calls, list) and len(calls) <= 64 and all(isinstance(c, dict) for c in calls)):
+        refuse("its thought's actions are not a list")
+    if not isinstance(words, str) or not (voiced is None or isinstance(voiced, str)):
+        refuse("its thought's words are not text")
+    ms = tokens_in = tokens_out = 0
+    pictures = set()
+    for r in rounds:
+        request, response, spent = r.get("request"), r.get("response"), count(r.get("ms"))
+        if spent is None or count(r.get("status")) is None or not isinstance(request, dict) \
+                or not isinstance(response, dict):
+            refuse("a round of its thought is not a round")
+        ms += spent
+        usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        tokens_in += count(usage.get("prompt_tokens")) or 0
+        tokens_out += count(usage.get("completion_tokens")) or 0
+        messages = request.get("messages") if isinstance(request.get("messages"), list) else []
+        for message in messages:
+            content = message.get("content") if isinstance(message, dict) else None
+            for part in content if isinstance(content, list) else []:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    shown = part.get("image_url") if isinstance(part.get("image_url"), dict) else {}
+                    if not (isinstance(shown.get("sha256"), str) and HEX64.fullmatch(shown["sha256"])):
+                        refuse("its thought was shown a picture it does not name by hash")
+                    pictures.add(shown["sha256"])
+    last = rounds[-1]
+    if count(last["status"]) != 200 or not isinstance(last["response"].get("message"), dict):
+        refuse("the model never answered its thought")
+    if len(pictures) > 1:
+        refuse("its thought was shown more than one picture")
+    spoken = []
+    for c in calls:
+        args = c.get("args") if isinstance(c.get("args"), dict) else {}
+        if c.get("tool") in ("world_say", "world_tell") and c.get("failed") is False \
+                and isinstance(args.get("text"), str) and args["text"]:
+            spoken.append(args["text"])
+    if voiced:
+        spoken.append(voiced)
+    did = []
+    for c in calls[:MAX_DID]:
+        tool, args = c.get("tool"), c.get("args") if isinstance(c.get("args"), dict) else {}
+        did.append({"verb": tool if isinstance(tool, str) and VERB.fullmatch(tool) else "?",
+                    "why": clip(args.get("why"), 160) if isinstance(args.get("why"), str) else "",
+                    "failed": c.get("failed") is not False})
+    answered = last["response"].get("model")
+    mind = {"kind": "model", "provider": PROVIDER, "asked": asked,
+            "model": answered if isinstance(answered, str) and MODEL.fullmatch(answered) else asked,
+            "multiplier_x100": cost, "said": clip(" ".join(spoken), 240), "did": did, "ms": ms,
+            "tokens_in": tokens_in, "tokens_out": tokens_out}
+    return mind, (next(iter(pictures)) if pictures else None)
+
+
+def read_exchange(data, pid):
+    try:
+        return derive_mind(json.loads(data.decode("utf-8"), parse_constant=_no_constant), pid)
+    except (UnicodeDecodeError, ValueError, RecursionError) as ex:
+        raise Refusal(f"{pid}: its thought's evidence is not JSON: {ex}")
+
+
+def segment_file(feed_dir, segment, rel, what):
+    if not in_segment(rel, segment):
+        raise Refusal(f"{what} is not a file in this tick's segment")
+    path = (feed_dir / rel).resolve()
+    if feed_dir not in path.parents or not path.is_file():
+        raise Refusal(f"{what} is not in the feed")
+    data = path.read_bytes()
+    if not data:
+        raise Refusal(f"{what} is empty")
+    return data
+
+
+def sealed_mind(m, pid, segment, feed_dir):
+    """What a frame says about a player's mind: a rest in its own words, or a thought derived from
+    the evidence beside its view. The receipt says only where to look."""
+    if m is None:
+        return None
+    if not isinstance(m, dict) or m.get("kind") not in ("model", "rest"):
+        raise Refusal(f"{pid}: the receipt names a mind that is neither a thought nor a rest")
+    if m["kind"] == "rest":
+        why = m.get("why") if isinstance(m.get("why"), str) else ""
+        return {"kind": "rest", "why": clip(SPACES.sub(" ", why).strip(" "), 160) or "resting"}
+    rel = m.get("exchange")
+    data = segment_file(feed_dir, segment, rel, f"{pid}: its thought's evidence")
+    mind, picture = read_exchange(data, pid)
+    mind["exchange"] = {"file": rel, "bytes": len(data), "sha256": sha256(data)}
+    saw = m.get("saw")
+    if picture is None and saw:
+        raise Refusal(f"{pid}: the receipt names a picture its thought was never shown")
+    if picture is not None:
+        if not saw:
+            raise Refusal(f"{pid}: its thought was shown a picture the capture did not keep")
+        shown = segment_file(feed_dir, segment, saw, f"{pid}: the picture its thought was shown")
+        if sha256(shown) != picture:
+            raise Refusal(f"{pid}: the picture beside its view is not the one its thought was shown")
+        mind["saw"] = {"file": saw, "bytes": len(shown), "sha256": picture}
+    return mind
+
+
+def plain(s, n):
+    """Text a frame may carry: short, whole characters, and nothing that splits a line."""
+    return isinstance(s, str) and len(s) <= n and not LONE.search(s) and not BREAKS.search(s)
+
+
+def mind_problems(pid, m, segment):
+    if not isinstance(m, dict):
+        return [f"{pid}: mind is not an object"]
+    if m.get("kind") == "rest":
+        why = m.get("why")
+        if set(m) != {"kind", "why"} or not (plain(why, 160) and why):
+            return [f"{pid}: a resting mind does not say why in a sentence"]
+        return []
+    if m.get("kind") != "model":
+        return [f"{pid}: mind is neither a thought nor a rest"]
+    if not (MIND_KEYS <= set(m) <= MIND_KEYS | {"saw"}):
+        return [f"{pid}: a thought is not {{{', '.join(sorted(MIND_KEYS))}}} with an optional saw"]
+    out = []
+    if m["provider"] != PROVIDER:
+        out.append(f"{pid}: its thought names a provider this line does not know")
+    for k in ("asked", "model"):
+        if not (isinstance(m[k], str) and MODEL.fullmatch(m[k])):
+            out.append(f"{pid}: {k} is not a model id")
+    for k, cap in (("multiplier_x100", 100000), ("ms", MAX_COUNT), ("tokens_in", MAX_COUNT), ("tokens_out", MAX_COUNT)):
+        if not (isint(m[k]) and 0 <= m[k] <= cap):
+            out.append(f"{pid}: {k} is not a count")
+    if not plain(m["said"], 240):
+        out.append(f"{pid}: said is not a short line")
+    did = m["did"]
+    if not (isinstance(did, list) and len(did) <= MAX_DID and all(
+            isinstance(d, dict) and set(d) == {"verb", "why", "failed"} and isinstance(d["verb"], str)
+            and (d["verb"] == "?" or VERB.fullmatch(d["verb"])) and plain(d["why"], 160)
+            and isinstance(d["failed"], bool)
+            for d in did)):
+        out.append(f"{pid}: did is not a list of what it did and why")
+    for k, what in (("exchange", "its thought's evidence"), ("saw", "the picture it was shown")):
+        e = m.get(k)
+        if k in m and not (isinstance(e, dict) and set(e) == {"file", "bytes", "sha256"}
+                           and in_segment(e["file"], segment) and isint(e["bytes"]) and e["bytes"] > 0
+                           and isinstance(e["sha256"], str) and HEX64.fullmatch(e["sha256"])):
+            out.append(f"{pid}: {what} is not a file in this tick's segment")
+    return out
+
+
+def thought_problem(pid, m, fetch):
+    """'' when the feed's evidence says exactly what the frame says about a thought, None when the
+    evidence has rolled out of the feed, and otherwise what is wrong."""
+    data = fetch(m["exchange"]["file"])
+    if data is None:
+        return None
+    if sha256(data) != m["exchange"]["sha256"] or len(data) != m["exchange"]["bytes"]:
+        return f"{pid}'s thought is not the one sealed"
+    try:
+        derived, picture = read_exchange(data, pid)
+    except Refusal as ex:
+        return str(ex)
+    if {k: m.get(k) for k in derived} != derived:
+        return f"{pid}: the frame says what its thought's evidence does not"
+    if picture != (m["saw"]["sha256"] if "saw" in m else None):
+        return f"{pid}: the frame names a picture its thought was not shown"
+    if "saw" in m:
+        shown = fetch(m["saw"]["file"])
+        if shown is not None and (sha256(shown) != m["saw"]["sha256"] or len(shown) != m["saw"]["bytes"]):
+            return f"{pid}'s picture is not the one its thought was shown"
+    return ""
+
+
 # ── the shape of a views payload ─────────────────────────────────────────────
 def shape_problems(p):
     """Everything a views frame's payload must be, so the sealer can never write what verify refuses.
@@ -207,7 +459,7 @@ def shape_problems(p):
     missing = need - set(v)
     if missing:
         return out + [f"views is missing {sorted(missing)}"]
-    extra = set(v) - need - {"source_commit"}
+    extra = set(v) - need - {"source_commit", "thoughts", "premium_x100"}
     if extra:
         out.append(f"unexpected views keys {sorted(extra)}")
     if not (isinstance(v["world"], str) and WORLD.match(v["world"])):
@@ -232,9 +484,11 @@ def shape_problems(p):
     if not (isinstance(players, list) and 1 <= len(players) <= MAX_PLAYERS):
         return out + [f"players is not a list of 1-{MAX_PLAYERS}"]
     ids, seen_total, byte_total = [], 0, 0
+    minded, thinkers = False, []
+    base = {"id", "doing", "sees", "file", "bytes", "sha256"}
     for q in players:
-        if not isinstance(q, dict) or set(q) != {"id", "doing", "sees", "file", "bytes", "sha256"}:
-            out.append("a player is not {id, doing, sees, file, bytes, sha256}")
+        if not isinstance(q, dict) or not base <= set(q) <= base | {"at", "mind"}:
+            out.append("a player is not {id, doing, sees, file, bytes, sha256} with an optional at and mind")
             continue
         if not (isinstance(q["id"], str) and PLAYER_ID.match(q["id"])):
             out.append(f"player id {q['id']!r} is not an id")
@@ -242,6 +496,17 @@ def shape_problems(p):
         ids.append(q["id"])
         if not (isinstance(q["doing"], str) and len(q["doing"]) <= 64):
             out.append(f"{q['id']}: doing is not a short string")
+        if "mind" in q:
+            minded = True
+            bad = mind_problems(q["id"], q["mind"], v["segment"])
+            out += bad
+            if not bad:
+                if q["doing"] != doing_of(q["mind"]):
+                    out.append(f"{q['id']}: doing is not what its mind says")
+                if q["mind"]["kind"] == "model":
+                    thinkers.append(q["mind"])
+        if "at" in q and not pose_ok(q["at"]):
+            out.append(f"{q['id']}: at is not a pose")
         sees = q["sees"]
         if not (isinstance(sees, list) and len(sees) <= MAX_PLAYERS and len(set(sees)) == len(sees)
                 and all(isinstance(x, str) and PLAYER_ID.match(x) and x != q["id"] for x in sees)):
@@ -249,9 +514,7 @@ def shape_problems(p):
         else:
             seen_total += len(sees)
         f = q["file"]
-        parts = f.split("/") if isinstance(f, str) else []
-        if not (isinstance(f, str) and len(f) <= 256 and f.startswith(f"segments/{v['segment']}/")
-                and all(part not in ("", ".", "..") for part in parts)):
+        if not in_segment(f, v["segment"]):
             out.append(f"{q['id']}: file is not inside this tick's segment")
         if not (isinstance(q["bytes"], int) and not isinstance(q["bytes"], bool) and q["bytes"] > 0):
             out.append(f"{q['id']}: bytes is not a positive integer")
@@ -267,6 +530,18 @@ def shape_problems(p):
         out.append("presences_seen does not sum what the players saw")
     if v["view_bytes"] != byte_total:
         out.append("view_bytes does not sum the views")
+    # the ledger: what thinking this tick cost, which is what a day's budget is audited from
+    ledger = {"thoughts", "premium_x100"}
+    if not minded and ledger & set(v):
+        out.append("a frame without minds carries a ledger of them")
+    elif minded:
+        if not ledger <= set(v):
+            out.append("a frame with minds does not carry thoughts and premium_x100")
+        else:
+            if not (isint(v["thoughts"]) and v["thoughts"] == len(thinkers)):
+                out.append("thoughts does not count the players who thought")
+            if not (isint(v["premium_x100"]) and v["premium_x100"] == sum(m["multiplier_x100"] for m in thinkers)):
+                out.append("premium_x100 does not sum what the thoughts cost")
     return out
 
 
@@ -304,8 +579,15 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head):
             continue
         sees = sorted({s for s in (q.get("sees") or []) if isinstance(s, str) and PLAYER_ID.match(s) and s != pid})
         doing = q.get("doing") if isinstance(q.get("doing"), str) else ""
-        sealed.append({"id": pid, "doing": doing[:64], "sees": sees, "file": rel,
-                       "bytes": len(data), "sha256": sha256(data)})
+        entry = {"id": pid, "doing": doing[:64], "sees": sees, "file": rel,
+                 "bytes": len(data), "sha256": sha256(data)}
+        if pose_ok(q.get("at")):
+            entry["at"] = {k: q["at"][k] for k in POSE}
+        mind = sealed_mind(q.get("mind"), pid, segment, feed_dir)
+        if mind is not None:
+            entry["mind"] = mind
+            entry["doing"] = doing_of(mind)
+        sealed.append(entry)
     if not sealed:
         raise Refusal("no player has a view in this tick's segment — there is nothing to seal")
     captured = receipt.get("captured_utc")
@@ -334,6 +616,10 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head):
     commit = receipt.get("source_commit")
     if isinstance(commit, str) and HEX40.match(commit):
         views["source_commit"] = commit
+    if any("mind" in q for q in sealed):
+        thinkers = [q["mind"] for q in sealed if q.get("mind", {}).get("kind") == "model"]
+        views["thoughts"] = len(thinkers)
+        views["premium_x100"] = sum(m["multiplier_x100"] for m in thinkers)
     payload = {"tick": anchor["tick"], "tick_frame": anchor["tick_frame"], "spine": SPINE_REPO,
                "fetched_utc": anchor["fetched_utc"], "views": views, "sources_failed": sorted(failed)}
     if head is None:
@@ -436,29 +722,50 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
     if feed:
         remote = str(feed).startswith(("https://", "http://"))
         base = str(feed) if not remote or str(feed).endswith("/") else str(feed) + "/"
-        held = pruned = 0
+
+        def fetch(rel):
+            """The feed's bytes for a sealed file, or None once they have rolled out of it."""
+            try:
+                if remote:
+                    req = urllib.request.Request(base + rel, headers={"User-Agent": "ainexus-views-seal"})
+                    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                        return r.read()
+                return (pathlib.Path(base) / rel).read_bytes()
+            except FileNotFoundError:
+                return None
+            except urllib.error.HTTPError as ex:
+                if ex.code == 404:
+                    return None
+                raise
+
+        held = pruned = thoughts = gone = 0
         for f in (frames[-feed_last:] if feed_last else frames):
             for q in f["payload"]["views"]["players"]:
                 try:
-                    if remote:
-                        req = urllib.request.Request(base + q["file"], headers={"User-Agent": "ainexus-views-seal"})
-                        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-                            data = r.read()
-                    else:
-                        data = (pathlib.Path(base) / q["file"]).read_bytes()
-                except (FileNotFoundError, urllib.error.HTTPError) as ex:
-                    if isinstance(ex, urllib.error.HTTPError) and ex.code != 404:
-                        problems.append(f"frame {f['seq']}: {q['id']}: the feed answered {ex.code}")
-                    else:
+                    data = fetch(q["file"])
+                    if data is None:
                         pruned += 1     # rolled out of the feed; the frame still proves its hash
-                    continue
-                if sha256(data) != q["sha256"] or len(data) != q["bytes"]:
-                    problems.append(f"frame {f['seq']}: {q['id']}'s view is not the one sealed")
-                else:
-                    held += 1
+                    elif sha256(data) != q["sha256"] or len(data) != q["bytes"]:
+                        problems.append(f"frame {f['seq']}: {q['id']}'s view is not the one sealed")
+                    else:
+                        held += 1
+                    mind = q.get("mind")
+                    if mind and mind["kind"] == "model":
+                        why = thought_problem(q["id"], mind, fetch)
+                        if why is None:
+                            gone += 1
+                        elif why:
+                            problems.append(f"frame {f['seq']}: {why}")
+                        else:
+                            thoughts += 1
+                except urllib.error.HTTPError as ex:
+                    problems.append(f"frame {f['seq']}: {q['id']}: the feed answered {ex.code}")
         if not problems:
             log(f"views: {held} held by the feed hash to their frames"
                 + (f"; {pruned} have rolled out of the feed" if pruned else ""))
+            if thoughts or gone:
+                log(f"minds: {thoughts} thought(s) say exactly what their evidence says"
+                    + (f"; {gone} have rolled out of the feed" if gone else ""))
     return problems
 
 
@@ -504,6 +811,7 @@ def main(argv=None):
             v = frame["payload"]["views"]
             line = f"frame {frame['seq']} @ spine tick {anchor['tick']}"
             print(f"sealed views {line}: {v['players_sealed']} view(s), {v['presences_seen']} presence(s) seen"
+                  + (f", {v['thoughts']} thought(s) costing {v['premium_x100'] / 100:g} premium" if "thoughts" in v else "")
                   + (f", missing {', '.join(frame['payload']['sources_failed'])}" if frame["payload"]["sources_failed"] else ""))
             if args.summary:
                 pathlib.Path(args.summary).write_text(line + "\n")

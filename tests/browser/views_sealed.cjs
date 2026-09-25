@@ -295,6 +295,78 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
   await context.close();
 }
 
+{
+  const doings = page => page.$$eval('.cell', all => Object.fromEntries(all.map(cell => [
+    cell.querySelector('.tag').textContent.replace(/^🤖 /, '').replace(/ [✓✗]$/, ''),
+    { text: cell.querySelector('.doing').textContent, title: cell.querySelector('.doing').title,
+      bad: cell.querySelector('.doing').classList.contains('bad') }])));
+  const mindsSettled = page => page.waitForFunction(() => {
+    const minds = window.__viewsState().seal.minds;
+    return minds && minds.thoughts && !minds.pending;
+  }, null, { timeout: 20000 }).catch(() => null);
+  const wanderer = fx.minds.wanderer, pilgrim = fx.minds.pilgrim;
+
+  let { context, page } = await open({});
+  await until(page, 'sealed', 1);
+  let s = (await state(page)).seal;
+  let said = await doings(page);
+  const hud = await page.locator('#seal').textContent();
+  check('a sealed thought is shown with its words, and only after every word was derived again from its evidence',
+    s.minds && s.minds.thoughts === 2 && s.minds.ok === 2 && hud.includes('🧠 2/2 thoughts ✓') &&
+    said.wanderer.text === '🧠 claude-sonnet-5 “Hello, greeter! 👋” ✓' &&
+    said.pilgrim.text === '🧠 gpt-5-mini-2026-08-07 “Heading for the portals.” ✓', JSON.stringify({ s, said, hud }));
+  check('its reasons, the model that answered and what it cost are one hover away; a rest says why; a script says what it did',
+    said.wanderer.title.includes('the greeter is off to my right') && said.wanderer.title.includes('answered by claude-sonnet-5') &&
+    said.wanderer.title.includes('1× premium') && said.pilgrim.title.includes('aim (failed) — I want to see where it leads') &&
+    said.greeter.text === '💤 resting between thoughts (thinks every 3 ticks)' && said.watcher.text === 'wander',
+    JSON.stringify(said));
+  await context.close();
+
+  const evidence = read('live', wanderer.exchange.file).toString('utf8');
+  ({ context, page } = await open({ ['live/' + wanderer.exchange.file]:
+    evidence.replace('the greeter is off to my right', 'the greeter is off to my left') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  s = (await state(page)).seal;
+  said = await doings(page);
+  check('a thought whose evidence changed is refused, while the four views still verify',
+    s.verdict === 'forged' && s.minds.forged === 1 && s.minds.ok === 1 && s.views.sealed === 4 &&
+    said.wanderer.bad && said.wanderer.text.startsWith('✗ thought refused: its evidence is not the one sealed'),
+    JSON.stringify({ s, said }));
+  await context.close();
+
+  ({ context, page } = await open({ 'chain/1.json': read('forged', 'chain-1-said.json'),
+                                   'chain/HEAD.json': read('forged', 'HEAD-said.json') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  s = (await state(page)).seal;
+  said = await doings(page);
+  check('words a model never said are caught against its evidence, when every hash and link in the line is right',
+    s.line === 'ok' && s.verdict === 'forged' && s.minds.forged === 1 && s.anchor === true &&
+    said.wanderer.text === '✗ thought refused: the frame says what its evidence does not' &&
+    !Object.values(said).some(d => d.text.includes('I was never here')), JSON.stringify({ s, said }));
+  await context.close();
+
+  ({ context, page } = await open({ ['live/' + pilgrim.saw.file]: read('live', wanderer.saw.file) }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  said = await doings(page);
+  check('a picture that is not the one the model was shown is refused',
+    said.pilgrim.text === '✗ thought refused: its picture is not the one it was shown', JSON.stringify(said));
+  await context.close();
+
+  ({ context, page } = await open({ ['live/' + wanderer.exchange.file]: null }));
+  await until(page, 'sealed', 1);
+  s = (await state(page)).seal;
+  said = await doings(page);
+  const rolled = await page.locator('#seal').textContent();
+  check('a thought whose evidence has rolled out of the feed is not a lie: the frame still names its hash',
+    s.minds.gone === 1 && s.minds.ok === 1 && rolled.includes('(1 rolled out)') &&
+    said.wanderer.text === '🧠 claude-sonnet-5 “Hello, greeter! 👋”' && said.wanderer.title.includes('rolled out'),
+    JSON.stringify({ s, said, rolled }));
+  await context.close();
+}
+
 console.log('page errors:', errors);
 await browser.close();
 fs.rmSync(out, { recursive: true, force: true });

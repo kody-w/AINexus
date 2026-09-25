@@ -72,10 +72,24 @@ const MAX_FRAMES = Math.floor(positive('max-frames', 2016));
 const TICK_SECONDS = Number(arg('tick-seconds', 0));
 const BROWSER_CHANNEL = arg('browser-channel', '');
 const RECEIPT = arg('receipt', '');
+const MINDS = arg('minds', '');
+const LINE = path.resolve(arg('line', path.join(ROOT, 'views')));
+const JOURNAL = arg('journal', '') ? path.resolve(arg('journal', '')) : '';
 const NAMES = ['wanderer', 'greeter', 'pilgrim', 'watcher', 'scribe', 'runner', 'herald', 'tinker'];
 if (!Number.isFinite(QUALITY) || QUALITY <= 0 || QUALITY > 1) throw new Error('--quality must be between 0 and 1');
 if (!Number.isFinite(TICK_SECONDS) || TICK_SECONDS < 0) throw new Error('--tick-seconds must be zero or positive');
 if (RECEIPT && !STREAM) throw new Error('--receipt describes a stream tick, so it needs --stream');
+// With --minds, what each player does is decided by a model (or it rests, and says why) instead of
+// by the scripted rotation. A capture thinks once, on its first frame: one tick, one thought.
+const minds = MINDS ? require('./minds.cjs') : null;
+const SEAT = MINDS && process.env.NEXUS_MIND_TOKEN && process.env.NEXUS_MIND_API
+  ? { token: process.env.NEXUS_MIND_TOKEN, api: process.env.NEXUS_MIND_API } : null;
+const PERSONAS = {
+  wanderer: 'wanderer, a curious visitor who looks before moving, greets whoever is here, and drifts between portals',
+  greeter: 'greeter, who stays near the centre, watches who arrives, and talks to the people here',
+  pilgrim: 'pilgrim, who walks toward portals, looks before stepping close, and reports what it finds',
+  watcher: 'watcher, who keeps to the edge of the ring, watches the others, and says what it notices',
+};
 
 function inside(root, candidate, label) {
   const relative = path.relative(root, candidate);
@@ -125,31 +139,56 @@ await context.route('https://kody-w.github.io/AINexus/**', route => {
 
 // Pages publish where they stand and paint the others as projections, so the herd can still see
 // itself even when its members occupy different worlds.
+let thinking = null;
+if (minds) {
+  const config = JSON.parse(fs.readFileSync(path.resolve(MINDS), 'utf8'));
+  thinking = minds.prepare(config, LINE, { seat: !!SEAT, journal: JOURNAL,
+                                            seatWhy: process.env.NEXUS_MIND_UNAVAILABLE || '' });
+  console.log(`minds: ${thinking.spent_x100 / 100} of ${thinking.cap_x100 / 100} premium requests spent in the last day`
+    + ` (${thinking.on_line_x100 / 100} on the line, ${thinking.journaled_x100 / 100} in this machine's journal)`);
+  for (const [id, planned] of Object.entries(thinking.players)) {
+    console.log(`  ${id}: ${planned.think ? 'thinks on ' + planned.model : 'rests: ' + planned.why}`);
+  }
+}
 console.log(`opening ${N} players in ${WORLD}...`);
 const players = [];
 for (let index = 0; index < N; index++) {
   const id = NAMES[index % NAMES.length] + (index >= NAMES.length ? '-' + index : '');
+  const planned = thinking && thinking.players[id] || null;
   const page = await context.newPage();
   page.on('pageerror', error => console.log('  ! ' + id + ': ' + error.message.slice(0, 80)));
   await page.goto('https://kody-w.github.io/AINexus/' + WORLD +
     '#as=' + encodeURIComponent('AI ' + id), { timeout: 60000 });
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/autodrive.js' }).catch(() => {});
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/holo.js' }).catch(() => {});
-  await page.waitForFunction(() => !!window.__autodrive && !!window.NexusHolo,
-    null, { timeout: 30000 }).catch(() => {});
+  if (planned) {
+    await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/frames.js' }).catch(() => {});
+    await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/vbrainstem.js' }).catch(() => {});
+  }
+  await page.waitForFunction(minded => !!window.__autodrive && !!window.NexusHolo && (!minded || !!window.NexusBrainstem),
+    !!planned, { timeout: 30000 }).catch(() => {});
   await page.evaluate(who => {
     window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
     window.NexusHolo.attach();
   }, id).catch(() => {});
-  await page.evaluate(async (position, count) => {
-    const drive = window.__autodrive;
-    if (!drive) return;
-    await drive.look(Math.round((360 / count) * position * 2.2), 0);
-    await drive.walk('forward', 420);
-    await drive.look(180 * 2.2, 0);
-  }, index, N).catch(() => {});
-  players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [], sees: [] });
-  console.log('  ' + id + ' is in');
+  // A remembered body stands where its last sealed frame left it; a new one takes its place in the ring.
+  const restored = planned && planned.restore ? await minds.restorePose(page, planned.restore) : false;
+  if (!restored) {
+    await page.evaluate(async (position, count) => {
+      const drive = window.__autodrive;
+      if (!drive) return;
+      await drive.look(Math.round((360 / count) * position * 2.2), 0);
+      await drive.walk('forward', 420);
+      await drive.look(180 * 2.2, 0);
+    }, index, N).catch(() => {});
+  }
+  if (planned) await minds.holdInWorld(page);
+  const record = planned && planned.think
+    ? await minds.installBridge(page, { api: SEAT.api, token: SEAT.token, model: planned.model, player: id,
+                                        cost: planned.multiplier_x100, journal: JOURNAL }) : null;
+  players.push({ id, label: '🤖 ' + id, page, shots: [], doing: [], epochs: [], sees: [], extras: [],
+                 planned, record, mind: null, at: null });
+  console.log('  ' + id + ' is in' + (restored ? ' (where it last stood)' : ''));
 }
 
 await new Promise(resolve => setTimeout(resolve, 1500));
@@ -163,6 +202,45 @@ for (const player of players) {
 const intents = ['wander', 'hold', 'go', 'wander'];
 const total = Math.max(1, Math.round(SECONDS * FPS));
 const ticks = [];
+
+// One thought, or an honest rest. What the model was shown and what it answered go to disk beside
+// the view, for the sealer to hash; a thought that failed becomes a rest that says why.
+async function mindOf(player, tick) {
+  const planned = player.planned;
+  let outcome = null;
+  if (planned.think) {
+    try {
+      outcome = await minds.think(player.page, planned, {
+        tick,
+        persona: 'You are ' + (planned.persona || PERSONAS[player.id] || player.id) + '. You are an AI player '
+          + 'in a shared 3D world of portals, with three others, and you get to act once every few minutes.',
+      });
+    } catch (error) {
+      const why = minds.clip(String(error && error.message || error), 150);
+      // A model that answered was paid for, so its thought is sealed even though the hands did not
+      // finish: nothing done, and why, beside the exchange that proves it was bought.
+      if (player.record && player.record.rounds.some(round => round.status === 200 && round.response.message)) {
+        outcome = { saw: null, words: '', calls: [], voiced: null, note: 'the thought failed after the model answered: ' + why };
+      } else {
+        planned.think = false;
+        planned.why = why;
+      }
+    }
+  }
+  player.doing[0] = minds.summary(planned, outcome, player.record);
+  if (!outcome) {
+    player.mind = { kind: 'rest', why: planned.why };
+    return;
+  }
+  const directory = path.join(outDir, player.id);
+  fs.mkdirSync(directory, { recursive: true });
+  const { exchange, sawBytes } = minds.evidence(player.id, planned, player.record, outcome, 'saw.webp');
+  if (sawBytes) fs.writeFileSync(path.join(directory, 'saw.webp'), sawBytes);
+  fs.writeFileSync(path.join(directory, 'mind.json'), JSON.stringify(exchange, null, 1) + '\n');
+  player.extras[0] = [player.id + '/mind.json'].concat(sawBytes ? [player.id + '/saw.webp'] : []);
+  player.mind = { kind: 'model', exchange: player.id + '/mind.json', saw: sawBytes ? player.id + '/saw.webp' : null };
+}
+
 console.log(`recording ${total} frames at ${FPS}fps...`);
 for (let frame = 0; frame < total; frame++) {
   ticks[frame] = {
@@ -171,7 +249,10 @@ for (let frame = 0; frame < total; frame++) {
   };
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
-    if (frame % Math.max(1, Math.round(FPS)) === 0) {
+    if (player.planned) {
+      if (frame === 0) await mindOf(player, thinking.tick);
+      else player.doing[frame] = player.doing[frame - 1] || '';
+    } else if (frame % Math.max(1, Math.round(FPS)) === 0) {
       const intent = intents[(index + Math.floor(frame / FPS)) % intents.length];
       player.doing[frame] = intent;
       await player.page.evaluate(async value => {
@@ -211,6 +292,8 @@ for (let frame = 0; frame < total; frame++) {
     player.sees[frame] = await player.page.evaluate(() => window.NexusHolo
       ? window.NexusHolo.present().filter(item => item.painted).map(item => item.id)
       : []).catch(() => []);
+    // where a minded body ended the tick, so the next tick can start it there
+    if (player.planned && frame === total - 1) player.at = await minds.readPose(player.page);
   }
   if (frame % Math.max(1, Math.round(FPS * 4)) === 0) {
     process.stdout.write('  ' + frame + '/' + total + '\r');
@@ -231,7 +314,8 @@ const manifest = {
     label: player.label,
     shots: player.shots,
     doing: player.doing,
-    epochs: player.epochs
+    epochs: player.epochs,
+    extras: player.extras
   }))
 };
 fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest));
@@ -266,7 +350,9 @@ if (STREAM) {
       world: WORLD,
       worldSha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, WORLD))).digest('hex'),
       sourceCommit: sourceCommit(),
-      sees: Object.fromEntries(players.map(player => [player.id, player.sees[total - 1] || []]))
+      sees: Object.fromEntries(players.map(player => [player.id, player.sees[total - 1] || []])),
+      minds: Object.fromEntries(players.filter(player => player.mind).map(player => [player.id, player.mind])),
+      at: Object.fromEntries(players.filter(player => player.at).map(player => [player.id, player.at]))
     });
     fs.writeFileSync(path.resolve(RECEIPT), JSON.stringify(receipt, null, 1) + '\n');
     console.log('  receipt for ' + receipt.tick_id + ' -> ' + path.resolve(RECEIPT));
