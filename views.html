@@ -717,8 +717,10 @@ function directedCheck(player, views) {
       const heard = typeof x.answer === 'string' ? window.NexusPlayout.directive(x.answer, awake) : null;
       const again = heard ? { kind: 'model', provider: 'github-copilot', asked: x.asked, ms: x.ms, answer: x.answer } : null;
       try {
-        if (x.at_utc !== views.captured || jcs([x.charter, x.state, x.clock, [...(x.awake || [])].sort()]) !==
-            jcs([p.charter, p.state, p.clock, awake])) return forged("its mind frame says it was shown what its evidence does not");
+        if (x.at_utc !== views.captured || jcs([x.charter, x.state, x.clock, [...(x.awake || [])].sort(), x.memory, x.morning]) !==
+            jcs([p.charter, p.state, p.clock, awake, p.memory, p.morning])) {
+          return forged("its mind frame says it was shown what its evidence does not");
+        }
         if (heard ? !(by.kind === 'model' && jcs(again) === jcs({ kind: by.kind, provider: by.provider, asked: by.asked, ms: by.ms,
                                                                  answer: by.answer })
                       && by.prompt && await sha256hex(ENCODER.encode(x.prompt)) === by.prompt.sha256)

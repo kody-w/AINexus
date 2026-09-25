@@ -25,6 +25,7 @@ import math
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -159,6 +160,17 @@ def _prompt_ref(prompt):
     return {"sha256": V.sha256(data), "bytes": len(data)}
 
 
+def _kill_group(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, ValueError):
+        pass
+
+
 def ask(prompt, model, copilot, timeout=150):
     """Ask the one mind with no tools, returning evidence or a short reason it did not answer."""
     start = time.monotonic_ns()
@@ -168,15 +180,23 @@ def ask(prompt, model, copilot, timeout=150):
         if "/" in program:
             program = str(pathlib.Path(program).resolve())
         work = tempfile.mkdtemp(prefix="dream-ask-")
-        result = subprocess.run(
+        # copilot is a launcher that starts the real process beneath it: the whole process group goes
+        # when the answer is late, or a child left holding the pipes would hang the night's heartbeat
+        proc = subprocess.Popen(
             [program, "-p", prompt, "--model", model, "-s", "--no-custom-instructions",
              "--no-ask-user", "--no-auto-update", "--no-color", "--disable-builtin-mcps",
-             "--available-tools="], cwd=work, capture_output=True, text=True, timeout=timeout,
-            env=dict(os.environ, PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"))
-        if result.returncode:
-            error = f"copilot exited {result.returncode}" + (": " + result.stderr.strip() if result.stderr.strip() else "")
+             "--available-tools="], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env=dict(os.environ, PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"), start_new_session=True)
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            raise
+        _kill_group(proc)
+        if proc.returncode:
+            error = f"copilot exited {proc.returncode}" + (": " + stderr.strip() if stderr.strip() else "")
         else:
-            answer = result.stdout.strip() or None
+            answer = stdout.strip() or None
             if answer is None:
                 error = "copilot returned no answer"
     except subprocess.TimeoutExpired:
