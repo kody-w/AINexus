@@ -1,0 +1,225 @@
+{
+  "spec": "rapp/1",
+  "kind": "views.snapshot",
+  "stream_id": "views:@kody-w/ainexus",
+  "seq": 258,
+  "utc": "2026-09-25T15:35:42.661Z",
+  "payload": {
+    "tick": 1236,
+    "tick_frame": "5a28d60f53566f223431d4639872f53cacd2f7de979bb07134fd8a91174c17d0",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-25T15:35:26.050Z",
+    "views": {
+      "world": "index.html",
+      "world_sha256": "bb7c9a56cb04bc4ab030dd544bfcf37018d28f842bed1cc48998cffe4db5db16",
+      "tick_id": "2026-09-25T15-35-40.352Z-191b6dc9:0000",
+      "segment": "2026-09-25T15-35-40.352Z-191b6dc9",
+      "captured_utc": "2026-09-25T15:35:26.783Z",
+      "feed": "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/",
+      "players": [
+        {
+          "id": "wanderer",
+          "doing": "💤 asleep: night in Tokyo 00:35",
+          "sees": [
+            "greeter",
+            "pilgrim",
+            "watcher"
+          ],
+          "file": "segments/2026-09-25T15-35-40.352Z-191b6dc9/wanderer/0000.webp",
+          "bytes": 3896,
+          "sha256": "3a69c29926d8475b507ef5a43b98d20881705e6135a678e49dcc0ee3124a3892",
+          "at": {
+            "x_cm": 1697,
+            "y_cm": 200,
+            "z_cm": 1697,
+            "yaw_mrad": 785,
+            "pitch_mrad": 1100
+          },
+          "mind": {
+            "kind": "sleep",
+            "why": "asleep: night in Tokyo 00:35"
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1800
+              },
+              {
+                "do": "look",
+                "dx": 300,
+                "dy": 0
+              },
+              {
+                "do": "wait",
+                "ms": 600
+              }
+            ],
+            "set_at": null,
+            "by": "default"
+          },
+          "clock": "Asia/Tokyo"
+        },
+        {
+          "id": "greeter",
+          "doing": "↻ default routine: wait, look, wait, look",
+          "sees": [
+            "pilgrim",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-25T15-35-40.352Z-191b6dc9/greeter/0000.webp",
+          "bytes": 4576,
+          "sha256": "803455c50b3045222fb76c3f3ab5ee598ac54040fc3e5c5dc07a9a9b65cd8308",
+          "at": {
+            "x_cm": -1697,
+            "y_cm": 200,
+            "z_cm": 1697,
+            "yaw_mrad": -1485,
+            "pitch_mrad": 0
+          },
+          "mind": {
+            "kind": "rest",
+            "why": "no Copilot seat to think on"
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "wait",
+                "ms": 2500
+              },
+              {
+                "do": "look",
+                "dx": 350,
+                "dy": 0
+              },
+              {
+                "do": "wait",
+                "ms": 2500
+              },
+              {
+                "do": "look",
+                "dx": -350,
+                "dy": 0
+              }
+            ],
+            "set_at": null,
+            "by": "default"
+          },
+          "clock": "America/New_York"
+        },
+        {
+          "id": "pilgrim",
+          "doing": "↻ default routine: walk, wait, look",
+          "sees": [
+            "greeter",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-25T15-35-40.352Z-191b6dc9/pilgrim/0000.webp",
+          "bytes": 5160,
+          "sha256": "05e2c65f5c28683864f1d8ca32040d4d4a92d35f4bbf498d6c28921dbc93ef78",
+          "at": {
+            "x_cm": 149,
+            "y_cm": 200,
+            "z_cm": -1563,
+            "yaw_mrad": 2864,
+            "pitch_mrad": 0
+          },
+          "mind": {
+            "kind": "rest",
+            "why": "no Copilot seat to think on"
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 2200
+              },
+              {
+                "do": "wait",
+                "ms": 1200
+              },
+              {
+                "do": "look",
+                "dx": 785,
+                "dy": 0
+              }
+            ],
+            "set_at": null,
+            "by": "default"
+          },
+          "clock": "Europe/London"
+        },
+        {
+          "id": "watcher",
+          "doing": "💤 asleep: night in Sydney 01:35",
+          "sees": [
+            "greeter",
+            "pilgrim",
+            "wanderer"
+          ],
+          "file": "segments/2026-09-25T15-35-40.352Z-191b6dc9/watcher/0000.webp",
+          "bytes": 3406,
+          "sha256": "22507b8c32afdfad30467aaa3064198007321486ec2ec8791fd90e881b02fd32",
+          "at": {
+            "x_cm": 1697,
+            "y_cm": 200,
+            "z_cm": -1697,
+            "yaw_mrad": 2356,
+            "pitch_mrad": 1100
+          },
+          "mind": {
+            "kind": "sleep",
+            "why": "asleep: night in Sydney 01:35"
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "walk",
+                "dir": "left",
+                "ms": 1500
+              },
+              {
+                "do": "wait",
+                "ms": 2000
+              },
+              {
+                "do": "walk",
+                "dir": "right",
+                "ms": 1500
+              },
+              {
+                "do": "wait",
+                "ms": 2000
+              },
+              {
+                "do": "look",
+                "dx": 60,
+                "dy": 0
+              }
+            ],
+            "set_at": null,
+            "by": "default"
+          },
+          "clock": "Australia/Sydney"
+        }
+      ],
+      "players_sealed": 4,
+      "presences_seen": 12,
+      "view_bytes": 17038,
+      "gap_min": 10,
+      "source_commit": "f8fbde18e0c179cdbeb9a095c662e2f832ea4222",
+      "thoughts": 0,
+      "premium_x100": 0
+    },
+    "sources_failed": []
+  },
+  "payload_hash": "40f810a5011c32a3d4c8fe29ad74906a8e7c42ea8520fb96448f50e019380e12",
+  "prev": "04e8001f170553515cc7862bf50655628f8c854c07d666af1abde562c9efd301",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "0b13cdf57bffe444f027d3b2e5224b4d993f253ef28e8b510a2ca45b3f5de304"
+}
