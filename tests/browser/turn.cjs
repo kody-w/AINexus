@@ -62,6 +62,68 @@ say('a verb that returned false is reported as FAILED, not ok', /failed/.test(re
 say('an invented verb is refused and never dispatched', /no such verb/.test(res.calls.find(c=>c.tool==='world_jump').result) && !res.acted.some(a=>a[0]==='run-was-used'));
 say('a list verb returns real data, not "ok"', /full-peer-id-1234/.test(res.calls.find(c=>c.tool==='world_people').result));
 say('the driver was called directly, not through run()', res.acted.some(a=>a[0]==='tell'));
+
+// ── the eyes and the reasons are opt-in, and the default is byte-for-byte what it was ──
+const eyes = await p.evaluate(async () => {
+  const seen = [];
+  const mind = { signedIn: () => true, isScripted: true, chat: async (messages, opts) => {
+    seen.push({ messages: JSON.parse(JSON.stringify(messages)), tools: JSON.parse(JSON.stringify(opts.tools)) });
+    return { content: 'over there.', tool_calls: [
+      { id: 'w1', function: { name: 'world_walk', arguments: '{"dir":"forward","ms":700,"why":"the portal is ahead"}' } }] };
+  } };
+  const walked = [];
+  const drive = { walk: async (dir, ms) => { walked.push([dir, ms]); return true; },
+                  snapshot: () => ({ chat: [] }), people: () => [], orbs: () => [] };
+  const pixel = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAQAcJaQAA3AA/v3AgAA=';
+  const plain = await window.NexusBrainstem.turn({ percepts: { me: {} }, python: false, rounds: 1, drive, mind });
+  const rich = await window.NexusBrainstem.turn({ percepts: { me: {} }, python: false, rounds: 1, drive, mind,
+                                                  image: pixel, explain: true });
+  const smuggled = await window.NexusBrainstem.turn({ percepts: { me: {} }, python: false, rounds: 1, drive, mind,
+                                                      image: 'https://example.invalid/tracker.png' });
+  const whyIn = (s) => s.tools.filter(t => t.function.name.indexOf('world_') === 0)
+                              .every(t => 'why' in t.function.parameters.properties);
+  return {
+    plainContentIsText: typeof seen[0].messages[1].content === 'string',
+    plainHasNoWhy: !seen[0].tools.some(t => 'why' in ((t.function.parameters || {}).properties || {})),
+    plainSystem: seen[0].messages[0].content,
+    richParts: Array.isArray(seen[1].messages[1].content) ? seen[1].messages[1].content.map(x => x.type) : null,
+    richImage: Array.isArray(seen[1].messages[1].content) ? seen[1].messages[1].content[1].image_url.url === pixel : false,
+    richWhy: whyIn(seen[1]),
+    richSystemTells: /exactly what your eyes see/.test(seen[1].messages[0].content) && /short why/.test(seen[1].messages[0].content),
+    keptWhy: rich.calls[0] && rich.calls[0].args.why,
+    walked,
+    smuggledIsText: typeof seen[2].messages[1].content === 'string' && !JSON.stringify(seen[2].messages).includes('example.invalid'),
+  };
+});
+say('without image or explain, the request is exactly what it always was',
+  eyes.plainContentIsText && eyes.plainHasNoWhy && !/eyes see|short why/.test(eyes.plainSystem));
+say('with an image, the model is shown the picture beside the percepts',
+  JSON.stringify(eyes.richParts) === '["text","image_url"]' && eyes.richImage && eyes.richSystemTells);
+say('with explain, every verb offers a why, the record keeps it, and the hands never see it',
+  eyes.richWhy && eyes.keptWhy === 'the portal is ahead' && JSON.stringify(eyes.walked[1]) === '["forward",700]');
+say('an image that is not a data: picture is never sent anywhere', eyes.smuggledIsText);
+
+// ── a mind may be given only some verbs: the rest are neither offered nor done ──
+const given = await p.evaluate(async () => {
+  let offered = null;
+  const mind = { signedIn: () => true, isScripted: true, chat: async (messages, opts) => {
+    offered = opts.tools.map(t => t.function.name).filter(n => n.indexOf('world_') === 0);
+    return { content: '', tool_calls: [
+      { id: 't1', function: { name: 'world_travel', arguments: '{"portal":"Crystal"}' } },
+      { id: 't2', function: { name: 'world_look', arguments: '{"dx":40}' } }] };
+  } };
+  const done = [];
+  const drive = { travel: async (p) => { done.push(['travel', p]); return true; },
+                  look: async (dx) => { done.push(['look', dx]); return true; },
+                  snapshot: () => ({ chat: [] }), people: () => [], orbs: () => [] };
+  const r = await window.NexusBrainstem.turn({ percepts: { me: {} }, python: false, rounds: 1, drive, mind,
+                                               verbs: ['look', 'say'] });
+  return { offered, done, calls: r.calls.map(c => ({ tool: c.tool, failed: c.failed, result: c.result })) };
+});
+say('a mind given only some verbs is offered only those, and a verb it was not given is refused and never done',
+  JSON.stringify(given.offered) === '["world_look","world_say"]' &&
+  JSON.stringify(given.done) === '[["look",40]]' &&
+  given.calls[0].failed === true && /not allowed here: travel/.test(given.calls[0].result) && given.calls[1].failed === false);
 console.log('\nnot exported:', await p.evaluate(()=>({ getToken: typeof window.NexusAuth?.getToken })));
 console.log('errors:', errs.slice(0,3));
 await b.close();

@@ -98,6 +98,82 @@ def rehash(frame, **payload_changes):
                          prev=frame["prev"], prev_wave=frame["prev_wave"], sig=frame["sig"])
 
 
+# Two players think on the second tick, one rests, and one is still scripted: every state a live
+# frame can hold. The evidence is in the shape tools/minds.cjs writes (tests/minds.cjs holds the two
+# to each other through the real capture path).
+MINDS = {
+    "wanderer": {"asked": "claude-sonnet-5", "answered": "claude-sonnet-5", "multiplier_x100": 100,
+                 "calls": [["world_look", {"dx": 110, "dy": 0, "why": "the greeter is off to my right"}, False, "ok"],
+                           # U+2028 and U+0085 are what a model may write, and what must never reach a frame raw
+                           ["world_say", {"text": "Hello,\u2028greeter! 👋", "why": "someone is here"}, False, "0"],
+                           ["world_tell", {"to": "nobody", "text": "psst, over here", "why": "a private\x85word"}, True,
+                            "failed: tell did not happen"]],
+                 "words": "", "voiced": None, "saw": 3, "tokens": [1480, 61], "ms": 2210},
+    "pilgrim": {"asked": "gpt-5-mini", "answered": "gpt-5-mini-2026-08-07", "multiplier_x100": 0,
+                "calls": [["world_aim", {"portal": "Nowhere", "why": "I want to see where it leads"}, True,
+                           "failed: aim did not happen"],
+                          ["world_walk", {"dir": "forward", "ms": 600, "why": "closer to the portals"}, False, "ok"]],
+                "words": "Heading for the portals.", "voiced": "Heading for the portals.", "saw": 8,
+                "tokens": [1302, 40], "ms": 1675},
+}
+RESTING = {"greeter": "resting between thoughts (thinks every 3 ticks)"}
+POSES = {"wanderer": {"x_cm": 412, "y_cm": 160, "z_cm": -233, "yaw_mrad": 1571, "pitch_mrad": 0},
+         "pilgrim": {"x_cm": -80, "y_cm": 160, "z_cm": 905, "yaw_mrad": -3142, "pitch_mrad": -120},
+         "greeter": {"x_cm": 0, "y_cm": 160, "z_cm": 0, "yaw_mrad": 0, "pitch_mrad": 0}}
+
+
+def exchange_for(pid, spec, picture):
+    persona = f"You are {pid}. You are an AI player in a shared 3D world of portals."
+    user = [{"type": "text", "text": 'PERCEPTS: {"tick":2,"me":{"x":4,"z":-2}}'}]
+    if picture:
+        user.append({"type": "image_url", "image_url": {"url": "saw.webp", "sha256": picture}})
+    calls = [{"tool": tool, "args": args, "failed": failed, "result": result}
+             for tool, args, failed, result in spec["calls"]]
+    tool_calls = [{"id": f"call_{i}", "type": "function",
+                   "function": {"name": c["tool"], "arguments": json.dumps(c["args"])}} for i, c in enumerate(calls)]
+    return {"schema": "ainexus/mind-exchange/1", "player": pid, "provider": "github-copilot",
+            "asked": spec["asked"], "multiplier_x100": spec["multiplier_x100"],
+            "rounds": [{"status": 200, "ms": spec["ms"],
+                        "request": {"model": spec["asked"], "messages": [{"role": "system", "content": persona},
+                                                                         {"role": "user", "content": user}],
+                                    "tools": [], "max_tokens": 600, "stream": False},
+                        "response": {"model": spec["answered"],
+                                     "message": {"role": "assistant", "content": spec["words"],
+                                                 "tool_calls": tool_calls},
+                                     "finish_reason": "tool_calls",
+                                     "usage": {"prompt_tokens": spec["tokens"][0],
+                                               "completion_tokens": spec["tokens"][1]},
+                                     "error": None}}],
+            "calls": calls, "words": spec["words"], "voiced": spec["voiced"], "note": ""}
+
+
+def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None):
+    """Give a capture's players the minds tools/record_views.cjs gives them: evidence files beside
+    the view and a receipt that says only where they are."""
+    feed_dir = pathlib.Path(feed_dir)
+    segment = receipt["segment"]
+    for q in receipt["players"]:
+        pid = q["id"]
+        spec = (MINDS if minds is None else minds).get(pid)
+        if spec:
+            where = f"segments/{segment}/{pid}/"
+            picture = None
+            if spec.get("saw") is not None:
+                shown = (SHOTS / pid / f"{spec['saw']:04d}.webp").read_bytes()
+                (feed_dir / where / "saw.webp").write_bytes(shown)
+                picture = hashlib.sha256(shown).hexdigest()
+            (feed_dir / where / "mind.json").write_text(
+                json.dumps(exchange_for(pid, spec, picture), indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+            q["mind"] = {"kind": "model", "exchange": where + "mind.json"}
+            if picture:
+                q["mind"]["saw"] = where + "saw.webp"
+        elif pid in (RESTING if resting is None else resting):
+            q["mind"] = {"kind": "rest", "why": (RESTING if resting is None else resting)[pid]}
+        if pid in (POSES if poses is None else poses):
+            q["at"] = dict((POSES if poses is None else poses)[pid])
+    return receipt
+
+
 def build(out):
     """legacy tick (before the line) → seal t1 under spine tick 1 → seal t2 under spine tick 2,
     then an unsealable t3 and the forgeries."""
@@ -117,12 +193,20 @@ def build(out):
     add_tick(spine, T0 + datetime.timedelta(minutes=20))
     anchor2 = V.read_anchor(str(spine))
     second = add_capture(feed, manifest, "2026-09-23T12-23-00.000Z-sealed02", T0 + datetime.timedelta(minutes=23), 10)
+    add_minds(feed, second)
     frame1 = V.seal(anchor2, second, feed, chain, feed_url="https://kody-w.github.io/AINexus/test/live/")
 
     forged = out / "forged"
     forged.mkdir(exist_ok=True)
     (forged / "chain-0.json").write_text(json.dumps(
         rehash(frame0, views__players__0__doing="rewritten afterwards"), indent=2) + "\n")
+    # The newest frame re-sealed with words its mind never said. Every hash and link is right, so
+    # only the evidence can catch it.
+    said = rehash(frame1, views__players__0__mind__said="I was never here.")
+    (forged / "chain-1-said.json").write_text(json.dumps(said, indent=2) + "\n")
+    head_said = json.loads((chain / "HEAD.json").read_text())
+    head_said["head_frame"] = said["frame_hash"]
+    (forged / "HEAD-said.json").write_text(json.dumps(head_said, indent=2) + "\n")
     tick2 = json.loads((spine / "2.json").read_text())
     other = R.build_frame(tick2["kind"], tick2["stream_id"], tick2["seq"], tick2["utc"],
                           dict(tick2["payload"], minted_by="somebody else's spine"), prev=tick2["prev"])
@@ -148,7 +232,8 @@ def build(out):
             "ticks": [legacy["tick_id"], first["tick_id"], second["tick_id"], third["tick_id"]],
             "frames": [frame0["frame_hash"], frame1["frame_hash"]],
             "anchors": [anchor1["tick"], anchor2["tick"]],
-            "first": first, "second": second, "third": third, "players": PLAYERS}
+            "first": first, "second": second, "third": third, "players": PLAYERS,
+            "minds": {q["id"]: q["mind"] for q in frame1["payload"]["views"]["players"] if "mind" in q}}
 
 
 if __name__ == "__main__":

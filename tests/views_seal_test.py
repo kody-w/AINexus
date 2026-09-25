@@ -236,6 +236,181 @@ class ViewsLine(unittest.TestCase):
         self.assertEqual(quiet(V.main, ["verify", "--chain", str(self.chain), "--spine", str(self.spine),
                                         "--feed", str(self.feed)]), 0)
 
+    # ── minds ────────────────────────────────────────────────────────────────
+    def players_of(self, frame):
+        return {q["id"]: q for q in frame["payload"]["views"]["players"]}
+
+    def capture(self, name, **minds):
+        """A minded capture under spine tick 3, whose tick is minted the first time one is asked for."""
+        if json.loads((self.spine / "HEAD.json").read_text())["count"] < 4:
+            FX.add_tick(self.spine, FX.T0.replace(minute=30))
+        receipt = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                 f"2026-09-23T12-31-00.000Z-{name}", FX.T0.replace(minute=31), 15)
+        return FX.add_minds(self.feed, receipt, **minds)
+
+    def test_a_thought_is_sealed_as_what_its_evidence_says(self):
+        f0, f1 = self.frames()
+        q = self.players_of(f1)
+        w, p = q["wanderer"]["mind"], q["pilgrim"]["mind"]
+        self.assertEqual((w["asked"], w["model"]), ("claude-sonnet-5", "claude-sonnet-5"))
+        # the model that answered, as the provider named it, not only the one that was asked
+        self.assertEqual((p["asked"], p["model"]), ("gpt-5-mini", "gpt-5-mini-2026-08-07"))
+        self.assertEqual(w["said"], "Hello, greeter! 👋")                # its failed tell was never heard
+        self.assertEqual([d["failed"] for d in w["did"]], [False, False, True])
+        self.assertEqual(p["said"], "Heading for the portals.")        # said aloud for it by the capture
+        self.assertEqual([(d["verb"], d["failed"]) for d in p["did"]], [("world_aim", True), ("world_walk", False)])
+        self.assertEqual(p["did"][0]["why"], "I want to see where it leads")
+        self.assertEqual((w["tokens_in"], w["tokens_out"], w["ms"], w["multiplier_x100"]), (1480, 61, 2210, 100))
+        for mind in (w, p):
+            for k in ("exchange", "saw"):
+                data = (self.feed / mind[k]["file"]).read_bytes()
+                self.assertEqual((mind[k]["bytes"], mind[k]["sha256"]), (len(data), hashlib.sha256(data).hexdigest()))
+        self.assertEqual(q["wanderer"]["doing"], "🧠 claude-sonnet-5: look, say, tell")
+        self.assertEqual(q["greeter"]["mind"], {"kind": "rest", "why": FX.RESTING["greeter"]})
+        self.assertEqual(q["greeter"]["doing"], "💤 " + FX.RESTING["greeter"])
+        self.assertNotIn("mind", q["watcher"])
+        self.assertEqual(q["watcher"]["doing"], "wander")
+        self.assertEqual(q["pilgrim"]["at"], FX.POSES["pilgrim"])
+        self.assertNotIn("at", q["watcher"])
+        v = f1["payload"]["views"]
+        self.assertEqual((v["thoughts"], v["premium_x100"]), (2, 100))
+        self.assertNotIn("thoughts", f0["payload"]["views"])            # a frame from before minds is unchanged
+        self.assertEqual(self.verify(), [])
+
+    def test_a_receipt_cannot_put_words_in_a_mind(self):
+        receipt = self.capture("minds003")
+        for q in receipt["players"]:
+            if q.get("mind", {}).get("kind") == "model":
+                q["mind"].update(said="I am a forgery", model="gpt-9", multiplier_x100=0, did=[])
+            q["doing"] = "rewritten by the receipt"
+            q["at"] = {"x_cm": 1.5}
+        frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+        q = self.players_of(frame)
+        self.assertEqual((q["wanderer"]["mind"]["said"], q["wanderer"]["mind"]["model"]),
+                         ("Hello, greeter! 👋", "claude-sonnet-5"))
+        self.assertEqual(frame["payload"]["views"]["premium_x100"], 100)
+        self.assertEqual(q["wanderer"]["doing"], "🧠 claude-sonnet-5: look, say, tell")
+        self.assertEqual(q["watcher"]["doing"], "rewritten by the receipt")     # a scripted claim stays a claim
+        self.assertTrue(all("at" not in p for p in q.values()))                 # a broken pose is dropped
+        self.assertEqual(self.verify(), [])
+
+    def test_evidence_that_is_not_a_thought_is_refused_and_nothing_is_written(self):
+        def edit(**changes):
+            def apply(where):
+                x = json.loads((where / "mind.json").read_text())
+                x.update(changes)
+                (where / "mind.json").write_text(json.dumps(x))
+            return apply
+
+        def unshown(where):
+            x = json.loads((where / "mind.json").read_text())
+            x["rounds"][0]["request"]["messages"][1]["content"] = "PERCEPTS: {}"
+            (where / "mind.json").write_text(json.dumps(x))
+
+        def refused(where):
+            x = json.loads((where / "mind.json").read_text())
+            x["rounds"][0]["status"] = 500
+            (where / "mind.json").write_text(json.dumps(x))
+
+        cases = {
+            "not in the feed": lambda where: (where / "mind.json").unlink(),
+            "not JSON": lambda where: (where / "mind.json").write_text("{not json"),
+            "another player's": edit(player="greeter"),
+            "no model it asked": edit(asked="gpt-5\n"),     # re's $ would have let the newline through
+            "no cost": edit(multiplier_x100=1.5),
+            "never answered": refused,
+            "not the one its thought was shown": lambda where: (where / "saw.webp").write_bytes(b"RIFF other bytes"),
+            "never shown": unshown,
+        }
+        for n, (why, damage) in enumerate(cases.items()):
+            with self.subTest(why):
+                receipt = self.capture(f"broken{n:02d}")
+                damage(self.feed / f"segments/{receipt['segment']}/wanderer")
+                with self.assertRaisesRegex(V.Refusal, "wanderer: .*" + why):
+                    V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+                self.assertEqual(len(self.frames()), 2)
+
+    def test_words_its_evidence_never_said_are_caught_even_when_every_hash_is_right(self):
+        shutil.copy(self.tmp / "forged" / "chain-1-said.json", self.chain / "1.json")
+        shutil.copy(self.tmp / "forged" / "HEAD-said.json", self.chain / "HEAD.json")
+        self.assertEqual(self.verify(feed=False), [], "the forgery must pass every check but the evidence")
+        problems = self.verify()
+        self.assertTrue(any("wanderer: the frame says what its thought's evidence does not" in p for p in problems),
+                        problems)
+
+    def test_changed_evidence_is_caught_and_evidence_rolled_out_is_not_a_lie(self):
+        wanderer = self.players_of(self.frames()[1])["wanderer"]["mind"]
+        path = self.feed / wanderer["exchange"]["file"]
+        path.write_text(path.read_text().replace("the greeter is off to my right", "the greeter is off to my left"))
+        self.assertTrue(any("wanderer's thought is not the one sealed" in p for p in self.verify()))
+        path.unlink()
+        shown = self.feed / wanderer["saw"]["file"]
+        shown.write_bytes(shown.read_bytes()[:-1])
+        self.assertEqual(self.verify(), [], "with its exchange gone, the picture has nothing left to be checked against")
+        pilgrim = self.players_of(self.frames()[1])["pilgrim"]["mind"]
+        (self.feed / pilgrim["saw"]["file"]).write_bytes(b"RIFF other bytes")
+        self.assertTrue(any("pilgrim's picture is not the one its thought was shown" in p for p in self.verify()))
+
+    def test_text_that_would_split_a_line_of_the_chain_is_sealed_as_spaces(self):
+        w = self.players_of(self.frames()[1])["wanderer"]["mind"]
+        self.assertEqual(w["said"], "Hello, greeter! 👋")            # said as "Hello,\u2028greeter! 👋"
+        self.assertEqual(w["did"][2]["why"], "a private word")      # given as "a private\x85word"
+        self.assertEqual(len(json.dumps({"said": "a\u2028b"}, ensure_ascii=False).splitlines()), 2,
+                         "the danger this guards against must be real, or this test proves nothing")
+        # the minded frame is sealed into an epoch bundle and read back by the spine's own reader
+        receipt = self.capture("epoch003")
+        V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+        meta = json.loads((self.chain / "HEAD.json").read_text())
+        meta["epoch_size"] = 1
+        (self.chain / "HEAD.json").write_text(json.dumps(meta))
+        chainio.compact(self.chain)
+        self.assertFalse((self.chain / "1.json").exists())
+        self.assertEqual([f["seq"] for f in chainio.load_chain(self.chain)], [0, 1, 2])
+        self.assertEqual(self.verify(), [])
+        # and a frame carrying one raw is refused before it could ever be sealed
+        payload = json.loads(json.dumps(self.frames()[1]["payload"]))
+        payload["views"]["players"][0]["mind"]["said"] = "Hello,\u2028greeter!"
+        payload["views"]["players"][0]["mind"]["did"][0]["why"] = "right\x85there"
+        found = V.shape_problems(payload)
+        self.assertTrue(any("said is not a short line" in p for p in found), found)
+        self.assertTrue(any("did is not a list of what it did and why" in p for p in found), found)
+
+    def test_the_shape_gate_holds_a_mind_to_itself(self):
+        def problems(**edits):
+            payload = json.loads(json.dumps(self.frames()[1]["payload"]))
+            for dotted, value in edits.items():
+                obj = payload["views"]
+                *path, last = dotted.split("__")
+                for part in path:
+                    obj = obj[int(part)] if isinstance(obj, list) else obj[part]
+                if value is KeyError:
+                    del obj[int(last) if isinstance(obj, list) else last]
+                else:
+                    obj[int(last) if isinstance(obj, list) else last] = value
+            return V.shape_problems(payload)
+        self.assertEqual(problems(), [])
+        seg = self.frames()[1]["payload"]["views"]["segment"]
+        expect = {
+            "doing is not what its mind says": {"players__0__doing": "🧠 claude-sonnet-5: dance"},
+            "thoughts does not count the players who thought": {"thoughts": 3},
+            "premium_x100 does not sum what the thoughts cost": {"premium_x100": 0},
+            "does not carry thoughts and premium_x100": {"premium_x100": KeyError},
+            "neither a thought nor a rest": {"players__1__mind__kind": "dream"},
+            "at is not a pose": {"players__2__at__yaw_mrad": 9000},
+            "did is not a list of what it did and why": {"players__0__mind__did__0__verb": "<script>"},
+            "said is not a short line": {"players__0__mind__said": "x" * 241},
+            "evidence is not a file in this tick's segment": {
+                "players__0__mind__exchange__file": f"segments/{seg}/../../elsewhere/mind.json"},
+            "a thought is not": {"players__0__mind__confidence": 99},
+        }
+        for why, edits in expect.items():
+            with self.subTest(why):
+                found = problems(**edits)
+                self.assertTrue(any(why in p for p in found), found)
+        payload = json.loads(json.dumps(self.frames()[0]["payload"]))
+        payload["views"].update(thoughts=0, premium_x100=0)
+        self.assertIn("a frame without minds carries a ledger of them", V.shape_problems(payload))
+
 
 class Vendored(unittest.TestCase):
     def test_the_reference_tools_are_the_spines_own(self):

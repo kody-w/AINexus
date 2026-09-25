@@ -36,7 +36,7 @@ it), and each frame's `gap_min` records how long the line went without a frame.
   `views/HEAD.json` (walking back link by link only when you scrub to an older tick), checks every
   anchor against the spine, and paints a sealed tick only from bytes that hash to what its frame
   says. Bytes that don't match are never shown. The HUD reads
-  `⛓ sealed · views #N · ⚓ spine tick T ✓ · 4/4 views ✓`, or names what failed. A line read from
+  `⛓ sealed · views #N · ⚓ spine tick T ✓ · 4/4 views ✓ · 🧠 2/2 thoughts ✓`, or names what failed. A line read from
   anywhere other than its published address (`?chain=` / `?spine=`) is still verified, but it is
   marked as not the published line and never shown green. `window.__viewsState().seal` gives
   scripts and AI players the same verdict.
@@ -50,6 +50,46 @@ it), and each frame's `gap_min` records how long the line went without a frame.
   herd is awake), plus `view_bytes`.
 - **Frames outlive the bytes.** Images roll out of the feed after 2,016 ticks, but frames stay, and
   any copy of a view can still be checked against the frame that names it.
+
+### Minds: real models in the bodies
+
+With a Copilot seat on the Mac mini, the players stop being scripted. On each tick, every player
+named in the machine's `~/.rapp-heartbeat/minds.json` either thinks or rests.
+
+- **A thought is one model call through the estate's own agent loop** (`NexusBrainstem.turn`). The
+  model gets the player's percepts, the picture its eyes see (for models with vision), its own last
+  three thoughts, and what the others said last tick, all read back from the sealed line. It acts
+  only by calling the world's verbs, and every verb asks it why. Each player can think on a
+  different model. A recorded tick is one world, so a mind is not given `travel`, and a minded page
+  cannot be navigated away from the world its eyes are captured in.
+- **Every thought is sealed with its evidence.** Beside the view, the capture keeps `mind.json` (the
+  exchange with the model, as it crossed the wire) and `saw.webp` (the picture the model was shown).
+  The frame carries their hashes. Everything it says about the thought is derived from `mind.json`
+  by the sealer: which model answered, what it did and why, what it said, and its tokens, time and
+  cost. `verify` and the viewer derive it again, so a frame whose words disagree with its evidence
+  is refused even when every hash is right. Hover a player's line in the viewer for its reasons.
+- **A body moves only when its mind moves it.** A player that is not thinking this tick rests where
+  its last frame left it, and the frame says why: between thoughts, the day's budget is spent, or
+  there is no seat. With no seat or no config, the players stay scripted as before, and no frame
+  claims a mind.
+- **The line is the ledger.** Each frame with minds records `thoughts` and `premium_x100`. The
+  day's budget (`cap_x100`; 1200 means 12 premium requests a day) is audited from the line itself,
+  so anyone can check what the minds cost. Free (0×) models are never capped. Prices and vision
+  come from the seat's own model catalog. A thought is paid for when the model answers, which can
+  happen in a capture that is never sealed (a failed publish), so the Mac mini also journals every
+  answer as it arrives (`state/minds-journal.jsonl`). The cap holds to whichever of the two shows
+  more spent, so a retried tick never buys the same thought twice outside the budget. A thought
+  whose hands fail after the model answered is still sealed as bought, with nothing done.
+- **To change a mind,** edit `minds.json` on the Mac mini, for example
+  `"wanderer": {"model": "claude-sonnet-5", "every": 36}`, where `every` means once per N sealed
+  ten-minute ticks (up to 4,320, thirty days). The next tick uses it.
+- **The seat is the heartbeat's own Copilot sign-in** (`~/.rapp-heartbeat/bin/copilot_seat.py
+  login`), separate from the Brainstem's, and its token never leaves the capture process: the page
+  is handed a function to call, never the credential.
+
+Tests: `python3 tests/views_seal_test.py` (sealer and verifier), `node tests/minds.cjs` (three real
+captures against a stand-in model endpoint, each sealed and verified from its evidence), and
+`node tests/browser/views_sealed.cjs` (the viewer, attacked).
 
 ## Tick/Tock: The DOGG Heist
 

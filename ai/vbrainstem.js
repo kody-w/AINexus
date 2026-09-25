@@ -201,10 +201,15 @@
     return String(value).slice(0, 400);
   }
 
-  function verbToolDefs() {
-    return VERBS.map(([name, description, props, required]) => {
+  // `explain` offers every verb an optional `why`, so a mind can say, in the same call, why it acts.
+  // The hands never read it; the record keeps it, which is the point. It is opt-in so that anything
+  // already reading these schemas sees exactly what it always saw. `only`, when given, is the verbs
+  // this mind may use: the rest are neither offered nor done.
+  function verbToolDefs(explain, only) {
+    return VERBS.filter(([name]) => !only || only.has(name)).map(([name, description, props, required]) => {
       const properties = {};
       for (const k of Object.keys(props)) properties[k] = { type: props[k][0], description: props[k][1] };
+      if (explain) properties.why = { type: 'string', description: 'one short sentence: why you are doing this' };
       return { type: 'function', function: { name: 'world_' + name, description,
                parameters: { type: 'object', properties, required } } };
     });
@@ -763,7 +768,8 @@
     // checked here, inside the lane, immediately before the model is asked anything
     const residency = o.python === false ? { resident: [], missing: [] }
                                          : await ensureResident((o.agents || []).concat(CORE_AGENTS), log);
-    const tools = verbToolDefs().concat(agentToolDefs(o.agents));
+    const allowed = Array.isArray(o.verbs) ? new Set(o.verbs.filter(v => typeof v === 'string')) : null;
+    const tools = verbToolDefs(o.explain === true, allowed).concat(agentToolDefs(o.agents));
 
     const system = (o.persona || 'You are a visitor in a shared 3D world.') + '\n'
       + 'You are PLAYING, through exactly the controls a person has. Act by CALLING the world_* '
@@ -772,8 +778,18 @@
       + 'When someone has spoken to you, answer them. Take one or two actions, then reply with a '
       + 'single short line of what you say out loud — or an empty reply if you say nothing.';
 
-    const messages = [{ role: 'system', content: system },
-                      { role: 'user', content: 'PERCEPTS: ' + JSON.stringify(o.percepts || {}) }];
+    // WHAT THE EYES SEE, WHEN THE CALLER HAS IT. The picture rides beside the percepts rather than
+    // inside them, because a model reads an image part and a text part differently, and only a
+    // data: URI of a real image type is accepted — anything else would be a way to smuggle a URL
+    // into a request that leaves this page.
+    const picture = typeof o.image === 'string' && /^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(o.image)
+      ? o.image : null;
+    const perceived = 'PERCEPTS: ' + JSON.stringify(o.percepts || {});
+    const messages = [{ role: 'system', content: system + (picture ? ' The picture is exactly what your eyes see right now.' : '')
+                                               + (o.explain === true ? ' Give every action a short why.' : '') },
+                      { role: 'user', content: picture ? [{ type: 'text', text: perceived },
+                                                          { type: 'image_url', image_url: { url: picture } }]
+                                                       : perceived }];
     const calls = [];
     const summoned = [];
     // A MODEL USUALLY NARRATES AND ACTS IN THE SAME BREATH. Reading the spoken line only from a
@@ -790,7 +806,7 @@
       if (round && typeof o.until === 'function' && !o.until())
         return { words: lastWords, calls, rounds: round, residency, summoned, note: 'stopped mid-turn' };
       spend(auth);        // whose seat this round is on — a free mind spends none of it
-      const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: 500 });
+      const msg = await auth.chat(messages, { tools, raw: true, temperature: o.temperature, max_tokens: o.max_tokens || 500 });
       messages.push(msg);
       const said = String((msg && msg.content) || '').trim();
       if (said) lastWords = said;
@@ -824,6 +840,7 @@
             // invent world_jump and be told it jumped. `has`, not truthiness: world_toString
             // found Object.prototype.toString and was answered "[object Object]" — a success.
             if (!has(CALL, verb)) result = 'no such verb: ' + verb + ' — the hands cannot do that';
+            else if (allowed && !allowed.has(verb)) result = 'not allowed here: ' + verb + ' — this mind was not given that verb';
             else { const v = await CALL[verb](drive, args);
                    result = describe(verb, v);
                    failed = (v === false || v === null || v === undefined); }

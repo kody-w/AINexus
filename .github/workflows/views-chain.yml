@@ -18,9 +18,12 @@ on:
       - 'tools/verify_thread.py'
       - 'tools/dogg_stream.cjs'
       - 'tools/record_views.cjs'
+      - 'tools/minds.cjs'
+      - 'ai/vbrainstem.js'
       - 'tests/views_seal_test.py'
       - 'tests/views_fixture.py'
       - 'tests/dogg_stream.cjs'
+      - 'tests/minds.cjs'
       - '.github/workflows/views-chain.yml'
       - '.github/workflows/dogg-live.yml'
   pull_request:
@@ -32,7 +35,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,6 +48,16 @@ jobs:
 
       - name: the stream the receipts are cut from
         run: node tests/dogg_stream.cjs
+
+      - name: the browser driver the publisher uses
+        run: npm install --prefix "$RUNNER_TEMP/driver" --no-save --no-package-lock playwright-core@1.62.1
+
+      - name: real minds, end to end, against a stand-in for the model endpoint
+        # three real captures through record_views.cjs --minds, each sealed and verified from its evidence
+        env:
+          PLAYWRIGHT_DIR: ${{ runner.temp }}/driver
+          BROWSER_CHANNEL: chrome
+        run: node tests/minds.cjs
 
       - name: every chain here verifies under the spine's own oracle
         run: python3 tools/verify_thread.py
