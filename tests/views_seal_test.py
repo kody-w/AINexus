@@ -26,6 +26,7 @@ import rapp as R  # noqa: E402
 import chainio  # noqa: E402
 import views_seal as V  # noqa: E402
 import views_fixture as FX  # noqa: E402
+import intent as I  # noqa: E402
 
 # The copies in tools/ are the spine's own, byte for byte (kody-w/dogg@651aacb). Refreshing them
 # from the spine is a deliberate act, so it means updating these three lines on purpose.
@@ -585,6 +586,51 @@ class ViewsLine(unittest.TestCase):
         payload = json.loads(json.dumps(self.frames()[0]["payload"]))
         payload["views"].update(thoughts=0, premium_x100=0)
         self.assertIn("a frame without minds carries a ledger of them", V.shape_problems(payload))
+
+
+class Charter(unittest.TestCase):
+    """intent:@kody-w/ainexus, the charter every mind working here reads first (tools/intent.py)."""
+
+    def test_the_charter_drives_every_mind(self):
+        self.assertEqual(I.verify(), [])       # the chain, the shape, and every check a held rule names
+        rules = {c["id"]: c for c in I.newest()["payload"]["canon"]}
+        self.assertEqual(rules["charter-drives"]["status"], "held")
+        for name in ("CLAUDE.md", ".github/copilot-instructions.md"):
+            text = (ROOT / name).read_text()
+            self.assertIn("tools/intent.py show", text, name)
+            self.assertIn(I.STREAM, text, name)
+
+    def test_a_rule_cannot_claim_a_check_nobody_runs_or_drop_his_words(self):
+        payload = json.loads(json.dumps(I.newest()["payload"]))
+        held = next(c for c in payload["canon"] if c["status"] == "held")
+        held["held_by"] = [{"file": "tests/minds.cjs", "check": "a check nobody ever wrote"}]
+        self.assertTrue(any("names a check that tests/minds.cjs does not have" in p
+                            for p in I.problems(payload, 0, files=True)))
+        payload = json.loads(json.dumps(I.newest()["payload"]))
+        payload["canon"][0]["said"] = []
+        self.assertTrue(any("without Kody's words" in p for p in I.problems(payload, 0)))
+        payload = json.loads(json.dumps(I.newest()["payload"]))
+        self.assertTrue(any("quote the words that changed it" in p or "is not [" in p
+                            for p in I.problems(payload, 1)), "an amendment must say why, in his words")
+
+    def test_an_amendment_is_a_successor_frame_the_spines_oracle_verifies(self):
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="intent-"))
+        try:
+            spine = tmp / "spine"
+            FX.add_tick(spine, FX.T0)
+            first = I.amend(dict((k, v) for k, v in I.newest()["payload"].items() if k not in ("tick", "tick_frame")),
+                            where=tmp / "intent", spine=str(spine))
+            FX.add_tick(spine, FX.T0.replace(minute=10))
+            later = dict((k, v) for k, v in first["payload"].items() if k not in ("tick", "tick_frame"))
+            later["amended_because"] = {"what": "a test amendment", "said": ["rethink this"]}
+            second = I.amend(later, where=tmp / "intent", spine=str(spine))
+            self.assertEqual((second["seq"], second["prev"]), (1, first["payload_hash"]))
+            self.assertEqual(I.verify(where=tmp / "intent"), [])
+            with self.assertRaises(V.Refusal):          # a successor that does not say why is refused
+                I.amend(dict((k, v) for k, v in first["payload"].items() if k not in ("tick", "tick_frame")),
+                        where=tmp / "intent", spine=str(spine))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class Vendored(unittest.TestCase):
