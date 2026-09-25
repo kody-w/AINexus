@@ -129,6 +129,17 @@
     const chars = Array.from(flat);
     return chars.length <= max ? flat : chars.slice(0, max - 1).join('') + '…';
   }
+  // The morning after a dream: every awake body says its line from the dream, word for word,
+  // whatever else it was told. tools/views_seal.py `quote` is the same function.
+  function quote(told, lines, awake) {
+    const out = {};
+    for (const id of Object.keys(told)) out[id] = Object.assign({}, told[id]);
+    for (const id of awake) {
+      const line = lines && typeof lines === 'object' && Object.prototype.hasOwnProperty.call(lines, id) ? lines[id] : null;
+      if (typeof line === 'string' && line) out[id] = Object.assign(out[id] || {}, { say: line });
+    }
+    return out;
+  }
   function directive(answer, awake) {
     if (typeof answer !== 'string' || !answer || Array.from(answer).length > MAX_ANSWER || SPLITS.test(answer)) return null;
     const from = answer.indexOf('{'), to = answer.lastIndexOf('}');
@@ -289,7 +300,7 @@
     return (steps || []).map(s => s.do).join(', ');
   }
 
-  return { canonical, canonicalAct, directive, sayLine, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt,
+  return { canonical, canonicalAct, directive, quote, sayLine, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt,
            clockText, bed, defaultRoutine, summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT,
            BEDS, PLACE_CLOCK, MAX_ACT_STEPS, MAX_ACT_MS, MAX_ANSWER, SAY_MAX };
 }));

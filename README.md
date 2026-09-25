@@ -88,6 +88,15 @@ sleeps.
   answered to and the state it was shown, and derives every directed body in the views frame from
   that frame; `verify` and the viewer derive both again. At night nobody is directed or asked, and
   when the model does not answer, rules write the tick: every body carries on.
+- **While they sleep, the one mind dreams.** At the first tick of the night, after the views are
+  sealed, [`tools/dream.py`](tools/dream.py) folds every views frame since the last dream into one
+  frame on `dream:@kody-w/ainexus` ([`dream/`](dream/)): a counted digest of the day (how far each
+  body walked, what it said, who it kept seeing), the dream itself, one line for each body to say
+  in the morning, and the memory it carries forward. The one mind writes it (rules do when it
+  cannot answer), and `verify` rebuilds the digest, the prompt and the dream from the views they
+  fold. The first mind frame after a dream is the morning: every awake body wakes saying its line
+  from the dream, word for word. Every mind frame names the newest dream and reads it instead of
+  the day: one frame to read instead of 144.
 - **One clock per place.** Day and night belong to the place, not the body: everyone in the hub
   keeps its one clock, New York time (`minds.json` may name another), and each frame seals it once
   as `views.clock`. From 23:00 to 07:00 there every body sleeps in its bed, all of them at once,

@@ -1,0 +1,356 @@
+{
+  "spec": "rapp/1",
+  "kind": "intent.charter",
+  "stream_id": "intent:@kody-w/ainexus",
+  "seq": 3,
+  "utc": "2026-09-25T22:44:11.170Z",
+  "payload": {
+    "about": "What AINexus is meant to be, in Kody's own words, and the rules every mind that works on it holds its work to: the assistant in any session on this repo, and the heartbeat's world mind on every tick. Read the newest frame of this stream before changing the world, the views line, the minds, the routines, the playout, or anything that seals a frame.",
+    "owner": "kody-w",
+    "binds": [
+      "the assistant, in any session on kody-w/AINexus",
+      "the heartbeat's world mind, on every tick",
+      "ai/playout.js",
+      "tools/minds.cjs",
+      "tools/record_views.cjs",
+      "tools/views_seal.py",
+      "views.html",
+      "tools/world_mind.cjs",
+      "tools/dream.py"
+    ],
+    "amend": "Only a successor frame on this stream changes the design, made with tools/intent.py amend. It says what changed and quotes the words of Kody's that changed it. When his words and a plan disagree, his words win: ask him, then record the answer here.",
+    "canon": [
+      {
+        "id": "frame-is-state",
+        "status": "held",
+        "rule": "A views frame is the world's state, not only its pictures: where every body stands, the routine it runs, and the clock of its place. Anyone can play a frame forward to any moment and get the same world.",
+        "said": [
+          "why cant they play out a frame from that point on in its own dimension that then plays out the frame and its routine until the next one updates the state with its state"
+        ],
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "the next frame finds it exactly where anyone playing the last one forward puts it"
+          }
+        ]
+      },
+      {
+        "id": "night-is-autopilot",
+        "status": "held",
+        "rule": "Between frames the world runs on autopilot: static routines govern every body until the next frame, the next day, arrives. Nothing waits for a mind to move.",
+        "said": [
+          "this can be the day and night cycle where things go on autopilot for awhile (sleeping satte that is governed by these static routines until the next \"day\" / new frame comes in"
+        ],
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "with no seat nobody is asked anything, and the bodies still run their routines exactly as anyone plays them"
+          }
+        ]
+      },
+      {
+        "id": "frames-line-up",
+        "status": "held",
+        "rule": "When a new frame arrives, a local playout merges into it by playing on until it is identical with its twin in the new frame, for as long as that takes. Nothing snaps. Then the cycle starts over.",
+        "said": [
+          "just make the frames line up until they are identical for the new frame and the process starts over again",
+          "for the assimiliation it literally can take as l9ng as needed until the state is ready and lined up fro the next state... there is no rush"
+        ],
+        "held_by": [
+          {
+            "file": "tests/browser/views_sealed.cjs",
+            "check": "when the next frame arrives nothing snaps"
+          }
+        ]
+      },
+      {
+        "id": "one-clock-per-place",
+        "status": "held",
+        "rule": "Day and night follow a real timezone, and the timezone belongs to the place, not the body: everyone in one place shares one clock, by proximity. At night everyone in a place is in bed, so the next frame is easy to predict.",
+        "said": [
+          "if they are all in beds its easy to predict where they will be the next frame so its not completely out of whack",
+          "and then we can even do this by gtimezone to make it universal",
+          "I dont mean you put people in different time zones at the same placed.... they are all in the same timezone by promixity!!!!!"
+        ],
+        "note": "The hub keeps America/New_York (ai/playout.js PLACE_CLOCK, or minds.json clock), sealed once per frame as views.clock. A line from before places had a clock still verifies as it was sealed.",
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "at night by the clock of their place, every body in it sleeps in its bed at once"
+          },
+          {
+            "file": "tests/minds.cjs",
+            "check": "when the clock of their place says day, every body wakes where it slept"
+          },
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_a_line_never_goes_back_to_a_clock_for_each_body"
+          },
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_a_receipt_names_the_one_clock_of_the_place_and_no_body_names_its_own"
+          },
+          {
+            "file": "tests/browser/views_sealed.cjs",
+            "check": "when the clock of their place says night, every body in it sleeps in its bed, all of them at once"
+          }
+        ]
+      },
+      {
+        "id": "routines-and-hands",
+        "status": "held",
+        "rule": "Every tick can update each body's standing routine and give it fine manual control, so the bodies do things between frames and at them.",
+        "said": [
+          "on every tick the AIs static routines can be updated along wiht fine mnaul control",
+          "so they do stuff between frames"
+        ],
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "a routine a mind sets is sealed as it runs"
+          }
+        ]
+      },
+      {
+        "id": "one-mind",
+        "status": "held",
+        "rule": "One intelligence authors the frame that moves every body: the assistant, woken by the heartbeat. Bodies do not each need a mind, a model or a seat. The world is alive through the frame, and rules write the frame when no model answers.",
+        "said": [
+          "YOU can be the intelligence that drives a rapp/1 that updates all of these so even if they dont have real intelligence the world is alive through this frame"
+        ],
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "the one mind is woken headless once, on its own model, with no tools and no custom instructions, away from the repo"
+          },
+          {
+            "file": "tests/minds.cjs",
+            "check": "when the one mind does not answer, rules write the tick: every body carries on"
+          },
+          {
+            "file": "tests/minds.cjs",
+            "check": "the capture and the sealer hear exactly the same directive in every answer the one mind might give"
+          },
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_the_one_mind_is_sealed_from_its_own_words_and_every_body_it_directed_says_exactly_that"
+          },
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_words_the_one_mind_never_said_are_caught_even_when_every_hash_is_right"
+          }
+        ],
+        "note": "With a `mind` in minds.json the heartbeat's capture (tools/world_mind.cjs) asks copilot -p once a tick; its frames are on mind:@kody-w/ainexus in mind/, and each directed body in a views frame is derived from one. At night nobody is directed or asked."
+      },
+      {
+        "id": "never-still",
+        "status": "held",
+        "rule": "The world never stands still waiting for anything: not a seat, a device code, an approval, or a model.",
+        "said": [
+          "they are still just sitting there"
+        ],
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "with no seat nobody is asked anything, and the bodies still run their routines exactly as anyone plays them"
+          }
+        ]
+      },
+      {
+        "id": "dogg-in",
+        "status": "planned",
+        "rule": "A frame is a combination, not one voice: it takes in frames streamed from the global DOGG network, names each by its frame hash, and the world answers them in its sky, its weather, and what the bodies talk about.",
+        "said": [
+          "you can actually get stuff streamed in with these frames from global DOGGs too so its not just you doing it but its a combination"
+        ]
+      },
+      {
+        "id": "godd-private",
+        "status": "planned",
+        "rule": "Local GODD data (godd/0-ledger, on this machine only) may influence the next frame and never leaves the machine. A published frame carries only commitments to what influenced it, and nothing that saw GODD data is published whole.",
+        "said": [
+          "you can have local GODD data in frames that would influence the next frame you publish without exposing GODD data"
+        ]
+      },
+      {
+        "id": "charter-drives",
+        "status": "held",
+        "rule": "This stream drives every mind that works on AINexus: read its newest frame before acting, hold each change to its canon and its never-list, and change the design only by a successor frame that quotes Kody.",
+        "said": [
+          "maeka rapp frame that drives you if this will keep you from not drifting like this"
+        ],
+        "held_by": [
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_the_charter_drives_every_mind"
+          }
+        ]
+      },
+      {
+        "id": "dream-memory",
+        "status": "held",
+        "rule": "While the bodies sleep, the one mind folds the day into one dream frame on dream:@kody-w/ainexus: every views frame since the last dream folded once, a counted digest, the dream, a line for each body to say in the morning, and the memory it carries forward. The first mind frame after a dream is the morning, and every awake body says its line from the dream, word for word. Every mind frame names the newest dream and reads it instead of the day: one frame to read instead of 144.",
+        "said": [
+          "7."
+        ],
+        "note": "Kody picked prompt 7 of the ten offered on 2026-09-25: “While they sleep, fold the day into one dream frame and have the morning quote it. That also becomes my long-term memory: one frame to read instead of 144.”",
+        "held_by": [
+          {
+            "file": "tests/minds.cjs",
+            "check": "while they sleep, the one mind folds the whole day into one dream frame, every view folded once"
+          },
+          {
+            "file": "tests/minds.cjs",
+            "check": "the morning after, every body wakes saying its line from the dream, word for word, and the mind frame names the dream"
+          },
+          {
+            "file": "tests/views_seal_test.py",
+            "check": "def test_the_morning_after_a_dream_quotes_it_word_for_word_and_every_mind_frame_remembers_it"
+          },
+          {
+            "file": "tests/dream_test.py",
+            "check": "def test_each_night_folds_every_new_view_once_and_remembers_the_previous_dream"
+          },
+          {
+            "file": "tests/dream_test.py",
+            "check": "def test_a_fold_cannot_skip_a_view_even_if_the_forger_rebuilds_the_whole_dream"
+          }
+        ]
+      }
+    ],
+    "standing": [
+      {
+        "id": "rapp1-first",
+        "rule": "Build from rapp/1 primitives first; never build a parallel system and make it rapp/1 compliant afterward.",
+        "said": [
+          "how can we utilize rapp/1 to do what we need in this application not how do we make this applicaiton rapp/1 compliant after the fact"
+        ]
+      },
+      {
+        "id": "speed-and-simplicity",
+        "rule": "Speed and simplicity are the product. Measure them, and refuse bloat.",
+        "said": [
+          "this perf and simplicity IS the product over time."
+        ]
+      },
+      {
+        "id": "the-assistant-plays-too",
+        "rule": "Build bounded semantic controls, so the assistant can operate and play the world itself, through the same hands.",
+        "said": [
+          "this way YOU can play this game too if you wanted... thats the end goal"
+        ]
+      },
+      {
+        "id": "no-grail-changes",
+        "rule": "Never modify the RAPP Brainstem Grail; use it only as it is.",
+        "said": [
+          "no new runtime, no Grail changes"
+        ]
+      }
+    ],
+    "never": [
+      {
+        "id": "clocks-per-body",
+        "rule": "Never give bodies in one place different clocks.",
+        "because": "on 2026-09-25 the four bodies in the hub were given Tokyo, New York, London and Sydney clocks, so two slept in bed while two walked past them"
+      },
+      {
+        "id": "life-behind-a-seat",
+        "rule": "Never make the world's motion wait on a seat, a device code or an approval.",
+        "because": "five Copilot device codes expired unapproved, and the bodies stood still for a day"
+      },
+      {
+        "id": "a-mind-per-body",
+        "rule": "Never make a model per body the architecture.",
+        "because": "four seats and four bills bought four minds that never shared a scene; one author makes one world"
+      },
+      {
+        "id": "publishing-godd",
+        "rule": "Never publish a GODD input, or any transcript that saw one.",
+        "because": "a thought's evidence is published whole, so a prompt that carried private data would publish it"
+      },
+      {
+        "id": "snapping",
+        "rule": "Never snap a body to a new frame.",
+        "because": "a viewer that jumps shows two worlds; a body that walks to its twin shows one"
+      },
+      {
+        "id": "reading-over-his-words",
+        "rule": "Never settle an ambiguous instruction by a guess and build on it; ask, or hold to the literal words, and record the answer here.",
+        "because": "'by timezone to make it universal' was read as a clock per body and shipped in PR #7"
+      }
+    ],
+    "plan": [
+      {
+        "step": 0,
+        "id": "one-clock",
+        "status": "done",
+        "serves": [
+          "one-clock-per-place"
+        ],
+        "what": "One clock per place. The hub keeps New York time, where its heartbeat and its owner are. It is sealed once per frame, players carry no clock of their own, and a body sealed asleep under an old clock wakes when the place's clock says day."
+      },
+      {
+        "step": 1,
+        "id": "world-mind",
+        "status": "done",
+        "serves": [
+          "one-mind",
+          "routines-and-hands",
+          "never-still"
+        ],
+        "what": "The heartbeat wakes the assistant headless (copilot -p on the Mac mini, already signed in: no device code, and gpt-5-mini costs no premium requests) as the world's one mind. It is given this charter, the state played forward to now, and what was said, and it returns one directive for every body: act (fine manual control at this tick), say, and routine. The directive is validated and sealed as a rapp/1 frame on mind:@kody-w/ainexus, anchored to the spine tick and naming the charter frame that governed it. When no model answers, rules write it. A headless call from launchd answered in 10 s on 2026-09-25."
+      },
+      {
+        "step": 2,
+        "id": "stream-dogg-in",
+        "status": "planned",
+        "serves": [
+          "dogg-in"
+        ],
+        "what": "Each mind frame names the DOGG frames it took in, by hash: world:@kody-w/dogg (space weather, the ISS, earthquakes, markets, Hacker News, grid carbon) and dimensions such as sky, land, water and radio. Rules turn them into the world's sky, weather and talk, so it answers the network even when no model runs."
+      },
+      {
+        "step": 3,
+        "id": "godd-in",
+        "status": "planned",
+        "serves": [
+          "godd-private"
+        ],
+        "what": "The mind may read this machine's GODD ledgers (godd/0-ledger). The published mind frame carries only HMAC commitments to them, the transcript that saw them is kept in the heartbeat's own GODD ledger, and a leak guard refuses any public output that quotes a private input."
+      },
+      {
+        "step": 4,
+        "id": "computed-world",
+        "status": "planned",
+        "serves": [
+          "frame-is-state",
+          "frames-line-up"
+        ],
+        "what": "Poses are computed, not measured: a views frame's state is the playout of the previous state under the mind frame, the browser only renders it, and verify recomputes every pose."
+      },
+      {
+        "step": 5,
+        "id": "signed",
+        "status": "planned",
+        "serves": [
+          "charter-drives"
+        ],
+        "what": "Mind frames are signed with the heartbeat's key, so each one proves which mind wrote it."
+      }
+    ],
+    "amended_because": {
+      "what": "Dreams are canon and held: each night the one mind folds the day into one frame on dream:@kody-w/ainexus, the morning after quotes it word for word, and every mind frame reads the newest dream as its memory instead of the day.",
+      "said": [
+        "7."
+      ]
+    },
+    "tick": 1276,
+    "tick_frame": "cda60628df99e552acecb19d3b8ca2fd4e729fba48e4223edc3e97a247533865"
+  },
+  "payload_hash": "a165fed81aa9ef1fa9d898149834455b1fab13cfa27d25b0591c310d6746058f",
+  "prev": "a429d9a61e937fa51601666b71f5fd55d26e1d9935d113d7e1e46e0132127eb2",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "f4964cf7fbce8f0306ef073f3225820879ae0abaa4969ae7edd79b07a0f0c548"
+}

@@ -19,7 +19,10 @@
 //           instructions, for one directive for every body; the capture carries it out and the
 //           mind frame and every directed body are sealed from its words.
 //   tick 7  the one mind does not answer: rules write the tick, and every body carries on.
-//   tick 8  night: nobody is directed and nobody is asked.
+//   tick 8  night: nobody is directed and nobody is asked, and the one mind folds the day into one
+//           dream (tools/dream.py).
+//   tick 9  the morning after it: every body wakes saying its line from the dream, word for word,
+//           and the mind frame names the dream it remembers instead of the day.
 //
 //   node tests/minds.cjs     (PLAYWRIGHT_DIR as for the suites; BROWSER_CHANNEL=chrome to use an installed Chrome)
 const { createRequire } = require('module');
@@ -281,8 +284,6 @@ const spine = path.join(out, 'spine'), chain = path.join(out, 'chain'), feedRoot
 const feed = path.join(feedRoot, 'recordings', 'live');
 for (const dir of [spine, chain, feedRoot]) fs.mkdirSync(dir, { recursive: true });
 const configFile = path.join(out, 'minds.json');
-// the charter beside the line, as it is beside views/ on main: the one mind answers to it
-fs.cpSync(path.join(ROOT, 'intent'), path.join(out, 'intent'), { recursive: true });
 // a stand-in for headless copilot: it writes down how it was asked and answers from a file
 const fakeDir = path.join(out, 'fake-copilot');
 fs.mkdirSync(fakeDir);
@@ -397,6 +398,11 @@ const port = stub.address().port;
 
 // tick 1: three minds think
 mintTick();
+// the charter beside the line, as it is beside views/ on main, anchored to this spine: the one mind
+// answers to it, and a dream answers to the charter that stood at its tick
+py(`import sys; sys.path.insert(0, "tools"); import intent as I
+I.amend({k: v for k, v in I.newest()["payload"].items() if k not in ("tick", "tick_frame", "amended_because")},
+        where=sys.argv[1], spine=sys.argv[2])`, path.join(out, 'intent'), spine);
 let log = await capture(1, true, port);
 let f1 = seal(1);
 let p = byId(f1);
@@ -615,10 +621,52 @@ const r8 = byId(f8);
 check('at night nobody is directed and nobody is asked: every body sleeps, and the one mind writes no frame',
   askedOf().length === 2 && !f8.payload.views.mind && !fs.existsSync(path.join(mindChain, '2.json')) &&
   MINDED.every(id => r8[id].mind.kind === 'sleep' && same(r8[id].at, P.bed(id))), JSON.stringify(r8) + '\n' + log);
+
+// ... and while they sleep, the one mind folds the day into one dream
+// in the order the dream seals them (by name)
+const LINES = { greeter: 'I dreamed the wanderer let me win.', pilgrim: 'I dreamed of a portal nobody has walked through yet.',
+  wanderer: 'I dreamed I raced the greeter to the portals and won.', watcher: 'I dreamed I watched them all run.' };
+fs.writeFileSync(path.join(fakeDir, 'answer'), JSON.stringify({ text: 'The wanderer raced the greeter to the portals while the pilgrim '
+  + 'watched the ring, and then the hub went dark and everyone slept.', lines: LINES,
+  memory: 'The wanderer and the greeter race. The pilgrim wonders about the portals.' }));
+const dreamChain = path.join(out, 'dream');
+const dreamArgs = ['--chain', dreamChain, '--views', chain, '--intent', path.join(out, 'intent')];
+let dreamt = '';
+try {
+  dreamt = execFileSync(PYTHON, ['tools/dream.py', 'dream', '--anchor', path.join(out, 'anchor-8.json'), '--model', 'stub-mind',
+    '--copilot', fakeCopilot, '--clock', NIGHT, '--cache', path.join(out, 'dream-cache.json'), ...dreamArgs],
+    { cwd: ROOT, encoding: 'utf8' });
+} catch (error) { dreamt = 'refused: ' + String(error.stderr || error.message); }
+const dream0 = fs.existsSync(path.join(dreamChain, '0.json')) ? JSON.parse(fs.readFileSync(path.join(dreamChain, '0.json'), 'utf8')) : null;
+check('while they sleep, the one mind folds the whole day into one dream frame, every view folded once',
+  /^sealed dream 0 · night /.test(dreamt) && dream0 && dream0.payload.by.kind === 'model' && dream0.payload.folded.from === 0 &&
+  dream0.payload.folded.to === f8.seq && same(dream0.payload.dream.lines, LINES) && askedOf().length === 3,
+  dreamt + JSON.stringify(dream0 && dream0.payload.by));
+
+// tick 9: the morning after the dream
+fs.writeFileSync(path.join(fakeDir, 'answer'), '{"bodies": {"wanderer": {"say": "this is not what it says", '
+  + '"act": [{"do": "look", "dx": 400}]}, "pilgrim": {"routine": [{"do": "wait", "ms": 900}]}}}');
+writeConfig(DAY, ONE);
+mintTick();
+log = await capture(9, false, port);
+const f9 = seal(9);
+const r9 = byId(f9);
+const m9 = fs.existsSync(path.join(mindChain, '2.json')) ? readMind(2) : { payload: {} };
+const told9 = (askedOf()[3] || { argv: [] }).argv;
+check('the morning after, every body wakes saying its line from the dream, word for word, and the mind frame names the dream',
+  m9.payload.morning === true && same(m9.payload.memory, dream0 && { seq: 0, frame_hash: dream0.frame_hash }) &&
+  MINDED.every(id => r9[id].mind.kind === 'directed' && r9[id].mind.said === LINES[id]) &&
+  same(r9.wanderer.mind.act, [{ do: 'look', dx: 400, dy: 0 }]) && r9.pilgrim.mind.routine_set &&
+  (told9[told9.indexOf('-p') + 1] || '').includes('The wanderer and the greeter race.'),
+  JSON.stringify({ mind: m9.payload, r9 }) + '\n' + log);
 verified = verify();
-check('and the whole line of eight ticks, with the one mind\'s two, verifies',
-  verified.code === 0 && /line: 8 frame\(s\) verify/.test(verified.out) && /the one mind: 2 frame\(s\) verify/.test(verified.out),
-  verified.out);
+let dreamVerified = '';
+try {
+  dreamVerified = execFileSync(PYTHON, ['tools/dream.py', 'verify', ...dreamArgs, '--spine', spine], { cwd: ROOT, encoding: 'utf8' });
+} catch (error) { dreamVerified = 'refused: ' + String(error.stdout || '') + String(error.stderr || error.message); }
+check('and the whole line of nine ticks, the one mind\'s three frames and the dream all verify',
+  verified.code === 0 && /line: 9 frame\(s\) verify/.test(verified.out) && /the one mind: 3 frame\(s\) verify/.test(verified.out) &&
+  /the dream line verifies/.test(dreamVerified), verified.out + dreamVerified);
 
 stub.close();
 fs.rmSync(out, { recursive: true, force: true });

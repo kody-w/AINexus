@@ -19,6 +19,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 from unittest import mock
@@ -75,9 +76,9 @@ class DreamLine(Workspace):
         self.views = pathlib.Path(self.fx["chain"])
         self.spine = pathlib.Path(self.fx["spine"])
         self.feed = pathlib.Path(self.fx["feed"])
+        # the fixture's own charter, anchored to its spine (tests/views_fixture.py)
         self.chain, self.intent = self.work / "dream", self.work / "intent"
-        payload = {k: v for k, v in I.newest()["payload"].items() if k not in ("tick", "tick_frame")}
-        self.charter = I.amend(payload, where=self.intent, spine=str(self.spine))
+        self.charter = I.newest(self.intent)
         self.day_anchor = V.read_anchor(str(self.spine))
         self.copilot = self.fake_copilot()
 
@@ -109,10 +110,11 @@ class DreamLine(Workspace):
             self.feed, manifest, f"dream-view-{anchor['tick']}",
             when + datetime.timedelta(minutes=1), 15)
         FX.add_minds(self.feed, receipt, minds={}, resting={pid: "between frames" for pid in FX.PLAYERS},
-                     poses=FX.POSES if poses is None else poses, routines={}, clocks={})
-        if asleep:
+                     poses=FX.POSES if poses is None else poses, routines={})
+        if asleep:                    # at night by the clock of their place: every body asleep in its bed
             for q in receipt["players"]:
                 q["mind"] = {"kind": "sleep", "why": "asleep in bed"}
+                q["at"] = V.bed(q["id"])
         return V.seal(anchor, receipt, self.feed, self.views)
 
     def seal(self, anchor=None, **options):
@@ -367,14 +369,15 @@ class DreamLine(Workspace):
             "-p", prompt, "--model", "gpt-5-mini", "-s", "--no-custom-instructions", "--no-ask-user",
             "--no-auto-update", "--no-color", "--disable-builtin-mcps", "--available-tools="])
         self.assertEqual(call["path"], "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")
-        work = pathlib.Path(call["cwd"])
-        self.assertEqual(work.parent, ROOT)
+        work = pathlib.Path(call["cwd"]).resolve()
+        self.assertFalse(work.is_relative_to(ROOT.resolve()))      # no repo's instructions or files around it
         self.assertFalse(work.exists())
         D.ask(prompt, "gpt-5-mini", self.copilot)
         self.assertNotEqual(self.calls()[1]["cwd"], call["cwd"])
 
     def test_a_timeout_missing_binary_or_failed_process_returns_no_answer_and_cleans_up(self):
-        before = set(ROOT.glob(".dream-ask-*"))
+        spare = pathlib.Path(tempfile.gettempdir())
+        before = set(spare.glob("dream-ask-*"))
         cases = [
             (self.work / "missing", 1, "could not run copilot"),
             (self.fake_copilot(wait=2), 0.1, "timed out"),
@@ -387,7 +390,7 @@ class DreamLine(Workspace):
                 self.assertIn(why, result["error"])
                 self.assertLessEqual(len(result["error"]), 160)
                 self.assertTrue(V.isint(result["ms"]))
-                self.assertEqual(set(ROOT.glob(".dream-ask-*")), before)
+                self.assertEqual(set(spare.glob("dream-ask-*")), before)
 
     def test_raw_epoch_separators_use_rules_but_json_escaped_unicode_is_derived_and_sealed(self):
         self.at()
@@ -539,7 +542,7 @@ class DreamLine(Workspace):
 
     def test_views_from_after_the_anchor_are_refused_before_the_mind_is_asked(self):
         anchor = self.at()
-        self.capture(FIRST_NIGHT + datetime.timedelta(minutes=10))
+        self.capture(FIRST_NIGHT + datetime.timedelta(minutes=10), asleep=True)
         with self.assertRaisesRegex(V.Refusal, "views are ahead"):
             self.seal(anchor)
         self.assertFalse(self.chain.exists())

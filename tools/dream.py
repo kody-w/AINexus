@@ -7,9 +7,9 @@ for each body, and the memory it leaves behind. Nothing is skipped or folded twi
 
 dream:@kody-w/ainexus is a native rapp/1 stream in dream/, anchored to the spine's own night,
 not the machine's wall clock. The charter governs the prompt; the previous dream is its memory.
-One headless mind answers with no tools. When it cannot answer, rules write the frame. verify
-rebuilds the digest, prompt and dream from their evidence, using the spine's reference tools.
-The mind's fresh working directory stays inside this repo and is removed after the call.
+One headless mind answers with no tools, from a fresh directory of its own outside any repo. When
+it cannot answer, rules write the frame. verify rebuilds the digest, prompt and dream from their
+evidence, using the spine's reference tools.
 
   python3 tools/dream.py dream --anchor anchor.json [--rules] [--cache answers.json]
   python3 tools/dream.py verify [--chain URL|DIR] [--views URL|DIR] [--intent URL|DIR] [--spine URL|DIR]
@@ -27,8 +27,8 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
-import uuid
 from zoneinfo import ZoneInfo
 
 TOOLS = pathlib.Path(__file__).resolve().parent
@@ -162,14 +162,12 @@ def _prompt_ref(prompt):
 def ask(prompt, model, copilot, timeout=150):
     """Ask the one mind with no tools, returning evidence or a short reason it did not answer."""
     start = time.monotonic_ns()
-    answer, error, made = None, None, False
-    work = pathlib.Path(os.path.relpath(ROOT)) / (".dream-ask-" + uuid.uuid4().hex)
+    answer, error, work = None, None, None
     try:
         program = os.path.expanduser(str(copilot))
         if "/" in program:
             program = str(pathlib.Path(program).resolve())
-        work.mkdir(mode=0o700)
-        made = True
+        work = tempfile.mkdtemp(prefix="dream-ask-")
         result = subprocess.run(
             [program, "-p", prompt, "--model", model, "-s", "--no-custom-instructions",
              "--no-ask-user", "--no-auto-update", "--no-color", "--disable-builtin-mcps",
@@ -186,8 +184,8 @@ def ask(prompt, model, copilot, timeout=150):
     except (OSError, UnicodeError) as ex:
         error = f"could not run copilot: {ex}"
     finally:
-        if made:
-            shutil.rmtree(work)
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
     return {"answer": answer, "ms": (time.monotonic_ns() - start) // 1000000,
             "error": V.clip(norm(error), 160) if error else None}
 

@@ -12,6 +12,11 @@
  * Nothing waits for it. At night everyone is asleep: nobody is directed and nobody is asked. When
  * the model does not answer, or answers nothing a body can do, rules write the directive: every
  * body carries on with the routine it has.
+ *
+ * ITS MEMORY IS LAST NIGHT'S DREAM. While the bodies sleep, tools/dream.py folds the day into one
+ * frame on dream:@kody-w/ainexus. Every tick the one mind reads that one frame instead of the day,
+ * and names it; the first tick after a dream is the morning, when every awake body says its line
+ * from the dream, word for word.
  */
 'use strict';
 const { spawn } = require('child_process');
@@ -101,7 +106,10 @@ function prompt(input) {
     '',
     'Said lately, newest last:',
     ...(heard.length ? heard : ['(nothing yet)']),
-    ...(input.memory ? ['', 'What you remember:', input.memory] : []),
+    ...(input.dream ? ['', `What you remember (your dream of the night of ${input.dream.payload.night}; you read it instead of the day):`,
+      input.dream.payload.dream.memory, 'The dream: ' + input.dream.payload.dream.text] : []),
+    ...(input.morning ? ['', 'It is the morning after that dream: each body wakes saying its line from it, so give them no say '
+      + 'this tick, only acts and routines.'] : []),
     '',
     'Answer with ONLY one JSON object, no prose and no code fence:',
     '{"bodies": {"<name>": {"say": "...", "act": [...], "routine": [...]}}}',
@@ -173,18 +181,22 @@ async function think(options) {
   if (!awake.length) return null;
   const charter = readChain(path.join(root, 'intent'));
   const head = frames.length ? frames[frames.length - 1] : null;
+  // the newest dream is what it remembers; the first mind frame after a dream is its morning
+  const dream = readChain(path.join(root, 'dream')), last = readChain(path.join(root, 'mind'));
+  const morning = !!dream && (!last || dream.payload.tick > last.payload.tick);
   const cost = Number.isInteger(mind.multiplier_x100) && mind.multiplier_x100 > 0 ? mind.multiplier_x100 : 0;
   const evidence = {
     schema: SCHEMA, at_utc: new Date(now).toISOString(), clock: planned.clock,
     charter: charter ? { seq: charter.seq, frame_hash: charter.frame_hash } : null,
     state: head ? { views_seq: head.seq, views_frame: head.frame_hash } : null,
-    awake, asked: null, prompt: null, answer: null, ms: 0, error: null,
+    awake, memory: dream ? { seq: dream.seq, frame_hash: dream.frame_hash } : null, morning,
+    asked: null, prompt: null, answer: null, ms: 0, error: null,
   };
   if (!charter) evidence.error = 'there is no charter to answer to';
   else if (cost && planned.spent_x100 + cost > planned.cap_x100) evidence.error = "the day's thinking budget is spent";
   else {
     evidence.asked = typeof mind.model === 'string' && mind.model ? mind.model : MODEL;
-    evidence.prompt = prompt({ planned, frames, charter, local: planned.local, memory: options.memory || '' });
+    evidence.prompt = prompt({ planned, frames, charter, local: planned.local, dream, morning });
     const got = await ask(evidence.prompt, { model: evidence.asked, copilot: mind.copilot, timeoutMs: mind.timeout_ms });
     Object.assign(evidence, { answer: got.answer, ms: got.ms, error: got.error });
     if (got.answer && cost && journal) {
@@ -193,7 +205,8 @@ async function think(options) {
     }
   }
   const told = typeof evidence.answer === 'string' ? Playout.directive(evidence.answer, awake) : null;
-  return { evidence, directive: told || {}, by: told ? evidence.asked : 'rules',
+  const bodies = morning ? Playout.quote(told || {}, dream.payload.dream.lines, awake) : told || {};
+  return { evidence, directive: bodies, by: told ? evidence.asked : 'rules', morning, dream,
            why: told ? '' : evidence.error || 'the model answered nothing a body can do' };
 }
 

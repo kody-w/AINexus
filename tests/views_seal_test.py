@@ -27,6 +27,7 @@ import chainio  # noqa: E402
 import views_seal as V  # noqa: E402
 import views_fixture as FX  # noqa: E402
 import intent as I  # noqa: E402
+import dream as D  # noqa: E402
 
 # The copies in tools/ are the spine's own, byte for byte (kody-w/dogg@651aacb). Refreshing them
 # from the spine is a deliberate act, so it means updating these three lines on purpose.
@@ -878,6 +879,57 @@ class OneMind(unittest.TestCase):
         self.seal(receipt)
         self.assertEqual((self.lines(), self.verify()), ((3, 1), []))
 
+    def test_the_morning_after_a_dream_quotes_it_word_for_word_and_every_mind_frame_remembers_it(self):
+        evening = self.seal(self.directed("dusk001"))
+        self.assertEqual((chainio.load_chain(self.minds)[0]["payload"]["memory"], chainio.load_chain(self.minds)[0]["payload"]["morning"]),
+                         (None, False))
+        # the night: the day is folded into one dream
+        FX.add_tick(self.spine, FX.T0.replace(day=24, hour=4, minute=10))          # 00:10 in New York
+        dreamt = D.dream(V.read_anchor(str(self.spine)), chain=self.tmp / "dream", views=self.chain,
+                         intent=self.tmp / "intent", rules_only=True)
+        lines = dreamt["payload"]["dream"]["lines"]
+        self.assertEqual(dreamt["payload"]["folded"]["to"], evening["seq"])
+        # the morning: every awake body says its line from the dream, whatever else it was told
+        FX.add_tick(self.spine, FX.T0.replace(day=24, hour=11, minute=30))         # 07:30 in New York
+        ran = {"wanderer": {"set_at": evening["payload"]["tick"]},
+               "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+               "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}}
+        receipt = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                 "2026-09-24T11-31-00.000Z-dawn002", FX.T0.replace(day=24, hour=11, minute=31), 25)
+        answer = '{"bodies": {"wanderer": {"say": "not this line", "act": [{"do": "look", "dx": 300}]}}}'
+        dawn = self.seal(FX.add_world(self.feed, receipt, self.chain, answer=answer, routines=ran))
+        mp = chainio.load_chain(self.minds)[-1]["payload"]
+        self.assertEqual((mp["memory"], mp["morning"]), ({"seq": 0, "frame_hash": dreamt["frame_hash"]}, True))
+        self.assertEqual(mp["bodies"]["wanderer"], {"say": lines["wanderer"], "act": [{"do": "look", "dx": 300, "dy": 0}]})
+        q = {x["id"]: x for x in dawn["payload"]["views"]["players"]}
+        self.assertEqual({k: q[k]["mind"]["said"] for k in ("wanderer", "greeter", "pilgrim")},
+                         {k: lines[k] for k in ("wanderer", "greeter", "pilgrim")})
+        self.assertEqual(self.verify(), [])
+        # a morning that does not quote its dream, and one that quotes it otherwise, are caught
+        thought = chainio.load_chain(self.minds)[1]
+        kept = {path: path.read_text() for path in (self.minds / "1.json", self.minds / "HEAD.json",
+                                                   self.chain / f"{dawn['seq']}.json", self.chain / "HEAD.json")}
+        forged = self.rewrite(self.minds, thought, lambda p: p.update(morning=False), V.MIND_STREAM)
+        self.rewrite(self.chain, dawn, lambda p: p["views"].update(mind={"seq": 1, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertIn("mind frame 1: it is the morning after a dream and does not quote it", self.verify(feed=False))
+        forged = self.rewrite(self.minds, thought, lambda p: p["bodies"]["wanderer"].update(say="I dreamed of nothing."),
+                              V.MIND_STREAM)
+        self.rewrite(self.chain, dawn, lambda p: p["views"].update(mind={"seq": 1, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertIn("mind frame 1: its bodies are not what its answer told them and its dream had them say",
+                      self.verify(feed=False))
+        for path, text in kept.items():
+            path.write_text(text)
+        self.assertEqual(self.verify(), [])
+        # later that day it still remembers the dream, and quotes it no more
+        FX.add_tick(self.spine, FX.T0.replace(day=24, hour=11, minute=40))
+        receipt = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                 "2026-09-24T11-41-00.000Z-noon003", FX.T0.replace(day=24, hour=11, minute=41), 20)
+        self.seal(FX.add_world(self.feed, receipt, self.chain, answer='{"bodies": {"greeter": {"say": "Good day."}}}',
+                               routines=ran))
+        mp = chainio.load_chain(self.minds)[-1]["payload"]
+        self.assertEqual((mp["memory"]["seq"], mp["morning"], mp["bodies"]), (0, False, {"greeter": {"say": "Good day."}}))
+        self.assertEqual(self.verify(), [])
+
     def test_a_directed_body_names_its_mind_and_the_shape_gate_holds_it_to_itself(self):
         frame = self.seal(self.directed("shape001"))
         base = frame["payload"]
@@ -959,6 +1011,9 @@ class Vendored(unittest.TestCase):
         for name, digest in VENDORED.items():
             self.assertEqual(hashlib.sha256((ROOT / "tools" / name).read_bytes()).hexdigest(), digest, name)
 
+
+# the dream line's own suite runs with this one, so CI holds every dream to the same oracle
+from dream_test import AnswerAndRules, DreamLine, DreamMath, NightClock  # noqa: E402,F401
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
