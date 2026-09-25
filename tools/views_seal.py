@@ -582,6 +582,11 @@ WORLD_SCHEMA = "ainexus/world-mind/1"
 WORLD_KEYS = {"schema", "at_utc", "clock", "charter", "state", "awake", "asked", "prompt", "answer", "ms", "error"}
 
 
+def strict(value):
+    """A value as its canonical JSON: two values are the same only if their JSON is, so False is not 0."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
 def newest_frame(where):
     try:
         frames = chainio.load_chain(where) if (pathlib.Path(where) / "HEAD.json").exists() else []
@@ -618,6 +623,10 @@ def world_problems(x):
         out.append("it has an answer to no question")
     if count(x["ms"]) is None:
         out.append("its time is not a count")
+    if not (isinstance(x["at_utc"], str) and UTC.match(x["at_utc"])):
+        out.append("its moment is not the fixed utc form")
+    if not (isinstance(x["clock"], str) and len(x["clock"]) <= 64 and CLOCK.fullmatch(x["clock"])):
+        out.append("its clock is not a timezone")
     if not (isinstance(x["awake"], list) and len(x["awake"]) <= MAX_PLAYERS and len(set(map(str, x["awake"]))) == len(x["awake"])
             and all(isinstance(a, str) and PLAYER_ID.match(a) for a in x["awake"])):
         out.append("awake is not a list of bodies")
@@ -690,7 +699,7 @@ def mind_payload_problems(p, seq):
                 and isinstance(pr, dict) and set(pr) == {"sha256", "bytes"} and isinstance(pr["sha256"], str)
                 and HEX64.match(pr["sha256"]) and count(pr["bytes"]) is not None and plain(by["answer"], MAX_ANSWER)):
             out.append("by is not a model that answered")
-        elif directive(by["answer"], awake) != p["bodies"]:
+        elif strict(directive(by["answer"], awake)) != strict(p["bodies"]):
             out.append("its bodies are not what its answer told them")
     elif isinstance(by, dict) and by.get("kind") == "rules":
         if set(by) != {"kind", "why"} or not (plain(by["why"], 160) and by["why"]):
@@ -1192,9 +1201,21 @@ def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL, mind
     ok, step, why = R.verify_frame(frame, head=head, stream_id_of_record=STREAM)
     if not ok:
         raise Refusal(f"refusing an invalid frame: step {step}: {why}")
-    if thought is not None:
-        chainio.append_frame(mind_dir, thought, MIND_STREAM)
-    chainio.append_frame(chain_dir, frame, STREAM)
+    if thought is None:
+        chainio.append_frame(chain_dir, frame, STREAM)
+        return frame
+    # the mind frame and the views frame that names it go on their lines together or not at all
+    kept = (mind_dir / "HEAD.json").read_text() if (mind_dir / "HEAD.json").exists() else None
+    chainio.append_frame(mind_dir, thought, MIND_STREAM)
+    try:
+        chainio.append_frame(chain_dir, frame, STREAM)
+    except BaseException:
+        (mind_dir / f"{thought['seq']}.json").unlink(missing_ok=True)
+        if kept is None:
+            (mind_dir / "HEAD.json").unlink(missing_ok=True)
+        else:
+            (mind_dir / "HEAD.json").write_text(kept)
+        raise
     return frame
 
 
@@ -1265,11 +1286,13 @@ def verify_minds(mind_src, intent_src, frames):
         if mp["state"] != ({"views_seq": before["seq"], "views_frame": before["frame_hash"]} if before else None):
             out.append(f"frame {v['seq']}: its mind was shown a state that is not the frame before it")
         world = {"bodies": mp["bodies"], "name": mp["by"]["asked"] if mp["by"]["kind"] == "model" else "rules"}
-        told = [q for q in views["players"] if isinstance(q.get("mind"), dict) and q["mind"].get("kind") == "directed"]
-        for q in told:
-            if q["id"] not in mp["awake"]:
+        for q in views["players"]:
+            directed = isinstance(q.get("mind"), dict) and q["mind"].get("kind") == "directed"
+            if directed and q["id"] not in mp["awake"]:
                 out.append(f"frame {v['seq']}: {q['id']} is directed, and its mind was not asked about it")
-            elif q["mind"] != directed_mind(world, q["id"]):
+            elif q["id"] in mp["awake"] and not directed:
+                out.append(f"frame {v['seq']}: {q['id']} was awake and directed, and the frame says otherwise")
+            elif directed and strict(q["mind"]) != strict(directed_mind(world, q["id"])):
                 out.append(f"frame {v['seq']}: {q['id']} is directed otherwise than its mind frame says")
     for f in minds:
         if f["seq"] not in named:
@@ -1277,7 +1300,7 @@ def verify_minds(mind_src, intent_src, frames):
     return out
 
 
-def world_problem(m, fetch):
+def world_problem(m, fetch, captured=None):
     """'' when the feed's evidence of the one mind's tick says exactly what its frame says, None when
     it has rolled out of the feed, and otherwise what is wrong."""
     e = m["payload"]["evidence"]
@@ -1294,10 +1317,13 @@ def world_problem(m, fetch):
     if bad:
         return f"mind frame {m['seq']}: its evidence: " + "; ".join(bad)
     mp = m["payload"]
-    if (x["charter"], x["state"], x["clock"], sorted(x["awake"])) != (mp["charter"], mp["state"], mp["clock"], mp["awake"]):
+    if x["at_utc"] != captured:
+        return f"mind frame {m['seq']}: its evidence is of another moment than its views were captured"
+    if strict([x["charter"], x["state"], x["clock"], sorted(x["awake"])]) != \
+            strict([mp["charter"], mp["state"], mp["clock"], mp["awake"]]):
         return f"mind frame {m['seq']}: it says it was shown what its evidence does not"
     by, bodies, _ = world_from(x, mp["awake"])
-    if (by, bodies) != (mp["by"], mp["bodies"]):
+    if strict([by, bodies]) != strict([mp["by"], mp["bodies"]]):
         return f"mind frame {m['seq']}: it says what its evidence does not"
     return ""
 
@@ -1423,12 +1449,12 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=No
                 raise
 
         held = pruned = thoughts = gone = 0
-        shown = {f["payload"]["views"]["mind"]["seq"] for f in (frames[-feed_last:] if feed_last else frames)
-                 if "mind" in f["payload"]["views"]}
+        shown = {f["payload"]["views"]["mind"]["seq"]: f["payload"]["views"]["captured_utc"]
+                 for f in (frames[-feed_last:] if feed_last else frames) if "mind" in f["payload"]["views"]}
         for m in minds:
             if m["seq"] in shown:
                 try:
-                    why = world_problem(m, fetch)
+                    why = world_problem(m, fetch, shown[m["seq"]])
                 except urllib.error.HTTPError as ex:
                     problems.append(f"mind frame {m['seq']}: the feed answered {ex.code}")
                     continue

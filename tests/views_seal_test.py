@@ -831,6 +831,53 @@ class OneMind(unittest.TestCase):
         path.write_text(path.read_text().replace("Welcome back.", "Welcome back!"))
         self.assertEqual(self.verify(), ["mind frame 0: its evidence is not the one sealed"])
 
+    def test_a_relabelled_body_a_boolean_for_a_number_and_evidence_of_another_moment_are_caught(self):
+        frame = self.seal(self.directed("forge002"))
+        thought = chainio.load_chain(self.minds)[0]
+        i = next(n for n, x in enumerate(frame["payload"]["views"]["players"]) if x["id"] == "wanderer")
+        before = chainio.load_chain(self.chain)[1]
+        was = next(x for x in before["payload"]["views"]["players"] if x["id"] == "wanderer")["routine"]
+
+        def rest(p):                          # the wanderer's directive hidden behind a rest
+            p["views"]["players"][i].update(mind={"kind": "rest", "why": "resting"}, routine=was,
+                                            doing=V.routine_line(was))
+        self.rewrite(self.chain, frame, rest, V.STREAM)
+        self.assertIn(f"frame {frame['seq']}: wanderer was awake and directed, and the frame says otherwise",
+                      self.verify(feed=False))
+        self.rewrite(self.chain, frame, lambda p: None, V.STREAM)
+        # a boolean where the answer gave a number: JSON's own types, never False == 0
+        forged = self.rewrite(self.minds, thought, lambda p: p["bodies"]["wanderer"]["act"][1].update(dy=False), V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertIn("mind frame 0: its bodies are not what its answer told them", self.verify(feed=False))
+        # evidence of another moment, its hash made right in the mind frame
+        path = self.feed / thought["payload"]["evidence"]["file"]
+        x = json.loads(path.read_text())
+        x["at_utc"] = "1999-01-01T00:00:00.000Z"
+        data = json.dumps(x).encode()
+        path.write_bytes(data)
+        forged = self.rewrite(self.minds, thought, lambda p: p["evidence"].update(bytes=len(data), sha256=V.sha256(data)),
+                              V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertEqual(self.verify(), ["mind frame 0: its evidence is of another moment than its views were captured"])
+
+    def test_the_mind_frame_and_its_views_frame_go_on_their_lines_together_or_not_at_all(self):
+        receipt = self.directed("pair001")
+        append = chainio.append_frame
+
+        def broken(where, frame, stream):
+            if stream == V.STREAM:
+                raise OSError("the disk filled up")
+            return append(where, frame, stream)
+        chainio.append_frame = broken
+        try:
+            with self.assertRaises(OSError):
+                self.seal(receipt)
+        finally:
+            chainio.append_frame = append
+        self.assertEqual(self.lines(), (2, 0))                  # no mind frame left behind without its views frame
+        self.seal(receipt)
+        self.assertEqual((self.lines(), self.verify()), ((3, 1), []))
+
     def test_a_directed_body_names_its_mind_and_the_shape_gate_holds_it_to_itself(self):
         frame = self.seal(self.directed("shape001"))
         base = frame["payload"]

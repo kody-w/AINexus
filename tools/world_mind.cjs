@@ -126,20 +126,31 @@ function ask(text, options = {}) {
     const started = Date.now();
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'world-mind-'));
     let out = '', err = '', done = false, timer = null, child = null;
+    // copilot is a launcher that starts the real process beneath it: it runs in a process group of
+    // its own, and the whole group goes when the answer is late or this capture is stopped
+    const killTree = () => {
+      if (!child || !child.pid) return;
+      try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { try { child.kill('SIGKILL'); } catch (e) {} }
+    };
+    const onStop = () => { killTree(); process.exit(143); };
     const finish = (answer, error) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      process.removeListener('SIGTERM', onStop);
+      killTree();
+      if (child) { child.stdout.destroy(); child.stderr.destroy(); }
       fs.rmSync(cwd, { recursive: true, force: true });
       resolve({ answer, error, ms: Date.now() - started });
     };
     try {
-      child = spawn(copilot, args, { cwd, env: Object.assign({}, process.env, { PATH }), stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(copilot, args, { cwd, env: Object.assign({}, process.env, { PATH }), stdio: ['ignore', 'pipe', 'pipe'],
+                                     detached: true });
     } catch (error) {
       return finish(null, cut('the model could not be asked: ' + error.message, 150));
     }
+    process.once('SIGTERM', onStop);
     timer = setTimeout(() => {
-      try { child.kill('SIGKILL'); } catch (error) {}
       finish(null, `the model did not answer within ${Math.round((options.timeoutMs || TIMEOUT_MS) / 1000)} s`);
     }, options.timeoutMs || TIMEOUT_MS);
     child.stdout.setEncoding('utf8');

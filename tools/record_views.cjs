@@ -151,6 +151,10 @@ if (minds) {
   const one = config.mind && typeof config.mind === 'object' ? config.mind : null;
   thinking = minds.prepare(config, LINE, { seat: !!SEAT && !one, journal: JOURNAL, now: TICK_AT,
                                             seatWhy: one ? 'the one mind directs it' : process.env.NEXUS_MIND_UNAVAILABLE || '' });
+  // the evidence is dated to the tick's one frame, and the receipt describes that same frame
+  if (one && Math.max(1, Math.round(SECONDS * FPS)) !== 1) {
+    throw new Error('the one mind directs a tick of one frame: capture it with --seconds 1 --fps 1');
+  }
   if (one) {
     world = await worldMind.think({ planned: thinking, frames: minds.readLine(LINE, 36), root: path.dirname(LINE),
                                     now: TICK_AT, mind: one, journal: JOURNAL });
