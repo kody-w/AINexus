@@ -78,6 +78,16 @@ sleeps.
   replaces its routine with `world_routine`, and until one does, a body runs the world's default.
   Between thoughts the body runs its routine; a frame that carries one forward names the tick and
   model that set it, and the sealer and `verify` check that against the line.
+- **One mind moves every body.** With a `mind` in `minds.json`, the heartbeat wakes the assistant
+  headless on every tick (`copilot -p`, no tools, `gpt-5-mini`, which costs no premium requests) as
+  the world's one mind ([`tools/world_mind.cjs`](tools/world_mind.cjs)). It is shown the charter,
+  where every body is, and what was said lately, and answers with one directive for every awake
+  body: a line to say, an act done by hand at the tick, and the routine to run until the next. The
+  capture carries it out and keeps the exchange beside the views as evidence. From its words the
+  sealer derives a frame on `mind:@kody-w/ainexus` ([`mind/`](mind/)), naming the charter it
+  answered to and the state it was shown, and derives every directed body in the views frame from
+  that frame; `verify` and the viewer derive both again. At night nobody is directed or asked, and
+  when the model does not answer, rules write the tick: every body carries on.
 - **One clock per place.** Day and night belong to the place, not the body: everyone in the hub
   keeps its one clock, New York time (`minds.json` may name another), and each frame seals it once
   as `views.clock`. From 23:00 to 07:00 there every body sleeps in its bed, all of them at once,

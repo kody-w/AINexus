@@ -36,6 +36,8 @@
   const NIGHT = { from: 23, until: 7 }; // local hours asleep: [from, until)
   const SLEEP_PITCH = 1100;             // lying down, looking up
   const MAX_STEPS = 8;
+  const MAX_ACT_STEPS = 4, MAX_ACT_MS = 6000;   // an act, done once at a tick, by hand
+  const MAX_ANSWER = 4000, MAX_BRACKETS = 128, SAY_MAX = 140;   // what the one mind may answer
   const DIRS = ['forward', 'back', 'left', 'right'];
   const WAKE_GRID_MS = 5 * 60000;       // when a body woke is found on a five-minute grid
 
@@ -72,40 +74,88 @@
   const bed = id => Object.assign({}, BEDS[id] || ELSEWHERE);
   const defaultRoutine = id => (DEFAULTS[id] || DEFAULTS.greeter).map(step => Object.assign({}, step));
 
-  // ── a routine a mind writes, made the one shape everything plays ──────────
+  // ── a routine or an act a mind writes, made the one shape everything plays ─
   // Numbers are cut toward zero and held to their bounds; anything else about a step is refused,
-  // and one refused step refuses the routine. tools/views_seal.py keeps the same rules.
+  // and one refused step refuses the whole. tools/views_seal.py keeps the same rules.
   function whole(v, lo, hi) {
     if (typeof v !== 'number' || !Number.isFinite(v)) return null;
     return Math.min(hi, Math.max(lo, Math.trunc(v))) + 0;
   }
-  function canonical(steps) {
-    if (!Array.isArray(steps) || steps.length < 1 || steps.length > MAX_STEPS) return null;
+  function step(s) {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+    if (s.do === 'walk') {
+      const ms = whole(s.ms, 100, 3000);
+      return DIRS.includes(s.dir) && ms !== null ? { do: 'walk', dir: s.dir, ms } : null;
+    }
+    if (s.do === 'look') {
+      const dx = s.dx === undefined ? 0 : whole(s.dx, -2000, 2000);
+      const dy = s.dy === undefined ? 0 : whole(s.dy, -600, 600);
+      return dx === null || dy === null ? null : { do: 'look', dx, dy };
+    }
+    if (s.do === 'wait') {
+      const ms = whole(s.ms, 100, 10000);
+      return ms === null ? null : { do: 'wait', ms };
+    }
+    return null;
+  }
+  function stepsOf(list, most, least, longest) {
+    if (!Array.isArray(list) || list.length < 1 || list.length > most) return null;
     const out = [];
     let timed = 0;
-    for (const s of steps) {
-      if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
-      if (s.do === 'walk') {
-        const ms = whole(s.ms, 100, 3000);
-        if (!DIRS.includes(s.dir) || ms === null) return null;
-        out.push({ do: 'walk', dir: s.dir, ms });
-        timed += ms;
-      } else if (s.do === 'look') {
-        const dx = s.dx === undefined ? 0 : whole(s.dx, -2000, 2000);
-        const dy = s.dy === undefined ? 0 : whole(s.dy, -600, 600);
-        if (dx === null || dy === null) return null;
-        out.push({ do: 'look', dx, dy });
-        timed += TURN_MS;
-      } else if (s.do === 'wait') {
-        const ms = whole(s.ms, 100, 10000);
-        if (ms === null) return null;
-        out.push({ do: 'wait', ms });
-        timed += ms;
-      } else {
-        return null;
-      }
+    for (const s of list) {
+      const one = step(s);
+      if (!one) return null;
+      out.push(one);
+      timed += one.do === 'look' ? TURN_MS : one.ms;
     }
-    return timed >= 300 ? out : null;
+    return timed >= least && timed <= longest ? out : null;
+  }
+  // a routine loops until a mind sets another; an act is done once, at the tick, by hand
+  const canonical = list => stepsOf(list, MAX_STEPS, 300, Infinity);
+  const canonicalAct = list => stepsOf(list, MAX_ACT_STEPS, 0, MAX_ACT_MS);
+
+  // ── what the one mind answered, made the one directive everyone derives ───
+  // The world mind answers in words, and anyone must be able to derive from those words exactly
+  // what every body was told: the capture that carries it out, the sealer (tools/views_seal.py
+  // `directive`, the same rules) and every viewer. So an answer is read one way only: the text from
+  // its first '{' to its last '}' is JSON with a `bodies` object, and each awake body in it may be
+  // given a line to say, an act and a routine. Whatever cannot be one of those is not heard.
+  const SPACES = /[\s\x1c-\x1f\x85\ufeff]+/g;
+  const LONE = /[\ud800-\udfff]/gu;
+  const SPLITS = /[\u0085\u2028\u2029]|[\ud800-\udfff]/u;     // what would split a line of the chain
+  // a line a body may say: whole characters, every run of space one space, cut by code point
+  function sayLine(value, max) {
+    const flat = String(value).replace(LONE, '\ufffd').replace(SPACES, ' ').replace(/^ +| +$/g, '');
+    const chars = Array.from(flat);
+    return chars.length <= max ? flat : chars.slice(0, max - 1).join('') + '…';
+  }
+  function directive(answer, awake) {
+    if (typeof answer !== 'string' || !answer || Array.from(answer).length > MAX_ANSWER || SPLITS.test(answer)) return null;
+    const from = answer.indexOf('{'), to = answer.lastIndexOf('}');
+    if (from < 0 || to < from) return null;
+    const text = answer.slice(from, to + 1);
+    // nesting deep enough to exhaust one engine's parser and not another's is not an answer
+    if ((text.match(/[[{]/g) || []).length > MAX_BRACKETS) return null;
+    let said;
+    try { said = JSON.parse(text); } catch (error) { return null; }
+    const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v);
+    if (!isMap(said) || !isMap(said.bodies)) return null;
+    const out = {};
+    for (const id of awake) {
+      const told = Object.prototype.hasOwnProperty.call(said.bodies, id) ? said.bodies[id] : null;
+      if (!isMap(told)) continue;
+      const one = {};
+      if (typeof told.say === 'string') {
+        const line = sayLine(told.say, SAY_MAX);
+        if (line) one.say = line;
+      }
+      const act = canonicalAct(told.act);
+      if (act) one.act = act;
+      const routine = canonical(told.routine);
+      if (routine) one.routine = routine;
+      if (Object.keys(one).length) out[id] = one;
+    }
+    return out;
   }
 
   // ── the kinematics ────────────────────────────────────────────────────────
@@ -239,6 +289,7 @@
     return (steps || []).map(s => s.do).join(', ');
   }
 
-  return { canonical, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt, clockText, bed, defaultRoutine,
-           summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT, BEDS, PLACE_CLOCK };
+  return { canonical, canonicalAct, directive, sayLine, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt,
+           clockText, bed, defaultRoutine, summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT,
+           BEDS, PLACE_CLOCK, MAX_ACT_STEPS, MAX_ACT_MS, MAX_ANSWER, SAY_MAX };
 }));

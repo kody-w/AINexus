@@ -82,6 +82,7 @@ if (RECEIPT && !STREAM) throw new Error('--receipt describes a stream tick, so i
 // With --minds, what each player does is decided by a model (or it rests, and says why) instead of
 // by the scripted rotation. A capture thinks once, on its first frame: one tick, one thought.
 const minds = MINDS ? require('./minds.cjs') : null;
+const worldMind = MINDS ? require('./world_mind.cjs') : null;
 const SEAT = MINDS && process.env.NEXUS_MIND_TOKEN && process.env.NEXUS_MIND_API
   ? { token: process.env.NEXUS_MIND_TOKEN, api: process.env.NEXUS_MIND_API } : null;
 const PERSONAS = {
@@ -143,11 +144,29 @@ await context.route('https://kody-w.github.io/AINexus/**', route => {
 // taken it by now, played forward exactly as every viewer plays it, and the frame is dated to that
 // same moment, so a viewer that has been playing along arrives at the state this tick starts from.
 const TICK_AT = Date.now();
-let thinking = null;
+let thinking = null, world = null;
 if (minds) {
   const config = JSON.parse(fs.readFileSync(path.resolve(MINDS), 'utf8'));
-  thinking = minds.prepare(config, LINE, { seat: !!SEAT, journal: JOURNAL, now: TICK_AT,
-                                            seatWhy: process.env.NEXUS_MIND_UNAVAILABLE || '' });
+  // With a `mind` in the config, one mind directs every body, and no body thinks for itself.
+  const one = config.mind && typeof config.mind === 'object' ? config.mind : null;
+  thinking = minds.prepare(config, LINE, { seat: !!SEAT && !one, journal: JOURNAL, now: TICK_AT,
+                                            seatWhy: one ? 'the one mind directs it' : process.env.NEXUS_MIND_UNAVAILABLE || '' });
+  // the evidence is dated to the tick's one frame, and the receipt describes that same frame
+  if (one && Math.max(1, Math.round(SECONDS * FPS)) !== 1) {
+    throw new Error('the one mind directs a tick of one frame: capture it with --seconds 1 --fps 1');
+  }
+  if (one) {
+    world = await worldMind.think({ planned: thinking, frames: minds.readLine(LINE, 36), root: path.dirname(LINE),
+                                    now: TICK_AT, mind: one, journal: JOURNAL });
+    if (!world) console.log('the one mind: everyone in the hub is asleep, so nobody is directed and nobody is asked');
+  }
+  if (world) {
+    fs.writeFileSync(path.join(outDir, 'world-mind.json'), JSON.stringify(world.evidence, null, 1) + '\n');
+    const told = Object.entries(world.directive).map(([id, t]) => id + ': ' + Object.keys(t).join('+'));
+    console.log(world.by === 'rules' ? `the one mind: rules write this tick (${world.why})`
+      : `the one mind: ${world.by} answered in ${(world.evidence.ms / 1000).toFixed(1)} s`
+        + (told.length ? ' · ' + told.join(' · ') : ' · everyone carries on'));
+  }
   console.log(`minds: ${thinking.spent_x100 / 100} of ${thinking.cap_x100 / 100} premium requests spent in the last day`
     + ` (${thinking.on_line_x100 / 100} on the line, ${thinking.journaled_x100 / 100} in this machine's journal)`);
   console.log(`  the hub's clock, which every body in it keeps: ${thinking.local}`);
@@ -164,7 +183,7 @@ for (let index = 0; index < N; index++) {
   const page = await context.newPage();
   page.on('pageerror', error => console.log('  ! ' + id + ': ' + error.message.slice(0, 80)));
   await page.goto('https://kody-w.github.io/AINexus/' + WORLD +
-    '#as=' + encodeURIComponent('AI ' + id), { timeout: 60000 });
+    '#as=' + encodeURIComponent('AI ' + id), { timeout: 120000 });
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/autodrive.js' }).catch(() => {});
   await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/holo.js' }).catch(() => {});
   if (planned) {
@@ -172,7 +191,7 @@ for (let index = 0; index < N; index++) {
     await page.addScriptTag({ url: 'https://kody-w.github.io/AINexus/ai/vbrainstem.js' }).catch(() => {});
   }
   await page.waitForFunction(minded => !!window.__autodrive && !!window.NexusHolo && (!minded || !!window.NexusBrainstem),
-    !!planned, { timeout: 30000 }).catch(() => {});
+    !!planned, { timeout: 90000 }).catch(() => {});
   await page.evaluate(who => {
     window.NexusHolo.publish({ id: who, name: '🤖 ' + who });
     window.NexusHolo.attach();
@@ -208,6 +227,9 @@ for (const player of players) {
   console.log('  ' + player.id + ' sees ' + (seen.length ? seen.join(', ') : 'nobody'));
 }
 
+// the one mind's evidence travels in the tick's segment beside the views, for the sealer to derive from
+if (world && players.length) players[0].extras[0] = ['world-mind.json'];
+
 const intents = ['wander', 'hold', 'go', 'wander'];
 const total = Math.max(1, Math.round(SECONDS * FPS));
 const ticks = [];
@@ -216,6 +238,7 @@ const ticks = [];
 // the view, for the sealer to hash; a thought that failed becomes a rest that says why.
 async function mindOf(player, tick) {
   const planned = player.planned;
+  if (world) return directed(player);
   let outcome = null;
   if (planned.think) {
     try {
@@ -262,6 +285,23 @@ async function mindOf(player, tick) {
   fs.writeFileSync(path.join(directory, 'mind.json'), JSON.stringify(exchange, null, 1) + '\n');
   player.extras[0] = [player.id + '/mind.json'].concat(sawBytes ? [player.id + '/saw.webp'] : []);
   player.mind = { kind: 'model', exchange: player.id + '/mind.json', saw: sawBytes ? player.id + '/saw.webp' : null };
+}
+
+// What the one mind told this body, carried out by its hands: an act, a line, and the routine it
+// runs from here. A body asleep is not directed; it sleeps, and keeps its routine for the morning.
+async function directed(player) {
+  const planned = player.planned;
+  if (planned.sleep) {
+    player.routine = planned.routine;
+    player.mind = { kind: 'sleep', why: planned.why };
+    player.doing[0] = minds.summary(planned, null, null, planned.routine);
+    return;
+  }
+  const told = world.directive[player.id] || {};
+  await worldMind.carryOut(player.page, told);
+  player.routine = told.routine ? { steps: told.routine, set_at: 'this', by: world.by } : planned.routine;
+  player.mind = { kind: 'directed' };
+  player.doing[0] = minds.directedLine(world.by, told, player.routine);
 }
 
 console.log(`recording ${total} frames at ${FPS}fps...`);
@@ -381,7 +421,8 @@ if (STREAM) {
       at: Object.fromEntries(players.filter(player => player.at).map(player => [player.id, player.at])),
       routines: Object.fromEntries(players.filter(player => player.routine).map(player => [player.id, player.routine])),
       // one clock for the place, kept by every body in it
-      clock: thinking ? thinking.clock : ''
+      clock: thinking ? thinking.clock : '',
+      mind: world ? 'world-mind.json' : ''
     });
     fs.writeFileSync(path.resolve(RECEIPT), JSON.stringify(receipt, null, 1) + '\n');
     console.log('  receipt for ' + receipt.tick_id + ' -> ' + path.resolve(RECEIPT));

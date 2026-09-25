@@ -211,6 +211,7 @@ function captureReceipt(options) {
   const mindOf = mind => {
     if (!mind || typeof mind !== 'object') return null;
     if (mind.kind === 'rest' || mind.kind === 'sleep') return { kind: mind.kind, why: String(mind.why || '') };
+    if (mind.kind === 'directed') return { kind: 'directed' };
     if (mind.kind !== 'model') return null;
     const entry = { kind: 'model', exchange: streamed(mind.exchange) };
     if (mind.saw) entry.saw = streamed(mind.saw);
@@ -245,6 +246,8 @@ function captureReceipt(options) {
   };
   // the clock of the place the bodies are in: one for all of them, never one each
   if (options.clock) receipt.clock = String(options.clock);
+  // the one mind's evidence, for the sealer to derive its frame and every directed body from
+  if (options.mind) receipt.mind = { evidence: streamed(options.mind) };
   if (options.sourceCommit) receipt.source_commit = options.sourceCommit;
   return receipt;
 }

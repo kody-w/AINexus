@@ -652,7 +652,7 @@ class ViewsLine(unittest.TestCase):
             "thoughts does not count the players who thought": {"thoughts": 3},
             "premium_x100 does not sum what the thoughts cost": {"premium_x100": 0},
             "does not carry thoughts and premium_x100": {"premium_x100": KeyError},
-            "neither a thought, a rest nor a sleep": {"players__1__mind__kind": "dream"},
+            "neither a thought, a direction, a rest nor a sleep": {"players__1__mind__kind": "dream"},
             "at is not a pose": {"players__2__at__yaw_mrad": 9000},
             "did is not a list of what it did and why": {"players__0__mind__did__0__verb": "<script>"},
             "said is not a short line": {"players__0__mind__said": "x" * 241},
@@ -672,6 +672,236 @@ class ViewsLine(unittest.TestCase):
         payload = json.loads(json.dumps(self.frames()[0]["payload"]))
         payload["views"]["clock"] = FX.PLACE_CLOCK
         self.assertIn("a frame without minds names a clock no body keeps", V.shape_problems(payload))
+
+
+class OneMind(unittest.TestCase):
+    """The one mind (tools/world_mind.cjs): one directive for every body, sealed on mind:@kody-w/ainexus
+    from its own words, and every directed body in the views frame derived from that frame."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="one-mind-"))
+        self.fx = FX.build(self.tmp)
+        self.chain, self.spine, self.feed = (pathlib.Path(self.fx[k]) for k in ("chain", "spine", "feed"))
+        self.minds = self.tmp / "mind"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def directed(self, name, **world):
+        """A capture under spine tick 3 (08:31 in New York) that the one mind directed."""
+        if json.loads((self.spine / "HEAD.json").read_text())["count"] < 4:
+            FX.add_tick(self.spine, FX.T0.replace(minute=30))
+        receipt = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                 f"2026-09-23T12-31-00.000Z-{name}", FX.T0.replace(minute=31), 15)
+        return FX.add_world(self.feed, receipt, self.chain, **world)
+
+    def seal(self, receipt):
+        return V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+
+    def verify(self, feed=True):
+        return V.verify(str(self.chain), str(self.spine), str(self.feed) if feed else None, log=lambda *_: None)
+
+    def lines(self):
+        return len(chainio.load_chain(self.chain)), len(chainio.load_chain(self.minds)) if (self.minds / "HEAD.json").exists() else 0
+
+    def test_the_one_mind_is_sealed_from_its_own_words_and_every_body_it_directed_says_exactly_that(self):
+        frame = self.seal(self.directed("world001"))
+        thought = chainio.load_chain(self.minds)[0]
+        mp, views = thought["payload"], frame["payload"]["views"]
+        self.assertEqual((thought["kind"], thought["stream_id"], mp["tick"], mp["tick_frame"]),
+                         (V.MIND_KIND, V.MIND_STREAM, frame["payload"]["tick"], frame["payload"]["tick_frame"]))
+        self.assertEqual(mp["bodies"], FX.WORLD_TOLD)                  # the ghost, the fly and the U+2028 are not heard
+        self.assertEqual(mp["by"]["kind"], "model")
+        self.assertEqual((mp["by"]["asked"], mp["by"]["answer"]), ("gpt-5-mini", FX.WORLD_ANSWER))
+        self.assertEqual(mp["awake"], ["greeter", "pilgrim", "wanderer"])
+        charter = chainio.load_chain(self.tmp / "intent")[-1]
+        self.assertEqual(mp["charter"], {"seq": charter["seq"], "frame_hash": charter["frame_hash"]})
+        before = chainio.load_chain(self.chain)[-2]
+        self.assertEqual(mp["state"], {"views_seq": before["seq"], "views_frame": before["frame_hash"]})
+        self.assertEqual(views["mind"], {"seq": 0, "frame_hash": thought["frame_hash"]})
+        q = {x["id"]: x for x in views["players"]}
+        self.assertEqual(q["wanderer"]["mind"], {"kind": "directed", "by": "gpt-5-mini", "said": "Morning, greeter! Over here.",
+                                                 "act": FX.WORLD_TOLD["wanderer"]["act"],
+                                                 "routine_set": FX.WORLD_TOLD["wanderer"]["routine"]})
+        self.assertEqual(q["wanderer"]["routine"], {"steps": FX.WORLD_TOLD["wanderer"]["routine"],
+                                                    "set_at": frame["payload"]["tick"], "by": "gpt-5-mini"})
+        self.assertEqual(q["greeter"]["mind"], {"kind": "directed", "by": "gpt-5-mini", "said": "Welcome back.", "act": []})
+        self.assertEqual(q["pilgrim"]["mind"], {"kind": "directed", "by": "gpt-5-mini", "said": "", "act": []})
+        self.assertEqual([q[k]["doing"] for k in ("wanderer", "greeter", "pilgrim")],
+                         ["🧠 gpt-5-mini: say, walk, look, routine", "🧠 gpt-5-mini: say", "↻ default routine: walk, wait, look"])
+        self.assertEqual((views["thoughts"], views["premium_x100"]), (0, 0))
+        self.assertEqual(self.verify(), [])
+        # and the next tick carries the routine the one mind set, in its name
+        FX.add_tick(self.spine, FX.T0.replace(minute=40))
+        later = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                               "2026-09-23T12-41-00.000Z-world002", FX.T0.replace(minute=41), 20)
+        later = FX.add_world(self.feed, later, self.chain, answer='{"bodies": {}}',
+                             routines={"wanderer": {"set_at": frame["payload"]["tick"]},
+                                       "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+                                       "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}})
+        after = self.seal(later)
+        w = next(x for x in after["payload"]["views"]["players"] if x["id"] == "wanderer")
+        self.assertEqual(w["routine"], q["wanderer"]["routine"])
+        self.assertEqual(w["doing"], "↻ gpt-5-mini's routine: walk, wait")
+        self.assertEqual(self.verify(), [])
+
+    def test_when_the_one_mind_answers_nothing_a_body_can_do_rules_write_the_tick(self):
+        cases = {"the model answered nothing a body can do": dict(answer="I would rather watch."),
+                 "the model did not answer (exit 1)": dict(answer=None, error="the model did not answer (exit 1)")}
+        for n, (why, world) in enumerate(cases.items()):
+            with self.subTest(why):
+                if n:
+                    self.setUp()
+                # nobody sets a routine under the rules: each body carries the one the line left it
+                carried = {"wanderer": {"set_at": chainio.load_chain(self.chain)[1]["payload"]["tick"]},
+                           "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+                           "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}}
+                frame = self.seal(self.directed(f"rules{n:03d}", routines=carried, **world))
+                mp = chainio.load_chain(self.minds)[-1]["payload"]
+                self.assertEqual((mp["by"], mp["bodies"]), ({"kind": "rules", "why": why}, {}))
+                q = {x["id"]: x for x in frame["payload"]["views"]["players"]}
+                self.assertEqual(q["wanderer"]["mind"], {"kind": "directed", "by": "rules", "said": "", "act": []})
+                self.assertEqual(q["greeter"]["doing"], "↻ default routine: wait, look, wait, look")
+                self.assertEqual(self.verify(), [])
+
+    def test_a_receipt_cannot_speak_for_the_one_mind(self):
+        charter = chainio.load_chain(self.tmp / "intent")[-1]
+        spoil = {
+            "did not answer to the newest charter": dict(charter={"seq": charter["seq"], "frame_hash": "0" * 64}),
+            "shown a state that is not the head of the line": dict(state=None),
+            "thought at another moment": dict(at_utc="2026-09-23T12:30:59.000Z"),
+            "shown another clock": dict(clock="Europe/London"),
+            "not the ones it directed": dict(awake=["wanderer", "greeter"]),
+            "it has an answer to no question": dict(prompt=None),
+            "is not an ainexus/world-mind/1": dict(schema="ainexus/world-mind/0"),
+        }
+        for n, (why, change) in enumerate(spoil.items()):
+            with self.subTest(why):
+                receipt = self.directed(f"spoil{n:03d}")
+                path = self.feed / receipt["mind"]["evidence"]
+                evidence = json.loads(path.read_text())
+                evidence.update(change)
+                path.write_text(json.dumps(evidence))
+                if "awake" in change:
+                    receipt = FX.add_world(self.feed, receipt, self.chain)
+                    evidence.update(change)
+                    path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(V.Refusal, why):
+                    self.seal(receipt)
+                self.assertEqual(self.lines(), (2, 0))          # neither line was written
+        receipt = self.directed("spoil099")
+        del receipt["mind"]
+        with self.assertRaisesRegex(V.Refusal, "names the one mind's evidence in no way"):
+            self.seal(receipt)
+
+    def rewrite(self, where, frame, change, stream):
+        payload = json.loads(json.dumps(frame["payload"]))
+        change(payload)
+        forged = R.build_frame(frame["kind"], stream, frame["seq"], frame["utc"], payload,
+                               prev=frame["prev"], prev_wave=frame["prev_wave"], sig=frame["sig"])
+        (where / f"{frame['seq']}.json").write_text(json.dumps(forged))
+        meta = json.loads((where / "HEAD.json").read_text())
+        if meta["count"] - 1 == frame["seq"]:
+            meta["head_frame"] = forged["frame_hash"]
+            (where / "HEAD.json").write_text(json.dumps(meta))
+        return forged
+
+    def test_words_the_one_mind_never_said_are_caught_even_when_every_hash_is_right(self):
+        frame = self.seal(self.directed("forge001"))
+        thought = chainio.load_chain(self.minds)[0]
+        i = next(n for n, x in enumerate(frame["payload"]["views"]["players"]) if x["id"] == "greeter")
+
+        def said(p):
+            p["views"]["players"][i]["mind"]["said"] = "I was never told this."
+            p["views"]["players"][i]["doing"] = "🧠 gpt-5-mini: say"
+        self.rewrite(self.chain, frame, said, V.STREAM)
+        self.assertEqual(self.verify(feed=False), [f"frame {frame['seq']}: greeter is directed otherwise than its mind frame says"])
+        self.rewrite(self.chain, frame, lambda p: None, V.STREAM)
+        # a mind frame rewritten to tell a body what its answer never did, and the views frame made to name it
+        forged = self.rewrite(self.minds, thought, lambda p: p["bodies"]["greeter"].update(say="I was never told this."),
+                              V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        found = self.verify(feed=False)
+        self.assertIn("mind frame 0: its bodies are not what its answer told them", found)
+        # and evidence changed in the feed after the seal is caught against the frame that names it
+        self.rewrite(self.minds, thought, lambda p: None, V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: None, V.STREAM)
+        self.assertEqual(self.verify(), [])
+        path = self.feed / thought["payload"]["evidence"]["file"]
+        path.write_text(path.read_text().replace("Welcome back.", "Welcome back!"))
+        self.assertEqual(self.verify(), ["mind frame 0: its evidence is not the one sealed"])
+
+    def test_a_relabelled_body_a_boolean_for_a_number_and_evidence_of_another_moment_are_caught(self):
+        frame = self.seal(self.directed("forge002"))
+        thought = chainio.load_chain(self.minds)[0]
+        i = next(n for n, x in enumerate(frame["payload"]["views"]["players"]) if x["id"] == "wanderer")
+        before = chainio.load_chain(self.chain)[1]
+        was = next(x for x in before["payload"]["views"]["players"] if x["id"] == "wanderer")["routine"]
+
+        def rest(p):                          # the wanderer's directive hidden behind a rest
+            p["views"]["players"][i].update(mind={"kind": "rest", "why": "resting"}, routine=was,
+                                            doing=V.routine_line(was))
+        self.rewrite(self.chain, frame, rest, V.STREAM)
+        self.assertIn(f"frame {frame['seq']}: wanderer was awake and directed, and the frame says otherwise",
+                      self.verify(feed=False))
+        self.rewrite(self.chain, frame, lambda p: None, V.STREAM)
+        # a boolean where the answer gave a number: JSON's own types, never False == 0
+        forged = self.rewrite(self.minds, thought, lambda p: p["bodies"]["wanderer"]["act"][1].update(dy=False), V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertIn("mind frame 0: its bodies are not what its answer told them", self.verify(feed=False))
+        # evidence of another moment, its hash made right in the mind frame
+        path = self.feed / thought["payload"]["evidence"]["file"]
+        x = json.loads(path.read_text())
+        x["at_utc"] = "1999-01-01T00:00:00.000Z"
+        data = json.dumps(x).encode()
+        path.write_bytes(data)
+        forged = self.rewrite(self.minds, thought, lambda p: p["evidence"].update(bytes=len(data), sha256=V.sha256(data)),
+                              V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertEqual(self.verify(), ["mind frame 0: its evidence is of another moment than its views were captured"])
+
+    def test_the_mind_frame_and_its_views_frame_go_on_their_lines_together_or_not_at_all(self):
+        receipt = self.directed("pair001")
+        append = chainio.append_frame
+
+        def broken(where, frame, stream):
+            if stream == V.STREAM:
+                raise OSError("the disk filled up")
+            return append(where, frame, stream)
+        chainio.append_frame = broken
+        try:
+            with self.assertRaises(OSError):
+                self.seal(receipt)
+        finally:
+            chainio.append_frame = append
+        self.assertEqual(self.lines(), (2, 0))                  # no mind frame left behind without its views frame
+        self.seal(receipt)
+        self.assertEqual((self.lines(), self.verify()), ((3, 1), []))
+
+    def test_a_directed_body_names_its_mind_and_the_shape_gate_holds_it_to_itself(self):
+        frame = self.seal(self.directed("shape001"))
+        base = frame["payload"]
+
+        def problems(change):
+            payload = json.loads(json.dumps(base))
+            change(payload["views"])
+            return V.shape_problems(payload)
+        q = next(n for n, x in enumerate(base["views"]["players"]) if x["id"] == "wanderer")
+        expect = {
+            "a directed mind is not": lambda v: v["players"][q]["mind"].update(confidence=9),
+            "by is neither a model nor rules": lambda v: v["players"][q]["mind"].update(by="<script>"),
+            "act is not an act": lambda v: v["players"][q]["mind"].update(act=[{"do": "fly"}]),
+            "said is not a short line": lambda v: v["players"][q]["mind"].update(said="x" * 141),
+            "a body is directed by a mind the frame does not name": lambda v: v.pop("mind"),
+            "mind does not name a frame of the one mind": lambda v: v.update(mind={"seq": -1, "frame_hash": "x"}),
+        }
+        for why, change in expect.items():
+            with self.subTest(why):
+                found = problems(change)
+                self.assertTrue(any(why in p for p in found), found)
+        payload = json.loads(json.dumps(chainio.load_chain(self.chain)[1]["payload"]))
+        payload["views"]["mind"] = base["views"]["mind"]
+        self.assertIn("a frame names a mind that directed none of its bodies", V.shape_problems(payload))
 
 
 class Charter(unittest.TestCase):
