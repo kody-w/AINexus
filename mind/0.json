@@ -1,0 +1,206 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 0,
+  "utc": "2026-09-25T23:30:01.797Z",
+  "payload": {
+    "tick": 1280,
+    "tick_frame": "14a5586ebcc16bb1d57cf310d99ad10b9ede1ca2f7876914005d4b1ef42af40d",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-25T23:29:03.711Z",
+    "charter": {
+      "seq": 2,
+      "frame_hash": "eb50391569d689768196f9ff944b9c8a8ba4bb78f1a4230f1a1454a224539bee"
+    },
+    "state": {
+      "views_seq": 298,
+      "views_frame": "9b4edc8c06aefc03789cfb602a8cf350c0d22e6e5d1a44c580ba27d3f8a22885"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 21672,
+      "prompt": {
+        "sha256": "8536dc226adb110a5361244165b6e712e46ea19ae981c8361019cef78dc51ef2",
+        "bytes": 4481
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Walking the light between portals.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"look\",\"dx\":200,\"dy\":0},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1800},{\"do\":\"look\",\"dx\":300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1200},{\"do\":\"wait\",\"ms\":600}]},\"pilgrim\":{\"say\":\"Toward the heart, slowly.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-300,\"dy\":20}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":785,\"dy\":0}]},\"watcher\":{\"say\":\"Watching paths cross.\",\"act\":[{\"do\":\"look\",\"dx\":60,\"dy\":0},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-60,\"dy\":0}],\"routine\":[{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"look\",\"dx\":60,\"dy\":0}]},\"greeter\":{\"say\":\"Evening, travelers — the plaza hums.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1500},{\"do\":\"look\",\"dx\":350,\"dy\":0}],\"routine\":[{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":350,\"dy\":0},{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":-350,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Evening, travelers — the plaza hums.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": -350,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Toward the heart, slowly.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -300,
+            "dy": 20
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 785,
+            "dy": 0
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Walking the light between portals.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1800
+          },
+          {
+            "do": "look",
+            "dx": 300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Watching paths cross.",
+        "act": [
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -60,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-25T23-29-58.247Z-c6cdbb29/world-mind.json",
+      "bytes": 6426,
+      "sha256": "5ee0b94920ec97d6f89868446031e510ba620e5456bcd3888d6780ec2d9abf0c"
+    },
+    "about": "What the one mind told every body. Each frame is one spine tick in the AINexus hub: the directive the world mind (the assistant, woken headless by the heartbeat) gave every awake body, derived from its own words, naming the charter it answered to and the state of the world it was shown. Rules write it when no model answers: every body carries on."
+  },
+  "payload_hash": "b9bf072067f0247be393d7267a5469a35575eb97ff23d2f65709701f61a68aee",
+  "prev": null,
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "1b6b222a6809a7d917be552c3b309fb7873e986be5818546f8d977c817d45769"
+}
