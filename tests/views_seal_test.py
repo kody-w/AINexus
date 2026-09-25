@@ -932,6 +932,39 @@ class OneMind(unittest.TestCase):
         self.assertEqual((mp["memory"]["seq"], mp["morning"], mp["bodies"]), (0, False, {"greeter": {"say": "Good day."}}))
         self.assertEqual(self.verify(), [])
 
+    def test_the_one_minds_first_ticks_from_before_dreams_still_verify_as_they_were_sealed(self):
+        frame = self.seal(self.directed("legacy001"))
+        thought = chainio.load_chain(self.minds)[0]
+        # as the one mind's first ticks were sealed, before dreams: no memory and no morning, in frame or evidence
+        path = self.feed / thought["payload"]["evidence"]["file"]
+        x = json.loads(path.read_text())
+        x.pop("memory"), x.pop("morning")
+        data = json.dumps(x).encode()
+        path.write_bytes(data)
+
+        def legacy(p):
+            p.pop("memory"), p.pop("morning")
+            p["evidence"].update(bytes=len(data), sha256=V.sha256(data))
+        forged = self.rewrite(self.minds, thought, legacy, V.MIND_STREAM)
+        self.rewrite(self.chain, frame, lambda p: p["views"].update(mind={"seq": 0, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertEqual(self.verify(), [])
+        # the next tick says what it remembers, and a line that remembers never stops saying so
+        FX.add_tick(self.spine, FX.T0.replace(minute=40))
+        later = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                               "2026-09-23T12-41-00.000Z-legacy002", FX.T0.replace(minute=41), 20)
+        ran = {"wanderer": {"set_at": frame["payload"]["tick"]}, "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+               "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}}
+        self.seal(FX.add_world(self.feed, later, self.chain, answer='{"bodies": {}}', routines=ran))
+        self.assertEqual(self.verify(), [])
+        FX.add_tick(self.spine, FX.T0.replace(minute=50))
+        last = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                              "2026-09-23T12-51-00.000Z-legacy003", FX.T0.replace(minute=51), 25)
+        after = self.seal(FX.add_world(self.feed, last, self.chain, answer='{"bodies": {}}', routines=ran))
+        third = chainio.load_chain(self.minds)[2]
+        forged = self.rewrite(self.minds, third, lambda p: (p.pop("memory"), p.pop("morning")), V.MIND_STREAM)
+        self.rewrite(self.chain, after, lambda p: p["views"].update(mind={"seq": 2, "frame_hash": forged["frame_hash"]}), V.STREAM)
+        self.assertIn("mind frame 2: it no longer says what it remembers", self.verify(feed=False))
+
     def test_a_directed_body_names_its_mind_and_the_shape_gate_holds_it_to_itself(self):
         frame = self.seal(self.directed("shape001"))
         base = frame["payload"]

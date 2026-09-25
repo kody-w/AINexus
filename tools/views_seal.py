@@ -598,6 +598,12 @@ def sealed_mind(m, pid, segment, feed_dir, world=None):
 WORLD_SCHEMA = "ainexus/world-mind/1"
 WORLD_KEYS = {"schema", "at_utc", "clock", "charter", "state", "awake", "memory", "morning", "asked", "prompt",
               "answer", "ms", "error"}
+REMEMBERING = {"memory", "morning"}          # absent from the one mind's first ticks, before there were dreams
+
+
+def memory_of(x):
+    """(memory, morning) of an exchange or a mind frame: none, on the ticks sealed before dreams."""
+    return x.get("memory"), x.get("morning", False)
 
 
 def strict(value):
@@ -629,7 +635,7 @@ def world_from(x, awake):
 
 def world_problems(x):
     """What is wrong with the one mind's evidence as a record of one exchange, on its own."""
-    if not isinstance(x, dict) or x.get("schema") != WORLD_SCHEMA or set(x) != WORLD_KEYS:
+    if not isinstance(x, dict) or x.get("schema") != WORLD_SCHEMA or set(x) not in (WORLD_KEYS, WORLD_KEYS - REMEMBERING):
         return [f"it is not an {WORLD_SCHEMA}"]
     out = []
     for k in ("asked", "prompt", "answer", "error"):
@@ -645,7 +651,8 @@ def world_problems(x):
         out.append("its moment is not the fixed utc form")
     if not (isinstance(x["clock"], str) and len(x["clock"]) <= 64 and CLOCK.fullmatch(x["clock"])):
         out.append("its clock is not a timezone")
-    if not isinstance(x["morning"], bool) or (x["morning"] and x["memory"] is None):
+    memory, morning = memory_of(x)
+    if not isinstance(morning, bool) or (morning and memory is None):
         out.append("morning is not whether it quotes the dream it remembers")
     if not (isinstance(x["awake"], list) and len(x["awake"]) <= MAX_PLAYERS and len(set(map(str, x["awake"]))) == len(x["awake"])
             and all(isinstance(a, str) and PLAYER_ID.match(a) for a in x["awake"])):
@@ -691,15 +698,13 @@ def world_mind(ref, receipt, segment, feed_dir, head, charter, clock, directed, 
         raise Refusal("the one mind was shown a state that is not the head of the line")
     if sorted(x["awake"]) != sorted(directed):
         raise Refusal("the bodies the one mind was asked about are not the ones it directed")
-    if x["memory"] != ref_of(dream):
-        raise Refusal("the one mind did not remember the newest dream")
-    if x["morning"] != morning:
-        raise Refusal("the one mind is wrong about whether this is the morning after a dream")
+    if memory_of(x) != (ref_of(dream), morning):
+        raise Refusal("the one mind did not remember the newest dream, or is wrong about whether this is its morning")
     awake = sorted(x["awake"])
     by, bodies, name = world_from(x, awake)
     if morning:
         bodies = quote(bodies, dream["payload"]["dream"]["lines"], awake)
-    parts = {"charter": x["charter"], "state": x["state"], "clock": clock, "awake": awake, "memory": x["memory"],
+    parts = {"charter": x["charter"], "state": x["state"], "clock": clock, "awake": awake, "memory": ref_of(dream),
              "morning": morning, "by": by, "bodies": bodies,
              "evidence": {"file": ref["evidence"], "bytes": len(data), "sha256": sha256(data)}}
     return parts, {"bodies": bodies, "name": name}
@@ -711,7 +716,7 @@ def mind_payload_problems(p, seq):
         return ["payload is not an object"]
     want = {"tick", "tick_frame", "spine", "fetched_utc", "charter", "state", "clock", "awake", "memory", "morning",
             "by", "bodies", "evidence"} | ({"about"} if seq == 0 else set())
-    if set(p) != want:
+    if set(p) not in (want, want - REMEMBERING):
         return [f"the payload is not {sorted(want)}"]
     out = []
     if not (isint(p["tick"]) and p["tick"] >= 0 and isinstance(p["tick_frame"], str) and HEX64.match(p["tick_frame"])):
@@ -733,11 +738,12 @@ def mind_payload_problems(p, seq):
             and all(PLAYER_ID.match(a) for a in awake) and len(awake) <= MAX_PLAYERS):
         out.append("awake is not a sorted list of bodies")
         awake = []
-    if p["memory"] is not None and not (isinstance(p["memory"], dict) and set(p["memory"]) == {"seq", "frame_hash"}
-                                        and isint(p["memory"]["seq"]) and isinstance(p["memory"]["frame_hash"], str)
-                                        and HEX64.match(p["memory"]["frame_hash"])):
+    memory, morning = memory_of(p)
+    if memory is not None and not (isinstance(memory, dict) and set(memory) == {"seq", "frame_hash"}
+                                   and isint(memory["seq"]) and isinstance(memory["frame_hash"], str)
+                                   and HEX64.match(memory["frame_hash"])):
         out.append("memory is not a frame of the dream line")
-    if not isinstance(p["morning"], bool) or (p["morning"] and p["memory"] is None):
+    if not isinstance(morning, bool) or (morning and memory is None):
         out.append("morning is not whether it quotes the dream it remembers")
     by = p["by"]
     if isinstance(by, dict) and by.get("kind") == "model":
@@ -752,7 +758,7 @@ def mind_payload_problems(p, seq):
     elif isinstance(by, dict) and by.get("kind") == "rules":
         if set(by) != {"kind", "why"} or not (plain(by["why"], 160) and by["why"]):
             out.append("rules that do not say why")
-        elif not p["morning"] and p["bodies"] != {}:
+        elif not morning and p["bodies"] != {}:
             out.append("rules told a body something: under the rules every body carries on")
     else:
         out.append("by is neither a model nor rules")
@@ -1288,7 +1294,7 @@ def told_by(p, dream):
     bodies = directive(by["answer"], p["awake"]) if by["kind"] == "model" else {}
     if bodies is None:
         return None
-    return quote(bodies, dream["payload"]["dream"]["lines"], p["awake"]) if p["morning"] else bodies
+    return quote(bodies, dream["payload"]["dream"]["lines"], p["awake"]) if memory_of(p)[1] else bodies
 
 
 def read_dreams(where):
@@ -1330,7 +1336,7 @@ def verify_minds(mind_src, intent_src, frames, dream_src=None):
         dreams = read_dreams(dream_src.where) if dream_src is not None else []
     except Exception as ex:
         return [f"the dream line could not be read: {ex}"]
-    out, head = [], None
+    out, head, remembering = [], None, False
     if meta.get("stream_id") != MIND_STREAM:
         out.append(f"the one mind's HEAD names {meta.get('stream_id')!r}, not {MIND_STREAM}")
     for f in minds:
@@ -1347,11 +1353,16 @@ def verify_minds(mind_src, intent_src, frames, dream_src=None):
                 out.append(f"mind frame {f['seq']}: it names a charter that is not a frame of intent")
             if head is not None and isint(head["payload"].get("tick")) and f["payload"]["tick"] <= head["payload"]["tick"]:
                 out.append(f"mind frame {f['seq']}: tick {f['payload']['tick']} does not advance past {head['payload']['tick']}")
-            # its memory is the newest dream before it, and the first mind frame after a dream quotes it
+            # its memory is the newest dream before it, and the first mind frame after a dream quotes it;
+            # once the line remembers, every later frame says what it remembers
             dream, morning = remembered(dreams, f["payload"]["tick"], head)
-            if f["payload"]["memory"] != ref_of(dream):
+            if REMEMBERING <= set(f["payload"]):
+                remembering = True
+            elif remembering:
+                out.append(f"mind frame {f['seq']}: it no longer says what it remembers")
+            if memory_of(f["payload"])[0] != ref_of(dream):
                 out.append(f"mind frame {f['seq']}: it does not remember the newest dream before it")
-            elif f["payload"]["morning"] != morning:
+            elif memory_of(f["payload"])[1] != morning:
                 out.append(f"mind frame {f['seq']}: " + ("it is the morning after a dream and does not quote it" if morning
                                                           else "it quotes a dream the morning already quoted"))
             elif strict(told_by(f["payload"], dream)) != strict(f["payload"]["bodies"]):
@@ -1417,12 +1428,12 @@ def world_problem(m, fetch, captured=None, dreams=()):
     mp = m["payload"]
     if x["at_utc"] != captured:
         return f"mind frame {m['seq']}: its evidence is of another moment than its views were captured"
-    if strict([x["charter"], x["state"], x["clock"], sorted(x["awake"]), x["memory"], x["morning"]]) != \
-            strict([mp["charter"], mp["state"], mp["clock"], mp["awake"], mp["memory"], mp["morning"]]):
+    if strict([x["charter"], x["state"], x["clock"], sorted(x["awake"]), *memory_of(x)]) != \
+            strict([mp["charter"], mp["state"], mp["clock"], mp["awake"], *memory_of(mp)]):
         return f"mind frame {m['seq']}: it says it was shown what its evidence does not"
     by, bodies, _ = world_from(x, mp["awake"])
-    if mp["morning"]:
-        dream = next((d for d in dreams if ref_of(d) == mp["memory"]), None)
+    if memory_of(mp)[1]:
+        dream = next((d for d in dreams if ref_of(d) == memory_of(mp)[0]), None)
         if dream is None:
             return f"mind frame {m['seq']}: it quotes a dream that is not on the dream line"
         bodies = quote(bodies, dream["payload"]["dream"]["lines"], mp["awake"])
