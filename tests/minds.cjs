@@ -146,14 +146,17 @@ let equal = 'unchecked';
 try {
   const py = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
 text = '[{"do":"wait","ms":1' + '0' * 309 + '}]'
-print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(json.loads(text))}))`],
+print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(json.loads(text)),
+                  "beds": {k: V.bed(k) for k in ["wanderer", "greeter", "pilgrim", "watcher", "nobody"]}}))`],
     { cwd: ROOT, encoding: 'utf8' }));
   const ids = ['wanderer', 'greeter', 'pilgrim', 'watcher'];
   const huge = minds.Playout.canonical(JSON.parse('[{"do":"wait","ms":1' + '0'.repeat(309) + '}]'));
   equal = ids.filter(id => JSON.stringify(py.defaults[id]) !== JSON.stringify(minds.Playout.defaultRoutine(id))).join(', ')
+    + ids.concat('nobody').filter(id => JSON.stringify(py.beds[id]) !== JSON.stringify(minds.Playout.bed(id)))
+      .map(id => ' bed of ' + id).join('')
     + (JSON.stringify(py.huge) !== JSON.stringify(huge) ? ' huge: js ' + JSON.stringify(huge) + ' python ' + JSON.stringify(py.huge) : '');
 } catch (error) { equal = String(error.message || error); }
-check('the world\'s default routines are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
+check('the world\'s default routines and its beds are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
   equal === '', equal);
 {
   const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'America/New_York' };

@@ -433,17 +433,26 @@ class ViewsLine(unittest.TestCase):
         self.assertTrue(any(f"wanderer runs a routine no thought at tick {tick} set" in p for p in problems), problems)
 
     def test_a_body_asleep_keeps_its_routine_for_the_morning(self):
-        receipt = self.capture("sleep009", minds={}, resting={},
-                               routines={"pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}})
-        pilgrim = next(q for q in receipt["players"] if q["id"] == "pilgrim")
-        pilgrim["mind"] = {"kind": "sleep", "why": "asleep: night in New York 02:10"}
-        pilgrim["routine"] = {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}
+        night = FX.T0.replace(day=24, hour=4, minute=10)            # 00:10 in New York: the hub is asleep
+        FX.add_tick(self.spine, night)
+        receipt = FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                 "2026-09-24T04-11-00.000Z-sleep009", night.replace(minute=11), 15)
+        why = "asleep: night in New York 00:11"
+        ran = {"wanderer": {"set_at": self.frames()[1]["payload"]["tick"]},
+               "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+               "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}}
+        for q in receipt["players"]:
+            if q["id"] in ran:
+                q.update(mind={"kind": "sleep", "why": why}, routine=ran[q["id"]], at=V.bed(q["id"]))
         receipt["clock"] = FX.PLACE_CLOCK
         frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
-        q = self.players_of(frame)["pilgrim"]
-        self.assertEqual(q["mind"], {"kind": "sleep", "why": "asleep: night in New York 02:10"})
-        self.assertEqual(q["doing"], "💤 asleep: night in New York 02:10")     # asleep is not running the routine
-        self.assertEqual(q["routine"]["by"], "default")
+        q = self.players_of(frame)
+        self.assertEqual(q["pilgrim"]["mind"], {"kind": "sleep", "why": why})
+        self.assertEqual(q["pilgrim"]["doing"], "💤 " + why)          # asleep is not running the routine
+        self.assertEqual(q["pilgrim"]["routine"]["by"], "default")
+        self.assertEqual(q["wanderer"]["routine"], {"steps": FX.PATROL, "set_at": ran["wanderer"]["set_at"],
+                                                    "by": "claude-sonnet-5"})
+        self.assertEqual([q[k]["at"] for k in ran], [V.bed(k) for k in ran])
         self.assertEqual(self.verify(), [])
 
     def forge(self, frame, **changes):
@@ -551,6 +560,28 @@ class ViewsLine(unittest.TestCase):
                 self.assertEqual(len(self.frames()), 2)
         frame = V.seal(V.read_anchor(str(self.spine)), self.capture("clock009"), self.feed, self.chain)
         self.assertEqual(frame["payload"]["views"]["clock"], FX.PLACE_CLOCK)
+
+    def test_at_night_by_the_clock_of_their_place_every_body_is_asleep_in_its_bed_and_in_the_day_none_is(self):
+        f1 = self.frames()[1]                         # captured at 08:23 in New York
+        i = next(n for n, q in enumerate(f1["payload"]["views"]["players"]) if q["id"] == "greeter")
+        payload = json.loads(json.dumps(f1["payload"]))
+        payload["views"]["players"][i].update(mind={"kind": "sleep", "why": "asleep"}, doing="💤 asleep")
+        self.assertIn("greeter: asleep in the day by the clock of its place", V.shape_problems(payload))
+        payload = json.loads(json.dumps(f1["payload"]))
+        payload["views"]["captured_utc"] = "2026-09-24T04:23:00.000Z"          # 00:23 in New York
+        found = V.shape_problems(payload)
+        self.assertTrue({"wanderer: awake at night by the clock of its place",
+                         "pilgrim: awake at night by the clock of its place"} <= set(found), found)
+        asleep = {"kind": "sleep", "why": "asleep: night in New York 00:23"}
+        for q in payload["views"]["players"]:
+            if "mind" in q:
+                q.update(mind=dict(asleep), doing="💤 " + asleep["why"], at=V.bed(q["id"]))
+                if q.get("routine", {}).get("set_at") == payload["tick"]:      # a sleeper set nothing this tick
+                    q["routine"] = {"steps": FX.DEFAULTS[q["id"]], "set_at": None, "by": "default"}
+        payload["views"].update(thoughts=0, premium_x100=0)
+        self.assertEqual([p for p in V.shape_problems(payload) if "night" in p or "bed" in p], [])
+        payload["views"]["players"][i]["at"] = dict(V.bed("greeter"), x_cm=0)
+        self.assertIn("greeter: asleep out of its bed", V.shape_problems(payload))
 
     def test_a_line_never_goes_back_to_a_clock_for_each_body(self):
         f1 = self.frames()[1]

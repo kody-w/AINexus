@@ -275,6 +275,32 @@ def default_routine(pid):
     return DEFAULT_ROUTINES.get(pid, DEFAULT_ROUTINES["greeter"])
 
 
+# Where each body sleeps, as ai/playout.js BEDS has them (tests/minds.cjs holds the two equal), and
+# the hours of the night on the clock of a place: [23:00, 07:00).
+BEDS = {
+    "wanderer": {"x_cm": 1697, "y_cm": 200, "z_cm": 1697, "yaw_mrad": 785, "pitch_mrad": 1100},
+    "greeter": {"x_cm": -1697, "y_cm": 200, "z_cm": 1697, "yaw_mrad": -785, "pitch_mrad": 1100},
+    "pilgrim": {"x_cm": -1697, "y_cm": 200, "z_cm": -1697, "yaw_mrad": -2356, "pitch_mrad": 1100},
+    "watcher": {"x_cm": 1697, "y_cm": 200, "z_cm": -1697, "yaw_mrad": 2356, "pitch_mrad": 1100},
+}
+ELSEWHERE = {"x_cm": 0, "y_cm": 200, "z_cm": 2400, "yaw_mrad": 0, "pitch_mrad": 1100}
+NIGHT = (23, 7)
+
+
+def bed(pid):
+    return dict(BEDS.get(pid, ELSEWHERE))
+
+
+def night_at(clock, utc):
+    """Whether it is night on this clock at this moment, or None when this machine cannot read the clock."""
+    try:
+        import zoneinfo
+        hour = parse_utc(utc).astimezone(zoneinfo.ZoneInfo(clock)).hour
+    except Exception:
+        return None
+    return hour >= NIGHT[0] or hour < NIGHT[1]
+
+
 def routine_line(r):
     who = "default routine" if r["by"] == "default" else r["by"] + "'s routine"
     return clip("↻ " + who + ": " + ", ".join(step["do"] for step in r["steps"]), 64)
@@ -654,6 +680,19 @@ def shape_problems(p):
         out.append("a player appears twice")
     if "clock" in v and not minded:
         out.append("a frame without minds names a clock no body keeps")
+    # at night by the clock of their place every body in it is asleep in its bed, and in the day none is
+    night = night_at(v["clock"], v["captured_utc"]) if "clock" in v and isinstance(v["captured_utc"], str) \
+        and UTC.match(v["captured_utc"]) else None
+    for q in players if night is not None else []:
+        m = q.get("mind") if isinstance(q, dict) else None
+        if not isinstance(m, dict) or not isinstance(q.get("id"), str):
+            continue
+        if night and m.get("kind") != "sleep":
+            out.append(f"{q['id']}: awake at night by the clock of its place")
+        elif not night and m.get("kind") == "sleep":
+            out.append(f"{q['id']}: asleep in the day by the clock of its place")
+        elif night and "at" in q and q["at"] != bed(q["id"]):
+            out.append(f"{q['id']}: asleep out of its bed")
     if v["players_sealed"] != len(players):
         out.append("players_sealed does not count the players")
     if v["presences_seen"] != seen_total:

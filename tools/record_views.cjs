@@ -315,8 +315,11 @@ for (let frame = 0; frame < total; frame++) {
     player.sees[frame] = await player.page.evaluate(() => window.NexusHolo
       ? window.NexusHolo.present().filter(item => item.painted).map(item => item.id)
       : []).catch(() => []);
-    // where a minded body ended the tick, so the next tick can start it there
-    if (player.planned && frame === total - 1) player.at = await minds.readPose(player.page);
+    // where a minded body ended the tick, so the next tick can start it there; a body asleep has not
+    // moved from its bed, and is sealed there exactly, not as the engine happens to measure it
+    if (player.planned && frame === total - 1) {
+      player.at = player.planned.sleep ? player.planned.start : await minds.readPose(player.page);
+    }
   }
   if (frame % Math.max(1, Math.round(FPS * 4)) === 0) {
     process.stdout.write('  ' + frame + '/' + total + '\r');
