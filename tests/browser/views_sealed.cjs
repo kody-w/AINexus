@@ -414,6 +414,16 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     JSON.stringify(d.bodies.wanderer.pose) !== JSON.stringify(minded.find(q => q.id === 'wanderer').at) &&
     /^☀️ Tokyo 21:30 · ▶ routine 7m in$/.test(d.bodies.wanderer.note) &&
     await page.locator('#dimension').isVisible(), JSON.stringify({ d, expected }));
+  await page.locator('#dimension').click();
+  await page.waitForTimeout(150);
+  const folded = await page.evaluate(() => ({ folded: document.getElementById('dimension').classList.contains('folded'),
+    map: getComputedStyle(document.getElementById('map')).display, note: document.getElementById('dimension-note').textContent }));
+  await page.locator('#dimension').click();
+  await page.waitForTimeout(150);
+  const unfolded = await page.evaluate(() => getComputedStyle(document.getElementById('map')).display);
+  check('the map folds to one line with a tap, so it need never stand over a view, and opens again with another',
+    folded.folded && folded.map === 'none' && /^🗺 3 awake · 0 asleep · tap for the map$/.test(folded.note) && unfolded === 'block',
+    JSON.stringify({ folded, unfolded }));
   await context.close();
 
   const N = frameMs + 12 * 3600000;             // 01:23 in London (BST), 09:23 in Tokyo: the pilgrim is asleep

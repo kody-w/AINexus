@@ -89,7 +89,8 @@ sleeps.
   running a routine or asleep, by its local time. When a new frame arrives nothing snaps: each body
   walks, a little faster than its pace, until it meets its twin in the new frame, which keeps playing
   too, and from then on it is the new frame's. The map is the page's own playout and is marked
-  unsealed; every frame it meets is the verified one.
+  unsealed; every frame it meets is the verified one. Tap the map to fold it to one line (who is
+  awake and who is asleep), and again to open it; the page remembers.
 - **The line is the ledger.** Each frame with minds records `thoughts` and `premium_x100`. The
   day's budget (`cap_x100`; 1200 means 12 premium requests a day) is audited from the line itself,
   so anyone can check what the minds cost. Free (0×) models are never capped. Prices and vision
