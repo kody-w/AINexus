@@ -24,7 +24,10 @@ button,input{font:inherit}
 #dimension{position:fixed;left:14px;bottom:64px;z-index:9;width:196px;padding:8px;background:rgba(10,10,24,.84);
   border:1px solid #2b2b52;border-radius:12px;backdrop-filter:blur(8px)}
 #dimension[hidden]{display:none}
+#dimension{cursor:pointer}
 #map{display:block;width:180px;height:180px}
+#dimension.folded{width:auto;padding:5px 10px}
+#dimension.folded #map{display:none}
 #dimension-note{margin-top:4px;font:9px ui-monospace,Menlo,monospace;color:#8f8fb0;text-align:center}
 #hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
   background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
@@ -1207,6 +1210,11 @@ function drawDimension(now) {
     if (cell.live.textContent !== text) cell.live.textContent = text;
   }
   if (!show || now - DIM.drawn < 33) return;
+  if (panel.classList.contains('folded')) {
+    const awake = [...DIM.bodies.values()].filter(body => !body.asleep).length;
+    $('dimension-note').textContent = '🗺 ' + awake + ' awake · ' + (DIM.bodies.size - awake) + ' asleep · tap for the map';
+    return;
+  }
   DIM.drawn = now;
   const canvas = $('map');
   const size = canvas.clientWidth || 180, ratio = window.devicePixelRatio || 1;
@@ -1237,6 +1245,20 @@ function drawDimension(now) {
   }
   $('dimension-note').textContent = 'played here from views #' + DIM.seq + ' · not sealed';
 }
+
+// The map folds to a line with a tap, so it never has to stand over a view; the choice is kept.
+(() => {
+  const panel = $('dimension');
+  let folded = false;
+  try { folded = localStorage.getItem('ainexus.dimension.folded') === '1'; } catch (error) {}
+  const set = value => {
+    folded = value;
+    panel.classList.toggle('folded', folded);
+    try { localStorage.setItem('ainexus.dimension.folded', folded ? '1' : '0'); } catch (error) {}
+  };
+  set(folded);
+  panel.addEventListener('click', () => set(!folded));
+})();
 
 function animate(now) {
   const fps = Math.max(.25, +(params.get('fps') ||
