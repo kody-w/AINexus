@@ -54,7 +54,8 @@ it), and each frame's `gap_min` records how long the line went without a frame.
 ### Minds: real models in the bodies
 
 With a Copilot seat on the Mac mini, the players stop being scripted. On each tick, every player
-named in the machine's `~/.rapp-heartbeat/minds.json` either thinks or rests.
+named in the machine's `~/.rapp-heartbeat/minds.json` thinks, rests while its routine runs, or
+sleeps.
 
 - **A thought is one model call through the estate's own agent loop** (`NexusBrainstem.turn`). The
   model gets the player's percepts, the picture its eyes see (for models with vision), its own last
@@ -68,10 +69,27 @@ named in the machine's `~/.rapp-heartbeat/minds.json` either thinks or rests.
   by the sealer: which model answered, what it did and why, what it said, and its tokens, time and
   cost. `verify` and the viewer derive it again, so a frame whose words disagree with its evidence
   is refused even when every hash is right. Hover a player's line in the viewer for its reasons.
-- **A body moves only when its mind moves it.** A player that is not thinking this tick rests where
-  its last frame left it, and the frame says why: between thoughts, the day's budget is spent, or
-  there is no seat. With no seat or no config, the players stay scripted as before, and no frame
-  claims a mind.
+- **A frame is a state, and between frames the world plays on.** Every frame seals each body's
+  pose and the routine it is running: a looped autodrive program of walks, looks and waits. A mind
+  replaces its routine with `world_routine`, and until one does, a body runs the world's default.
+  Between thoughts the body runs its routine; a frame that carries one forward names the tick and
+  model that set it, and the sealer and `verify` check that against the line.
+- **Day and night by each body's own clock.** The wanderer keeps Tokyo hours, the greeter New York,
+  the pilgrim London and the watcher Sydney, so the world is never asleep all at once. From 23:00
+  to 07:00 local a body sleeps in its bed, eyes on the sky, and nobody thinks for it. It wakes where
+  it slept and its routine starts over.
+- **The frames line up.** [`ai/playout.js`](ai/playout.js) plays a sealed state forward to any
+  moment with integer kinematics (900 cm a second walking, 2 mrad a pixel looking), so it gives the
+  same pose in every browser and in Node. Before the minds wake for a tick, the capture places each
+  body where the last frame's routines have taken it by then. The only difference a new frame brings
+  is what the minds did by hand that tick. With no seat the bodies still run their routines and
+  sleep by their clocks; nobody is asked anything.
+- **The viewer is its own dimension of the line.** Between frames, `views.html` plays the newest
+  verified frame forward on a live map (bottom left), and each view shows whether its body is
+  running a routine or asleep, by its local time. When a new frame arrives nothing snaps: each body
+  walks, a little faster than its pace, until it meets its twin in the new frame, which keeps playing
+  too, and from then on it is the new frame's. The map is the page's own playout and is marked
+  unsealed; every frame it meets is the verified one.
 - **The line is the ledger.** Each frame with minds records `thoughts` and `premium_x100`. The
   day's budget (`cap_x100`; 1200 means 12 premium requests a day) is audited from the line itself,
   so anyone can check what the minds cost. Free (0×) models are never capped. Prices and vision
@@ -87,9 +105,11 @@ named in the machine's `~/.rapp-heartbeat/minds.json` either thinks or rests.
   login`), separate from the Brainstem's, and its token never leaves the capture process: the page
   is handed a function to call, never the credential.
 
-Tests: `python3 tests/views_seal_test.py` (sealer and verifier), `node tests/minds.cjs` (three real
-captures against a stand-in model endpoint, each sealed and verified from its evidence), and
-`node tests/browser/views_sealed.cjs` (the viewer, attacked).
+Tests: `python3 tests/views_seal_test.py` (sealer and verifier, routines carried and forged),
+`node tests/minds.cjs` (real captures against a stand-in model endpoint: each resting body sealed to
+the centimetre where the playout puts it, a night in bed, and a line with no seat that keeps moving),
+and `node tests/browser/views_sealed.cjs` (the viewer attacked, the playout matched exactly, and a
+new frame assimilated without a snap).
 
 ## Tick/Tock: The DOGG Heist
 

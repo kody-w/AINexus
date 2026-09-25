@@ -120,6 +120,24 @@ const given = await p.evaluate(async () => {
                                                verbs: ['look', 'say'] });
   return { offered, done, calls: r.calls.map(c => ({ tool: c.tool, failed: c.failed, result: c.result })) };
 });
+const routines = await p.evaluate(async () => {
+  const offered = [];
+  const mind = { signedIn: () => true, isScripted: true, chat: async (messages, opts) => {
+    offered.push(opts.tools.map(t => t.function.name));
+    return { content: '', tool_calls: [{ id: 'r1', function: { name: 'world_routine',
+      arguments: '{"steps":[{"do":"wait","ms":900}],"why":"stay a while"}' } }] };
+  } };
+  const kept = [];
+  const drive = { routine: async (steps) => { kept.push(steps); return 'routine set'; },
+                  snapshot: () => ({ chat: [] }), people: () => [], orbs: () => [] };
+  const plain = await window.NexusBrainstem.turn({ percepts: {}, python: false, rounds: 1, drive, mind });
+  const given = await window.NexusBrainstem.turn({ percepts: {}, python: false, rounds: 1, drive, mind,
+                                                   verbs: ['look', 'routine'] });
+  return { offered, kept, plain: plain.calls[0], given: given.calls[0] };
+});
+say('a routine is offered only to a mind given it by name, and goes to the hands that keep one',
+  !routines.offered[0].includes('world_routine') && routines.offered[1].includes('world_routine') &&
+  routines.kept.length === 2 && routines.given.failed === false && /routine set/.test(routines.given.result));
 say('a mind given only some verbs is offered only those, and a verb it was not given is refused and never done',
   JSON.stringify(given.offered) === '["world_look","world_say"]' &&
   JSON.stringify(given.done) === '[["look",40]]' &&

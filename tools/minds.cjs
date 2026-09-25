@@ -22,6 +22,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const Playout = require('../ai/playout.js');
 
 const PROVIDER = 'github-copilot';
 const HEADERS = { 'Copilot-Integration-Id': 'vscode-chat', 'Editor-Version': 'vscode/1.95.0' };
@@ -106,9 +107,26 @@ function readJournal(file, now = Date.now()) {
 
 const playersOf = (frame) => (frame && frame.payload && frame.payload.views && frame.payload.views.players) || [];
 const thought = (entry) => !!(entry && entry.mind && entry.mind.kind === 'model');
+const CLOCK = /^[A-Za-z][A-Za-z0-9_+-]{0,31}(\/[A-Za-z0-9_+-]{1,32}){0,2}$/;
+const frameMs = (frame) => Date.parse(frame && frame.payload && frame.payload.views && frame.payload.views.captured_utc);
+
+// Where a body is at `now` and what it will run from there: its last sealed pose, played forward
+// through the night and its standing routine exactly as every viewer plays it (ai/playout.js).
+function bodyAt(id, frames, clock, now) {
+  let routine = null, last = null, when = now;
+  for (let i = frames.length - 1; i >= 0 && !(routine && last); i--) {
+    const entry = playersOf(frames[i]).find(e => e.id === id);
+    if (!entry) continue;
+    if (!routine && entry.routine) routine = entry.routine;
+    if (!last && entry.at) { last = entry.at; when = frameMs(frames[i]); }
+  }
+  if (!routine) routine = { steps: Playout.defaultRoutine(id), set_at: null, by: 'default' };
+  const state = Playout.stateAt({ id, at: last, routine, clock }, Number.isFinite(when) ? when : now, now);
+  return { routine, start: state.pose, asleep: state.asleep };
+}
 
 // ── who thinks this tick, and what they remember ─────────────────────────────
-// config: { cap_x100, players: { id: { model, every, multiplier_x100, vision, persona? } } }
+// config: { cap_x100, players: { id: { model, every, multiplier_x100, vision, persona?, clock? } } }
 function plan(config, frames, options = {}) {
   const now = options.now || Date.now();
   const seat = !!options.seat;
@@ -132,8 +150,11 @@ function plan(config, frames, options = {}) {
     }
     const every = Math.min(MAX_EVERY, Math.max(1, Number.isInteger(want.every) ? want.every : 1));
     const cost = Number.isInteger(want.multiplier_x100) ? want.multiplier_x100 : 100;
+    const clock = Playout.validClock(typeof want.clock === 'string' && CLOCK.test(want.clock) ? want.clock : null, id);
+    const body = bodyAt(id, frames, clock, now);
     let why = '';
-    if (!seat) why = clip(options.seatWhy || 'no Copilot seat to think on', 150);
+    if (body.asleep) why = clip('asleep: night in ' + Playout.clockText(clock, now), 150);
+    else if (!seat) why = clip(options.seatWhy || 'no Copilot seat to think on', 150);
     else if (!want.model) why = 'no model chosen for this player';
     else if (want.unavailable) why = clip(String(want.unavailable), 150);
     else if (since + 1 < every) why = `resting between thoughts (thinks every ${every} ticks)`;
@@ -157,7 +178,9 @@ function plan(config, frames, options = {}) {
     if (!why) spent += cost;
     out[id] = { think: !why, why, model: want.model || null, multiplier_x100: cost,
                 vision: want.vision !== false, persona: want.persona || null,
-                memory, heard, restore, since: Number.isFinite(since) ? since : null };
+                memory, heard, restore, since: Number.isFinite(since) ? since : null,
+                clock, sleep: body.asleep, routine: body.routine, start: body.start,
+                local: Playout.clockText(clock, now) };
   }
   return { players: out, spent_x100: spent, on_line_x100: onLine, journaled_x100: journaled, cap_x100: cap };
 }
@@ -188,6 +211,11 @@ async function readPose(page) {
 // Every move after this goes through the hands.
 async function restorePose(page, at) {
   if (!at) return false;
+  // window.worldNavigator is published at the very end of the world's init, after its camera is
+  // built at the spawn point; a pose set before then was silently refused and the body began the
+  // tick at the spawn instead of where the line says it is.
+  await page.waitForFunction(() => !!(window.worldNavigator && window.worldNavigator.camera),
+    null, { timeout: 60000 }).catch(() => {});
   return page.evaluate((a) => {
     const w = window.worldNavigator;
     if (!w || !w.camera) return false;
@@ -253,6 +281,15 @@ async function installBridge(page, options) {
     }
     return JSON.stringify(choice.message);
   });
+  // A routine a mind sets is made canonical here, in the capture, and kept: it is what the body
+  // will run until the mind next thinks, and what the sealer will find in the evidence.
+  await page.exposeFunction('__nexusMindRoutine', async (stepsJson) => {
+    let steps = null;
+    try { steps = Playout.canonical(JSON.parse(stepsJson)); } catch (error) {}
+    if (!steps) return false;
+    record.routine = steps;
+    return 'routine set: ' + Playout.summary(steps) + ' (' + steps.length + ' steps, looped until you next think)';
+  });
   await page.evaluate(() => {
     window.__nexusMind = {
       signedIn: () => true,
@@ -278,9 +315,13 @@ async function think(page, player, options = {}) {
     const percepts = { tick: a.tick, me: snap.me, world: snap.world, portals: snap.portals, others,
                        chat: (snap.chat || []).slice(-4),
                        picture: saw ? (saw.blank ? 'BLANK: you cannot see' : 'attached') : 'none',
-                       you_recently: a.memory, you_heard: a.heard };
+                       you_recently: a.memory, you_heard: a.heard,
+                       your_routine: a.routine, your_clock: a.local + ' local; you sleep from 23:00 to 07:00' };
+    // the same hands, plus one: a routine it may leave running until it thinks again
+    const hands = Object.create(drive);
+    hands.routine = async (steps) => window.__nexusMindRoutine(JSON.stringify(steps === undefined ? null : steps));
     const result = await window.NexusBrainstem.turn({
-      percepts, persona: a.persona, mind: window.__nexusMind, python: false, summon: false,
+      percepts, persona: a.persona, mind: window.__nexusMind, python: false, summon: false, drive: hands,
       rounds: 1, explain: true, max_tokens: a.maxTokens, verbs: a.verbs,
       image: saw && !saw.blank ? saw.uri : undefined,
     });
@@ -296,7 +337,9 @@ async function think(page, player, options = {}) {
              voiced, note: result.note || '' };
   }, { vision: player.vision, width: options.width || 448, tick: options.tick == null ? null : options.tick,
        memory: player.memory, heard: player.heard, persona: options.persona, maxTokens: options.maxTokens || 600,
-       verbs: RECORDED_VERBS });
+       verbs: RECORDED_VERBS.concat('routine'), local: player.local || '',
+       routine: player.routine ? { steps: player.routine.steps, set_by: player.routine.by,
+                                   set_at: player.routine.set_at } : null });
 }
 
 // ── the evidence ─────────────────────────────────────────────────────────────
@@ -343,8 +386,15 @@ function evidence(player, planned, record, outcome, sawName) {
 // the sealer derives (views_seal.doing_of), so a tick reads the same before and after its seal.
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
 const VERB_ID = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
-function summary(planned, outcome, record) {
-  if (!outcome) return clip('💤 ' + (clip(words(planned.why), 160) || 'resting'), 64);
+function routineLine(routine) {
+  const who = routine.by === 'default' ? 'default routine' : routine.by + "'s routine";
+  return clip('↻ ' + who + ': ' + Playout.summary(routine.steps), 64);
+}
+function summary(planned, outcome, record, routine) {
+  if (!outcome) {
+    const why = clip(words(planned.why), 160) || (planned.sleep ? 'sleep' : 'rest');
+    return planned.sleep || !routine ? clip('💤 ' + why, 64) : routineLine(routine);
+  }
   const rounds = record && record.rounds || [];
   const answered = rounds.length && rounds[rounds.length - 1].response ? rounds[rounds.length - 1].response.model : null;
   const model = typeof answered === 'string' && MODEL_ID.test(answered) ? answered : planned.model;
@@ -354,4 +404,4 @@ function summary(planned, outcome, record) {
 }
 
 module.exports = { plan, prepare, readLine, lookback, readJournal, readPose, restorePose, holdInWorld, installBridge, think,
-                   evidence, summary, clip, sha256, RECORDED_VERBS };
+                   evidence, summary, routineLine, clip, sha256, RECORDED_VERBS, Playout };

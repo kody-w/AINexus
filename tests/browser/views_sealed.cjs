@@ -109,6 +109,7 @@ async function open(overrides, options = {}) {
   });
   const page = await context.newPage();
   if (options.now) await page.clock.setFixedTime(options.now);
+  if (options.install) await page.clock.install({ time: options.install });
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(options.mounted ? MOUNTED_PAGE : PUBLISHED_PAGE, { timeout: 45000 });
   await page.waitForFunction(() => window.__viewsReady);
@@ -318,7 +319,9 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
   check('its reasons, the model that answered and what it cost are one hover away; a rest says why; a script says what it did',
     said.wanderer.title.includes('the greeter is off to my right') && said.wanderer.title.includes('answered by claude-sonnet-5') &&
     said.wanderer.title.includes('1× premium') && said.pilgrim.title.includes('aim (failed) — I want to see where it leads') &&
-    said.greeter.text === '💤 resting between thoughts (thinks every 3 ticks)' && said.watcher.text === 'wander',
+    said.greeter.text === '↻ default routine: wait, look, wait, look' &&
+    said.greeter.title.includes('resting between thoughts') && said.greeter.title.includes("the world's default routine") &&
+    said.wanderer.title.includes('left its body a new routine: walk forward 1200ms') && said.watcher.text === 'wander',
     JSON.stringify(said));
   await context.close();
 
@@ -347,6 +350,27 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     !Object.values(said).some(d => d.text.includes('I was never here')), JSON.stringify({ s, said }));
   await context.close();
 
+  ({ context, page } = await open({ 'chain/1.json': read('forged', 'chain-1-routine.json'),
+                                   'chain/HEAD.json': read('forged', 'HEAD-routine.json') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  s = (await state(page)).seal;
+  said = await doings(page);
+  const bodyRan = s.verdict === 'forged' && s.minds.forged === 1 &&
+    said.pilgrim.text === '✗ thought refused: the frame says what its evidence does not' && !said.wanderer.bad;
+  await context.close();
+  ({ context, page } = await open({ 'chain/1.json': read('forged', 'chain-1-routine-only.json'),
+                                   'chain/HEAD.json': read('forged', 'HEAD-routine-only.json') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  const bare = (await state(page)).seal;
+  const bareSaid = await doings(page);
+  check('a routine a thought never set is refused, whether its body is said to run it or the claim stands alone',
+    bodyRan && bare.verdict === 'forged' && bare.minds.forged === 1 &&
+    bareSaid.pilgrim.text === '✗ thought refused: the frame says what its evidence does not',
+    JSON.stringify({ s, said, bare, bareSaid }));
+  await context.close();
+
   ({ context, page } = await open({ ['live/' + pilgrim.saw.file]: read('live', wanderer.saw.file) }));
   await until(page, 'forged', 1);
   await mindsSettled(page);
@@ -364,6 +388,77 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     s.minds.gone === 1 && s.minds.ok === 1 && rolled.includes('(1 rolled out)') &&
     said.wanderer.text === '🧠 claude-sonnet-5 “Hello, greeter! 👋”' && said.wanderer.title.includes('rolled out'),
     JSON.stringify({ s, said, rolled }));
+  await context.close();
+}
+
+// ── the dimension: the newest frame played forward here, and met again when the next arrives ──
+{
+  const P = require(path.join(ROOT, 'ai', 'playout.js'));
+  const frame1 = JSON.parse(read('chain', '1.json'));
+  const frameMs = Date.parse(frame1.payload.views.captured_utc);
+  const minded = frame1.payload.views.players.filter(q => q.mind);
+  const dimension = page => page.evaluate(() => window.__viewsState().dimension);
+  const settled = (page, n) => page.waitForFunction(k => {
+    const d = window.__viewsState().dimension;
+    return d.seq !== null && Object.keys(d.bodies).length === k;
+  }, n, { timeout: 20000 }).catch(() => null);
+
+  const T = frameMs + 7 * 60000;
+  let { context, page } = await open({}, { now: new Date(T) });
+  await settled(page, minded.length);
+  let d = await dimension(page);
+  const expected = Object.fromEntries(minded.map(q => [q.id, P.stateAt(q, frameMs, T)]));
+  check('between frames, this page plays the newest frame forward to exactly where the capture would put every body',
+    Object.keys(d.bodies).length === 3 && minded.every(q => JSON.stringify(d.bodies[q.id].pose) === JSON.stringify(expected[q.id].pose) &&
+      d.bodies[q.id].met && !d.bodies[q.id].asleep) &&
+    JSON.stringify(d.bodies.wanderer.pose) !== JSON.stringify(minded.find(q => q.id === 'wanderer').at) &&
+    /^☀️ Tokyo 21:30 · ▶ routine 7m in$/.test(d.bodies.wanderer.note) &&
+    await page.locator('#dimension').isVisible(), JSON.stringify({ d, expected }));
+  await context.close();
+
+  const N = frameMs + 12 * 3600000;             // 01:23 in London (BST), 09:23 in Tokyo: the pilgrim is asleep
+  ({ context, page } = await open({}, { now: new Date(N) }));
+  await settled(page, minded.length);
+  d = await dimension(page);
+  const woke = P.stateAt(minded.find(q => q.id === 'wanderer'), frameMs, N);
+  check('where its clock says night a body sleeps in its bed; one that slept since its frame wakes there into its routine',
+    d.bodies.pilgrim.asleep && JSON.stringify(d.bodies.pilgrim.pose) === JSON.stringify(P.bed('pilgrim')) &&
+    /^🌙 asleep · London 01:23$/.test(d.bodies.pilgrim.note) && !d.bodies.wanderer.asleep &&
+    JSON.stringify(d.bodies.wanderer.pose) === JSON.stringify(woke.pose) &&
+    // it woke at 07:00 in Tokyo, on the clock's own five-minute marks
+    woke.since === Date.parse('2026-09-23T22:00:00.000Z'),
+    JSON.stringify({ d, woke }));
+  await context.close();
+
+  // A new frame arrives while the page is open: nothing snaps, and each body walks to meet its twin.
+  const overrides = {};
+  ({ context, page } = await open(overrides, { install: frameMs + 8 * 60000 }));
+  await settled(page, minded.length);
+  const before = (await dimension(page)).bodies.wanderer.pose;
+  Object.assign(overrides, {
+    'chain/HEAD.json': read('later', 'HEAD-3.json'), 'chain/2.json': read('later', 'chain-2.json'),
+    'spine/HEAD.json': read('extra', 'spine-HEAD-4.json'), 'spine/3.json': read('extra', 'spine-3.json'),
+    'live/manifest.json': read('later', 'manifest-5.json')
+  });
+  await page.waitForFunction(() => window.__viewsState().dimension.seq === 2, null, { timeout: 20000 }).catch(() => null);
+  const arrived = (await dimension(page)).bodies.wanderer;
+  const gap = (a, b) => Math.hypot(a.x_cm - b.x_cm, a.z_cm - b.z_cm);
+  const trail = [];
+  for (let i = 0; i < 120; i++) {
+    const w = (await dimension(page)).bodies.wanderer;
+    trail.push({ pose: w.pose, gap: gap(w.pose, w.twin), met: w.met });
+    if (w.met) break;
+    await page.waitForTimeout(250);
+  }
+  const last = trail[trail.length - 1];
+  const leaps = trail.slice(1).map((t, i) => gap(t.pose, trail[i].pose));
+  const finalState = await dimension(page);
+  check('when the next frame arrives nothing snaps: each body walks from where it was until it meets its twin, and is then the new frame\'s',
+    arrived && !arrived.met && gap(arrived.pose, before) < 200 && gap(arrived.pose, arrived.twin) > 500 &&
+    /^↝ meeting its twin in views #2$/.test(arrived.note) &&
+    last.met && JSON.stringify(finalState.bodies.wanderer.pose) === JSON.stringify(finalState.bodies.wanderer.twin) &&
+    trail.length > 2 && Math.max(...leaps.slice(0, -1)) < 1500 && Object.values(finalState.bodies).length === 3,
+    JSON.stringify({ before, arrived, steps: trail.length, leaps: leaps.map(Math.round), last }));
   await context.close();
 }
 

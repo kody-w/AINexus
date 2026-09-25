@@ -199,6 +199,8 @@ function captureReceipt(options) {
   const sees = options.sees || {};
   const minds = options.minds || {};
   const at = options.at || {};
+  const routines = options.routines || {};
+  const clocks = options.clocks || {};
   // a capture-relative file, named where appendCapture put it: this tick's own segment
   const streamed = relative => {
     const parts = String(relative || '').split('/');
@@ -209,7 +211,7 @@ function captureReceipt(options) {
   };
   const mindOf = mind => {
     if (!mind || typeof mind !== 'object') return null;
-    if (mind.kind === 'rest') return { kind: 'rest', why: String(mind.why || '') };
+    if (mind.kind === 'rest' || mind.kind === 'sleep') return { kind: mind.kind, why: String(mind.why || '') };
     if (mind.kind !== 'model') return null;
     const entry = { kind: 'model', exchange: streamed(mind.exchange) };
     if (mind.saw) entry.saw = streamed(mind.saw);
@@ -232,6 +234,14 @@ function captureReceipt(options) {
       const mind = mindOf(minds[player.id]);
       if (mind) entry.mind = mind;
       if (at[player.id]) entry.at = at[player.id];
+      // which routine ran: the sealer resolves it from where it was set, never from here
+      const routine = routines[player.id];
+      if (routine) {
+        entry.routine = routine.set_at === 'this' ? { set_at: 'this' }
+          : routine.set_at === null ? { set_at: null, by: 'default', steps: routine.steps }
+          : { set_at: routine.set_at };
+      }
+      if (clocks[player.id]) entry.clock = clocks[player.id];
       return entry;
     })
   };

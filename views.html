@@ -18,6 +18,14 @@ button,input{font:inherit}
   color:#9a9ac0;background:rgba(6,6,16,.7);border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell.focus .doing{color:#e9e9f2}
 .doing.bad,.cell.focus .doing.bad{color:#ff8a8a}
+.live{position:absolute;right:8px;top:8px;z-index:2;font:10px ui-monospace,Menlo,monospace;color:#c9c9e6;
+  background:rgba(6,6,16,.72);border-radius:999px;padding:2px 8px}
+.live:empty{display:none}
+#dimension{position:fixed;left:14px;bottom:64px;z-index:9;width:196px;padding:8px;background:rgba(10,10,24,.84);
+  border:1px solid #2b2b52;border-radius:12px;backdrop-filter:blur(8px)}
+#dimension[hidden]{display:none}
+#map{display:block;width:180px;height:180px}
+#dimension-note{margin-top:4px;font:9px ui-monospace,Menlo,monospace;color:#8f8fb0;text-align:center}
 #hud{position:fixed;right:16px;top:14px;z-index:9;font:11px ui-monospace,Menlo,monospace;color:#8f8fb0;
   background:rgba(10,10,24,.8);border:1px solid #2b2b52;border-radius:10px;padding:7px 11px;backdrop-filter:blur(8px)}
 #hud b{color:#7de3ff;font-weight:600}
@@ -41,7 +49,8 @@ button,input{font:inherit}
 .cell.forged img{opacity:.1;filter:grayscale(1)}
 .cell.forged::after{content:"✗ not the sealed view";position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;
   color:#ff8a8a;font:12px ui-monospace,Menlo,monospace}
-@media(max-width:700px){#hud{left:14px;right:auto}#when{display:none}#stage{gap:6px;padding:8px;bottom:48px}
+@media(max-width:700px){#dimension{width:128px;bottom:56px;left:8px;padding:5px}#map{width:118px;height:118px}
+  #hud{left:14px;right:auto}#when{display:none}#stage{gap:6px;padding:8px;bottom:48px}
   #transport{height:48px;padding:7px 8px;gap:7px}#transport button{padding:0 8px}}
 </style></head><body>
 <div id="stage"><div class="blank">waiting for the first DOGG frame...</div></div>
@@ -52,6 +61,10 @@ button,input{font:inherit}
   <button id="live" class="off" type="button">LIVE</button>
   <span id="when">-</span>
 </div>
+<div id="dimension" hidden title="Between frames, this page plays the newest sealed frame forward: every body runs the routine its mind left it, and sleeps in its bed when its clock says night. When a new frame arrives, each body walks here until it meets its twin in it.">
+  <canvas id="map"></canvas><div id="dimension-note"></div>
+</div>
+<script src="ai/playout.js"></script>
 <script>
 // A DOGG is a line, not a GIF. The manifest can grow while this page is open: viewers at the
 // live edge hold the newest frame until the next tick arrives, while anyone who scrubs back
@@ -493,7 +506,12 @@ const clipped = (value, max) => {
 };
 const countOf = (value, cap = Number.MAX_SAFE_INTEGER) =>
   Number.isSafeInteger(value) && value >= 0 && value <= cap ? value : null;
-const doingOf = mind => mind.kind === 'rest' ? clipped('💤 ' + mind.why, 64)
+// A body resting between thoughts is running its routine; a body asleep is not, whatever it will
+// wake to. The same line tools/views_seal.py derives.
+const routineLine = r => clipped('↻ ' + (r.by === 'default' ? 'default routine' : r.by + "'s routine") + ': '
+  + r.steps.map(step => step.do).join(', '), 64);
+const doingOf = (mind, routine) => mind.kind === 'sleep' || (mind.kind === 'rest' && !routine) ? clipped('💤 ' + mind.why, 64)
+  : mind.kind === 'rest' ? routineLine(routine)
   : clipped('🧠 ' + mind.model + (mind.did.length
     ? ': ' + mind.did.map(d => d.verb.startsWith('world_') ? d.verb.slice(6) : d.verb).join(', ') : ''), 64);
 
@@ -545,13 +563,21 @@ function deriveMind(x, pid) {
     return { verb: typeof call.tool === 'string' && VERB_ID.test(call.tool) ? call.tool : '?',
       why: typeof args.why === 'string' ? clipped(args.why, 160) : '', failed: call.failed !== false };
   });
+  // the routine it left its body running: the last one it set that the hands accepted
+  let routine = null;
+  for (const call of calls) {
+    const args = isObject(call.args) ? call.args : {};
+    if (call.tool === 'world_routine' && call.failed === false) {
+      const steps = window.NexusPlayout ? window.NexusPlayout.canonical(args.steps) : null;
+      if (steps) routine = steps;
+    }
+  }
   const answered = last.response.model;
-  return {
-    mind: { kind: 'model', provider: 'github-copilot', asked,
-      model: typeof answered === 'string' && MODEL_ID.test(answered) ? answered : asked,
-      multiplier_x100: cost, said: clipped(spoken.join(' '), 240), did, ms, tokens_in: tokensIn, tokens_out: tokensOut },
-    picture: pictures.size ? [...pictures][0] : null
-  };
+  const mind = { kind: 'model', provider: 'github-copilot', asked,
+    model: typeof answered === 'string' && MODEL_ID.test(answered) ? answered : asked,
+    multiplier_x100: cost, said: clipped(spoken.join(' '), 240), did, ms, tokens_in: tokensIn, tokens_out: tokensOut };
+  if (routine) mind.routine_set = routine;
+  return { mind, picture: pictures.size ? [...pictures][0] : null };
 }
 
 async function fetchBytes(url) {
@@ -566,11 +592,11 @@ async function fetchBytes(url) {
 
 // One sealed thought, checked once: 'pending', 'ok', 'forged' (with why), 'pruned' once its
 // evidence has rolled out of the feed, or 'unreachable', which is asked again.
-function mindCheck(player) {
+function mindCheck(player, tick) {
   const mind = player.mind;
   if (!isObject(mind) || mind.kind !== 'model') return null;
   const evidence = isObject(mind.exchange) ? mind.exchange : {};
-  const key = keyOf(feedFile(evidence.file) ? imageUrl(evidence.file) : 'nowhere', String(evidence.sha256));
+  const key = keyOf(feedFile(evidence.file) ? imageUrl(evidence.file) : 'nowhere', String(evidence.sha256)) + '#' + tick;
   const known = mindChecks.get(key);
   if (known && (known.state !== 'unreachable' || Date.now() - known.at < 15000)) return known;
   const pending = { state: 'pending', why: '', at: Date.now() };
@@ -590,11 +616,20 @@ function mindCheck(player) {
     } catch (error) {
       return forged('its evidence is not the evidence of a thought: ' + error.message);
     }
+    // everything it says, and nothing its evidence does not: a routine_set never set is words
+    const said = Object.keys(mind).filter(key => key !== 'exchange' && key !== 'saw').sort();
     const claimed = {};
     for (const key of Object.keys(derived.mind)) claimed[key] = mind[key];
-    let same = false;
-    try { same = jcs(claimed) === jcs(derived.mind); } catch (error) {}
-    if (!same || player.doing !== doingOf(derived.mind)) return forged('the frame says what its evidence does not');
+    let same = jcs(said) === jcs(Object.keys(derived.mind).sort());
+    try { same = same && jcs(claimed) === jcs(derived.mind); } catch (error) { same = false; }
+    // and a body that ran a routine set this tick ran the one this thought set, in its name
+    const ran = isObject(player.routine) ? player.routine : null;
+    if (same && ran && ran.set_at === tick) {
+      try {
+        same = !!derived.mind.routine_set && jcs(ran.steps) === jcs(derived.mind.routine_set) && ran.by === derived.mind.model;
+      } catch (error) { same = false; }
+    }
+    if (!same || player.doing !== doingOf(derived.mind, player.routine)) return forged('the frame says what its evidence does not');
     if (derived.picture !== (mind.saw ? mind.saw.sha256 : null)) return forged('the frame names a picture it was not shown');
     if (mind.saw) {
       const shown = await fetchBytes(imageUrl(mind.saw.file)).catch(error => {
@@ -615,11 +650,24 @@ function mindCheck(player) {
 }
 
 // the words under a cell for a sealed player, and everything else about its mind for a hover
-function mindNote(player) {
+function mindNote(player, tick) {
   const mind = player.mind;
   if (!isObject(mind)) return null;
-  if (mind.kind === 'rest') return { text: '💤 ' + mind.why, title: 'resting: ' + mind.why, bad: false };
-  const check = mindCheck(player);
+  const running = isObject(player.routine) && Array.isArray(player.routine.steps) ? player.routine : null;
+  const routineText = r => r.steps.map(step => step.do + (step.dir ? ' ' + step.dir : '') + (step.ms ? ' ' + step.ms + 'ms' : '')
+    + (step.dx ? ' ' + step.dx + 'px' : '')).join(' → ');
+  const whose = r => r.by === 'default' ? "the world's default routine" : `the routine ${r.by} set at spine tick ${r.set_at}`;
+  if (mind.kind === 'sleep') {
+    return { text: '💤 ' + mind.why, bad: false,
+      title: mind.why + (running ? '\nwakes to ' + whose(running) + ': ' + routineText(running) : '') };
+  }
+  if (mind.kind === 'rest') {
+    return running
+      ? { text: routineLine(running), bad: false,
+          title: `resting: ${mind.why}\nits body runs ${whose(running)}, looped: ${routineText(running)}` }
+      : { text: '💤 ' + mind.why, title: 'resting: ' + mind.why, bad: false };
+  }
+  const check = mindCheck(player, tick);
   if (!check) return null;
   if (check.state === 'forged') return { text: '✗ thought refused: ' + check.why, title: check.why, bad: true };
   const mark = { ok: ' ✓', pending: ' …', pruned: '', unreachable: ' …' }[check.state] || '';
@@ -630,6 +678,8 @@ function mindNote(player) {
     `${mind.multiplier_x100 / 100}× premium · ${mind.tokens_in} tokens in, ${mind.tokens_out} out · ${mind.ms} ms`,
     ...did,
     mind.said ? `said: “${mind.said}”` : 'said nothing',
+    running ? (mind.routine_set ? 'left its body a new routine: ' : 'its body runs ' + whose(running) + ': ')
+      + routineText(running) : '',
     check.state === 'ok' ? 'every word re-derived here from the exchange, whose hash the frame names'
       : check.state === 'pruned' ? 'its evidence has rolled out of the feed; the frame still names its hash' : 'checking its evidence…'
   ].join('\n');
@@ -650,7 +700,7 @@ function verdictAt(index) {
     const verdict = judged(cell, keyOf(imageUrl(player.file), player.sha256));
     if (verdict === 'sealed' || verdict === 'forged' || verdict === 'pending') counts[verdict] += 1;
     else counts.missing += 1;
-    const check = mindCheck(player);
+    const check = mindCheck(player, seal.views.tick);
     if (check) {
       minds.thoughts += 1;
       minds[['ok', 'forged', 'pending'].includes(check.state) ? check.state : 'gone'] += 1;
@@ -773,13 +823,15 @@ function rebuildCells(players) {
     const tag = document.createElement('span');
     const image = document.createElement('img');
     const doing = document.createElement('div');
+    const live = document.createElement('span');
+    live.className = 'live';
     cell.className = 'cell';
     tag.className = 'tag';
     image.alt = `${player.id || 'player'}'s view`;
     doing.className = 'doing';
-    cell.append(tag, image, doing);
+    cell.append(tag, live, image, doing);
     stage.appendChild(cell);
-    return { rec: player, el: cell, tag, img: image, doing, label: '', current: '', pending: '', loadToken: 0,
+    return { rec: player, el: cell, tag, live, img: image, doing, label: '', current: '', pending: '', loadToken: 0,
       refused: '', failed: '', failedWhy: '', failedAt: 0, blob: '' };
   });
   layout(players.length);
@@ -933,7 +985,7 @@ function paint() {
     cell.tag.textContent = cell.label + (verdict === 'sealed' ? ' ✓' : verdict === 'forged' ? ' ✗' : '');
     cell.el.classList.toggle('forged', verdict === 'forged');
     // a sealed tick says what its frame says; anything else is the feed's own unsealed note
-    const mind = sealed ? mindNote(sealed) : null;
+    const mind = sealed ? mindNote(sealed, seal.views.tick) : null;
     const note = mind ? mind.text : sealed ? sealed.doing : Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
     cell.doing.textContent = note || '';
     cell.doing.title = mind ? mind.title : note || '';
@@ -1054,6 +1106,138 @@ $('play').addEventListener('click', () => {
   paint();
 });
 
+// ── the dimension: the newest sealed frame, played forward here until the next one ──
+// A frame is a state: where each body stands and the routine its mind left it running. Between
+// frames this page plays that state forward with the arithmetic the capture uses (ai/playout.js),
+// so the bodies go on with their routines and sleep in their beds when their clocks say night.
+// When a new frame arrives nothing snaps. Each body walks from where it is here toward its twin in
+// the new frame, which goes on playing too, for as long as it takes to meet it, and from then on
+// it is the new frame's. Nothing drawn here is sealed: it is this page's own dimension of the
+// line, and the frame each body meets is always the verified one.
+const DIM = { bodies: new Map(), seq: null, last: 0, drawn: 0 };
+const CATCH_CM_PER_MS = 1.35;          // a body catching up walks at one and a half times its pace,
+const CATCH_GAP_MS = 2500;             // and a little faster the further it has to go
+const CATCH_MRAD_PER_MS = 3;
+const MET_CM = 10, MET_MRAD = 30, JUMP_CM = 60;
+const COLORS = ['#7dffb0', '#7de3ff', '#ffd479', '#ff8ad8', '#b58cff', '#ff9f6b', '#9fe870', '#6bb8ff'];
+const wrapMrad = m => { let e = m % 6283; if (e > 3141) e -= 6283; if (e < -3141) e += 6283; return e; };
+
+function headFrame() {
+  if (!line.on || line.state === 'broken' || line.top < 0) return null;
+  return line.frames.get(line.top) || null;
+}
+
+function bodiesOf(frame) {
+  const views = frame && frame.payload && frame.payload.views;
+  if (!views || !Array.isArray(views.players)) return [];
+  return views.players.filter(q => isObject(q) && typeof q.id === 'string' && isObject(q.mind) && (q.at || q.routine));
+}
+
+function apart(a, b) {
+  return { cm: Math.hypot(a.x_cm - b.x_cm, a.z_cm - b.z_cm),
+    mrad: Math.max(Math.abs(wrapMrad(a.yaw_mrad - b.yaw_mrad)), Math.abs(a.pitch_mrad - b.pitch_mrad)) };
+}
+
+function toward(from, to, dt) {
+  const dx = to.x_cm - from.x_cm, dz = to.z_cm - from.z_cm, d = Math.hypot(dx, dz);
+  const step = Math.min(d, (CATCH_CM_PER_MS + d / CATCH_GAP_MS) * dt);
+  const turn = (a, b) => { const e = wrapMrad(b - a); return wrapMrad(a + Math.sign(e) * Math.min(Math.abs(e), CATCH_MRAD_PER_MS * dt)); };
+  return { x_cm: d ? from.x_cm + dx / d * step : to.x_cm, y_cm: to.y_cm, z_cm: d ? from.z_cm + dz / d * step : to.z_cm,
+    yaw_mrad: turn(from.yaw_mrad, to.yaw_mrad),
+    pitch_mrad: from.pitch_mrad + Math.sign(to.pitch_mrad - from.pitch_mrad) * Math.min(Math.abs(to.pitch_mrad - from.pitch_mrad), CATCH_MRAD_PER_MS * dt) };
+}
+
+function stepDimension() {
+  if (!window.NexusPlayout) return;
+  const frame = headFrame();
+  if (!frame) return;
+  const now = Date.now();
+  const dt = DIM.last ? Math.min(250, Math.max(0, now - DIM.last)) : 0;
+  DIM.last = now;
+  const arrived = DIM.seq !== frame.seq;
+  DIM.seq = frame.seq;
+  const frameMs = Date.parse(frame.payload.views.captured_utc);
+  if (!Number.isFinite(frameMs)) return;
+  const seen = new Set();
+  bodiesOf(frame).forEach((q, index) => {
+    seen.add(q.id);
+    let body = DIM.bodies.get(q.id);
+    if (!body || arrived) {
+      const follow = window.NexusPlayout.tracker(q, frameMs);
+      if (!body) {
+        const first = follow(now);
+        body = { pose: first.pose, met: true, meeting: null, color: COLORS[index % COLORS.length] };
+        DIM.bodies.set(q.id, body);
+      } else {
+        body.met = false;                 // a new frame: go and meet its twin, however long it takes
+        body.meeting = frame.seq;
+      }
+      body.follow = follow;
+    }
+    const twin = body.follow(now);
+    if (body.met && apart(body.pose, twin.pose).cm > JUMP_CM) { body.met = false; body.meeting = frame.seq; }
+    if (!body.met) {
+      body.pose = toward(body.pose, twin.pose, dt);
+      const left = apart(body.pose, twin.pose);
+      if (left.cm <= MET_CM && left.mrad <= MET_MRAD) { body.met = true; body.meeting = null; }
+    }
+    if (body.met) body.pose = twin.pose;
+    Object.assign(body, { twin: twin.pose, asleep: twin.asleep, tz: twin.tz, since: twin.since, frameMs,
+      routine: q.routine || null, local: window.NexusPlayout.clockText(twin.tz, now) });
+  });
+  for (const id of [...DIM.bodies.keys()]) if (!seen.has(id)) DIM.bodies.delete(id);
+}
+
+function liveNote(body) {
+  if (!body) return '';
+  if (!body.met) return '↝ meeting its twin in views #' + DIM.seq;
+  if (body.asleep) return '🌙 asleep · ' + body.local;
+  const minutes = Math.max(0, Math.floor((Date.now() - (body.since || body.frameMs)) / 60000));
+  return '☀️ ' + body.local + (body.routine ? ' · ▶ routine ' + minutes + 'm in' : ' · still');
+}
+
+function drawDimension(now) {
+  const panel = $('dimension');
+  stepDimension();
+  const frame = headFrame();
+  const show = !!(frame && DIM.bodies.size && window.NexusPlayout);
+  if (panel.hidden === show) panel.hidden = !show;
+  for (const cell of view.cells) {
+    const text = show ? liveNote(DIM.bodies.get(cell.rec.id)) : '';
+    if (cell.live.textContent !== text) cell.live.textContent = text;
+  }
+  if (!show || now - DIM.drawn < 33) return;
+  DIM.drawn = now;
+  const canvas = $('map');
+  const size = canvas.clientWidth || 180, ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(size * ratio)) { canvas.width = Math.round(size * ratio); canvas.height = Math.round(size * ratio); }
+  const g = canvas.getContext('2d');
+  g.setTransform(ratio, 0, 0, ratio, 0, 0);
+  g.clearRect(0, 0, size, size);
+  const P = window.NexusPlayout, half = size / 2, k = (half - 6) / P.BOUND_CM;
+  const at = pose => [half + pose.x_cm * k, half + pose.z_cm * k];     // north is -z, where yaw 0 looks
+  g.strokeStyle = '#2b2b52'; g.lineWidth = 1;
+  g.beginPath(); g.arc(half, half, P.BOUND_CM * k, 0, Math.PI * 2); g.stroke();
+  g.setLineDash([2, 3]); g.beginPath(); g.arc(half, half, 1500 * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  for (const [id, body] of DIM.bodies) {
+    const [bx, by] = at(P.bed(id));
+    g.strokeStyle = body.color; g.globalAlpha = .45; g.strokeRect(bx - 4, by - 3, 8, 6); g.globalAlpha = 1;
+    const [x, y] = at(body.pose);
+    if (!body.met) {
+      const [tx, ty] = at(body.twin);
+      g.setLineDash([3, 3]); g.strokeStyle = body.color; g.beginPath(); g.moveTo(x, y); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
+      g.globalAlpha = .35; g.beginPath(); g.arc(tx, ty, 3, 0, Math.PI * 2); g.fillStyle = body.color; g.fill(); g.globalAlpha = 1;
+    }
+    const yaw = body.pose.yaw_mrad / 1000;
+    g.strokeStyle = body.color; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x - Math.sin(yaw) * 9, y - Math.cos(yaw) * 9); g.stroke(); g.lineWidth = 1;
+    g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = body.asleep ? '#55557d' : body.color; g.fill();
+    g.fillStyle = '#c9c9e6'; g.font = '9px ui-monospace,Menlo,monospace';
+    g.fillText(body.asleep ? id + ' z' : id, x + 6, y - 5);
+  }
+  $('dimension-note').textContent = 'played here from views #' + DIM.seq + ' · not sealed';
+}
+
 function animate(now) {
   const fps = Math.max(.25, +(params.get('fps') ||
     (view.manifest && (view.manifest.playbackFps || view.manifest.fps)) || 8));
@@ -1076,12 +1260,17 @@ function animate(now) {
     view.focusAt = now;
     paint();
   }
+  // the dimension is this page's own; nothing it meets may stop the page from going on
+  try { drawDimension(now); } catch (error) {}
   requestAnimationFrame(animate);
 }
 
 window.__viewsState = () => {
   const seal = verdictAt(view.frame);
   return {
+    // this page's own dimension of the line: the newest frame played forward, and who has met it
+    dimension: { seq: DIM.seq, bodies: Object.fromEntries([...DIM.bodies].map(([id, b]) =>
+      [id, { pose: b.pose, twin: b.twin, met: b.met, asleep: b.asleep, local: b.local, note: liveNote(b) }])) },
     frames: frameCount(view.manifest),
     frame: view.frame,
     followingLive: view.followingLive,

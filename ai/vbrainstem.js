@@ -129,7 +129,7 @@
   // One entry per thing the hands can actually do. The schemas are deliberately tight: a verb
   // that does not exist cannot be named, and an argument that is not offered cannot be invented.
   const VERBS = [
-    ['look',   'Turn your head. Positive dx looks right.', { dx: ['number', 'pixels to turn horizontally, about 220 for a quarter turn'], dy: ['number', 'pixels to look up or down'] }, []],
+    ['look',   'Turn your head. Positive dx looks right.', { dx: ['number', 'pixels to turn horizontally, about 785 for a quarter turn'], dy: ['number', 'pixels to look up or down'] }, []],
     ['walk',   'Walk in a direction for a while.', { dir: ['string', 'forward, back, left or right'], ms: ['number', 'how long in milliseconds, 300-1500'] }, ['dir']],
     ['aim',    'Turn to face a portal by name, without entering it.', { portal: ['string', 'the portal name exactly as the percepts give it'] }, ['portal']],
     ['travel', 'Walk into a portal and go to that world.', { portal: ['string', 'the portal name exactly as the percepts give it'] }, ['portal']],
@@ -191,6 +191,8 @@
     orbs:     (d) => d.orbs().map(o => ({ name: o.name, distance: o.distance })),
     dialogue: (d, a) => d.dialogue(a.to),
     wait:     (d, a) => d.wait(Math.max(50, Math.min(4000, a.ms || 800))),
+    // only hands that keep a routine have one to set; everyone else is told it did not happen
+    routine:  (d, a) => typeof d.routine === 'function' ? d.routine(a.steps) : false,
   };
 
   // what the model is told came back — an honest sentence, never a cheerful constant
@@ -201,14 +203,31 @@
     return String(value).slice(0, 400);
   }
 
+  // Verbs a mind is given only by name, through turn's `verbs`. They are not everyone's hands, so
+  // nothing that reads the default schemas ever sees them.
+  const OPT_IN = [
+    ['routine', 'Set the routine your body runs, looped, from now until you next think: between your thoughts, '
+      + 'whenever you are not acting by hand. It replaces the routine you had. Up to 8 steps, each a walk, a look or a wait.',
+     { steps: { type: 'array', description: 'the steps, in order; the list repeats', maxItems: 8,
+                items: { type: 'object', required: ['do'], properties: {
+                  do: { type: 'string', enum: ['walk', 'look', 'wait'] },
+                  dir: { type: 'string', enum: ['forward', 'back', 'left', 'right'], description: 'walk: which way' },
+                  ms: { type: 'number', description: 'walk: 100-3000 ms (9 m a second); wait: 100-10000 ms' },
+                  dx: { type: 'number', description: 'look: pixels to turn, positive is right, about 785 for a quarter turn' },
+                  dy: { type: 'number', description: 'look: pixels to tilt' } } } } }, ['steps']],
+  ];
+
   // `explain` offers every verb an optional `why`, so a mind can say, in the same call, why it acts.
   // The hands never read it; the record keeps it, which is the point. It is opt-in so that anything
   // already reading these schemas sees exactly what it always saw. `only`, when given, is the verbs
   // this mind may use: the rest are neither offered nor done.
   function verbToolDefs(explain, only) {
-    return VERBS.filter(([name]) => !only || only.has(name)).map(([name, description, props, required]) => {
+    const offered = VERBS.concat(OPT_IN.filter(([name]) => only && only.has(name)));
+    return offered.filter(([name]) => !only || only.has(name)).map(([name, description, props, required]) => {
       const properties = {};
-      for (const k of Object.keys(props)) properties[k] = { type: props[k][0], description: props[k][1] };
+      for (const k of Object.keys(props)) {
+        properties[k] = Array.isArray(props[k]) ? { type: props[k][0], description: props[k][1] } : props[k];
+      }
       if (explain) properties.why = { type: 'string', description: 'one short sentence: why you are doing this' };
       return { type: 'function', function: { name: 'world_' + name, description,
                parameters: { type: 'object', properties, required } } };
