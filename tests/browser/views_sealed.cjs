@@ -403,16 +403,19 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     return d.seq !== null && Object.keys(d.bodies).length === k;
   }, n, { timeout: 20000 }).catch(() => null);
 
+  // every body in the frame keeps the one clock its place sealed (08:23 in New York when it was captured)
+  const place = q => Object.assign({}, q, { clock: frame1.payload.views.clock });
   const T = frameMs + 7 * 60000;
   let { context, page } = await open({}, { now: new Date(T) });
   await settled(page, minded.length);
   let d = await dimension(page);
-  const expected = Object.fromEntries(minded.map(q => [q.id, P.stateAt(q, frameMs, T)]));
+  const expected = Object.fromEntries(minded.map(q => [q.id, P.stateAt(place(q), frameMs, T)]));
   check('between frames, this page plays the newest frame forward to exactly where the capture would put every body',
     Object.keys(d.bodies).length === 3 && minded.every(q => JSON.stringify(d.bodies[q.id].pose) === JSON.stringify(expected[q.id].pose) &&
       d.bodies[q.id].met && !d.bodies[q.id].asleep) &&
     JSON.stringify(d.bodies.wanderer.pose) !== JSON.stringify(minded.find(q => q.id === 'wanderer').at) &&
-    /^☀️ Tokyo 21:30 · ▶ routine 7m in$/.test(d.bodies.wanderer.note) &&
+    frame1.payload.views.clock === 'America/New_York' && d.clock === 'New York 08:30' &&
+    /^☀️ ▶ routine 7m in$/.test(d.bodies.wanderer.note) &&
     await page.locator('#dimension').isVisible(), JSON.stringify({ d, expected }));
   await page.locator('#dimension').click();
   await page.waitForTimeout(150);
@@ -422,21 +425,29 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
   await page.waitForTimeout(150);
   const unfolded = await page.evaluate(() => getComputedStyle(document.getElementById('map')).display);
   check('the map folds to one line with a tap, so it need never stand over a view, and opens again with another',
-    folded.folded && folded.map === 'none' && /^🗺 3 awake · 0 asleep · tap for the map$/.test(folded.note) && unfolded === 'block',
+    folded.folded && folded.map === 'none' && /^🗺 New York 08:30 · 3 awake · 0 asleep · tap for the map$/.test(folded.note) &&
+    unfolded === 'block',
     JSON.stringify({ folded, unfolded }));
   await context.close();
 
-  const N = frameMs + 12 * 3600000;             // 01:23 in London (BST), 09:23 in Tokyo: the pilgrim is asleep
+  const N = frameMs + 16 * 3600000;             // 00:23 in New York: night in the hub, for everyone in it
   ({ context, page } = await open({}, { now: new Date(N) }));
   await settled(page, minded.length);
   d = await dimension(page);
-  const woke = P.stateAt(minded.find(q => q.id === 'wanderer'), frameMs, N);
-  check('where its clock says night a body sleeps in its bed; one that slept since its frame wakes there into its routine',
-    d.bodies.pilgrim.asleep && JSON.stringify(d.bodies.pilgrim.pose) === JSON.stringify(P.bed('pilgrim')) &&
-    /^🌙 asleep · London 01:23$/.test(d.bodies.pilgrim.note) && !d.bodies.wanderer.asleep &&
-    JSON.stringify(d.bodies.wanderer.pose) === JSON.stringify(woke.pose) &&
-    // it woke at 07:00 in Tokyo, on the clock's own five-minute marks
-    woke.since === Date.parse('2026-09-23T22:00:00.000Z'),
+  check('when the clock of their place says night, every body in it sleeps in its bed, all of them at once',
+    minded.every(q => d.bodies[q.id].asleep && JSON.stringify(d.bodies[q.id].pose) === JSON.stringify(P.bed(q.id)) &&
+      d.bodies[q.id].note === '🌙 asleep') && d.clock === 'New York 00:23',
+    JSON.stringify(d));
+  await context.close();
+
+  const M = frameMs + 24 * 3600000;             // 08:23 the next morning in New York
+  ({ context, page } = await open({}, { now: new Date(M) }));
+  await settled(page, minded.length);
+  d = await dimension(page);
+  const woke = Object.fromEntries(minded.map(q => [q.id, P.stateAt(place(q), frameMs, M)]));
+  check('and in the morning every body wakes where it slept, into its routine, at 07:00 on the clock of their place',
+    minded.every(q => !d.bodies[q.id].asleep && JSON.stringify(d.bodies[q.id].pose) === JSON.stringify(woke[q.id].pose) &&
+      woke[q.id].since === Date.parse('2026-09-24T11:00:00.000Z')) && d.clock === 'New York 08:23',
     JSON.stringify({ d, woke }));
   await context.close();
 

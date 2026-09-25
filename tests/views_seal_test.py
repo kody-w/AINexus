@@ -386,8 +386,9 @@ class ViewsLine(unittest.TestCase):
                                                     "by": "claude-sonnet-5"})
         self.assertEqual(q["greeter"]["routine"], {"steps": FX.DEFAULTS["greeter"], "set_at": None, "by": "default"})
         self.assertEqual(q["pilgrim"]["routine"]["by"], "default")      # its thought set none
-        self.assertEqual([q[k].get("clock") for k in ("wanderer", "greeter", "pilgrim", "watcher")],
-                         ["Asia/Tokyo", "America/New_York", "Europe/London", None])
+        # one clock for the place, sealed once for every body in it, and no body keeps one of its own
+        self.assertEqual(f1["payload"]["views"]["clock"], "America/New_York")
+        self.assertFalse([k for k, x in q.items() if "clock" in x])
         self.assertNotIn("routine", q["watcher"])                       # a scripted body has no routine
         self.assertEqual(self.verify(), [])
 
@@ -435,12 +436,13 @@ class ViewsLine(unittest.TestCase):
         receipt = self.capture("sleep009", minds={}, resting={},
                                routines={"pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}})
         pilgrim = next(q for q in receipt["players"] if q["id"] == "pilgrim")
-        pilgrim["mind"] = {"kind": "sleep", "why": "asleep: night in London 02:10"}
+        pilgrim["mind"] = {"kind": "sleep", "why": "asleep: night in New York 02:10"}
         pilgrim["routine"] = {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}
+        receipt["clock"] = FX.PLACE_CLOCK
         frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
         q = self.players_of(frame)["pilgrim"]
-        self.assertEqual(q["mind"], {"kind": "sleep", "why": "asleep: night in London 02:10"})
-        self.assertEqual(q["doing"], "💤 asleep: night in London 02:10")     # asleep is not running the routine
+        self.assertEqual(q["mind"], {"kind": "sleep", "why": "asleep: night in New York 02:10"})
+        self.assertEqual(q["doing"], "💤 asleep: night in New York 02:10")     # asleep is not running the routine
         self.assertEqual(q["routine"]["by"], "default")
         self.assertEqual(self.verify(), [])
 
@@ -515,17 +517,65 @@ class ViewsLine(unittest.TestCase):
         problems = self.verify(feed=False)
         self.assertTrue(any("greeter's default routine is not the world's default" in p for p in problems), problems)
 
-    def test_numbers_are_read_as_javascript_reads_them_and_unknown_clocks_are_not_sealed(self):
+    def test_numbers_are_read_as_javascript_reads_them(self):
         self.assertIsNone(V.canonical_routine([{"do": "wait", "ms": 10 ** 309}]))      # Infinity in JavaScript
         self.assertEqual(V.canonical_routine([{"do": "wait", "ms": 10 ** 300}]), [{"do": "wait", "ms": 10000}])
-        receipt = self.capture("clock005")
-        for q in receipt["players"]:
-            if q["id"] == "greeter":
-                q["clock"] = "Mars/Olympus_Mons"
-        frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
-        q = self.players_of(frame)
-        self.assertNotIn("clock", q["greeter"])
-        self.assertEqual(q["wanderer"]["clock"], "Asia/Tokyo")
+
+    # ── one clock per place ──────────────────────────────────────────────────
+    def rewrite(self, frame, change):
+        """Rewrite a frame's views on the line with every hash recomputed, and HEAD made to name it."""
+        payload = json.loads(json.dumps(frame["payload"]))
+        change(payload["views"])
+        forged = R.build_frame(frame["kind"], frame["stream_id"], frame["seq"], frame["utc"], payload,
+                               prev=frame["prev"], prev_wave=frame["prev_wave"], sig=frame["sig"])
+        (self.chain / f"{frame['seq']}.json").write_text(json.dumps(forged))
+        meta = json.loads((self.chain / "HEAD.json").read_text())
+        if meta["count"] - 1 == frame["seq"]:
+            meta["head_frame"] = forged["frame_hash"]
+            (self.chain / "HEAD.json").write_text(json.dumps(meta))
+        return forged
+
+    def test_a_receipt_names_the_one_clock_of_the_place_and_no_body_names_its_own(self):
+        spoil = {
+            "a body keeps the clock of its place, and the receipt names one of its own":
+                lambda r: next(q for q in r["players"] if q["id"] == "greeter").update(clock="Asia/Tokyo"),
+            "the receipt names none this sealer knows": lambda r: r.update(clock="Mars/Olympus_Mons"),
+            "the bodies keep the clock of their place": lambda r: r.pop("clock"),
+        }
+        for n, (why, change) in enumerate(spoil.items()):
+            with self.subTest(why):
+                receipt = self.capture(f"clock{n:03d}")
+                change(receipt)
+                with self.assertRaisesRegex(V.Refusal, why):
+                    V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+                self.assertEqual(len(self.frames()), 2)
+        frame = V.seal(V.read_anchor(str(self.spine)), self.capture("clock009"), self.feed, self.chain)
+        self.assertEqual(frame["payload"]["views"]["clock"], FX.PLACE_CLOCK)
+
+    def test_a_line_never_goes_back_to_a_clock_for_each_body(self):
+        f1 = self.frames()[1]
+        each = {"wanderer": "Asia/Tokyo", "greeter": "America/New_York", "pilgrim": "Europe/London"}
+
+        def clocks_each(v):
+            del v["clock"]
+            for q in v["players"]:
+                if q["id"] in each:
+                    q["clock"] = each[q["id"]]
+        # a line sealed before places had a clock, a clock per body, still verifies as it was sealed
+        kept = (self.chain / f"{f1['seq']}.json").read_text(), (self.chain / "HEAD.json").read_text()
+        self.rewrite(f1, clocks_each)
+        self.assertEqual(self.verify(feed=False), [])
+        (self.chain / f"{f1['seq']}.json").write_text(kept[0])
+        (self.chain / "HEAD.json").write_text(kept[1])
+        # after its place has one, a body never goes back to its own clock, nor to none
+        later = self.carried("clock010", {"set_at": f1["payload"]["tick"]})
+        self.assertEqual((later["payload"]["views"]["clock"], self.verify(feed=False)), (FX.PLACE_CLOCK, []))
+        self.rewrite(later, clocks_each)
+        self.assertEqual(self.verify(feed=False), [f"frame {later['seq']}: its bodies go back to a clock each after "
+                                                   f"views #{f1['seq']} gave their place one"])
+        self.rewrite(later, lambda v: v.pop("clock"))
+        self.assertEqual(self.verify(feed=False), [f"frame {later['seq']}: its bodies keep no clock after "
+                                                   f"views #{f1['seq']} gave their place one"])
 
     def test_the_shape_gate_holds_a_routine_to_itself(self):
         def problems(pid="wanderer", **fields):
@@ -578,6 +628,8 @@ class ViewsLine(unittest.TestCase):
             "evidence is not a file in this tick's segment": {
                 "players__0__mind__exchange__file": f"segments/{seg}/../../elsewhere/mind.json"},
             "a thought is not": {"players__0__mind__confidence": 99},
+            "clock is not a timezone": {"clock": "Tokyo\nMars"},
+            "a body keeps the clock of its place, and this one names its own": {"players__0__clock": "Asia/Tokyo"},
         }
         for why, edits in expect.items():
             with self.subTest(why):
@@ -586,6 +638,9 @@ class ViewsLine(unittest.TestCase):
         payload = json.loads(json.dumps(self.frames()[0]["payload"]))
         payload["views"].update(thoughts=0, premium_x100=0)
         self.assertIn("a frame without minds carries a ledger of them", V.shape_problems(payload))
+        payload = json.loads(json.dumps(self.frames()[0]["payload"]))
+        payload["views"]["clock"] = FX.PLACE_CLOCK
+        self.assertIn("a frame without minds names a clock no body keeps", V.shape_problems(payload))
 
 
 class Charter(unittest.TestCase):
@@ -601,24 +656,29 @@ class Charter(unittest.TestCase):
             self.assertIn(I.STREAM, text, name)
 
     def test_a_rule_cannot_claim_a_check_nobody_runs_or_drop_his_words(self):
+        seq = I.newest()["seq"]
         payload = json.loads(json.dumps(I.newest()["payload"]))
         held = next(c for c in payload["canon"] if c["status"] == "held")
         held["held_by"] = [{"file": "tests/minds.cjs", "check": "a check nobody ever wrote"}]
         self.assertTrue(any("names a check that tests/minds.cjs does not have" in p
-                            for p in I.problems(payload, 0, files=True)))
+                            for p in I.problems(payload, seq, files=True)))
         payload = json.loads(json.dumps(I.newest()["payload"]))
         payload["canon"][0]["said"] = []
-        self.assertTrue(any("without Kody's words" in p for p in I.problems(payload, 0)))
+        self.assertTrue(any("without Kody's words" in p for p in I.problems(payload, seq)))
         payload = json.loads(json.dumps(I.newest()["payload"]))
+        payload.pop("amended_because", None)
         self.assertTrue(any("quote the words that changed it" in p or "is not [" in p
-                            for p in I.problems(payload, 1)), "an amendment must say why, in his words")
+                            for p in I.problems(payload, seq + 1)), "an amendment must say why, in his words")
+        payload["amended_because"] = {"what": "nothing he said", "said": []}
+        self.assertTrue(any("quote the words that changed it" in p for p in I.problems(payload, seq + 1)))
 
     def test_an_amendment_is_a_successor_frame_the_spines_oracle_verifies(self):
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="intent-"))
         try:
             spine = tmp / "spine"
             FX.add_tick(spine, FX.T0)
-            first = I.amend(dict((k, v) for k, v in I.newest()["payload"].items() if k not in ("tick", "tick_frame")),
+            genesis = ("tick", "tick_frame", "amended_because")
+            first = I.amend(dict((k, v) for k, v in I.newest()["payload"].items() if k not in genesis),
                             where=tmp / "intent", spine=str(spine))
             FX.add_tick(spine, FX.T0.replace(minute=10))
             later = dict((k, v) for k, v in first["payload"].items() if k not in ("tick", "tick_frame"))

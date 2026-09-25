@@ -14,9 +14,10 @@
  * and every sum is an integer. The same state and the same moment give the same pose in any
  * browser and in Node.
  *
- * NIGHT. Each body keeps the hours of its own timezone, spread around the globe so the world is
- * never asleep all at once. From 23:00 to 07:00 local time it sleeps in its bed, eyes on the sky,
- * and it wakes where it slept, with its routine starting over.
+ * NIGHT. Day and night belong to the place, not the body: everyone in one place keeps its one
+ * clock, by proximity, and a frame seals that clock once for all of them. From 23:00 to 07:00
+ * there every body sleeps in its bed, eyes on the sky, so where each one is through the night is
+ * easy to predict, and it wakes where it slept, with its routine starting over.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -47,15 +48,17 @@
   const wrap = m => ((m % TURN) + TURN) % TURN;
   const norm = m => { const w = wrap(m); return w > HALF ? w - TURN : w; };
 
-  // Where each body sleeps, and whose hours it keeps. The beds sit outside the ring of portals,
-  // between them, and face the middle of the plaza.
-  const HOMES = {
-    wanderer: { tz: 'Asia/Tokyo',       bed: { x_cm: 1697, y_cm: EYE_CM, z_cm: 1697, yaw_mrad: 785, pitch_mrad: SLEEP_PITCH } },
-    greeter:  { tz: 'America/New_York', bed: { x_cm: -1697, y_cm: EYE_CM, z_cm: 1697, yaw_mrad: -785, pitch_mrad: SLEEP_PITCH } },
-    pilgrim:  { tz: 'Europe/London',    bed: { x_cm: -1697, y_cm: EYE_CM, z_cm: -1697, yaw_mrad: -2356, pitch_mrad: SLEEP_PITCH } },
-    watcher:  { tz: 'Australia/Sydney', bed: { x_cm: 1697, y_cm: EYE_CM, z_cm: -1697, yaw_mrad: 2356, pitch_mrad: SLEEP_PITCH } },
+  // Where each body sleeps. The beds sit outside the ring of portals, between them, and face the
+  // middle of the plaza.
+  const BEDS = {
+    wanderer: { x_cm: 1697, y_cm: EYE_CM, z_cm: 1697, yaw_mrad: 785, pitch_mrad: SLEEP_PITCH },
+    greeter:  { x_cm: -1697, y_cm: EYE_CM, z_cm: 1697, yaw_mrad: -785, pitch_mrad: SLEEP_PITCH },
+    pilgrim:  { x_cm: -1697, y_cm: EYE_CM, z_cm: -1697, yaw_mrad: -2356, pitch_mrad: SLEEP_PITCH },
+    watcher:  { x_cm: 1697, y_cm: EYE_CM, z_cm: -1697, yaw_mrad: 2356, pitch_mrad: SLEEP_PITCH },
   };
-  const ELSEWHERE = { tz: 'America/New_York', bed: { x_cm: 0, y_cm: EYE_CM, z_cm: 2400, yaw_mrad: 0, pitch_mrad: SLEEP_PITCH } };
+  const ELSEWHERE = { x_cm: 0, y_cm: EYE_CM, z_cm: 2400, yaw_mrad: 0, pitch_mrad: SLEEP_PITCH };
+  // The hub's one clock, where its heartbeat and its owner are. Every body in it keeps these hours.
+  const PLACE_CLOCK = 'America/New_York';
 
   // What a body does before any mind has told it anything: the world's own static routines.
   const DEFAULTS = {
@@ -66,9 +69,7 @@
               { do: 'wait', ms: 2000 }, { do: 'look', dx: 60, dy: 0 }],
   };
 
-  const home = id => HOMES[id] || ELSEWHERE;
-  const bed = id => Object.assign({}, home(id).bed);
-  const clockOf = id => home(id).tz;
+  const bed = id => Object.assign({}, BEDS[id] || ELSEWHERE);
   const defaultRoutine = id => (DEFAULTS[id] || DEFAULTS.greeter).map(step => Object.assign({}, step));
 
   // ── a routine a mind writes, made the one shape everything plays ──────────
@@ -161,12 +162,12 @@
   const play = (start, steps, elapsed) => cursor(start, steps)(elapsed);
 
   // ── the clock ─────────────────────────────────────────────────────────────
-  // a clock this engine can read, or the body's own: a line may name a zone this browser has never heard of
-  function validClock(tz, id) {
+  // a clock this engine can read, or the hub's own: a line may name a zone this browser has never heard of
+  function validClock(tz) {
     if (typeof tz === 'string' && tz) {
       try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz; } catch (error) {}
     }
-    return clockOf(id);
+    return PLACE_CLOCK;
   }
   const hours = new Map();
   function localHour(tz, ms) {
@@ -209,13 +210,14 @@
   }
 
   // ── a sealed body, at any moment after its frame ──────────────────────────
-  // `entry` is a player as a frame seals it: { id, at, routine?, clock? }. `frameMs` is when its
-  // frame was captured. The answer is where it is and what it is doing at `ms`.
+  // `entry` is a player as a frame seals it: { id, at, routine?, clock? }, where clock is the one
+  // its frame keeps (views.clock; a line sealed before places had one named a clock per body).
+  // `frameMs` is when its frame was captured. The answer is where it is and what it is doing at `ms`.
   // A tracker follows one sealed body forward, keeping its place: a viewer asks it again every
   // animation frame, and only the time since the last answer is played.
   function tracker(entry, frameMs) {
     const id = entry.id;
-    const tz = validClock(entry.clock, id);
+    const tz = validClock(entry.clock);
     const steps = entry.routine ? canonical(entry.routine.steps) : null;
     let from = null, run = null, risen = null;
     return function at(ms) {
@@ -237,6 +239,6 @@
     return (steps || []).map(s => s.do).join(', ');
   }
 
-  return { canonical, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt, clockText, clockOf, bed, defaultRoutine,
-           summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT, HOMES };
+  return { canonical, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt, clockText, bed, defaultRoutine,
+           summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT, BEDS, PLACE_CLOCK };
 }));

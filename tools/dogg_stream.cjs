@@ -200,7 +200,6 @@ function captureReceipt(options) {
   const minds = options.minds || {};
   const at = options.at || {};
   const routines = options.routines || {};
-  const clocks = options.clocks || {};
   // a capture-relative file, named where appendCapture put it: this tick's own segment
   const streamed = relative => {
     const parts = String(relative || '').split('/');
@@ -241,10 +240,11 @@ function captureReceipt(options) {
           : routine.set_at === null ? { set_at: null, by: 'default', steps: routine.steps }
           : { set_at: routine.set_at };
       }
-      if (clocks[player.id]) entry.clock = clocks[player.id];
       return entry;
     })
   };
+  // the clock of the place the bodies are in: one for all of them, never one each
+  if (options.clock) receipt.clock = String(options.clock);
   if (options.sourceCommit) receipt.source_commit = options.sourceCommit;
   return receipt;
 }
