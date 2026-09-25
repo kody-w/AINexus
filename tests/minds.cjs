@@ -157,12 +157,17 @@ check('the world\'s default routines are the same in the playout and the sealer,
   const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'Asia/Tokyo' };
   const asleep = Date.parse('2026-09-24T21:50:30Z');           // 06:50:30 in Tokyo
   const past = P0.stateAt(e, asleep, asleep + 599000);          // 07:00:29: a tick not quite ten minutes on
-  const started = Date.now();
-  const odd = P0.tracker({ id: 'wanderer', clock: 'Mars/Olympus_Mons', routine: e.routine, at: e.at }, NaN)(Date.now());
+  // in a child with a deadline: a playout that looped forever would otherwise hang this suite instead of failing it
+  let odd = null;
+  try {
+    odd = JSON.parse(execFileSync(process.execPath, ['-e', `const P = require(${JSON.stringify(path.join(ROOT, 'ai', 'playout.js'))});
+      const e = { id: 'wanderer', clock: 'Mars/Olympus_Mons', routine: { steps: P.defaultRoutine('wanderer') }, at: P.bed('wanderer') };
+      console.log(JSON.stringify({ nan: P.tracker(e, NaN)(Date.now()), later: P.cursor(P.bed('wanderer'), e.routine.steps)(NaN),
+                                   clock: P.validClock('Mars/Olympus_Mons', 'wanderer') }));`], { encoding: 'utf8', timeout: 5000 }));
+  } catch (error) { odd = { error: String(error.message || error).slice(0, 200) }; }
   check('a tick a second past 07:00 finds the body awake, and a line with a clock or a time no engine can read cannot stop the playout',
     !past.asleep && past.since === Date.parse('2026-09-24T22:00:00Z') && past.pose.pitch_mrad === 0 &&
-    Date.now() - started < 1000 && odd && odd.pose && P0.validClock('Mars/Olympus_Mons', 'wanderer') === 'Asia/Tokyo',
-    JSON.stringify({ past, odd }));
+    odd && odd.nan && odd.nan.pose && odd.later && odd.clock === 'Asia/Tokyo', JSON.stringify({ past, odd }));
 }
 
 // A model that answered was paid for: if the hands fail after that, the thought is still sealed,

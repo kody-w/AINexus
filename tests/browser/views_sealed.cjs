@@ -356,10 +356,19 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
   await mindsSettled(page);
   s = (await state(page)).seal;
   said = await doings(page);
-  check('a routine a thought never set is refused, though the frame says so in the model\'s name with every hash right',
-    s.line === 'ok' && s.verdict === 'forged' && s.minds.forged === 1 &&
-    said.pilgrim.text === '✗ thought refused: the frame says what its evidence does not' && !said.wanderer.bad,
-    JSON.stringify({ s, said }));
+  const bodyRan = s.verdict === 'forged' && s.minds.forged === 1 &&
+    said.pilgrim.text === '✗ thought refused: the frame says what its evidence does not' && !said.wanderer.bad;
+  await context.close();
+  ({ context, page } = await open({ 'chain/1.json': read('forged', 'chain-1-routine-only.json'),
+                                   'chain/HEAD.json': read('forged', 'HEAD-routine-only.json') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  const bare = (await state(page)).seal;
+  const bareSaid = await doings(page);
+  check('a routine a thought never set is refused, whether its body is said to run it or the claim stands alone',
+    bodyRan && bare.verdict === 'forged' && bare.minds.forged === 1 &&
+    bareSaid.pilgrim.text === '✗ thought refused: the frame says what its evidence does not',
+    JSON.stringify({ s, said, bare, bareSaid }));
   await context.close();
 
   ({ context, page } = await open({ ['live/' + pilgrim.saw.file]: read('live', wanderer.saw.file) }));

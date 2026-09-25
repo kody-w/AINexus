@@ -235,6 +235,10 @@ def build(out):
     (forged / "chain-1-routine.json").write_text(json.dumps(claimed, indent=2) + "\n")
     head_claimed = dict(head_said, head_frame=claimed["frame_hash"])
     (forged / "HEAD-routine.json").write_text(json.dumps(head_claimed, indent=2) + "\n")
+    # ...and the claim alone, its body still on the world's default: only the thought's key set shows it
+    bare = rehash(frame1, **{f"views__players__{k}__mind__routine_set": PATROL})
+    (forged / "chain-1-routine-only.json").write_text(json.dumps(bare, indent=2) + "\n")
+    (forged / "HEAD-routine-only.json").write_text(json.dumps(dict(head_said, head_frame=bare["frame_hash"]), indent=2) + "\n")
     tick2 = json.loads((spine / "2.json").read_text())
     other = R.build_frame(tick2["kind"], tick2["stream_id"], tick2["seq"], tick2["utc"],
                           dict(tick2["payload"], minted_by="somebody else's spine"), prev=tick2["prev"])
