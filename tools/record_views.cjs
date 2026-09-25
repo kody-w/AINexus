@@ -150,8 +150,9 @@ if (minds) {
                                             seatWhy: process.env.NEXUS_MIND_UNAVAILABLE || '' });
   console.log(`minds: ${thinking.spent_x100 / 100} of ${thinking.cap_x100 / 100} premium requests spent in the last day`
     + ` (${thinking.on_line_x100 / 100} on the line, ${thinking.journaled_x100 / 100} in this machine's journal)`);
+  console.log(`  the hub's clock, which every body in it keeps: ${thinking.local}`);
   for (const [id, planned] of Object.entries(thinking.players)) {
-    console.log(`  ${id} (${planned.local}): ${planned.think ? 'thinks on ' + planned.model
+    console.log(`  ${id}: ${planned.think ? 'thinks on ' + planned.model
       : planned.sleep ? planned.why : 'runs ' + minds.routineLine(planned.routine) + ' (' + planned.why + ')'}`);
   }
 }
@@ -314,8 +315,11 @@ for (let frame = 0; frame < total; frame++) {
     player.sees[frame] = await player.page.evaluate(() => window.NexusHolo
       ? window.NexusHolo.present().filter(item => item.painted).map(item => item.id)
       : []).catch(() => []);
-    // where a minded body ended the tick, so the next tick can start it there
-    if (player.planned && frame === total - 1) player.at = await minds.readPose(player.page);
+    // where a minded body ended the tick, so the next tick can start it there; a body asleep has not
+    // moved from its bed, and is sealed there exactly, not as the engine happens to measure it
+    if (player.planned && frame === total - 1) {
+      player.at = player.planned.sleep ? player.planned.start : await minds.readPose(player.page);
+    }
   }
   if (frame % Math.max(1, Math.round(FPS * 4)) === 0) {
     process.stdout.write('  ' + frame + '/' + total + '\r');
@@ -376,7 +380,8 @@ if (STREAM) {
       minds: Object.fromEntries(players.filter(player => player.mind).map(player => [player.id, player.mind])),
       at: Object.fromEntries(players.filter(player => player.at).map(player => [player.id, player.at])),
       routines: Object.fromEntries(players.filter(player => player.routine).map(player => [player.id, player.routine])),
-      clocks: Object.fromEntries(players.filter(player => player.planned).map(player => [player.id, player.planned.clock]))
+      // one clock for the place, kept by every body in it
+      clock: thinking ? thinking.clock : ''
     });
     fs.writeFileSync(path.resolve(RECEIPT), JSON.stringify(receipt, null, 1) + '\n');
     console.log('  receipt for ' + receipt.tick_id + ' -> ' + path.resolve(RECEIPT));

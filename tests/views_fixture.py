@@ -125,7 +125,8 @@ MINDS = {
 RESTING = {"greeter": "resting between thoughts (thinks every 3 ticks)"}
 # the world's own routines, as the sealer knows them (tests/minds.cjs holds them equal to ai/playout.js)
 DEFAULTS = V.DEFAULT_ROUTINES
-CLOCKS = {"wanderer": "Asia/Tokyo", "greeter": "America/New_York", "pilgrim": "Europe/London"}
+# the hub's one clock, which every body in it keeps (ai/playout.js PLACE_CLOCK)
+PLACE_CLOCK = "America/New_York"
 LATER_POSES = {"wanderer": {"x_cm": -1600, "y_cm": 200, "z_cm": 900, "yaw_mrad": -1200, "pitch_mrad": 0},
                "pilgrim": {"x_cm": 300, "y_cm": 200, "z_cm": 1100, "yaw_mrad": 400, "pitch_mrad": 0},
                "greeter": {"x_cm": 0, "y_cm": 200, "z_cm": 0, "yaw_mrad": 700, "pitch_mrad": 0}}
@@ -159,7 +160,7 @@ def exchange_for(pid, spec, picture):
             "calls": calls, "words": spec["words"], "voiced": spec["voiced"], "note": ""}
 
 
-def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None, routines=None, clocks=None):
+def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None, routines=None, clock=PLACE_CLOCK):
     """Give a capture's players the minds tools/record_views.cjs gives them: evidence files beside
     the view, and a receipt that says only where they are and which routine ran."""
     feed_dir = pathlib.Path(feed_dir)
@@ -188,8 +189,8 @@ def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None, routines=
                if routines is None else routines)
         if pid in ran and "mind" in q:
             q["routine"] = dict(ran[pid])
-        if pid in (CLOCKS if clocks is None else clocks) and "mind" in q:
-            q["clock"] = (CLOCKS if clocks is None else clocks)[pid]
+    if clock and any("mind" in q for q in receipt["players"]):
+        receipt["clock"] = clock
     return receipt
 
 

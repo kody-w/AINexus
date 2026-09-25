@@ -11,8 +11,10 @@
 //           rests where its last frame left it; a mind between thoughts rests and says why; and the
 //           free mind remembers what it did and hears what the others said a tick ago.
 //   tick 3  with no seat nobody is asked anything, but the world does not stop: each body runs the
-//           routine it was left, to the centimetre where anyone playing the line forward puts it,
-//           and one whose clock says night sleeps in its bed with its routine kept for the morning.
+//           routine it was left, to the centimetre where anyone playing the line forward puts it.
+//   tick 4  night by the place's clock: every body in the hub sleeps in its bed, all of them at once,
+//           each with its routine kept for the morning.
+//   tick 5  day again: every body wakes where it slept, eyes level, into its routine.
 //
 //   node tests/minds.cjs     (PLAYWRIGHT_DIR as for the suites; BROWSER_CHANNEL=chrome to use an installed Chrome)
 const { createRequire } = require('module');
@@ -144,18 +146,21 @@ let equal = 'unchecked';
 try {
   const py = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
 text = '[{"do":"wait","ms":1' + '0' * 309 + '}]'
-print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(json.loads(text))}))`],
+print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(json.loads(text)),
+                  "beds": {k: V.bed(k) for k in ["wanderer", "greeter", "pilgrim", "watcher", "nobody"]}}))`],
     { cwd: ROOT, encoding: 'utf8' }));
   const ids = ['wanderer', 'greeter', 'pilgrim', 'watcher'];
   const huge = minds.Playout.canonical(JSON.parse('[{"do":"wait","ms":1' + '0'.repeat(309) + '}]'));
   equal = ids.filter(id => JSON.stringify(py.defaults[id]) !== JSON.stringify(minds.Playout.defaultRoutine(id))).join(', ')
+    + ids.concat('nobody').filter(id => JSON.stringify(py.beds[id]) !== JSON.stringify(minds.Playout.bed(id)))
+      .map(id => ' bed of ' + id).join('')
     + (JSON.stringify(py.huge) !== JSON.stringify(huge) ? ' huge: js ' + JSON.stringify(huge) + ' python ' + JSON.stringify(py.huge) : '');
 } catch (error) { equal = String(error.message || error); }
-check('the world\'s default routines are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
+check('the world\'s default routines and its beds are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
   equal === '', equal);
 {
-  const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'Asia/Tokyo' };
-  const asleep = Date.parse('2026-09-24T21:50:30Z');           // 06:50:30 in Tokyo
+  const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'America/New_York' };
+  const asleep = Date.parse('2026-09-24T10:50:30Z');           // 06:50:30 in New York
   const past = P0.stateAt(e, asleep, asleep + 599000);          // 07:00:29: a tick not quite ten minutes on
   // in a child with a deadline: a playout that looped forever would otherwise hang this suite instead of failing it
   let odd = null;
@@ -163,11 +168,11 @@ check('the world\'s default routines are the same in the playout and the sealer,
     odd = JSON.parse(execFileSync(process.execPath, ['-e', `const P = require(${JSON.stringify(path.join(ROOT, 'ai', 'playout.js'))});
       const e = { id: 'wanderer', clock: 'Mars/Olympus_Mons', routine: { steps: P.defaultRoutine('wanderer') }, at: P.bed('wanderer') };
       console.log(JSON.stringify({ nan: P.tracker(e, NaN)(Date.now()), later: P.cursor(P.bed('wanderer'), e.routine.steps)(NaN),
-                                   clock: P.validClock('Mars/Olympus_Mons', 'wanderer') }));`], { encoding: 'utf8', timeout: 5000 }));
+                                   clock: P.validClock('Mars/Olympus_Mons') }));`], { encoding: 'utf8', timeout: 5000 }));
   } catch (error) { odd = { error: String(error.message || error).slice(0, 200) }; }
   check('a tick a second past 07:00 finds the body awake, and a line with a clock or a time no engine can read cannot stop the playout',
-    !past.asleep && past.since === Date.parse('2026-09-24T22:00:00Z') && past.pose.pitch_mrad === 0 &&
-    odd && odd.nan && odd.nan.pose && odd.later && odd.clock === 'Asia/Tokyo', JSON.stringify({ past, odd }));
+    !past.asleep && past.since === Date.parse('2026-09-24T11:00:00Z') && past.pose.pitch_mrad === 0 &&
+    odd && odd.nan && odd.nan.pose && odd.later && odd.clock === 'America/New_York', JSON.stringify({ past, odd }));
 }
 
 // A model that answered was paid for: if the hands fail after that, the thought is still sealed,
@@ -239,23 +244,24 @@ const feed = path.join(feedRoot, 'recordings', 'live');
 for (const dir of [spine, chain, feedRoot]) fs.mkdirSync(dir, { recursive: true });
 const configFile = path.join(out, 'minds.json');
 const journal = path.join(out, 'journal.jsonl');
-// A clock where it is day for hours yet, and one where it is night for hours yet, found now.
+// A clock where it is day for hours yet, and one where it is night for hours yet, found now: the
+// place keeps one or the other, and every body in it keeps the place's.
 const ZONES = ['Pacific/Honolulu', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London',
   'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'];
 const hourIn = tz => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' })
   .format(new Date())) % 24;
 const DAY = ZONES.find(tz => hourIn(tz) >= 9 && hourIn(tz) <= 19);
 const NIGHT = ZONES.find(tz => hourIn(tz) >= 0 && hourIn(tz) <= 4);
-const writeConfig = (pilgrimClock) => fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, players: {
-  wanderer: { model: 'stub-premium', every: 1, multiplier_x100: 100, vision: true, clock: DAY },
-  greeter: { model: 'stub-free', every: 1, multiplier_x100: 0, vision: false, clock: DAY },
-  pilgrim: { model: 'stub-premium', every: 3, multiplier_x100: 100, vision: true, clock: pilgrimClock } } }));
+const writeConfig = (clock) => fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, clock, players: {
+  wanderer: { model: 'stub-premium', every: 1, multiplier_x100: 100, vision: true },
+  greeter: { model: 'stub-free', every: 1, multiplier_x100: 0, vision: false },
+  pilgrim: { model: 'stub-premium', every: 3, multiplier_x100: 100, vision: true } } }));
 writeConfig(DAY);
 const P = minds.Playout;
 const frameAt = f => Date.parse(f.payload.views.captured_utc);
-// where anyone playing a frame forward puts a body at the next frame's moment
-const played = (prev, id, prevFrame, nextFrame, clock) =>
-  P.stateAt(Object.assign({}, prev, { id, clock }), frameAt(prevFrame), frameAt(nextFrame)).pose;
+// where anyone playing a frame forward, under the clock its place kept, puts a body at the next frame's moment
+const played = (prev, id, prevFrame, nextFrame) => P.stateAt(Object.assign({}, prev, { id,
+  clock: prevFrame.payload.views.clock }), frameAt(prevFrame), frameAt(nextFrame)).pose;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const py = (code, ...args) => execFileSync(PYTHON, ['-c', code, ...args], { cwd: ROOT, encoding: 'utf8' });
@@ -388,11 +394,13 @@ check('a routine the hands refuse changes nothing: the body keeps the world\'s d
   same(p.greeter.routine, { steps: P.defaultRoutine('greeter'), set_at: null, by: 'default' }),
   JSON.stringify({ pilgrim: p.pilgrim.routine, greeter: p.greeter.routine }));
 const woke = percepts(askedBy('wanderer'));
-check('a body the line has never seen wakes in its own bed, and its mind is told its routine and its clock',
+check('a body the line has never seen wakes in its own bed, and its mind is told its routine and the clock of its place',
   Math.abs(woke.me.x - 17) <= 1 && Math.abs(woke.me.z - 17) <= 1 && woke.your_routine.set_by === 'default' &&
-  same(woke.your_routine.steps, P.defaultRoutine('wanderer')) && /local; you sleep from 23:00 to 07:00$/.test(woke.your_clock) &&
-  p.wanderer.clock === DAY, JSON.stringify({ me: woke.me, at: [p.wanderer.at, p.greeter.at, p.pilgrim.at],
-    routine: woke.your_routine, clock: woke.your_clock }) + '\n' + log);
+  same(woke.your_routine.steps, P.defaultRoutine('wanderer')) &&
+  /, the hub's clock: everyone here sleeps from 23:00 to 07:00$/.test(woke.your_clock) &&
+  f1.payload.views.clock === DAY && !Object.values(p).some(x => 'clock' in x),
+  JSON.stringify({ me: woke.me, at: [p.wanderer.at, p.greeter.at, p.pilgrim.at], routine: woke.your_routine,
+    clock: woke.your_clock, sealed: f1.payload.views.clock }) + '\n' + log);
 const manifest = JSON.parse(fs.readFileSync(path.join(feed, 'manifest.json'), 'utf8'));
 const lastDoing = id => { const q = manifest.players.find(x => x.id === id); return q.doing[q.doing.length - 1]; };
 check('the feed says what the frame says, before its seal and after it',
@@ -423,7 +431,7 @@ check('over the day\'s budget a premium mind rests, between thoughts a mind rest
   JSON.stringify({ asked: asked2.map(r => r.who), wanderer: q.wanderer.mind, pilgrim: q.pilgrim.mind }) + '\n' + log);
 const near = (a, b, cm, mrad) => a && b && Math.abs(a.x_cm - b.x_cm) <= cm && Math.abs(a.z_cm - b.z_cm) <= cm &&
   Math.abs(a.yaw_mrad - b.yaw_mrad) <= mrad;
-const aheadW = played(p.wanderer, 'wanderer', f1, f2, DAY), aheadP = played(p.pilgrim, 'pilgrim', f1, f2, DAY);
+const aheadW = played(p.wanderer, 'wanderer', f1, f2), aheadP = played(p.pilgrim, 'pilgrim', f1, f2);
 check('between thoughts a body runs its routine, and the next frame finds it exactly where anyone playing the last one forward puts it',
   same(q.wanderer.at, aheadW) && same(q.pilgrim.at, aheadP) && !same(q.pilgrim.at, p.pilgrim.at) &&
   same(q.wanderer.routine, p.wanderer.routine) && same(q.pilgrim.routine, p.pilgrim.routine) &&
@@ -433,7 +441,7 @@ check('between thoughts a body runs its routine, and the next frame finds it exa
 const seen = percepts(asked2[0]);
 // how far a walk goes depends on the frame rate (a slow CI renderer walks a few centimetres a
 // second), so moving is judged against the same 5 cm a resting body is held to, not a distance
-const aheadG = played(p.greeter, 'greeter', f1, f2, DAY);
+const aheadG = played(p.greeter, 'greeter', f1, f2);
 check('a thinking body wakes into the day where its routine took it, and its mind moves it on from there',
   Math.abs(seen.me.x * 100 - aheadG.x_cm) <= 100 && Math.abs(seen.me.z * 100 - aheadG.z_cm) <= 100 &&
   q.greeter.mind.did[0].verb === 'world_walk' && q.greeter.mind.did[0].failed === false &&
@@ -444,25 +452,46 @@ check('a mind remembers what it did and why, and hears what the others said a ti
   seen.you_heard.map(h => h.who + ': ' + h.said).sort().join(' / ') ===
     'pilgrim: Is anyone near the portals? / wanderer: Hello from wanderer 👋', JSON.stringify(seen));
 
-// tick 3: no seat, and night where the pilgrim keeps its hours
-writeConfig(NIGHT);
+// tick 3: no seat, in the day
 mintTick();
 log = await capture(3, false, port);
 const f3 = seal(3);
 const r3 = byId(f3);
+const MINDED = ['wanderer', 'greeter', 'pilgrim'];
 check('with no seat nobody is asked anything, and the bodies still run their routines exactly as anyone plays them',
   heardByStub.length === 0 && f3.payload.views.thoughts === 0 &&
-  ['wanderer', 'greeter'].every(id => r3[id].mind.kind === 'rest' && r3[id].mind.why === 'no Copilot seat to think on') &&
-  same(r3.wanderer.at, played(q.wanderer, 'wanderer', f2, f3, DAY)) && same(r3.greeter.at, played(q.greeter, 'greeter', f2, f3, DAY)) &&
-  same(r3.wanderer.routine, p.wanderer.routine), JSON.stringify(r3) + '\n' + log);
-check('where its clock says night, a body sleeps in its bed with its eyes on the sky, and keeps its routine for the morning',
-  r3.pilgrim.mind.kind === 'sleep' && /^asleep: night in /.test(r3.pilgrim.mind.why) && r3.pilgrim.clock === NIGHT &&
-  same(r3.pilgrim.at, P.bed('pilgrim')) && same(r3.pilgrim.routine, q.pilgrim.routine) &&
-  r3.pilgrim.doing === '💤 ' + r3.pilgrim.mind.why && lastDoingOf(r3.pilgrim.id) === r3.pilgrim.doing,
-  JSON.stringify(r3.pilgrim));
+  MINDED.every(id => r3[id].mind.kind === 'rest' && r3[id].mind.why === 'no Copilot seat to think on' &&
+    same(r3[id].at, played(q[id], id, f2, f3)) && same(r3[id].routine, q[id].routine)),
+  JSON.stringify(r3) + '\n' + log);
+
+// tick 4: night, by the one clock of the place
+writeConfig(NIGHT);
+mintTick();
+log = await capture(4, false, port);
+const f4 = seal(4);
+const r4 = byId(f4);
+check('at night by the clock of their place, every body in it sleeps in its bed at once, eyes on the sky, its routine kept for the morning',
+  f4.payload.views.clock === NIGHT && !Object.values(r4).some(x => 'clock' in x) &&
+  MINDED.every(id => r4[id].mind.kind === 'sleep' && /^asleep: night in /.test(r4[id].mind.why) &&
+    same(r4[id].at, P.bed(id)) && same(r4[id].routine, r3[id].routine) &&
+    r4[id].doing === '💤 ' + r4[id].mind.why && lastDoingOf(id) === r4[id].doing) &&
+  new Set(MINDED.map(id => r4[id].mind.why)).size === 1,
+  JSON.stringify(r4) + '\n' + log);
+
+// tick 5: day again
+writeConfig(DAY);
+mintTick();
+log = await capture(5, false, port);
+const f5 = seal(5);
+const r5 = byId(f5);
+check('when the clock of their place says day, every body wakes where it slept, eyes level, into the routine it was left',
+  f5.payload.views.clock === DAY &&
+  MINDED.every(id => r5[id].mind.kind === 'rest' && same(r5[id].at, Object.assign(P.bed(id), { pitch_mrad: 0 })) &&
+    same(r5[id].routine, r4[id].routine) && r5[id].doing === minds.routineLine(r5[id].routine)),
+  JSON.stringify(r5) + '\n' + log);
 verified = verify();
-check('and the whole line of three ticks verifies from its evidence',
-  verified.code === 0 && /line: 3 frame\(s\) verify/.test(verified.out), verified.out);
+check('and the whole line of five ticks verifies from its evidence',
+  verified.code === 0 && /line: 5 frame\(s\) verify/.test(verified.out), verified.out);
 
 stub.close();
 fs.rmSync(out, { recursive: true, force: true });

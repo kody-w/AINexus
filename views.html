@@ -64,7 +64,7 @@ button,input{font:inherit}
   <button id="live" class="off" type="button">LIVE</button>
   <span id="when">-</span>
 </div>
-<div id="dimension" hidden title="Between frames, this page plays the newest sealed frame forward: every body runs the routine its mind left it, and sleeps in its bed when its clock says night. When a new frame arrives, each body walks here until it meets its twin in it.">
+<div id="dimension" hidden title="Between frames, this page plays the newest sealed frame forward: every body runs the routine its mind left it, and sleeps in its bed when the clock of its place says night. When a new frame arrives, each body walks here until it meets its twin in it.">
   <canvas id="map"></canvas><div id="dimension-note"></div>
 </div>
 <script src="ai/playout.js"></script>
@@ -1112,12 +1112,13 @@ $('play').addEventListener('click', () => {
 // ── the dimension: the newest sealed frame, played forward here until the next one ──
 // A frame is a state: where each body stands and the routine its mind left it running. Between
 // frames this page plays that state forward with the arithmetic the capture uses (ai/playout.js),
-// so the bodies go on with their routines and sleep in their beds when their clocks say night.
+// so the bodies go on with their routines and sleep in their beds when their place's clock says night:
+// one clock for everyone in the place, sealed once in the frame (views.clock).
 // When a new frame arrives nothing snaps. Each body walks from where it is here toward its twin in
 // the new frame, which goes on playing too, for as long as it takes to meet it, and from then on
 // it is the new frame's. Nothing drawn here is sealed: it is this page's own dimension of the
 // line, and the frame each body meets is always the verified one.
-const DIM = { bodies: new Map(), seq: null, last: 0, drawn: 0 };
+const DIM = { bodies: new Map(), seq: null, last: 0, drawn: 0, place: '' };
 const CATCH_CM_PER_MS = 1.35;          // a body catching up walks at one and a half times its pace,
 const CATCH_GAP_MS = 2500;             // and a little faster the further it has to go
 const CATCH_MRAD_PER_MS = 3;
@@ -1161,12 +1162,15 @@ function stepDimension() {
   DIM.seq = frame.seq;
   const frameMs = Date.parse(frame.payload.views.captured_utc);
   if (!Number.isFinite(frameMs)) return;
+  // every body keeps its place's clock; a line sealed before places had one named a clock per body
+  const clock = typeof frame.payload.views.clock === 'string' ? frame.payload.views.clock : '';
+  DIM.place = clock ? window.NexusPlayout.clockText(window.NexusPlayout.validClock(clock), now) : '';
   const seen = new Set();
   bodiesOf(frame).forEach((q, index) => {
     seen.add(q.id);
     let body = DIM.bodies.get(q.id);
     if (!body || arrived) {
-      const follow = window.NexusPlayout.tracker(q, frameMs);
+      const follow = window.NexusPlayout.tracker(clock ? Object.assign({}, q, { clock }) : q, frameMs);
       if (!body) {
         const first = follow(now);
         body = { pose: first.pose, met: true, meeting: null, color: COLORS[index % COLORS.length] };
@@ -1194,9 +1198,10 @@ function stepDimension() {
 function liveNote(body) {
   if (!body) return '';
   if (!body.met) return '↝ meeting its twin in views #' + DIM.seq;
-  if (body.asleep) return '🌙 asleep · ' + body.local;
+  // the place's time is shown once, over the map; only a body keeping a clock of its own shows one
+  if (body.asleep) return '🌙 asleep' + (DIM.place ? '' : ' · ' + body.local);
   const minutes = Math.max(0, Math.floor((Date.now() - (body.since || body.frameMs)) / 60000));
-  return '☀️ ' + body.local + (body.routine ? ' · ▶ routine ' + minutes + 'm in' : ' · still');
+  return '☀️ ' + (DIM.place ? '' : body.local + ' · ') + (body.routine ? '▶ routine ' + minutes + 'm in' : 'still');
 }
 
 function drawDimension(now) {
@@ -1212,7 +1217,8 @@ function drawDimension(now) {
   if (!show || now - DIM.drawn < 33) return;
   if (panel.classList.contains('folded')) {
     const awake = [...DIM.bodies.values()].filter(body => !body.asleep).length;
-    $('dimension-note').textContent = '🗺 ' + awake + ' awake · ' + (DIM.bodies.size - awake) + ' asleep · tap for the map';
+    $('dimension-note').textContent = '🗺 ' + (DIM.place ? DIM.place + ' · ' : '') + awake + ' awake · '
+      + (DIM.bodies.size - awake) + ' asleep · tap for the map';
     return;
   }
   DIM.drawn = now;
@@ -1243,7 +1249,7 @@ function drawDimension(now) {
     g.fillStyle = '#c9c9e6'; g.font = '9px ui-monospace,Menlo,monospace';
     g.fillText(body.asleep ? id + ' z' : id, x + 6, y - 5);
   }
-  $('dimension-note').textContent = 'played here from views #' + DIM.seq + ' · not sealed';
+  $('dimension-note').textContent = 'played here from views #' + DIM.seq + (DIM.place ? ' · ' + DIM.place : '') + ' · not sealed';
 }
 
 // The map folds to a line with a tap, so it never has to stand over a view; the choice is kept.
@@ -1291,7 +1297,7 @@ window.__viewsState = () => {
   const seal = verdictAt(view.frame);
   return {
     // this page's own dimension of the line: the newest frame played forward, and who has met it
-    dimension: { seq: DIM.seq, bodies: Object.fromEntries([...DIM.bodies].map(([id, b]) =>
+    dimension: { seq: DIM.seq, clock: DIM.place || null, bodies: Object.fromEntries([...DIM.bodies].map(([id, b]) =>
       [id, { pose: b.pose, twin: b.twin, met: b.met, asleep: b.asleep, local: b.local, note: liveNote(b) }])) },
     frames: frameCount(view.manifest),
     frame: view.frame,

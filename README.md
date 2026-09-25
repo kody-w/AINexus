@@ -78,19 +78,20 @@ sleeps.
   replaces its routine with `world_routine`, and until one does, a body runs the world's default.
   Between thoughts the body runs its routine; a frame that carries one forward names the tick and
   model that set it, and the sealer and `verify` check that against the line.
-- **Day and night by each body's own clock.** The wanderer keeps Tokyo hours, the greeter New York,
-  the pilgrim London and the watcher Sydney, so the world is never asleep all at once. From 23:00
-  to 07:00 local a body sleeps in its bed, eyes on the sky, and nobody thinks for it. It wakes where
-  it slept and its routine starts over.
+- **One clock per place.** Day and night belong to the place, not the body: everyone in the hub
+  keeps its one clock, New York time (`minds.json` may name another), and each frame seals it once
+  as `views.clock`. From 23:00 to 07:00 there every body sleeps in its bed, all of them at once,
+  eyes on the sky, and nobody thinks for them. They wake where they slept and their routines start
+  over. No body carries a clock of its own, and `verify` refuses a line that goes back to one.
 - **The frames line up.** [`ai/playout.js`](ai/playout.js) plays a sealed state forward to any
   moment with integer kinematics (900 cm a second walking, 2 mrad a pixel looking), so it gives the
   same pose in every browser and in Node. Before the minds wake for a tick, the capture places each
   body where the last frame's routines have taken it by then. The only difference a new frame brings
   is what the minds did by hand that tick. With no seat the bodies still run their routines and
-  sleep by their clocks; nobody is asked anything.
+  sleep by their place's clock; nobody is asked anything.
 - **The viewer is its own dimension of the line.** Between frames, `views.html` plays the newest
-  verified frame forward on a live map (bottom left), and each view shows whether its body is
-  running a routine or asleep, by its local time. When a new frame arrives nothing snaps: each body
+  verified frame forward on a live map (bottom left), with the time on the clock of the place, and
+  each view shows whether its body is running a routine or asleep. When a new frame arrives nothing snaps: each body
   walks, a little faster than its pace, until it meets its twin in the new frame, which keeps playing
   too, and from then on it is the new frame's. The map is the page's own playout and is marked
   unsealed; every frame it meets is the verified one. Tap the map to fold it to one line (who is

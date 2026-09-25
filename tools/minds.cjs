@@ -109,28 +109,46 @@ const playersOf = (frame) => (frame && frame.payload && frame.payload.views && f
 const thought = (entry) => !!(entry && entry.mind && entry.mind.kind === 'model');
 const CLOCK = /^[A-Za-z][A-Za-z0-9_+-]{0,31}(\/[A-Za-z0-9_+-]{1,32}){0,2}$/;
 const frameMs = (frame) => Date.parse(frame && frame.payload && frame.payload.views && frame.payload.views.captured_utc);
+// The clock of the place, from the config, or the hub's own. Players carry none of their own.
+const placeClock = (config) => Playout.validClock(config && typeof config.clock === 'string' && CLOCK.test(config.clock)
+  ? config.clock : null);
+// The clock a sealed frame kept for a body: its place's, or on a line sealed before places had one,
+// the body's own.
+function sealedClock(frame, entry) {
+  const views = frame && frame.payload && frame.payload.views;
+  if (views && typeof views.clock === 'string' && views.clock) return views.clock;
+  return entry && typeof entry.clock === 'string' && entry.clock ? entry.clock : null;
+}
 
 // Where a body is at `now` and what it will run from there: its last sealed pose, played forward
-// through the night and its standing routine exactly as every viewer plays it (ai/playout.js).
+// through the night and its standing routine exactly as every viewer plays it (ai/playout.js), under
+// the clock its frame kept. Then the place's clock says whether it is night now: a body the line
+// left asleep under another clock wakes where it slept when the place says day, and a body the place
+// says is asleep is in its bed.
 function bodyAt(id, frames, clock, now) {
-  let routine = null, last = null, when = now;
+  let routine = null, last = null, when = now, kept = null;
   for (let i = frames.length - 1; i >= 0 && !(routine && last); i--) {
     const entry = playersOf(frames[i]).find(e => e.id === id);
     if (!entry) continue;
     if (!routine && entry.routine) routine = entry.routine;
-    if (!last && entry.at) { last = entry.at; when = frameMs(frames[i]); }
+    if (!last && entry.at) { last = entry.at; when = frameMs(frames[i]); kept = sealedClock(frames[i], entry); }
   }
   if (!routine) routine = { steps: Playout.defaultRoutine(id), set_at: null, by: 'default' };
-  const state = Playout.stateAt({ id, at: last, routine, clock }, Number.isFinite(when) ? when : now, now);
-  return { routine, start: state.pose, asleep: state.asleep };
+  const state = Playout.stateAt({ id, at: last, routine, clock: kept || clock }, Number.isFinite(when) ? when : now, now);
+  const asleep = Playout.asleepAt(clock, now);
+  const start = asleep ? Playout.bed(id)
+    : state.asleep ? Object.assign(Playout.bed(id), { pitch_mrad: 0 }) : state.pose;
+  return { routine, start, asleep };
 }
 
 // ── who thinks this tick, and what they remember ─────────────────────────────
-// config: { cap_x100, players: { id: { model, every, multiplier_x100, vision, persona?, clock? } } }
+// config: { cap_x100, clock?, players: { id: { model, every, multiplier_x100, vision, persona? } } }
 function plan(config, frames, options = {}) {
   const now = options.now || Date.now();
   const seat = !!options.seat;
   const newest = frames[frames.length - 1];
+  const clock = placeClock(config);
+  const local = Playout.clockText(clock, now);
   let onLine = 0, journaled = 0;
   for (const frame of frames) {
     if (!(Date.parse(frame.utc) >= now - DAY_MS)) continue;
@@ -150,10 +168,9 @@ function plan(config, frames, options = {}) {
     }
     const every = Math.min(MAX_EVERY, Math.max(1, Number.isInteger(want.every) ? want.every : 1));
     const cost = Number.isInteger(want.multiplier_x100) ? want.multiplier_x100 : 100;
-    const clock = Playout.validClock(typeof want.clock === 'string' && CLOCK.test(want.clock) ? want.clock : null, id);
     const body = bodyAt(id, frames, clock, now);
     let why = '';
-    if (body.asleep) why = clip('asleep: night in ' + Playout.clockText(clock, now), 150);
+    if (body.asleep) why = clip('asleep: night in ' + local, 150);
     else if (!seat) why = clip(options.seatWhy || 'no Copilot seat to think on', 150);
     else if (!want.model) why = 'no model chosen for this player';
     else if (want.unavailable) why = clip(String(want.unavailable), 150);
@@ -179,10 +196,9 @@ function plan(config, frames, options = {}) {
     out[id] = { think: !why, why, model: want.model || null, multiplier_x100: cost,
                 vision: want.vision !== false, persona: want.persona || null,
                 memory, heard, restore, since: Number.isFinite(since) ? since : null,
-                clock, sleep: body.asleep, routine: body.routine, start: body.start,
-                local: Playout.clockText(clock, now) };
+                sleep: body.asleep, routine: body.routine, start: body.start, local };
   }
-  return { players: out, spent_x100: spent, on_line_x100: onLine, journaled_x100: journaled, cap_x100: cap };
+  return { players: out, clock, local, spent_x100: spent, on_line_x100: onLine, journaled_x100: journaled, cap_x100: cap };
 }
 
 // Everything a capture needs before it opens a page: the line read back as far as this config
@@ -316,7 +332,8 @@ async function think(page, player, options = {}) {
                        chat: (snap.chat || []).slice(-4),
                        picture: saw ? (saw.blank ? 'BLANK: you cannot see' : 'attached') : 'none',
                        you_recently: a.memory, you_heard: a.heard,
-                       your_routine: a.routine, your_clock: a.local + ' local; you sleep from 23:00 to 07:00' };
+                       your_routine: a.routine,
+                       your_clock: a.local + ", the hub's clock: everyone here sleeps from 23:00 to 07:00" };
     // the same hands, plus one: a routine it may leave running until it thinks again
     const hands = Object.create(drive);
     hands.routine = async (steps) => window.__nexusMindRoutine(JSON.stringify(steps === undefined ? null : steps));
@@ -404,4 +421,4 @@ function summary(planned, outcome, record, routine) {
 }
 
 module.exports = { plan, prepare, readLine, lookback, readJournal, readPose, restorePose, holdInWorld, installBridge, think,
-                   evidence, summary, routineLine, clip, sha256, RECORDED_VERBS, Playout };
+                   evidence, summary, routineLine, clip, sha256, placeClock, sealedClock, bodyAt, RECORDED_VERBS, Playout };

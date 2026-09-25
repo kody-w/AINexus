@@ -200,7 +200,8 @@ MAX_DID = 6
 MAX_COUNT = 2 ** 53 - 1
 MIND_KEYS = {"kind", "provider", "asked", "model", "multiplier_x100", "said", "did", "ms", "tokens_in",
              "tokens_out", "exchange"}
-# A clock is the IANA timezone whose hours a body keeps: it sleeps from 23:00 to 07:00 there.
+# A clock is the IANA timezone whose hours a place keeps: every body in it sleeps from 23:00 to 07:00
+# there. A frame seals it once, as views.clock; a line sealed before places had one named a clock per body.
 CLOCK = re.compile(r"[A-Za-z][A-Za-z0-9_+-]{0,31}(/[A-Za-z0-9_+-]{1,32}){0,2}")
 
 
@@ -272,6 +273,32 @@ DEFAULT_ROUTINES = {
 
 def default_routine(pid):
     return DEFAULT_ROUTINES.get(pid, DEFAULT_ROUTINES["greeter"])
+
+
+# Where each body sleeps, as ai/playout.js BEDS has them (tests/minds.cjs holds the two equal), and
+# the hours of the night on the clock of a place: [23:00, 07:00).
+BEDS = {
+    "wanderer": {"x_cm": 1697, "y_cm": 200, "z_cm": 1697, "yaw_mrad": 785, "pitch_mrad": 1100},
+    "greeter": {"x_cm": -1697, "y_cm": 200, "z_cm": 1697, "yaw_mrad": -785, "pitch_mrad": 1100},
+    "pilgrim": {"x_cm": -1697, "y_cm": 200, "z_cm": -1697, "yaw_mrad": -2356, "pitch_mrad": 1100},
+    "watcher": {"x_cm": 1697, "y_cm": 200, "z_cm": -1697, "yaw_mrad": 2356, "pitch_mrad": 1100},
+}
+ELSEWHERE = {"x_cm": 0, "y_cm": 200, "z_cm": 2400, "yaw_mrad": 0, "pitch_mrad": 1100}
+NIGHT = (23, 7)
+
+
+def bed(pid):
+    return dict(BEDS.get(pid, ELSEWHERE))
+
+
+def night_at(clock, utc):
+    """Whether it is night on this clock at this moment, or None when this machine cannot read the clock."""
+    try:
+        import zoneinfo
+        hour = parse_utc(utc).astimezone(zoneinfo.ZoneInfo(clock)).hour
+    except Exception:
+        return None
+    return hour >= NIGHT[0] or hour < NIGHT[1]
 
 
 def routine_line(r):
@@ -576,9 +603,11 @@ def shape_problems(p):
     missing = need - set(v)
     if missing:
         return out + [f"views is missing {sorted(missing)}"]
-    extra = set(v) - need - {"source_commit", "thoughts", "premium_x100"}
+    extra = set(v) - need - {"source_commit", "thoughts", "premium_x100", "clock"}
     if extra:
         out.append(f"unexpected views keys {sorted(extra)}")
+    if "clock" in v and not (isinstance(v["clock"], str) and len(v["clock"]) <= 64 and CLOCK.fullmatch(v["clock"])):
+        out.append("clock is not a timezone")
     if not (isinstance(v["world"], str) and WORLD.match(v["world"])):
         out.append("world is not a page name")
     if not (isinstance(v["world_sha256"], str) and HEX64.match(v["world_sha256"])):
@@ -628,6 +657,8 @@ def shape_problems(p):
             out.append(f"{q['id']}: a routine is sealed with the mind that runs it, and there is none")
         if "clock" in q and not (isinstance(q["clock"], str) and len(q["clock"]) <= 64 and CLOCK.fullmatch(q["clock"])):
             out.append(f"{q['id']}: clock is not a timezone")
+        if "clock" in q and "clock" in v:
+            out.append(f"{q['id']}: a body keeps the clock of its place, and this one names its own")
         if "at" in q and not pose_ok(q["at"]):
             out.append(f"{q['id']}: at is not a pose")
         sees = q["sees"]
@@ -647,6 +678,21 @@ def shape_problems(p):
             out.append(f"{q['id']}: sha256 is not 64 hex")
     if len(set(ids)) != len(ids):
         out.append("a player appears twice")
+    if "clock" in v and not minded:
+        out.append("a frame without minds names a clock no body keeps")
+    # at night by the clock of their place every body in it is asleep in its bed, and in the day none is
+    night = night_at(v["clock"], v["captured_utc"]) if "clock" in v and isinstance(v["captured_utc"], str) \
+        and UTC.match(v["captured_utc"]) else None
+    for q in players if night is not None else []:
+        m = q.get("mind") if isinstance(q, dict) else None
+        if not isinstance(m, dict) or not isinstance(q.get("id"), str):
+            continue
+        if night and m.get("kind") != "sleep":
+            out.append(f"{q['id']}: awake at night by the clock of its place")
+        elif not night and m.get("kind") == "sleep":
+            out.append(f"{q['id']}: asleep in the day by the clock of its place")
+        elif night and "at" in q and q["at"] != bed(q["id"]):
+            out.append(f"{q['id']}: asleep out of its bed")
     if v["players_sealed"] != len(players):
         out.append("players_sealed does not count the players")
     if v["presences_seen"] != seen_total:
@@ -749,6 +795,8 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
         pid = q.get("id") if isinstance(q, dict) else None
         if not (isinstance(pid, str) and PLAYER_ID.match(pid)):
             raise Refusal(f"the receipt names a player {pid!r} that is not an id")
+        if "clock" in q:
+            raise Refusal(f"{pid}: a body keeps the clock of its place, and the receipt names one of its own")
         rel = q.get("file")
         # A shot from an earlier segment is how the stream carries a view forward when a player
         # produced none this tick. That is last tick's view, and sealing it here would date it wrong.
@@ -776,9 +824,6 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
             if routine is not None:
                 entry["routine"] = routine
             entry["doing"] = doing_of(mind, routine)
-        clock = q.get("clock")
-        if isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock) and known_zone(clock):
-            entry["clock"] = clock
         sealed.append(entry)
     if not sealed:
         raise Refusal("no player has a view in this tick's segment — there is nothing to seal")
@@ -812,6 +857,11 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
         thinkers = [q["mind"] for q in sealed if q.get("mind", {}).get("kind") == "model"]
         views["thoughts"] = len(thinkers)
         views["premium_x100"] = sum(m["multiplier_x100"] for m in thinkers)
+        # the one clock of the place, whose night every body in it sleeps through, sealed once
+        clock = receipt.get("clock")
+        if not (isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock) and known_zone(clock)):
+            raise Refusal("the bodies keep the clock of their place, and the receipt names none this sealer knows")
+        views["clock"] = clock
     payload = {"tick": anchor["tick"], "tick_frame": anchor["tick_frame"], "spine": SPINE_REPO,
                "fetched_utc": anchor["fetched_utc"], "views": views, "sources_failed": sorted(failed)}
     if head is None:
@@ -870,6 +920,7 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
         return problems + ["the chain is empty"]
     head = None
     by_tick, left = {}, {}
+    placed = None                     # the first frame that sealed its place's clock
     for f in frames:
         ok, step, why = R.verify_frame(f, head=head, stream_id_of_record=STREAM)
         if not ok:
@@ -904,6 +955,16 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
                 elif prev is not None and prev.get("by") != "default":
                     problems.append(f"frame {f['seq']}: {pid} goes back to the default routine after a thought set one")
             left[pid] = r
+        # once the place has a clock, every body in it keeps that one: never a clock each, never none
+        v = f["payload"].get("views") if isinstance(f["payload"].get("views"), dict) else {}
+        bodies = [q for q in v.get("players", []) if isinstance(q, dict)] if isinstance(v.get("players"), list) else []
+        if placed is not None:
+            if any("clock" in q for q in bodies):
+                problems.append(f"frame {f['seq']}: its bodies go back to a clock each after views #{placed} gave their place one")
+            elif any("mind" in q for q in bodies) and "clock" not in v:
+                problems.append(f"frame {f['seq']}: its bodies keep no clock after views #{placed} gave their place one")
+        elif "clock" in v:
+            placed = f["seq"]
         if isinstance(f["payload"].get("tick"), int):
             by_tick[f["payload"]["tick"]] = f
         head = f
