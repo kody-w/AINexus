@@ -184,6 +184,7 @@ const ANSWERS = [
   'x'.repeat(4001), '{"bodies": {"wanderer": {}, "greeter": {"say": " "}}}',
   '{"bodies": {"wanderer": {"say": "one"}, "wanderer": {"say": "two"}}}',
   '{"bodies": {"greeter": {"act": [{"do": "wait", "ms": 10000}]}, "pilgrim": {"routine": "walk"}}}',
+  '{"bodies": {"wanderer": {"say": "a\\u0000b\\u0007c"}}}',
 ];
 let directed = 'unchecked';
 try {
@@ -198,6 +199,21 @@ print(json.dumps([V.directive(a, awake) for a in answers]))`], { cwd: ROOT, enco
     routine: [{ do: 'wait', ms: 500 }] } })) directed = 'the first answer was not heard as it was meant: ' + JSON.stringify(js[0]);
 } catch (error) { directed = String(error.message || error); }
 check('the capture and the sealer hear exactly the same directive in every answer the one mind might give', directed === '', directed);
+// ... and quote a dream the same way, whatever a body is called
+const sorted = value => value && typeof value === 'object' && !Array.isArray(value)
+  ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])])) : value;
+let quoted = 'unchecked';
+try {
+  const cases = [[{ wanderer: { act: [{ do: 'wait', ms: 500 }] } }, { wanderer: 'I dreamed.', constructor: 'boo', greeter: 'Me too.' },
+    ['constructor', 'greeter', 'wanderer']], [{}, {}, ['wanderer']], [{ pilgrim: { say: 'x' } }, { pilgrim: '' }, ['pilgrim']]];
+  const python = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
+print(json.dumps([V.quote(b, l, a) for b, l, a in json.loads(sys.stdin.read())]))`], { cwd: ROOT, encoding: 'utf8',
+    input: JSON.stringify(cases) }));
+  const js = cases.map(([b, l, a]) => minds.Playout.quote(b, l, a));
+  quoted = cases.map((c, i) => JSON.stringify(sorted(js[i])) === JSON.stringify(sorted(python[i])) ? ''
+    : `#${i}: js ${JSON.stringify(js[i])} python ${JSON.stringify(python[i])}`).filter(Boolean).join('; ');
+} catch (error) { quoted = String(error.message || error); }
+check('the capture and the sealer quote a dream the same way, whatever a body is called', quoted === '', quoted);
 
 {
   const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'America/New_York' };

@@ -124,8 +124,9 @@
   const LONE = /[\ud800-\udfff]/gu;
   const SPLITS = /[\u0085\u2028\u2029]|[\ud800-\udfff]/u;     // what would split a line of the chain
   // a line a body may say: whole characters, every run of space one space, cut by code point
+  const CONTROL = /[\x00-\x08\x0e-\x1b\x7f]/g;       // not text: a NUL cannot even be handed to a process
   function sayLine(value, max) {
-    const flat = String(value).replace(LONE, '\ufffd').replace(SPACES, ' ').replace(/^ +| +$/g, '');
+    const flat = String(value).replace(CONTROL, '').replace(LONE, '\ufffd').replace(SPACES, ' ').replace(/^ +| +$/g, '');
     const chars = Array.from(flat);
     return chars.length <= max ? flat : chars.slice(0, max - 1).join('') + '…';
   }
@@ -136,7 +137,8 @@
     for (const id of Object.keys(told)) out[id] = Object.assign({}, told[id]);
     for (const id of awake) {
       const line = lines && typeof lines === 'object' && Object.prototype.hasOwnProperty.call(lines, id) ? lines[id] : null;
-      if (typeof line === 'string' && line) out[id] = Object.assign(out[id] || {}, { say: line });
+      const had = Object.prototype.hasOwnProperty.call(out, id) ? out[id] : {};
+      if (typeof line === 'string' && line) out[id] = Object.assign(had, { say: line });
     }
     return out;
   }

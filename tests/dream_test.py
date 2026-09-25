@@ -425,6 +425,40 @@ class DreamLine(Workspace):
         self.assertGreater(len(prompt.encode("utf-8")), len(prompt))
         self.assertEqual(self.verify(), [])
 
+    def test_an_amendment_in_the_same_tick_after_a_dream_does_not_reach_back_into_it(self):
+        self.at()
+        first = self.seal()
+        self.amend()                                    # the spine has not moved: the same tick, a later frame
+        self.assertEqual(I.newest(self.intent)["payload"]["tick"], first["payload"]["tick"])
+        self.assertEqual(self.verify(), [])
+        self.capture(FX.T0 + datetime.timedelta(days=1))
+        self.at(SECOND_NIGHT)
+        self.assertEqual(self.seal()["payload"]["remembered"], ref(first))
+        self.assertEqual(self.verify(), [])
+
+    def test_a_dream_keeps_the_clock_of_the_place_its_views_keep(self):
+        self.at()
+        with self.assertRaisesRegex(V.Refusal, "is not the clock of the place its views keep"):
+            self.seal(clock="Asia/Tokyo")
+        self.assertEqual(self.seal(rules_only=True)["payload"]["clock"], "America/New_York")
+        self.forge(clock="Asia/Tokyo")
+        self.assert_problem("clock is not the clock of the place its views keep")
+
+    def test_control_characters_never_reach_a_dream_and_a_torn_cache_is_no_cache(self):
+        self.at()
+        answer = json.dumps({"text": "We met\u0000 at the portals.", "lines": {pid: "Hello\u0007." for pid in FX.PLAYERS},
+                             "memory": "We met.\u0000"})
+        cache = self.work / "answers.json"
+        cache.write_text('{"torn": ')
+        first = self.seal(copilot=self.fake_copilot(answer), cache=cache)
+        d = first["payload"]["dream"]
+        self.assertEqual((first["payload"]["by"]["kind"], d["text"], d["memory"]), ("model", "We met at the portals.", "We met."))
+        self.assertEqual(set(d["lines"].values()), {"Hello."})
+        self.assertEqual(self.verify(), [])
+        self.capture(FX.T0 + datetime.timedelta(days=1))
+        self.at(SECOND_NIGHT)
+        self.assertEqual(self.seal()["payload"]["remembered"], ref(first))
+
     def test_a_dream_cannot_use_a_charter_that_did_not_exist_at_its_tick(self):
         anchor = self.at()
         self.at(FX.T0 + datetime.timedelta(days=1))
@@ -485,13 +519,13 @@ class DreamLine(Workspace):
         summary = self.work / "summary.txt"
         result = self.cli(self.dream_args() + [
             "--copilot", str(self.copilot.resolve()), "--model", "fixture-model",
-            "--clock", "UTC", "--summary", str(summary.resolve())])
+            "--clock", "America/New_York", "--summary", str(summary.resolve())])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         line = "dream 0 · night 2026-09-23 · folded views 0–1 (2 frames) · by fixture-model"
         self.assertEqual(summary.read_text(), line + "\n")
         self.assertIn("sealed " + line, result.stdout)
         p = self.frames()[0]["payload"]
-        self.assertEqual((p["clock"], p["by"]["asked"]), ("UTC", "fixture-model"))
+        self.assertEqual((p["clock"], p["by"]["asked"]), ("America/New_York", "fixture-model"))
         result = self.cli(["verify"] + self.paths() + ["--spine", str(self.spine.resolve())])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("✓ the dream line verifies", result.stdout)
@@ -535,7 +569,7 @@ class DreamLine(Workspace):
                     self.seal(dict(anchor, **changes))
         with self.assertRaises(V.Refusal):
             self.seal({"tick": anchor["tick"]})
-        with self.assertRaisesRegex(V.Refusal, "known timezone"):
+        with self.assertRaisesRegex(V.Refusal, "not the clock of the place its views keep"):
             self.seal(anchor, clock="Mars/Olympus")
         self.assertFalse(self.chain.exists())
         self.assertEqual(self.calls(), [])

@@ -630,6 +630,34 @@ async function dreamFrameAt(ref) {
   const d = isObject(frame.payload.dream) ? frame.payload.dream : null;
   return d && isObject(d.lines) && typeof d.text === 'string' ? frame : 'the dream it quotes has no dream in it';
 }
+// The newest dream sealed before a tick, found by walking the dream line back from its head, every
+// link checked: what a mind frame at that tick must remember. null when there is none yet.
+async function dreamBefore(tick) {
+  const meta = await fetchJson(dreamLine.base + 'HEAD.json', true).catch(error => {
+    if (error.status === 404) return null;
+    throw error;
+  });
+  if (meta === null) return null;
+  const broken = why => Object.assign(new Error(why), { line: true });
+  if (!isObject(meta) || meta.stream_id !== DREAM_STREAM || !Number.isSafeInteger(meta.count)) throw broken('the dream line has no HEAD');
+  dreamLine.meta = meta;
+  dreamLine.at = Date.now();
+  let newer = null;
+  for (let seq = meta.count - 1; seq >= 0; seq--) {
+    let frame = dreamLine.frames.get(seq);
+    if (!frame) {
+      frame = await chainFrame(dreamLine.base, meta, dreamLine.bundles, seq);
+      const bad = await frameProblem(frame, DREAM_STREAM);
+      if (bad) throw broken('dream ' + seq + ' ' + bad);
+      dreamLine.frames.set(seq, frame);
+    }
+    if (newer ? newer.prev !== frame.payload_hash : frame.frame_hash !== meta.head_frame) throw broken('the dream line does not link');
+    if (frame.payload.tick < tick) return frame;
+    newer = frame;
+  }
+  return null;
+}
+
 // the newest dream, for the map, proven like every frame this page shows
 async function refreshDream() {
   if (!line.on || Date.now() - dreamLine.checked < 60000) return;
@@ -679,6 +707,22 @@ function directedCheck(player, views) {
       if (await frameProblem(before, STREAM) || before.payload_hash !== views.prev || before.frame_hash !== p.state.views_frame) {
         return forged('its mind was shown a state that is not the frame before it');
       }
+    }
+    // what it remembers is the newest dream before it, and the first mind frame after that dream quotes it
+    let remembered;
+    try { remembered = await dreamBefore(p.tick); } catch (error) { if (error.line) return forged(error.message); throw error; }
+    const previous = ref.seq > 0 ? await mindFrameAt(ref.seq - 1) : null;
+    if (previous && (await frameProblem(previous, MIND_STREAM) || previous.payload_hash !== frame.prev)) {
+      return forged('its mind line does not link');
+    }
+    const morning = !!remembered && (!previous || remembered.payload.tick >= previous.payload.tick);
+    try {
+      if (jcs(p.memory) !== jcs(remembered ? { seq: remembered.seq, frame_hash: remembered.frame_hash } : null)) {
+        return forged('its mind frame does not remember the newest dream before it');
+      }
+    } catch (error) { return forged('its mind frame cannot be canonicalised: it holds ' + error.message); }
+    if (p.morning !== morning) {
+      return forged(morning ? 'it is the morning after a dream and does not quote it' : 'it quotes a dream the morning already quoted');
     }
     const by = isObject(p.by) ? p.by : {};
     const awake = Array.isArray(p.awake) ? p.awake : [];

@@ -357,8 +357,12 @@ def _no_constant(name):
 # object; each awake body in it may be told a line to say, an act and a routine. An answer that
 # could split a line of the chain, or that nests deep enough to exhaust one parser and not the
 # other, is not heard.
+# control characters a model may write are not text (a NUL cannot even be handed to a process)
+CONTROL = re.compile("[\x00-\x08\x0e-\x1b\x7f]")
+
+
 def say_line(value, n=SAY_MAX):
-    return clip(SPACES.sub(" ", value).strip(" "), n)
+    return clip(SPACES.sub(" ", CONTROL.sub("", value)).strip(" "), n)
 
 
 def quote(bodies, lines, awake):
@@ -657,7 +661,9 @@ def remembered(dreams, before_tick, previous_mind):
     """(the dream a mind frame at this tick remembers, whether it is the morning after it): the
     newest dream sealed before it, which the first mind frame after that dream quotes."""
     dream = next((d for d in reversed(dreams) if d["payload"].get("tick", -1) < before_tick), None)
-    morning = dream is not None and (previous_mind is None or dream["payload"]["tick"] > previous_mind["payload"]["tick"])
+    # a dream sealed at the same tick as the last mind frame (a night tick captured after 07:00) is
+    # still quoted by the next: a dream at tick t is never the memory of a mind frame at t
+    morning = dream is not None and (previous_mind is None or dream["payload"]["tick"] >= previous_mind["payload"]["tick"])
     return dream, morning
 
 
@@ -1289,7 +1295,12 @@ def read_dreams(where):
     src = Chain(where)
     if not src.remote and not (pathlib.Path(where) / "HEAD.json").exists():
         return []
-    meta = src.head()
+    try:
+        meta = src.head()
+    except urllib.error.HTTPError as ex:
+        if ex.code == 404:                   # no dream yet: the first night has not come
+            return []
+        raise
     if meta.get("stream_id") != DREAM_STREAM:
         raise ValueError(f"its HEAD names {meta.get('stream_id')!r}, not {DREAM_STREAM}")
     frames, head = src.frames(), None
@@ -1499,8 +1510,8 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=No
         minds = mind_src.frames()
         dreams = read_dreams(dream_src.where)
         log(f"the one mind: {len(minds)} frame(s) verify on {MIND_STREAM}, each derived from its own answer")
-    if dreams or dream:
-        # every dream, rebuilt from the views it folds and the charter that stood at its tick
+    if dreams or dream or read_dreams(sibling(chain, "dream")):
+        # every dream, rebuilt from the views it folds and the charter that stood when it was sealed
         import dream as D                     # dream.py imports this module, so it is imported here
         problems = D.verify(dream or sibling(chain, "dream"), chain, intent or sibling(chain, "intent"), spine, log=log)
         if problems:

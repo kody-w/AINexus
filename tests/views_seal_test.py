@@ -18,6 +18,8 @@ import shutil
 import sys
 import tempfile
 import unittest
+import urllib.error
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -954,6 +956,22 @@ class OneMind(unittest.TestCase):
         payload = json.loads(json.dumps(chainio.load_chain(self.chain)[1]["payload"]))
         payload["views"]["mind"] = base["views"]["mind"]
         self.assertIn("a frame names a mind that directed none of its bodies", V.shape_problems(payload))
+
+
+class Remembering(unittest.TestCase):
+    """What a mind frame remembers, and which one is the morning after a dream."""
+
+    def test_the_first_mind_frame_after_a_dream_is_its_morning_even_when_the_dream_shares_its_tick(self):
+        dream = {"payload": {"tick": 4}}
+        self.assertEqual(V.remembered([dream], 5, {"payload": {"tick": 4}}), (dream, True))
+        self.assertEqual(V.remembered([dream], 6, {"payload": {"tick": 5}}), (dream, False))
+        self.assertEqual(V.remembered([dream], 5, None), (dream, True))
+        self.assertEqual(V.remembered([dream], 4, None), (None, False))
+
+    def test_no_dream_line_at_its_address_is_no_dream_yet(self):
+        gone = urllib.error.HTTPError("https://example.invalid/dream/HEAD.json", 404, "Not Found", {}, None)
+        with mock.patch.object(V.Chain, "head", side_effect=gone):
+            self.assertEqual(V.read_dreams("https://example.invalid/dream/"), [])
 
 
 class Charter(unittest.TestCase):

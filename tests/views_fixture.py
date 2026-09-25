@@ -218,7 +218,7 @@ def add_world(feed_dir, receipt, chain_dir, answer=WORLD_ANSWER, asked="gpt-5-mi
     beside = {name: chainio.load_chain(chain_dir.parent / name) if (chain_dir.parent / name / "HEAD.json").exists() else []
               for name in ("dream", "mind")}
     dream = beside["dream"][-1] if beside["dream"] else None
-    morning = dream is not None and (not beside["mind"] or dream["payload"]["tick"] > beside["mind"][-1]["payload"]["tick"])
+    morning = dream is not None and (not beside["mind"] or dream["payload"]["tick"] >= beside["mind"][-1]["payload"]["tick"])
     charter = chainio.load_chain(pathlib.Path(intent_dir) if intent_dir else chain_dir.parent / "intent")[-1]
     evidence = {"schema": "ainexus/world-mind/1", "at_utc": receipt["captured_utc"], "clock": clock,
                 "charter": {"seq": charter["seq"], "frame_hash": charter["frame_hash"]},

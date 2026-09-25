@@ -183,7 +183,7 @@ async function think(options) {
   const head = frames.length ? frames[frames.length - 1] : null;
   // the newest dream is what it remembers; the first mind frame after a dream is its morning
   const dream = readChain(path.join(root, 'dream')), last = readChain(path.join(root, 'mind'));
-  const morning = !!dream && (!last || dream.payload.tick > last.payload.tick);
+  const morning = !!dream && (!last || dream.payload.tick >= last.payload.tick);
   const cost = Number.isInteger(mind.multiplier_x100) && mind.multiplier_x100 > 0 ? mind.multiplier_x100 : 0;
   const evidence = {
     schema: SCHEMA, at_utc: new Date(now).toISOString(), clock: planned.clock,
@@ -196,7 +196,9 @@ async function think(options) {
   else if (cost && planned.spent_x100 + cost > planned.cap_x100) evidence.error = "the day's thinking budget is spent";
   else {
     evidence.asked = typeof mind.model === 'string' && mind.model ? mind.model : MODEL;
-    evidence.prompt = prompt({ planned, frames, charter, local: planned.local, dream, morning });
+    // control characters are not text, and a NUL cannot even be handed to a process
+    evidence.prompt = prompt({ planned, frames, charter, local: planned.local, dream, morning })
+      .replace(/[\x00-\x08\x0e-\x1b\x7f]/g, '');
     const got = await ask(evidence.prompt, { model: evidence.asked, copilot: mind.copilot, timeoutMs: mind.timeout_ms });
     Object.assign(evidence, { answer: got.answer, ms: got.ms, error: got.error });
     if (got.answer && cost && journal) {
