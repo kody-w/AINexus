@@ -53,6 +53,10 @@ it), and each frame's `gap_min` records how long the line went without a frame.
 
 ### Minds: real models in the bodies
 
+The design these follow is a charter: [`intent/`](intent/) (`intent:@kody-w/ainexus`), what this world
+is meant to be in Kody's own words and the rules every mind here holds its work to. Read it with
+`python3 tools/intent.py show`; it changes only by a successor frame that quotes him.
+
 With a Copilot seat on the Mac mini, the players stop being scripted. On each tick, every player
 named in the machine's `~/.rapp-heartbeat/minds.json` thinks, rests while its routine runs, or
 sleeps.
