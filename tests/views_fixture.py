@@ -194,6 +194,48 @@ def add_minds(feed_dir, receipt, minds=None, resting=None, poses=None, routines=
     return receipt
 
 
+# The one mind's answer on the fixture's tick: two bodies told something, one left to carry on,
+# a body that is not in the hub, and the text a model wraps its JSON in.
+WORLD_ANSWER = ('Here is the directive: {"bodies": {"wanderer": {"say": "Morning, greeter!\\u2028Over here.", '
+                '"act": [{"do": "walk", "dir": "forward", "ms": 900.7}, {"do": "look", "dx": 120}], '
+                '"routine": [{"do": "walk", "dir": "left", "ms": 1200}, {"do": "wait", "ms": 800}]}, '
+                '"greeter": {"say": "Welcome back.", "act": [{"do": "fly"}]}, "ghost": {"say": "boo"}}}')
+WORLD_TOLD = {"wanderer": {"say": "Morning, greeter! Over here.",
+                           "act": [{"do": "walk", "dir": "forward", "ms": 900}, {"do": "look", "dx": 120, "dy": 0}],
+                           "routine": [{"do": "walk", "dir": "left", "ms": 1200}, {"do": "wait", "ms": 800}]},
+              "greeter": {"say": "Welcome back."}}
+
+
+def add_world(feed_dir, receipt, chain_dir, answer=WORLD_ANSWER, asked="gpt-5-mini", error=None, awake=None,
+              routines=None, clock=PLACE_CLOCK, intent_dir=None, **overrides):
+    """Give a capture the one mind tools/record_views.cjs gives it with a `mind` in its config: its
+    evidence beside the views, every awake body directed, and a receipt that says only where to look."""
+    feed_dir, chain_dir = pathlib.Path(feed_dir), pathlib.Path(chain_dir)
+    awake = sorted(awake if awake is not None else ["wanderer", "greeter", "pilgrim"])
+    chain = chainio.load_chain(chain_dir)
+    charter = chainio.load_chain(pathlib.Path(intent_dir) if intent_dir else chain_dir.parent / "intent")[-1]
+    evidence = {"schema": "ainexus/world-mind/1", "at_utc": receipt["captured_utc"], "clock": clock,
+                "charter": {"seq": charter["seq"], "frame_hash": charter["frame_hash"]},
+                "state": {"views_seq": chain[-1]["seq"], "views_frame": chain[-1]["frame_hash"]} if chain else None,
+                "awake": awake, "asked": asked if answer is not None else None,
+                "prompt": "You are the one mind of AINexus." if answer is not None else None,
+                "answer": answer, "ms": 9120 if answer is not None else 0, "error": error}
+    evidence.update(overrides)
+    rel = f"segments/{receipt['segment']}/world-mind.json"
+    (feed_dir / rel).write_text(json.dumps(evidence, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    ran = routines if routines is not None else {"wanderer": {"set_at": "this"},
+                                                 "greeter": {"set_at": None, "steps": DEFAULTS["greeter"]},
+                                                 "pilgrim": {"set_at": None, "steps": DEFAULTS["pilgrim"]}}
+    for q in receipt["players"]:
+        if q["id"] in awake:
+            q["mind"] = {"kind": "directed"}
+            if q["id"] in ran:
+                q["routine"] = dict(ran[q["id"]])
+    receipt["clock"] = clock
+    receipt["mind"] = {"evidence": rel}
+    return receipt
+
+
 def build(out):
     """legacy tick (before the line) → seal t1 under spine tick 1 → seal t2 under spine tick 2,
     then an unsealable t3 and the forgeries."""
@@ -201,6 +243,8 @@ def build(out):
     spine, feed, chain = out / "spine", out / "live", out / "chain"
     for d in (spine, feed, chain):
         d.mkdir(parents=True, exist_ok=True)
+    # the charter beside the line, as it is beside views/ on main: the one mind answers to it
+    shutil.copytree(ROOT / "intent", out / "intent")
     manifest = empty_manifest()
     add_tick(spine, T0)
     legacy = add_capture(feed, manifest, "2026-09-23T12-02-00.000Z-legacy00", T0 + datetime.timedelta(minutes=2), 0)

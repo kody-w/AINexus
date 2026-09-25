@@ -230,8 +230,9 @@ async function restorePose(page, at) {
   // window.worldNavigator is published at the very end of the world's init, after its camera is
   // built at the spawn point; a pose set before then was silently refused and the body began the
   // tick at the spawn instead of where the line says it is.
+  // a loaded machine can take minutes to build a world, and a body placed before it is ready is lost
   await page.waitForFunction(() => !!(window.worldNavigator && window.worldNavigator.camera),
-    null, { timeout: 60000 }).catch(() => {});
+    null, { timeout: 180000 }).catch(() => {});
   return page.evaluate((a) => {
     const w = window.worldNavigator;
     if (!w || !w.camera) return false;
@@ -420,5 +421,14 @@ function summary(planned, outcome, record, routine) {
   return clip('🧠 ' + model + (verbs.length ? ': ' + verbs.join(', ') : ''), 64);
 }
 
-module.exports = { plan, prepare, readLine, lookback, readJournal, readPose, restorePose, holdInWorld, installBridge, think,
+// The line a body the one mind directed shows before its seal: exactly what the sealer derives
+// (views_seal.doing_of for a directed mind). A body told nothing is running its routine.
+function directedLine(by, told, routine) {
+  const verbs = (told && told.say ? ['say'] : []).concat((told && told.act || []).map(step => step.do),
+    told && told.routine ? ['routine'] : []);
+  if (!verbs.length && routine) return routineLine(routine);
+  return clip((by === 'rules' ? '📜 ' : '🧠 ') + by + ': ' + (verbs.join(', ') || 'carry on'), 64);
+}
+
+module.exports = { plan, prepare, readLine, directedLine, lookback, readJournal, readPose, restorePose, holdInWorld, installBridge, think,
                    evidence, summary, routineLine, clip, sha256, placeClock, sealedClock, bodyAt, RECORDED_VERBS, Playout };

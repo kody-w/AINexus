@@ -15,6 +15,11 @@
 //   tick 4  night by the place's clock: every body in the hub sleeps in its bed, all of them at once,
 //           each with its routine kept for the morning.
 //   tick 5  day again: every body wakes where it slept, eyes level, into its routine.
+//   tick 6  the one mind: a stand-in for headless copilot is asked once, with no tools and no custom
+//           instructions, for one directive for every body; the capture carries it out and the
+//           mind frame and every directed body are sealed from its words.
+//   tick 7  the one mind does not answer: rules write the tick, and every body carries on.
+//   tick 8  night: nobody is directed and nobody is asked.
 //
 //   node tests/minds.cjs     (PLAYWRIGHT_DIR as for the suites; BROWSER_CHANNEL=chrome to use an installed Chrome)
 const { createRequire } = require('module');
@@ -158,6 +163,39 @@ print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(js
 } catch (error) { equal = String(error.message || error); }
 check('the world\'s default routines and its beds are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
   equal === '', equal);
+// What the one mind told every body is derived twice, by the capture that carries it out and by the
+// sealer, and the two must agree on every answer a model might write.
+const ANSWERS = [
+  'Sure. {"bodies": {"wanderer": {"say": "hi", "act": [{"do": "walk", "dir": "forward", "ms": 900.7}], ' +
+    '"routine": [{"do": "wait", "ms": 500}]}, "ghost": {"say": "boo"}}} Hope that helps!',
+  '{"bodies": {"wanderer": {"say": "  lots   of\\t space\\u2028here  ", "act": [{"do": "walk", "dir": "back", "ms": 3000}, ' +
+    '{"do": "walk", "dir": "back", "ms": 3000}, {"do": "wait", "ms": 100}]}}}',
+  '{"bodies": {"wanderer": {"say": "' + 'x'.repeat(200) + '"}}}',
+  '{"bodies": {"wanderer": {"say": 42, "routine": [{"do": "wait", "ms": 200}]}}}',
+  '{"bodies": []}', '[]', 'no json at all', '{"bodies": {"wanderer": {"say": "a"}}',
+  '{"bodies": {"wanderer": {"say": "\\ud800 lone"}}}', '{"bodies": {"wanderer": {"say": "😀😀"}}}',
+  '{"bodies": {"wanderer": {"say": NaN}}}', '{"bodies": {"wanderer": {"act": [{"do": "look", "dx": 1e400}]}}}',
+  '{"bodies": {"wanderer": {"act": [{"do": "look", "dx": -0.9, "dy": 599.9}]}}}',
+  '{"bodies": {"wanderer": {"say": "x"}}, "deep": ' + '['.repeat(130) + ']'.repeat(130) + '}',
+  '{"bodies": {"wanderer": {"say": "x"}}}\u2028', '{"bodies": {"wanderer": {"say": "x"}}}\ud800',
+  'x'.repeat(4001), '{"bodies": {"wanderer": {}, "greeter": {"say": " "}}}',
+  '{"bodies": {"wanderer": {"say": "one"}, "wanderer": {"say": "two"}}}',
+  '{"bodies": {"greeter": {"act": [{"do": "wait", "ms": 10000}]}, "pilgrim": {"routine": "walk"}}}',
+];
+let directed = 'unchecked';
+try {
+  const awake = ['greeter', 'pilgrim', 'wanderer'];
+  const python = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
+answers, awake = json.loads(sys.stdin.read())
+print(json.dumps([V.directive(a, awake) for a in answers]))`], { cwd: ROOT, encoding: 'utf8', input: JSON.stringify([ANSWERS, awake]) }));
+  const js = ANSWERS.map(a => minds.Playout.directive(a, awake));
+  directed = ANSWERS.map((a, i) => JSON.stringify(js[i]) === JSON.stringify(python[i]) ? ''
+    : `#${i}: js ${JSON.stringify(js[i])} python ${JSON.stringify(python[i])}`).filter(Boolean).join('; ');
+  if (!directed && JSON.stringify(js[0]) !== JSON.stringify({ wanderer: { say: 'hi', act: [{ do: 'walk', dir: 'forward', ms: 900 }],
+    routine: [{ do: 'wait', ms: 500 }] } })) directed = 'the first answer was not heard as it was meant: ' + JSON.stringify(js[0]);
+} catch (error) { directed = String(error.message || error); }
+check('the capture and the sealer hear exactly the same directive in every answer the one mind might give', directed === '', directed);
+
 {
   const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'America/New_York' };
   const asleep = Date.parse('2026-09-24T10:50:30Z');           // 06:50:30 in New York
@@ -243,6 +281,21 @@ const spine = path.join(out, 'spine'), chain = path.join(out, 'chain'), feedRoot
 const feed = path.join(feedRoot, 'recordings', 'live');
 for (const dir of [spine, chain, feedRoot]) fs.mkdirSync(dir, { recursive: true });
 const configFile = path.join(out, 'minds.json');
+// the charter beside the line, as it is beside views/ on main: the one mind answers to it
+fs.cpSync(path.join(ROOT, 'intent'), path.join(out, 'intent'), { recursive: true });
+// a stand-in for headless copilot: it writes down how it was asked and answers from a file
+const fakeDir = path.join(out, 'fake-copilot');
+fs.mkdirSync(fakeDir);
+const fakeCopilot = path.join(fakeDir, 'copilot');
+fs.writeFileSync(fakeCopilot, `#!${process.execPath}
+const fs = require('fs'), path = require('path'), dir = ${JSON.stringify(fakeDir)};
+fs.appendFileSync(path.join(dir, 'asked.jsonl'), JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }) + '\\n');
+if (fs.existsSync(path.join(dir, 'fail'))) { process.stderr.write('stand-in: refusing on purpose'); process.exit(1); }
+process.stdout.write(fs.readFileSync(path.join(dir, 'answer'), 'utf8'));
+`);
+fs.chmodSync(fakeCopilot, 0o755);
+const askedOf = () => fs.existsSync(path.join(fakeDir, 'asked.jsonl'))
+  ? fs.readFileSync(path.join(fakeDir, 'asked.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
 const journal = path.join(out, 'journal.jsonl');
 // A clock where it is day for hours yet, and one where it is night for hours yet, found now: the
 // place keeps one or the other, and every body in it keeps the place's.
@@ -252,7 +305,7 @@ const hourIn = tz => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hou
   .format(new Date())) % 24;
 const DAY = ZONES.find(tz => hourIn(tz) >= 9 && hourIn(tz) <= 19);
 const NIGHT = ZONES.find(tz => hourIn(tz) >= 0 && hourIn(tz) <= 4);
-const writeConfig = (clock) => fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, clock, players: {
+const writeConfig = (clock, mind) => fs.writeFileSync(configFile, JSON.stringify({ cap_x100: 300, clock, mind, players: {
   wanderer: { model: 'stub-premium', every: 1, multiplier_x100: 100, vision: true },
   greeter: { model: 'stub-free', every: 1, multiplier_x100: 0, vision: false },
   pilgrim: { model: 'stub-premium', every: 3, multiplier_x100: 100, vision: true } } }));
@@ -492,6 +545,80 @@ check('when the clock of their place says day, every body wakes where it slept, 
 verified = verify();
 check('and the whole line of five ticks verifies from its evidence',
   verified.code === 0 && /line: 5 frame\(s\) verify/.test(verified.out), verified.out);
+
+// tick 6: the one mind directs every body
+const ONE = { model: 'stub-mind', copilot: fakeCopilot };
+fs.writeFileSync(path.join(fakeDir, 'answer'), 'Here you go: {"bodies": {"wanderer": {"say": "Greeter! Race you to the portals.", ' +
+  '"act": [{"do": "walk", "dir": "forward", "ms": 1500}], "routine": [{"do": "walk", "dir": "forward", "ms": 1000}, ' +
+  '{"do": "look", "dx": 500}]}, "greeter": {"say": "You are on."}, "ghost": {"say": "boo"}}}');
+writeConfig(DAY, ONE);
+mintTick();
+log = await capture(6, false, port);
+const f6 = seal(6);
+const r6 = byId(f6);
+const asked6 = askedOf();
+const argv = asked6.length ? asked6[0].argv : [];
+const told6 = argv[argv.indexOf('-p') + 1] || '';
+check('the one mind is woken headless once, on its own model, with no tools and no custom instructions, away from the repo',
+  asked6.length === 1 && argv.includes('--available-tools=') && argv.includes('--no-custom-instructions') &&
+  argv.includes('--no-ask-user') && argv[argv.indexOf('--model') + 1] === 'stub-mind' &&
+  !asked6[0].cwd.startsWith(ROOT) && heardByStub.length === 0, JSON.stringify(asked6) + '\n' + log);
+check('it is shown the charter it answers to, where every body is, and what they said lately',
+  told6.includes('everyone in one place shares one clock') && told6.includes('Where the bodies are now:') &&
+  told6.includes('- wanderer: ') && told6.includes("the hub's clock") && told6.includes('Said lately'),
+  told6.slice(0, 600));
+const mindChain = path.join(out, 'mind');
+const readMind = seq => JSON.parse(fs.readFileSync(path.join(mindChain, seq + '.json'), 'utf8'));
+const m6 = fs.existsSync(path.join(mindChain, '0.json')) ? readMind(0) : { payload: {} };
+const race = [{ do: 'walk', dir: 'forward', ms: 1000 }, { do: 'look', dx: 500, dy: 0 }];
+check('the mind frame is sealed from its words, and every body it directed says exactly what it was told',
+  f6.payload.views.mind && f6.payload.views.mind.seq === 0 && f6.payload.views.mind.frame_hash === m6.frame_hash &&
+  m6.payload.by && m6.payload.by.kind === 'model' && m6.payload.by.asked === 'stub-mind' &&
+  same(m6.payload.bodies, { greeter: { say: 'You are on.' }, wanderer: { say: 'Greeter! Race you to the portals.',
+    act: [{ do: 'walk', dir: 'forward', ms: 1500 }], routine: race } }) &&
+  same(r6.wanderer.mind, { kind: 'directed', by: 'stub-mind', said: 'Greeter! Race you to the portals.',
+    act: [{ do: 'walk', dir: 'forward', ms: 1500 }], routine_set: race }) &&
+  same(r6.wanderer.routine, { steps: race, set_at: f6.payload.tick, by: 'stub-mind' }) &&
+  r6.greeter.mind.said === 'You are on.' && r6.pilgrim.mind.said === '' && r6.pilgrim.doing === minds.routineLine(r6.pilgrim.routine) &&
+  r6.wanderer.doing === '🧠 stub-mind: say, walk, routine' && lastDoingOf('wanderer') === r6.wanderer.doing,
+  JSON.stringify({ mind: m6.payload, r6 }) + '\n' + log);
+const startW = played(r5.wanderer, 'wanderer', f5, f6);
+check('the capture carries the directive out by the same hands a visitor has: the wanderer walked where it was told',
+  !near(r6.wanderer.at, startW, 5, 5) && near(r6.greeter.at, played(r5.greeter, 'greeter', f5, f6), 5, 5),
+  JSON.stringify({ start: startW, after: r6.wanderer.at }));
+verified = verify();
+check('the line and the one mind\'s line verify, each mind frame derived again from the evidence in the feed',
+  verified.code === 0 && /the one mind: 1 frame\(s\) verify/.test(verified.out) &&
+  /minds: \d+ thought\(s\) say exactly what their evidence says/.test(verified.out), verified.out);
+
+// tick 7: the one mind does not answer
+fs.writeFileSync(path.join(fakeDir, 'fail'), '1');
+mintTick();
+log = await capture(7, false, port);
+const f7 = seal(7);
+const r7 = byId(f7);
+const m7 = fs.existsSync(path.join(mindChain, '1.json')) ? readMind(1) : { payload: {} };
+check('when the one mind does not answer, rules write the tick: every body carries on with the routine it was left',
+  askedOf().length === 2 && m7.payload.by && m7.payload.by.kind === 'rules' && /did not answer \(exit 1\)/.test(m7.payload.by.why) &&
+  same(m7.payload.bodies, {}) && f7.payload.views.mind.seq === 1 &&
+  MINDED.every(id => r7[id].mind.kind === 'directed' && r7[id].mind.by === 'rules' && r7[id].mind.said === '' &&
+    same(r7[id].routine, r6[id].routine) && same(r7[id].at, played(r6[id], id, f6, f7))),
+  JSON.stringify({ mind: m7.payload, r7 }) + '\n' + log);
+
+// tick 8: night
+fs.rmSync(path.join(fakeDir, 'fail'));
+writeConfig(NIGHT, ONE);
+mintTick();
+log = await capture(8, false, port);
+const f8 = seal(8);
+const r8 = byId(f8);
+check('at night nobody is directed and nobody is asked: every body sleeps, and the one mind writes no frame',
+  askedOf().length === 2 && !f8.payload.views.mind && !fs.existsSync(path.join(mindChain, '2.json')) &&
+  MINDED.every(id => r8[id].mind.kind === 'sleep' && same(r8[id].at, P.bed(id))), JSON.stringify(r8) + '\n' + log);
+verified = verify();
+check('and the whole line of eight ticks, with the one mind\'s two, verifies',
+  verified.code === 0 && /line: 8 frame\(s\) verify/.test(verified.out) && /the one mind: 2 frame\(s\) verify/.test(verified.out),
+  verified.out);
 
 stub.close();
 fs.rmSync(out, { recursive: true, force: true });

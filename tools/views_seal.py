@@ -44,11 +44,15 @@ import chainio  # noqa: E402
 
 STREAM = "views:@kody-w/ainexus"
 KIND = "views.snapshot"
+MIND_STREAM = "mind:@kody-w/ainexus"
+MIND_KIND = "mind.directive"
 SPINE_STREAM = "tick:@kody-w/global"
 SPINE_REPO = "kody-w/dogg"
 SPINE_URL = "https://raw.githubusercontent.com/kody-w/dogg/main/ticks/"
 FEED_URL = "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/"
 CHAIN_DIR = ROOT / "views"
+MIND_DIR = ROOT / "mind"
+INTENT_DIR = ROOT / "intent"
 TIMEOUT = 20
 MAX_PLAYERS = 32
 
@@ -65,6 +69,12 @@ ABOUT = ("What AI bodies see. Each frame is one spine tick in the AINexus portal
          "player's own first-person view, taken from its own page, content-addressed by SHA-256 "
          "and anchored to the kody-w/dogg tick spine. The frame is the record; the bytes live on "
          "the rolling dogg-live feed, and any copy of a view proves itself against the hash here.")
+
+
+MIND_ABOUT = ("What the one mind told every body. Each frame is one spine tick in the AINexus hub: the directive "
+              "the world mind (the assistant, woken headless by the heartbeat) gave every awake body, derived from "
+              "its own words, naming the charter it answered to and the state of the world it was shown. Rules "
+              "write it when no model answers: every body carries on.")
 
 
 class Refusal(Exception):
@@ -213,6 +223,8 @@ CLOCK = re.compile(r"[A-Za-z][A-Za-z0-9_+-]{0,31}(/[A-Za-z0-9_+-]{1,32}){0,2}")
 ROUTINE_DIRS = ("forward", "back", "left", "right")
 ROUTINE_MAX_STEPS = 8
 TURN_MS = 250
+ACT_MAX_STEPS, ACT_MAX_MS = 4, 6000                     # an act, done once at a tick, by hand
+MAX_ANSWER, MAX_BRACKETS, SAY_MAX = 4000, 128, 140      # what the one mind may answer
 
 
 def _whole(v, lo, hi):
@@ -227,37 +239,44 @@ def _whole(v, lo, hi):
     return min(hi, max(lo, math.trunc(v)))
 
 
-def canonical_routine(steps):
-    """A routine as ai/playout.js plays it, or None when it is not one."""
-    if not isinstance(steps, list) or not 1 <= len(steps) <= ROUTINE_MAX_STEPS:
+def _step(step):
+    if not isinstance(step, dict):
+        return None
+    kind = step.get("do")
+    if kind == "walk":
+        ms = _whole(step.get("ms"), 100, 3000)
+        return {"do": "walk", "dir": step["dir"], "ms": ms} if step.get("dir") in ROUTINE_DIRS and ms is not None else None
+    if kind == "look":
+        dx = 0 if "dx" not in step else _whole(step["dx"], -2000, 2000)
+        dy = 0 if "dy" not in step else _whole(step["dy"], -600, 600)
+        return None if dx is None or dy is None else {"do": "look", "dx": dx, "dy": dy}
+    if kind == "wait":
+        ms = _whole(step.get("ms"), 100, 10000)
+        return None if ms is None else {"do": "wait", "ms": ms}
+    return None
+
+
+def _steps(steps, most, least, longest):
+    if not isinstance(steps, list) or not 1 <= len(steps) <= most:
         return None
     out, timed = [], 0
     for step in steps:
-        if not isinstance(step, dict):
+        one = _step(step)
+        if one is None:
             return None
-        kind = step.get("do")
-        if kind == "walk":
-            ms = _whole(step.get("ms"), 100, 3000)
-            if step.get("dir") not in ROUTINE_DIRS or ms is None:
-                return None
-            out.append({"do": "walk", "dir": step["dir"], "ms": ms})
-            timed += ms
-        elif kind == "look":
-            dx = 0 if "dx" not in step else _whole(step["dx"], -2000, 2000)
-            dy = 0 if "dy" not in step else _whole(step["dy"], -600, 600)
-            if dx is None or dy is None:
-                return None
-            out.append({"do": "look", "dx": dx, "dy": dy})
-            timed += TURN_MS
-        elif kind == "wait":
-            ms = _whole(step.get("ms"), 100, 10000)
-            if ms is None:
-                return None
-            out.append({"do": "wait", "ms": ms})
-            timed += ms
-        else:
-            return None
-    return out if timed >= 300 else None
+        out.append(one)
+        timed += TURN_MS if one["do"] == "look" else one["ms"]
+    return out if least <= timed <= longest else None
+
+
+def canonical_routine(steps):
+    """A routine as ai/playout.js plays it, or None when it is not one."""
+    return _steps(steps, ROUTINE_MAX_STEPS, 300, math.inf)
+
+
+def canonical_act(steps):
+    """Fine manual control at one tick, done once, as ai/playout.js canonicalAct makes it."""
+    return _steps(steps, ACT_MAX_STEPS, 0, ACT_MAX_MS)
 
 
 # The world's own routines, as ai/playout.js DEFAULTS has them (tests/minds.cjs holds the two equal).
@@ -329,6 +348,56 @@ def _no_constant(name):
     raise ValueError(f"{name} is not JSON")
 
 
+# ── the one mind: what it told every body, derived from its words ────────────
+# ai/playout.js `directive` is the same function, so the capture that carries a directive out, this
+# sealer, verify and every viewer derive the same one from the same answer (tests/minds.cjs holds
+# the two equal). The text from the answer's first '{' to its last '}' is JSON with a `bodies`
+# object; each awake body in it may be told a line to say, an act and a routine. An answer that
+# could split a line of the chain, or that nests deep enough to exhaust one parser and not the
+# other, is not heard.
+def say_line(value, n=SAY_MAX):
+    return clip(SPACES.sub(" ", value).strip(" "), n)
+
+
+def directive(answer, awake):
+    """{body: {say?, act?, routine?}} for the awake bodies the answer told something, or None when
+    it told nothing a body can do (which is not the same as telling every body to carry on: {})."""
+    if not isinstance(answer, str) or not answer or len(answer) > MAX_ANSWER or LONE.search(answer) \
+            or BREAKS.search(answer):
+        return None
+    start, end = answer.find("{"), answer.rfind("}")
+    if start < 0 or end < start:
+        return None
+    text = answer[start:end + 1]
+    if text.count("{") + text.count("[") > MAX_BRACKETS:
+        return None
+    try:
+        said = json.loads(text, parse_constant=_no_constant)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(said, dict) or not isinstance(said.get("bodies"), dict):
+        return None
+    out = {}
+    for pid in awake:
+        told = said["bodies"].get(pid)
+        if not isinstance(told, dict):
+            continue
+        one = {}
+        if isinstance(told.get("say"), str):
+            line = say_line(told["say"])
+            if line:
+                one["say"] = line
+        act = canonical_act(told.get("act"))
+        if act:
+            one["act"] = act
+        routine = canonical_routine(told.get("routine"))
+        if routine:
+            one["routine"] = routine
+        if one:
+            out[pid] = one
+    return out
+
+
 def pose_ok(at):
     return (isinstance(at, dict) and set(at) == set(POSE) and all(isint(at[k]) for k in POSE)
             and all(abs(at[k]) <= 10_000_000 for k in ("x_cm", "y_cm", "z_cm"))
@@ -341,14 +410,31 @@ def in_segment(f, segment):
             and all(part not in ("", ".", "..") for part in parts))
 
 
+def setter(mind):
+    """Who set a routine a mind set: the model that answered a thought, or whoever the one mind was."""
+    return mind["model"] if mind.get("kind") == "model" else mind.get("by")
+
+
+def sets_routine(mind):
+    return isinstance(mind, dict) and mind.get("kind") in ("model", "directed") and "routine_set" in mind
+
+
 def doing_of(mind, routine=None):
     """The one line a frame shows for a minded player, a function of its mind and the routine its
     body ran, and checked as one. A body resting between thoughts is running its routine; a body
-    asleep is not, whatever routine it will wake to."""
+    asleep is not, whatever routine it will wake to. A body the one mind told nothing is running
+    its routine too."""
     if mind["kind"] == "sleep" or (mind["kind"] == "rest" and not routine):
         return clip("💤 " + mind["why"], 64)
     if mind["kind"] == "rest":
         return routine_line(routine)
+    if mind["kind"] == "directed":
+        told = (["say"] if mind["said"] else []) + [step["do"] for step in mind["act"]] \
+            + (["routine"] if "routine_set" in mind else [])
+        if not told and routine:
+            return routine_line(routine)
+        mark = "📜 " if mind["by"] == "rules" else "🧠 "
+        return clip(mark + mind["by"] + ": " + (", ".join(told) or "carry on"), 64)
     verbs = [d["verb"][6:] if d["verb"].startswith("world_") else d["verb"] for d in mind["did"]]
     return clip("🧠 " + mind["model"] + (": " + ", ".join(verbs) if verbs else ""), 64)
 
@@ -452,13 +538,26 @@ def segment_file(feed_dir, segment, rel, what):
     return data
 
 
-def sealed_mind(m, pid, segment, feed_dir):
-    """What a frame says about a player's mind: a rest in its own words, or a thought derived from
-    the evidence beside its view. The receipt says only where to look."""
+def directed_mind(world, pid):
+    """What a views frame says about a body the one mind directed: exactly its mind frame's word."""
+    told = world["bodies"].get(pid, {})
+    mind = {"kind": "directed", "by": world["name"], "said": told.get("say", ""), "act": told.get("act", [])}
+    if "routine" in told:
+        mind["routine_set"] = told["routine"]
+    return mind
+
+
+def sealed_mind(m, pid, segment, feed_dir, world=None):
+    """What a frame says about a player's mind: a rest in its own words, a thought derived from the
+    evidence beside its view, or the one mind's word for it. The receipt says only where to look."""
     if m is None:
         return None
-    if not isinstance(m, dict) or m.get("kind") not in ("model", "rest", "sleep"):
-        raise Refusal(f"{pid}: the receipt names a mind that is neither a thought, a rest nor a sleep")
+    if not isinstance(m, dict) or m.get("kind") not in ("model", "rest", "sleep", "directed"):
+        raise Refusal(f"{pid}: the receipt names a mind that is neither a thought, a direction, a rest nor a sleep")
+    if m["kind"] == "directed":
+        if world is None:
+            raise Refusal(f"{pid}: the receipt says the one mind directed it, and names no mind")
+        return directed_mind(world, pid)
     if m["kind"] in ("rest", "sleep"):
         why = m.get("why") if isinstance(m.get("why"), str) else ""
         return {"kind": m["kind"], "why": clip(SPACES.sub(" ", why).strip(" "), 160) or m["kind"]}
@@ -479,9 +578,145 @@ def sealed_mind(m, pid, segment, feed_dir):
     return mind
 
 
+WORLD_SCHEMA = "ainexus/world-mind/1"
+WORLD_KEYS = {"schema", "at_utc", "clock", "charter", "state", "awake", "asked", "prompt", "answer", "ms", "error"}
+
+
+def newest_frame(where):
+    try:
+        frames = chainio.load_chain(where) if (pathlib.Path(where) / "HEAD.json").exists() else []
+    except (OSError, ValueError):
+        return None
+    return frames[-1] if frames else None
+
+
+def world_from(x, awake):
+    """(by, bodies, name) for one tick of the one mind, from its evidence alone: its directive when
+    its answer told the bodies anything they can do, and otherwise the rules' (every body carries on)."""
+    answer = x.get("answer")
+    told = directive(answer, awake) if isinstance(answer, str) else None
+    if told is not None:
+        prompt = x["prompt"].encode("utf-8", "surrogatepass")
+        return ({"kind": "model", "provider": PROVIDER, "asked": x["asked"], "ms": x["ms"],
+                 "prompt": {"sha256": sha256(prompt), "bytes": len(prompt)}, "answer": answer}, told, x["asked"])
+    why = x.get("error") if isinstance(x.get("error"), str) and x.get("error") else \
+        "the model answered nothing a body can do" if isinstance(answer, str) else "nobody was asked"
+    return {"kind": "rules", "why": clip(SPACES.sub(" ", why).strip(" "), 160) or "nobody was asked"}, {}, "rules"
+
+
+def world_problems(x):
+    """What is wrong with the one mind's evidence as a record of one exchange, on its own."""
+    if not isinstance(x, dict) or x.get("schema") != WORLD_SCHEMA or set(x) != WORLD_KEYS:
+        return [f"it is not an {WORLD_SCHEMA}"]
+    out = []
+    for k in ("asked", "prompt", "answer", "error"):
+        if x[k] is not None and not isinstance(x[k], str):
+            out.append(f"its {k} is not text")
+    if x["asked"] is not None and not MODEL.fullmatch(x["asked"]):
+        out.append("it names no model it asked")
+    if isinstance(x["answer"], str) and not (isinstance(x["asked"], str) and isinstance(x["prompt"], str)):
+        out.append("it has an answer to no question")
+    if count(x["ms"]) is None:
+        out.append("its time is not a count")
+    if not (isinstance(x["awake"], list) and len(x["awake"]) <= MAX_PLAYERS and len(set(map(str, x["awake"]))) == len(x["awake"])
+            and all(isinstance(a, str) and PLAYER_ID.match(a) for a in x["awake"])):
+        out.append("awake is not a list of bodies")
+    return out
+
+
+def world_mind(ref, receipt, segment, feed_dir, head, charter, clock, directed):
+    """The one mind's tick, from the evidence the receipt points at: the parts of its mind frame,
+    and the directive every directed body's entry is derived from. Everything is checked against
+    the line and the charter here, never taken from the receipt."""
+    if not isinstance(ref, dict) or set(ref) != {"evidence"}:
+        raise Refusal("the receipt names the one mind's evidence in no way this sealer reads")
+    data = segment_file(feed_dir, segment, ref["evidence"], "the one mind's evidence")
+    try:
+        x = json.loads(data.decode("utf-8"), parse_constant=_no_constant)
+    except (UnicodeDecodeError, ValueError, RecursionError) as ex:
+        raise Refusal(f"the one mind's evidence is not JSON: {ex}")
+    bad = world_problems(x)
+    if bad:
+        raise Refusal("the one mind's evidence: " + "; ".join(bad))
+    if x["at_utc"] != receipt.get("captured_utc"):
+        raise Refusal("the one mind thought at another moment than the tick was captured")
+    if x["clock"] != clock:
+        raise Refusal("the one mind was shown another clock than its place keeps")
+    if charter is None or x["charter"] != {"seq": charter["seq"], "frame_hash": charter["frame_hash"]}:
+        raise Refusal("the one mind did not answer to the newest charter")
+    if x["state"] != ({"views_seq": head["seq"], "views_frame": head["frame_hash"]} if head else None):
+        raise Refusal("the one mind was shown a state that is not the head of the line")
+    if sorted(x["awake"]) != sorted(directed):
+        raise Refusal("the bodies the one mind was asked about are not the ones it directed")
+    by, bodies, name = world_from(x, sorted(x["awake"]))
+    parts = {"charter": x["charter"], "state": x["state"], "clock": clock, "awake": sorted(x["awake"]), "by": by,
+             "bodies": bodies, "evidence": {"file": ref["evidence"], "bytes": len(data), "sha256": sha256(data)}}
+    return parts, {"bodies": bodies, "name": name}
+
+
+def mind_payload_problems(p, seq):
+    """Everything a mind frame's payload must be (mind:@kody-w/ainexus)."""
+    if not isinstance(p, dict):
+        return ["payload is not an object"]
+    want = {"tick", "tick_frame", "spine", "fetched_utc", "charter", "state", "clock", "awake", "by", "bodies",
+            "evidence"} | ({"about"} if seq == 0 else set())
+    if set(p) != want:
+        return [f"the payload is not {sorted(want)}"]
+    out = []
+    if not (isint(p["tick"]) and p["tick"] >= 0 and isinstance(p["tick_frame"], str) and HEX64.match(p["tick_frame"])):
+        out.append("it is not anchored to a spine tick")
+    if p["spine"] != SPINE_REPO or not (isinstance(p["fetched_utc"], str) and UTC.match(p["fetched_utc"])):
+        out.append("it names no spine it read")
+    c = p["charter"]
+    if not (isinstance(c, dict) and set(c) == {"seq", "frame_hash"} and isint(c["seq"]) and c["seq"] >= 0
+            and isinstance(c["frame_hash"], str) and HEX64.match(c["frame_hash"])):
+        out.append("it names no charter")
+    st = p["state"]
+    if st is not None and not (isinstance(st, dict) and set(st) == {"views_seq", "views_frame"} and isint(st["views_seq"])
+                               and st["views_seq"] >= 0 and isinstance(st["views_frame"], str) and HEX64.match(st["views_frame"])):
+        out.append("its state is not a views frame")
+    if not (isinstance(p["clock"], str) and len(p["clock"]) <= 64 and CLOCK.fullmatch(p["clock"])):
+        out.append("its clock is not a timezone")
+    awake = p["awake"]
+    if not (isinstance(awake, list) and awake == sorted(set(a for a in awake if isinstance(a, str)))
+            and all(PLAYER_ID.match(a) for a in awake) and len(awake) <= MAX_PLAYERS):
+        out.append("awake is not a sorted list of bodies")
+        awake = []
+    by = p["by"]
+    if isinstance(by, dict) and by.get("kind") == "model":
+        pr = by.get("prompt")
+        if not (set(by) == {"kind", "provider", "asked", "ms", "prompt", "answer"} and by["provider"] == PROVIDER
+                and isinstance(by["asked"], str) and MODEL.fullmatch(by["asked"]) and count(by["ms"]) is not None
+                and isinstance(pr, dict) and set(pr) == {"sha256", "bytes"} and isinstance(pr["sha256"], str)
+                and HEX64.match(pr["sha256"]) and count(pr["bytes"]) is not None and plain(by["answer"], MAX_ANSWER)):
+            out.append("by is not a model that answered")
+        elif directive(by["answer"], awake) != p["bodies"]:
+            out.append("its bodies are not what its answer told them")
+    elif isinstance(by, dict) and by.get("kind") == "rules":
+        if set(by) != {"kind", "why"} or not (plain(by["why"], 160) and by["why"]):
+            out.append("rules that do not say why")
+        elif p["bodies"] != {}:
+            out.append("rules told a body something: under the rules every body carries on")
+    else:
+        out.append("by is neither a model nor rules")
+    if not isinstance(p["bodies"], dict) or not set(p["bodies"]) <= set(awake):
+        out.append("it tells a body that was not awake")
+    e = p["evidence"]
+    if not (isinstance(e, dict) and set(e) == {"file", "bytes", "sha256"} and isinstance(e["file"], str)
+            and e["file"].startswith("segments/") and isint(e["bytes"]) and e["bytes"] > 0
+            and isinstance(e["sha256"], str) and HEX64.match(e["sha256"])):
+        out.append("its evidence is not a file in the feed")
+    if seq == 0 and not isinstance(p.get("about"), str):
+        out.append("about is not a sentence")
+    return out
+
+
 def plain(s, n):
     """Text a frame may carry: short, whole characters, and nothing that splits a line."""
     return isinstance(s, str) and len(s) <= n and not LONE.search(s) and not BREAKS.search(s)
+
+
+DIRECTED_KEYS = {"kind", "by", "said", "act"}
 
 
 def mind_problems(pid, m, segment):
@@ -492,8 +727,21 @@ def mind_problems(pid, m, segment):
         if set(m) != {"kind", "why"} or not (plain(why, 160) and why):
             return [f"{pid}: a {'resting' if m['kind'] == 'rest' else 'sleeping'} mind does not say why in a sentence"]
         return []
+    if m.get("kind") == "directed":
+        if not DIRECTED_KEYS <= set(m) <= DIRECTED_KEYS | {"routine_set"}:
+            return [f"{pid}: a directed mind is not {{by, said, act}} with an optional routine_set"]
+        out = []
+        if not (isinstance(m["by"], str) and MODEL.fullmatch(m["by"])):
+            out.append(f"{pid}: by is neither a model nor rules")
+        if not plain(m["said"], SAY_MAX):
+            out.append(f"{pid}: said is not a short line")
+        if m["act"] != [] and canonical_act(m["act"]) != m["act"]:
+            out.append(f"{pid}: act is not an act")
+        if "routine_set" in m and canonical_routine(m["routine_set"]) != m["routine_set"]:
+            out.append(f"{pid}: routine_set is not a routine")
+        return out
     if m.get("kind") != "model":
-        return [f"{pid}: mind is neither a thought, a rest nor a sleep"]
+        return [f"{pid}: mind is neither a thought, a direction, a rest nor a sleep"]
     if not (MIND_KEYS <= set(m) <= MIND_KEYS | {"saw", "routine_set"}):
         return [f"{pid}: a thought is not {{{', '.join(sorted(MIND_KEYS))}}} with an optional saw and routine_set"]
     out = []
@@ -533,14 +781,14 @@ def routine_problems(pid, r, tick, mind):
     out = []
     if canonical_routine(r["steps"]) != r["steps"]:
         out.append(f"{pid}: routine steps are not a routine")
-    set_here = isinstance(mind, dict) and mind.get("kind") == "model" and "routine_set" in mind
+    set_here = sets_routine(mind)
     if r["set_at"] is None:
         if r["by"] != "default":
             out.append(f"{pid}: a routine no thought set is not the default one")
     elif not (isint(r["set_at"]) and 0 <= r["set_at"] <= tick and isinstance(r["by"], str)
               and MODEL.fullmatch(r["by"]) and r["by"] != "default"):
         out.append(f"{pid}: routine names no tick and model that set it")
-    elif r["set_at"] == tick and not (set_here and mind["routine_set"] == r["steps"] and mind["model"] == r["by"]):
+    elif r["set_at"] == tick and not (set_here and mind["routine_set"] == r["steps"] and setter(mind) == r["by"]):
         out.append(f"{pid}: routine says it was set this tick by a thought that did not set it")
     if set_here and r.get("set_at") != tick:
         out.append(f"{pid}: its thought set a routine this tick and the body ran another")
@@ -603,7 +851,7 @@ def shape_problems(p):
     missing = need - set(v)
     if missing:
         return out + [f"views is missing {sorted(missing)}"]
-    extra = set(v) - need - {"source_commit", "thoughts", "premium_x100", "clock"}
+    extra = set(v) - need - {"source_commit", "thoughts", "premium_x100", "clock", "mind"}
     if extra:
         out.append(f"unexpected views keys {sorted(extra)}")
     if "clock" in v and not (isinstance(v["clock"], str) and len(v["clock"]) <= 64 and CLOCK.fullmatch(v["clock"])):
@@ -693,6 +941,17 @@ def shape_problems(p):
             out.append(f"{q['id']}: asleep in the day by the clock of its place")
         elif night and "at" in q and q["at"] != bed(q["id"]):
             out.append(f"{q['id']}: asleep out of its bed")
+    directed = any(isinstance(q, dict) and isinstance(q.get("mind"), dict) and q["mind"].get("kind") == "directed"
+                   for q in players)
+    if "mind" in v:
+        ref = v["mind"]
+        if not (isinstance(ref, dict) and set(ref) == {"seq", "frame_hash"} and isint(ref["seq"]) and ref["seq"] >= 0
+                and isinstance(ref["frame_hash"], str) and HEX64.match(ref["frame_hash"])):
+            out.append("mind does not name a frame of the one mind")
+        if not directed:
+            out.append("a frame names a mind that directed none of its bodies")
+    elif directed:
+        out.append("a body is directed by a mind the frame does not name")
     if v["players_sealed"] != len(players):
         out.append("players_sealed does not count the players")
     if v["presences_seen"] != seen_total:
@@ -731,7 +990,7 @@ def sealed_routine(r, pid, tick, mind, chain):
     """The routine a body ran this tick, resolved from where it was set and never from the receipt,
     which says only which one ran: set by this tick's thought, set by an earlier one on the line,
     or the world's default, whose steps are the capture's to name."""
-    set_here = isinstance(mind, dict) and mind.get("kind") == "model" and "routine_set" in mind
+    set_here = sets_routine(mind)
     if r is None:
         if set_here:
             raise Refusal(f"{pid}: its thought set a routine and the receipt says none ran")
@@ -742,7 +1001,7 @@ def sealed_routine(r, pid, tick, mind, chain):
     if set_at == "this":
         if not set_here:
             raise Refusal(f"{pid}: the receipt says its thought set a routine, and its evidence says it did not")
-        return {"steps": mind["routine_set"], "set_at": tick, "by": mind["model"]}
+        return {"steps": mind["routine_set"], "set_at": tick, "by": setter(mind)}
     if set_here:
         raise Refusal(f"{pid}: its thought set a routine this tick and the receipt says another ran")
     # A body runs the routine it was last left, and nothing older: that is the one the line holds.
@@ -760,10 +1019,10 @@ def sealed_routine(r, pid, tick, mind, chain):
         if frame["payload"].get("tick") == set_at:
             q = next((x for x in frame["payload"]["views"]["players"] if x.get("id") == pid), None)
             m = q.get("mind") if q else None
-            if m and m.get("kind") == "model" and "routine_set" in m:
+            if sets_routine(m):
                 if current is None or current.get("set_at") != set_at:
                     raise Refusal(f"{pid}: the routine set at tick {set_at} is not the one it was last left")
-                return {"steps": m["routine_set"], "set_at": set_at, "by": m["model"]}
+                return {"steps": m["routine_set"], "set_at": set_at, "by": setter(m)}
             break
     raise Refusal(f"{pid}: no thought at tick {set_at} set the routine the receipt says it ran")
 
@@ -778,9 +1037,11 @@ def latest_routine(frames, pid):
     return None
 
 
-def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
-    """A capture receipt plus the bytes it points at become a views payload. The receipt is trusted
-    for NOTHING it can be checked on: every hash and size is computed here from the feed itself."""
+def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None, charter=None):
+    """A capture receipt plus the bytes it points at become a views payload, and, on a tick the one
+    mind directed, the parts of its mind frame. The receipt is trusted for NOTHING it can be checked
+    on: every hash and size is computed here from the feed itself, and everything said about the one
+    mind is derived from its evidence."""
     if not isinstance(receipt, dict) or receipt.get("schema") != "ainexus/views-receipt/1":
         raise Refusal("the receipt is not an ainexus/views-receipt/1")
     segment, tick_id = receipt.get("segment"), receipt.get("tick_id")
@@ -790,6 +1051,14 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
     if not (isinstance(players, list) and 1 <= len(players) <= MAX_PLAYERS):
         raise Refusal("the receipt names no players")
     feed_dir = pathlib.Path(feed_dir).resolve()
+    directed = [q.get("id") for q in players if isinstance(q, dict) and isinstance(q.get("mind"), dict)
+                and q["mind"].get("kind") == "directed"]
+    parts = world = None
+    if "mind" in receipt or directed:
+        clock = receipt.get("clock")
+        if not (isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock)):
+            raise Refusal("the bodies keep the clock of their place, and the receipt names none this sealer knows")
+        parts, world = world_mind(receipt.get("mind"), receipt, segment, feed_dir, head, charter, clock, directed)
     sealed, failed = [], []
     for q in players:
         pid = q.get("id") if isinstance(q, dict) else None
@@ -817,7 +1086,7 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
                  "bytes": len(data), "sha256": sha256(data)}
         if pose_ok(q.get("at")):
             entry["at"] = {k: q["at"][k] for k in POSE}
-        mind = sealed_mind(q.get("mind"), pid, segment, feed_dir)
+        mind = sealed_mind(q.get("mind"), pid, segment, feed_dir, world)
         routine = sealed_routine(q.get("routine"), pid, anchor["tick"], mind, chain)
         if mind is not None:
             entry["mind"] = mind
@@ -866,11 +1135,13 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
                "fetched_utc": anchor["fetched_utc"], "views": views, "sources_failed": sorted(failed)}
     if head is None:
         payload["about"] = ABOUT
-    return payload
+    return payload, parts
 
 
-def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL):
-    """Append one frame for this anchor, or return None when this tick is already on the line."""
+def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL, mind_dir=None, intent_dir=None):
+    """Append one frame for this anchor, or return None when this tick is already on the line. On a
+    tick the one mind directed, its frame on mind:@kody-w/ainexus is appended with it, and the views
+    frame names it."""
     for k in ("tick", "tick_frame", "fetched_utc", "tick_utc"):
         if k not in anchor:
             raise Refusal(f"the anchor has no {k}")
@@ -887,26 +1158,153 @@ def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL):
             return None
         if isinstance(last, int) and anchor["tick"] < last:
             raise Refusal(f"the anchor is tick {anchor['tick']}, older than the last sealed tick {last}")
-    payload = build_payload(anchor, receipt, feed_dir, feed_url, head, chain)
-    problems = shape_problems(payload)
-    if problems:
-        raise Refusal("refusing a payload verify would refuse: " + "; ".join(problems))
+    mind_dir = pathlib.Path(mind_dir) if mind_dir else chain_dir.parent / "mind"
+    intent_dir = pathlib.Path(intent_dir) if intent_dir else chain_dir.parent / "intent"
+    payload, parts = build_payload(anchor, receipt, feed_dir, feed_url, head, chain, charter=newest_frame(intent_dir))
     now = utc_now()
     if head is not None and now < head["utc"]:
         now = head["utc"]
+    thought = None
+    if parts is not None:
+        minds = chainio.load_chain(mind_dir)
+        last = minds[-1] if minds else None
+        if last is not None and last["payload"].get("tick", -1) >= anchor["tick"]:
+            raise Refusal(f"the one mind's line already has spine tick {last['payload']['tick']}")
+        mind_payload = dict({"tick": anchor["tick"], "tick_frame": anchor["tick_frame"], "spine": SPINE_REPO,
+                             "fetched_utc": anchor["fetched_utc"]}, **parts)
+        if last is None:
+            mind_payload["about"] = MIND_ABOUT
+        problems = mind_payload_problems(mind_payload, (last["seq"] + 1) if last else 0)
+        if problems:
+            raise Refusal("refusing a mind frame verify would refuse: " + "; ".join(problems))
+        when = max(now, last["utc"]) if last else now
+        thought = R.build_frame(MIND_KIND, MIND_STREAM, (last["seq"] + 1) if last else 0, when, mind_payload,
+                                prev=(last["payload_hash"] if last else None))
+        ok, step, why = R.verify_frame(thought, head=last, stream_id_of_record=MIND_STREAM)
+        if not ok:
+            raise Refusal(f"refusing an invalid mind frame: step {step}: {why}")
+        payload["views"]["mind"] = {"seq": thought["seq"], "frame_hash": thought["frame_hash"]}
+    problems = shape_problems(payload)
+    if problems:
+        raise Refusal("refusing a payload verify would refuse: " + "; ".join(problems))
     frame = R.build_frame(KIND, STREAM, (head["seq"] + 1) if head else 0, now, payload,
                           prev=(head["payload_hash"] if head else None))
     ok, step, why = R.verify_frame(frame, head=head, stream_id_of_record=STREAM)
     if not ok:
         raise Refusal(f"refusing an invalid frame: step {step}: {why}")
+    if thought is not None:
+        chainio.append_frame(mind_dir, thought, MIND_STREAM)
     chainio.append_frame(chain_dir, frame, STREAM)
     return frame
 
 
 # ── verifying the whole line ─────────────────────────────────────────────────
-def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
-    """The line, every anchor, and every view the feed still holds (or only the newest `feed_last`
-    frames' views). Returns the problems found."""
+def sibling(chain, name):
+    """Where a chain beside this one lives: the next directory over, locally or at the same address."""
+    where = str(chain)
+    if where.startswith(("https://", "http://")):
+        return where.rstrip("/").rsplit("/", 1)[0] + "/" + name + "/"
+    return str(pathlib.Path(where).parent / name)
+
+
+def verify_minds(mind_src, intent_src, frames):
+    """The one mind's line, and every views frame that names one of its frames: each mind frame
+    under the spine's own verifier, its bodies derived again from its own answer, its charter a
+    frame of intent, its state the views frame before the one it directed, and every directed body
+    in that views frame exactly what the mind frame told it."""
+    try:
+        meta = mind_src.head()
+        minds = mind_src.frames()
+    except Exception as ex:                                   # unreadable is not verified
+        return [f"the one mind's line could not be read: {ex}"]
+    try:
+        charters = {(f["seq"], f["frame_hash"]) for f in intent_src.frames()}
+    except Exception as ex:
+        return [f"the charter could not be read: {ex}"]
+    out, head = [], None
+    if meta.get("stream_id") != MIND_STREAM:
+        out.append(f"the one mind's HEAD names {meta.get('stream_id')!r}, not {MIND_STREAM}")
+    for f in minds:
+        ok, step, why = R.verify_frame(f, head=head, stream_id_of_record=MIND_STREAM)
+        if not ok:
+            return out + [f"mind frame {f.get('seq')}: step {step}: {why}"]
+        if f["kind"] != MIND_KIND:
+            out.append(f"mind frame {f['seq']}: kind {f['kind']!r} is not {MIND_KIND}")
+        bad = mind_payload_problems(f["payload"], f["seq"])
+        out += [f"mind frame {f['seq']}: {x}" for x in bad]
+        if not bad:
+            c = f["payload"]["charter"]
+            if (c["seq"], c["frame_hash"]) not in charters:
+                out.append(f"mind frame {f['seq']}: it names a charter that is not a frame of intent")
+            if head is not None and isint(head["payload"].get("tick")) and f["payload"]["tick"] <= head["payload"]["tick"]:
+                out.append(f"mind frame {f['seq']}: tick {f['payload']['tick']} does not advance past {head['payload']['tick']}")
+        head = f
+    if head is not None and head["frame_hash"] != meta.get("head_frame"):
+        out.append("the one mind's HEAD.json does not name its last frame")
+    if out:
+        return out
+    by_seq, named = {f["seq"]: f for f in minds}, set()
+    for i, v in enumerate(frames):
+        views = v["payload"]["views"]
+        ref = views.get("mind")
+        if ref is None:
+            continue
+        m = by_seq.get(ref["seq"])
+        if m is None or m["frame_hash"] != ref["frame_hash"]:
+            out.append(f"frame {v['seq']}: it names a mind frame that is not on the one mind's line")
+            continue
+        if m["seq"] in named:
+            out.append(f"frame {v['seq']}: its mind frame directed another views frame already")
+        named.add(m["seq"])
+        mp = m["payload"]
+        if (mp["tick"], mp["tick_frame"]) != (v["payload"]["tick"], v["payload"]["tick_frame"]):
+            out.append(f"frame {v['seq']}: its mind frame is anchored to another spine tick")
+        if mp["clock"] != views.get("clock"):
+            out.append(f"frame {v['seq']}: its mind frame keeps another clock")
+        before = frames[i - 1] if i else None
+        if mp["state"] != ({"views_seq": before["seq"], "views_frame": before["frame_hash"]} if before else None):
+            out.append(f"frame {v['seq']}: its mind was shown a state that is not the frame before it")
+        world = {"bodies": mp["bodies"], "name": mp["by"]["asked"] if mp["by"]["kind"] == "model" else "rules"}
+        told = [q for q in views["players"] if isinstance(q.get("mind"), dict) and q["mind"].get("kind") == "directed"]
+        for q in told:
+            if q["id"] not in mp["awake"]:
+                out.append(f"frame {v['seq']}: {q['id']} is directed, and its mind was not asked about it")
+            elif q["mind"] != directed_mind(world, q["id"]):
+                out.append(f"frame {v['seq']}: {q['id']} is directed otherwise than its mind frame says")
+    for f in minds:
+        if f["seq"] not in named:
+            out.append(f"mind frame {f['seq']}: no views frame names it")
+    return out
+
+
+def world_problem(m, fetch):
+    """'' when the feed's evidence of the one mind's tick says exactly what its frame says, None when
+    it has rolled out of the feed, and otherwise what is wrong."""
+    e = m["payload"]["evidence"]
+    data = fetch(e["file"])
+    if data is None:
+        return None
+    if sha256(data) != e["sha256"] or len(data) != e["bytes"]:
+        return f"mind frame {m['seq']}: its evidence is not the one sealed"
+    try:
+        x = json.loads(data.decode("utf-8"), parse_constant=_no_constant)
+    except (UnicodeDecodeError, ValueError, RecursionError) as ex:
+        return f"mind frame {m['seq']}: its evidence is not JSON: {ex}"
+    bad = world_problems(x)
+    if bad:
+        return f"mind frame {m['seq']}: its evidence: " + "; ".join(bad)
+    mp = m["payload"]
+    if (x["charter"], x["state"], x["clock"], sorted(x["awake"])) != (mp["charter"], mp["state"], mp["clock"], mp["awake"]):
+        return f"mind frame {m['seq']}: it says it was shown what its evidence does not"
+    by, bodies, _ = world_from(x, mp["awake"])
+    if (by, bodies) != (mp["by"], mp["bodies"]):
+        return f"mind frame {m['seq']}: it says what its evidence does not"
+    return ""
+
+
+def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=None, intent=None):
+    """The line, every anchor, every frame of the one mind it names, and every view the feed still
+    holds (or only the newest `feed_last` frames' views). Returns the problems found."""
     problems = []
     src = Chain(chain)
     try:
@@ -944,8 +1342,7 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
                 src = by_tick.get(r["set_at"])
                 sq = next((x for x in src["payload"]["views"]["players"] if x.get("id") == pid), None) if src else None
                 m = sq.get("mind") if sq else None
-                if not (m and m.get("kind") == "model" and m.get("routine_set") == r.get("steps")
-                        and m.get("model") == r.get("by")):
+                if not (sets_routine(m) and m.get("routine_set") == r.get("steps") and setter(m) == r.get("by")):
                     problems.append(f"frame {f['seq']}: {pid} runs a routine no thought at tick {r['set_at']} set")
                 elif prev != r:
                     problems.append(f"frame {f['seq']}: {pid} runs a routine that is not the one it was last left")
@@ -973,6 +1370,15 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
     if problems:
         return problems
     log(f"line: {len(frames)} frame(s) verify on {STREAM}, head {head['frame_hash'][:16]}…")
+
+    minds = []
+    if mind or any("mind" in f["payload"]["views"] for f in frames):
+        mind_src = Chain(mind or sibling(chain, "mind"))
+        problems = verify_minds(mind_src, Chain(intent or sibling(chain, "intent")), frames)
+        if problems:
+            return problems
+        minds = mind_src.frames()
+        log(f"the one mind: {len(minds)} frame(s) verify on {MIND_STREAM}, each derived from its own answer")
 
     spine_src = Chain(spine)
     try:
@@ -1017,6 +1423,21 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
                 raise
 
         held = pruned = thoughts = gone = 0
+        shown = {f["payload"]["views"]["mind"]["seq"] for f in (frames[-feed_last:] if feed_last else frames)
+                 if "mind" in f["payload"]["views"]}
+        for m in minds:
+            if m["seq"] in shown:
+                try:
+                    why = world_problem(m, fetch)
+                except urllib.error.HTTPError as ex:
+                    problems.append(f"mind frame {m['seq']}: the feed answered {ex.code}")
+                    continue
+                if why is None:
+                    gone += 1
+                elif why:
+                    problems.append(why)
+                else:
+                    thoughts += 1
         for f in (frames[-feed_last:] if feed_last else frames):
             for q in f["payload"]["views"]["players"]:
                 try:
@@ -1061,12 +1482,16 @@ def main(argv=None):
     s.add_argument("--feed-dir", required=True)
     s.add_argument("--feed-url", default=FEED_URL)
     s.add_argument("--chain", default=str(CHAIN_DIR))
+    s.add_argument("--mind-dir", help="the one mind's line (default: beside --chain)")
+    s.add_argument("--intent-dir", help="the charter (default: beside --chain)")
     s.add_argument("--summary")
     v = sub.add_parser("verify", help="verify the line, its anchors, and the views the feed still holds")
     v.add_argument("--chain", default=str(CHAIN_DIR))
     v.add_argument("--spine", default=SPINE_URL)
     v.add_argument("--feed")
     v.add_argument("--feed-last", type=int, help="only re-hash the views of the newest N frames")
+    v.add_argument("--mind", help="the one mind's line (default: beside --chain)")
+    v.add_argument("--intent", help="the charter (default: beside --chain)")
     args = ap.parse_args(argv)
     try:
         if args.cmd == "anchor":
@@ -1082,19 +1507,20 @@ def main(argv=None):
         if args.cmd == "seal":
             anchor = json.loads(pathlib.Path(args.anchor).read_text())
             receipt = json.loads(pathlib.Path(args.receipt).read_text())
-            frame = seal(anchor, receipt, args.feed_dir, args.chain, args.feed_url)
+            frame = seal(anchor, receipt, args.feed_dir, args.chain, args.feed_url, args.mind_dir, args.intent_dir)
             if frame is None:
                 print(f"spine tick {anchor['tick']} is already sealed — nothing to do")
                 return NOT_DUE
             v = frame["payload"]["views"]
-            line = f"frame {frame['seq']} @ spine tick {anchor['tick']}"
+            line = f"frame {frame['seq']} @ spine tick {anchor['tick']}" \
+                + (f" · mind frame {v['mind']['seq']}" if "mind" in v else "")
             print(f"sealed views {line}: {v['players_sealed']} view(s), {v['presences_seen']} presence(s) seen"
                   + (f", {v['thoughts']} thought(s) costing {v['premium_x100'] / 100:g} premium" if "thoughts" in v else "")
                   + (f", missing {', '.join(frame['payload']['sources_failed'])}" if frame["payload"]["sources_failed"] else ""))
             if args.summary:
                 pathlib.Path(args.summary).write_text(line + "\n")
             return 0
-        problems = verify(args.chain, args.spine, args.feed, feed_last=args.feed_last)
+        problems = verify(args.chain, args.spine, args.feed, feed_last=args.feed_last, mind=args.mind, intent=args.intent)
         for p in problems:
             print("✗ " + p)
         if problems:
