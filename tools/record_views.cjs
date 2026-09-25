@@ -235,8 +235,16 @@ async function mindOf(player, tick) {
       }
     }
   }
-  // the routine the body runs from here: the one this thought set, or the one it already had
-  const set = outcome && player.record && player.record.routine;
+  // The routine the body runs from here: the one this thought set, read from the thought's own
+  // calls exactly as the sealer reads them, or the one it already had. A thought that failed after
+  // the model answered is sealed with no calls, so it set nothing, whatever reached the hands.
+  let set = null;
+  for (const call of outcome ? outcome.calls : []) {
+    if (call.tool === 'world_routine' && call.failed === false) {
+      const steps = minds.Playout.canonical(call.args && call.args.steps);
+      if (steps) set = steps;
+    }
+  }
   const answered = player.record && player.record.rounds.length
     ? player.record.rounds[player.record.rounds.length - 1].response.model : null;
   const running = set ? { steps: set, set_at: 'this', by: answered || planned.model } : planned.routine;

@@ -142,6 +142,8 @@
   function cursor(start, steps) {
     let t0 = 0, p0 = Object.assign({}, start), i0 = 0;
     return function at(elapsed) {
+      // a moment that is not a number is no moment: the body stays where it began
+      if (!Number.isFinite(elapsed)) return Object.assign({}, start);
       let t = Math.max(0, Math.trunc(elapsed));
       if (!steps || !steps.length) return Object.assign({}, start);
       if (t < t0) { t0 = 0; p0 = Object.assign({}, start); i0 = 0; }
@@ -159,6 +161,13 @@
   const play = (start, steps, elapsed) => cursor(start, steps)(elapsed);
 
   // ── the clock ─────────────────────────────────────────────────────────────
+  // a clock this engine can read, or the body's own: a line may name a zone this browser has never heard of
+  function validClock(tz, id) {
+    if (typeof tz === 'string' && tz) {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz; } catch (error) {}
+    }
+    return clockOf(id);
+  }
   const hours = new Map();
   function localHour(tz, ms) {
     let f = hours.get(tz);
@@ -179,15 +188,17 @@
     const { hour, minute } = localHour(tz, ms);
     return tz.split('/').pop().replace(/_/g, ' ') + ' ' + String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
   }
-  // The last moment in (from, to] at which a body asleep at some point after `from` woke, on the
-  // grid every player of the line agrees on; null when it slept through none of that span.
+  // The last moment in (from, to] at which a body asleep at some point after `from` woke; null when
+  // it slept through none of that span. Waking is looked for on the five-minute marks of the clock
+  // itself, not of the frame: every real timezone is a whole number of quarter hours from UTC, so
+  // 07:00 anywhere is one of those marks, and a tick a second past it still finds the body awake.
   const woken = new Map();
   function wokeAt(tz, from, to) {
-    if (!(to > from)) return null;
-    const key = tz + '|' + from + '|' + Math.floor((to - from) / WAKE_GRID_MS);
+    if (!(to > from) || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+    const key = tz + '|' + from + '|' + Math.floor(to / WAKE_GRID_MS);
     if (woken.has(key)) return woken.get(key);
     let woke = null, sleeping = asleepAt(tz, from);
-    for (let t = from + WAKE_GRID_MS; t <= to; t += WAKE_GRID_MS) {
+    for (let t = (Math.floor(from / WAKE_GRID_MS) + 1) * WAKE_GRID_MS; t <= to; t += WAKE_GRID_MS) {
       const now = asleepAt(tz, t);
       if (sleeping && !now) woke = t;
       sleeping = now;
@@ -204,7 +215,7 @@
   // animation frame, and only the time since the last answer is played.
   function tracker(entry, frameMs) {
     const id = entry.id;
-    const tz = entry.clock || clockOf(id);
+    const tz = validClock(entry.clock, id);
     const steps = entry.routine ? canonical(entry.routine.steps) : null;
     let from = null, run = null, risen = null;
     return function at(ms) {
@@ -226,6 +237,6 @@
     return (steps || []).map(s => s.do).join(', ');
   }
 
-  return { canonical, play, cursor, stateAt, tracker, asleepAt, wokeAt, clockText, clockOf, bed, defaultRoutine,
+  return { canonical, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt, clockText, clockOf, bed, defaultRoutine,
            summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT, HOMES };
 }));

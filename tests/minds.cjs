@@ -77,6 +77,7 @@ check('with no seat, nobody thinks, and every mind says why',
   JSON.stringify(plan.players));
 check('a cut never splits a character in two, so the sealer can always encode it',
   minds.clip('ab😀😀c', 4) === 'ab😀…' && minds.clip('ab😀😀', 4) === 'ab😀😀');
+const P0 = minds.Playout;
 const hour = h => new Date(NOW - h * 3600000).toISOString();
 const premium = { cap_x100: 300, players: { ada: { model: 'premium', every: 1, multiplier_x100: 100 } } };
 check('what this machine paid for and never sealed counts against the day, and the larger ledger wins',
@@ -139,6 +140,30 @@ print(json.dumps([V.canonical_routine(r) for r in json.loads(sys.stdin.read())])
     .filter(Boolean).join('; ');
 } catch (error) { parity = String(error.message || error); }
 check('the capture and the sealer make every routine a model might write canonical in exactly the same way', parity === '', parity);
+let equal = 'unchecked';
+try {
+  const py = JSON.parse(execFileSync(PYTHON, ['-c', `import sys, json; sys.path.insert(0, "tools"); import views_seal as V
+text = '[{"do":"wait","ms":1' + '0' * 309 + '}]'
+print(json.dumps({"defaults": V.DEFAULT_ROUTINES, "huge": V.canonical_routine(json.loads(text))}))`],
+    { cwd: ROOT, encoding: 'utf8' }));
+  const ids = ['wanderer', 'greeter', 'pilgrim', 'watcher'];
+  const huge = minds.Playout.canonical(JSON.parse('[{"do":"wait","ms":1' + '0'.repeat(309) + '}]'));
+  equal = ids.filter(id => JSON.stringify(py.defaults[id]) !== JSON.stringify(minds.Playout.defaultRoutine(id))).join(', ')
+    + (JSON.stringify(py.huge) !== JSON.stringify(huge) ? ' huge: js ' + JSON.stringify(huge) + ' python ' + JSON.stringify(py.huge) : '');
+} catch (error) { equal = String(error.message || error); }
+check('the world\'s default routines are the same in the playout and the sealer, and a number too big for JavaScript is too big for both',
+  equal === '', equal);
+{
+  const e = { id: 'wanderer', at: P0.bed('wanderer'), routine: { steps: P0.defaultRoutine('wanderer') }, clock: 'Asia/Tokyo' };
+  const asleep = Date.parse('2026-09-24T21:50:30Z');           // 06:50:30 in Tokyo
+  const past = P0.stateAt(e, asleep, asleep + 599000);          // 07:00:29: a tick not quite ten minutes on
+  const started = Date.now();
+  const odd = P0.tracker({ id: 'wanderer', clock: 'Mars/Olympus_Mons', routine: e.routine, at: e.at }, NaN)(Date.now());
+  check('a tick a second past 07:00 finds the body awake, and a line with a clock or a time no engine can read cannot stop the playout',
+    !past.asleep && past.since === Date.parse('2026-09-24T22:00:00Z') && past.pose.pitch_mrad === 0 &&
+    Date.now() - started < 1000 && odd && odd.pose && P0.validClock('Mars/Olympus_Mons', 'wanderer') === 'Asia/Tokyo',
+    JSON.stringify({ past, odd }));
+}
 
 // A model that answered was paid for: if the hands fail after that, the thought is still sealed,
 // with the picture it was shown found in the request itself.

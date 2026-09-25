@@ -350,6 +350,18 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     !Object.values(said).some(d => d.text.includes('I was never here')), JSON.stringify({ s, said }));
   await context.close();
 
+  ({ context, page } = await open({ 'chain/1.json': read('forged', 'chain-1-routine.json'),
+                                   'chain/HEAD.json': read('forged', 'HEAD-routine.json') }));
+  await until(page, 'forged', 1);
+  await mindsSettled(page);
+  s = (await state(page)).seal;
+  said = await doings(page);
+  check('a routine a thought never set is refused, though the frame says so in the model\'s name with every hash right',
+    s.line === 'ok' && s.verdict === 'forged' && s.minds.forged === 1 &&
+    said.pilgrim.text === '✗ thought refused: the frame says what its evidence does not' && !said.wanderer.bad,
+    JSON.stringify({ s, said }));
+  await context.close();
+
   ({ context, page } = await open({ ['live/' + pilgrim.saw.file]: read('live', wanderer.saw.file) }));
   await until(page, 'forged', 1);
   await mindsSettled(page);
@@ -404,8 +416,8 @@ const cells = page => page.$$eval('.cell', all => all.map(cell => ({
     d.bodies.pilgrim.asleep && JSON.stringify(d.bodies.pilgrim.pose) === JSON.stringify(P.bed('pilgrim')) &&
     /^🌙 asleep · London 01:23$/.test(d.bodies.pilgrim.note) && !d.bodies.wanderer.asleep &&
     JSON.stringify(d.bodies.wanderer.pose) === JSON.stringify(woke.pose) &&
-    // it woke at 07:00 in Tokyo, found on the five-minute grid that starts at its own frame (12:23Z)
-    woke.since === Date.parse('2026-09-23T22:03:00.000Z'),
+    // it woke at 07:00 in Tokyo, on the clock's own five-minute marks
+    woke.since === Date.parse('2026-09-23T22:00:00.000Z'),
     JSON.stringify({ d, woke }));
   await context.close();
 

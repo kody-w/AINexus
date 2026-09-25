@@ -411,7 +411,7 @@ class ViewsLine(unittest.TestCase):
         cases = [({"set_at": first}, None, f"no thought at tick {first} set the routine"),
                  ({"set_at": "this"}, None, "says its thought set a routine"),
                  ({"set_at": 99}, None, "set at no earlier tick"),
-                 ({"set_at": None, "steps": FX.DEFAULTS["greeter"]}, [{"do": "fly"}], "default routine that is not a routine")]
+                 ({"set_at": None, "steps": FX.DEFAULTS["greeter"]}, [{"do": "fly"}], "default routine that is not the world's default")]
         for n, (routine, steps, why) in enumerate(cases):
             with self.subTest(why):
                 with self.assertRaisesRegex(V.Refusal, why):
@@ -442,6 +442,89 @@ class ViewsLine(unittest.TestCase):
         self.assertEqual(q["doing"], "💤 asleep: night in London 02:10")     # asleep is not running the routine
         self.assertEqual(q["routine"]["by"], "default")
         self.assertEqual(self.verify(), [])
+
+    def forge(self, frame, **changes):
+        """Rewrite a frame on the line with every hash recomputed and HEAD made to name it."""
+        forged = FX.rehash(frame, **changes)
+        (self.chain / f"{frame['seq']}.json").write_text(json.dumps(forged))
+        meta = json.loads((self.chain / "HEAD.json").read_text())
+        if meta["count"] - 1 == frame["seq"]:
+            meta["head_frame"] = forged["frame_hash"]
+            (self.chain / "HEAD.json").write_text(json.dumps(meta))
+        return forged
+
+    def test_a_thought_cannot_claim_a_routine_its_evidence_never_set(self):
+        f1 = self.frames()[1]
+        i = next(n for n, q in enumerate(f1["payload"]["views"]["players"]) if q["id"] == "pilgrim")
+        pilgrim = f1["payload"]["views"]["players"][i]
+        tick = f1["payload"]["tick"]
+        self.forge(f1, **{f"views__players__{i}__mind__routine_set": FX.PATROL,
+                          f"views__players__{i}__routine": {"steps": FX.PATROL, "set_at": tick,
+                                                            "by": pilgrim["mind"]["model"]}})
+        self.assertEqual(self.verify(feed=False), [], "the forgery must pass every check but the evidence")
+        problems = self.verify()
+        self.assertTrue(any("pilgrim: the frame says what its thought's evidence does not" in p for p in problems), problems)
+
+    def test_a_body_runs_the_routine_it_was_last_left_and_nothing_older(self):
+        first_set = self.frames()[1]["payload"]["tick"]
+        newer = [{"do": "wait", "ms": 700}, {"do": "look", "dx": -200, "dy": 0}]
+        spec = json.loads(json.dumps(FX.MINDS["wanderer"]))
+        spec["calls"] = [["world_routine", {"steps": newer, "why": "a new plan"}, False, "routine set"]]
+        receipt = self.capture("newer003", minds={"wanderer": spec}, resting={"greeter": "resting"},
+                               routines={"wanderer": {"set_at": "this"},
+                                         "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]},
+                                         "pilgrim": {"set_at": None, "steps": FX.DEFAULTS["pilgrim"]}})
+        frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+        self.assertEqual(self.players_of(frame)["wanderer"]["routine"]["steps"], newer)
+        FX.add_tick(self.spine, FX.T0.replace(minute=40))
+        stale = FX.add_minds(self.feed, FX.add_capture(self.feed, json.loads((self.feed / "manifest.json").read_text()),
+                                                       "2026-09-23T12-41-00.000Z-stale004", FX.T0.replace(minute=41), 18),
+                             minds={}, resting={"wanderer": "resting", "greeter": "resting"},
+                             routines={"wanderer": {"set_at": first_set},
+                                       "greeter": {"set_at": None, "steps": FX.DEFAULTS["greeter"]}})
+        with self.assertRaisesRegex(V.Refusal, f"the routine set at tick {first_set} is not the one it was last left"):
+            V.seal(V.read_anchor(str(self.spine)), stale, self.feed, self.chain)
+        for k, q in enumerate(stale["players"]):
+            if q["id"] == "wanderer":
+                stale["players"][k]["routine"] = {"set_at": None, "steps": FX.DEFAULTS["wanderer"]}
+        with self.assertRaisesRegex(V.Refusal, "goes back to the default routine after a thought set one"):
+            V.seal(V.read_anchor(str(self.spine)), stale, self.feed, self.chain)
+        # the honest tick carries the newer routine; a history rewritten to bring back the older one,
+        # every hash right and the older one really set on the line, is still caught
+        newer_at = frame["payload"]["tick"]
+        for k, q in enumerate(stale["players"]):
+            if q["id"] == "wanderer":
+                stale["players"][k]["routine"] = {"set_at": newer_at}
+        honest = V.seal(V.read_anchor(str(self.spine)), stale, self.feed, self.chain)
+        self.assertEqual(self.players_of(honest)["wanderer"]["routine"]["steps"], newer)
+        self.assertEqual(self.verify(feed=False), [])
+        i = next(n for n, q in enumerate(honest["payload"]["views"]["players"]) if q["id"] == "wanderer")
+        self.forge(honest, **{f"views__players__{i}__routine": {"steps": FX.PATROL, "set_at": first_set,
+                                                                "by": "claude-sonnet-5"},
+                              f"views__players__{i}__doing": "↻ claude-sonnet-5's routine: walk, look, wait"})
+        problems = self.verify(feed=False)
+        self.assertEqual(problems, [f"frame {honest['seq']}: wanderer runs a routine that is not the one it was last left"])
+
+    def test_a_default_routine_is_the_worlds_default_and_only_until_a_mind_sets_one(self):
+        f1 = self.frames()[1]
+        i = next(n for n, q in enumerate(f1["payload"]["views"]["players"]) if q["id"] == "greeter")
+        walkabout = [{"do": "walk", "dir": "left", "ms": 3000}]
+        self.forge(f1, **{f"views__players__{i}__routine": {"steps": walkabout, "set_at": None, "by": "default"},
+                          f"views__players__{i}__doing": "↻ default routine: walk"})
+        problems = self.verify(feed=False)
+        self.assertTrue(any("greeter's default routine is not the world's default" in p for p in problems), problems)
+
+    def test_numbers_are_read_as_javascript_reads_them_and_unknown_clocks_are_not_sealed(self):
+        self.assertIsNone(V.canonical_routine([{"do": "wait", "ms": 10 ** 309}]))      # Infinity in JavaScript
+        self.assertEqual(V.canonical_routine([{"do": "wait", "ms": 10 ** 300}]), [{"do": "wait", "ms": 10000}])
+        receipt = self.capture("clock005")
+        for q in receipt["players"]:
+            if q["id"] == "greeter":
+                q["clock"] = "Mars/Olympus_Mons"
+        frame = V.seal(V.read_anchor(str(self.spine)), receipt, self.feed, self.chain)
+        q = self.players_of(frame)
+        self.assertNotIn("clock", q["greeter"])
+        self.assertEqual(q["wanderer"]["clock"], "Asia/Tokyo")
 
     def test_the_shape_gate_holds_a_routine_to_itself(self):
         def problems(pid="wanderer", **fields):

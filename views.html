@@ -592,11 +592,11 @@ async function fetchBytes(url) {
 
 // One sealed thought, checked once: 'pending', 'ok', 'forged' (with why), 'pruned' once its
 // evidence has rolled out of the feed, or 'unreachable', which is asked again.
-function mindCheck(player) {
+function mindCheck(player, tick) {
   const mind = player.mind;
   if (!isObject(mind) || mind.kind !== 'model') return null;
   const evidence = isObject(mind.exchange) ? mind.exchange : {};
-  const key = keyOf(feedFile(evidence.file) ? imageUrl(evidence.file) : 'nowhere', String(evidence.sha256));
+  const key = keyOf(feedFile(evidence.file) ? imageUrl(evidence.file) : 'nowhere', String(evidence.sha256)) + '#' + tick;
   const known = mindChecks.get(key);
   if (known && (known.state !== 'unreachable' || Date.now() - known.at < 15000)) return known;
   const pending = { state: 'pending', why: '', at: Date.now() };
@@ -616,10 +616,19 @@ function mindCheck(player) {
     } catch (error) {
       return forged('its evidence is not the evidence of a thought: ' + error.message);
     }
+    // everything it says, and nothing its evidence does not: a routine_set never set is words
+    const said = Object.keys(mind).filter(key => key !== 'exchange' && key !== 'saw').sort();
     const claimed = {};
     for (const key of Object.keys(derived.mind)) claimed[key] = mind[key];
-    let same = false;
-    try { same = jcs(claimed) === jcs(derived.mind); } catch (error) {}
+    let same = jcs(said) === jcs(Object.keys(derived.mind).sort());
+    try { same = same && jcs(claimed) === jcs(derived.mind); } catch (error) { same = false; }
+    // and a body that ran a routine set this tick ran the one this thought set, in its name
+    const ran = isObject(player.routine) ? player.routine : null;
+    if (same && ran && ran.set_at === tick) {
+      try {
+        same = !!derived.mind.routine_set && jcs(ran.steps) === jcs(derived.mind.routine_set) && ran.by === derived.mind.model;
+      } catch (error) { same = false; }
+    }
     if (!same || player.doing !== doingOf(derived.mind, player.routine)) return forged('the frame says what its evidence does not');
     if (derived.picture !== (mind.saw ? mind.saw.sha256 : null)) return forged('the frame names a picture it was not shown');
     if (mind.saw) {
@@ -641,7 +650,7 @@ function mindCheck(player) {
 }
 
 // the words under a cell for a sealed player, and everything else about its mind for a hover
-function mindNote(player) {
+function mindNote(player, tick) {
   const mind = player.mind;
   if (!isObject(mind)) return null;
   const running = isObject(player.routine) && Array.isArray(player.routine.steps) ? player.routine : null;
@@ -658,7 +667,7 @@ function mindNote(player) {
           title: `resting: ${mind.why}\nits body runs ${whose(running)}, looped: ${routineText(running)}` }
       : { text: '💤 ' + mind.why, title: 'resting: ' + mind.why, bad: false };
   }
-  const check = mindCheck(player);
+  const check = mindCheck(player, tick);
   if (!check) return null;
   if (check.state === 'forged') return { text: '✗ thought refused: ' + check.why, title: check.why, bad: true };
   const mark = { ok: ' ✓', pending: ' …', pruned: '', unreachable: ' …' }[check.state] || '';
@@ -691,7 +700,7 @@ function verdictAt(index) {
     const verdict = judged(cell, keyOf(imageUrl(player.file), player.sha256));
     if (verdict === 'sealed' || verdict === 'forged' || verdict === 'pending') counts[verdict] += 1;
     else counts.missing += 1;
-    const check = mindCheck(player);
+    const check = mindCheck(player, seal.views.tick);
     if (check) {
       minds.thoughts += 1;
       minds[['ok', 'forged', 'pending'].includes(check.state) ? check.state : 'gone'] += 1;
@@ -976,7 +985,7 @@ function paint() {
     cell.tag.textContent = cell.label + (verdict === 'sealed' ? ' ✓' : verdict === 'forged' ? ' ✗' : '');
     cell.el.classList.toggle('forged', verdict === 'forged');
     // a sealed tick says what its frame says; anything else is the feed's own unsealed note
-    const mind = sealed ? mindNote(sealed) : null;
+    const mind = sealed ? mindNote(sealed, seal.views.tick) : null;
     const note = mind ? mind.text : sealed ? sealed.doing : Array.isArray(cell.rec.doing) ? cell.rec.doing[view.frame] : '';
     cell.doing.textContent = note || '';
     cell.doing.title = mind ? mind.title : note || '';
@@ -1148,6 +1157,7 @@ function stepDimension() {
   const arrived = DIM.seq !== frame.seq;
   DIM.seq = frame.seq;
   const frameMs = Date.parse(frame.payload.views.captured_utc);
+  if (!Number.isFinite(frameMs)) return;
   const seen = new Set();
   bodiesOf(frame).forEach((q, index) => {
     seen.add(q.id);
@@ -1250,7 +1260,8 @@ function animate(now) {
     view.focusAt = now;
     paint();
   }
-  drawDimension(now);
+  // the dimension is this page's own; nothing it meets may stop the page from going on
+  try { drawDimension(now); } catch (error) {}
   requestAnimationFrame(animate);
 }
 

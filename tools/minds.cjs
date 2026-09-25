@@ -150,7 +150,7 @@ function plan(config, frames, options = {}) {
     }
     const every = Math.min(MAX_EVERY, Math.max(1, Number.isInteger(want.every) ? want.every : 1));
     const cost = Number.isInteger(want.multiplier_x100) ? want.multiplier_x100 : 100;
-    const clock = typeof want.clock === 'string' && CLOCK.test(want.clock) ? want.clock : Playout.clockOf(id);
+    const clock = Playout.validClock(typeof want.clock === 'string' && CLOCK.test(want.clock) ? want.clock : null, id);
     const body = bodyAt(id, frames, clock, now);
     let why = '';
     if (body.asleep) why = clip('asleep: night in ' + Playout.clockText(clock, now), 150);

@@ -123,12 +123,8 @@ MINDS = {
                 "tokens": [1302, 40], "ms": 1675},
 }
 RESTING = {"greeter": "resting between thoughts (thinks every 3 ticks)"}
-# the world's own routines (ai/playout.js DEFAULTS) for the players these tests use
-DEFAULTS = {
-    "greeter": [{"do": "wait", "ms": 2500}, {"do": "look", "dx": 350, "dy": 0}, {"do": "wait", "ms": 2500},
-                {"do": "look", "dx": -350, "dy": 0}],
-    "pilgrim": [{"do": "walk", "dir": "forward", "ms": 2200}, {"do": "wait", "ms": 1200}, {"do": "look", "dx": 785, "dy": 0}],
-}
+# the world's own routines, as the sealer knows them (tests/minds.cjs holds them equal to ai/playout.js)
+DEFAULTS = V.DEFAULT_ROUTINES
 CLOCKS = {"wanderer": "Asia/Tokyo", "greeter": "America/New_York", "pilgrim": "Europe/London"}
 LATER_POSES = {"wanderer": {"x_cm": -1600, "y_cm": 200, "z_cm": 900, "yaw_mrad": -1200, "pitch_mrad": 0},
                "pilgrim": {"x_cm": 300, "y_cm": 200, "z_cm": 1100, "yaw_mrad": 400, "pitch_mrad": 0},
@@ -230,6 +226,15 @@ def build(out):
     head_said = json.loads((chain / "HEAD.json").read_text())
     head_said["head_frame"] = said["frame_hash"]
     (forged / "HEAD-said.json").write_text(json.dumps(head_said, indent=2) + "\n")
+    # ...and with a routine the pilgrim's thought never set, carried by its body in the model's name
+    k = next(n for n, q in enumerate(frame1["payload"]["views"]["players"]) if q["id"] == "pilgrim")
+    pilgrim = frame1["payload"]["views"]["players"][k]
+    claimed = rehash(frame1, **{f"views__players__{k}__mind__routine_set": PATROL,
+                                f"views__players__{k}__routine": {"steps": PATROL, "set_at": frame1["payload"]["tick"],
+                                                                  "by": pilgrim["mind"]["model"]}})
+    (forged / "chain-1-routine.json").write_text(json.dumps(claimed, indent=2) + "\n")
+    head_claimed = dict(head_said, head_frame=claimed["frame_hash"])
+    (forged / "HEAD-routine.json").write_text(json.dumps(head_claimed, indent=2) + "\n")
     tick2 = json.loads((spine / "2.json").read_text())
     other = R.build_frame(tick2["kind"], tick2["stream_id"], tick2["seq"], tick2["utc"],
                           dict(tick2["payload"], minted_by="somebody else's spine"), prev=tick2["prev"])

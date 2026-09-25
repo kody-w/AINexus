@@ -217,7 +217,11 @@ TURN_MS = 250
 def _whole(v, lo, hi):
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
-    if isinstance(v, float) and not math.isfinite(v):
+    try:
+        v = float(v)                      # a number as JavaScript reads it: 1e400 is not a number
+    except OverflowError:
+        return None
+    if not math.isfinite(v):
         return None
     return min(hi, max(lo, math.trunc(v)))
 
@@ -253,6 +257,21 @@ def canonical_routine(steps):
         else:
             return None
     return out if timed >= 300 else None
+
+
+# The world's own routines, as ai/playout.js DEFAULTS has them (tests/minds.cjs holds the two equal).
+DEFAULT_ROUTINES = {
+    "wanderer": [{"do": "walk", "dir": "forward", "ms": 1800}, {"do": "look", "dx": 300, "dy": 0}, {"do": "wait", "ms": 600}],
+    "greeter": [{"do": "wait", "ms": 2500}, {"do": "look", "dx": 350, "dy": 0}, {"do": "wait", "ms": 2500},
+                {"do": "look", "dx": -350, "dy": 0}],
+    "pilgrim": [{"do": "walk", "dir": "forward", "ms": 2200}, {"do": "wait", "ms": 1200}, {"do": "look", "dx": 785, "dy": 0}],
+    "watcher": [{"do": "walk", "dir": "left", "ms": 1500}, {"do": "wait", "ms": 2000}, {"do": "walk", "dir": "right", "ms": 1500},
+                {"do": "wait", "ms": 2000}, {"do": "look", "dx": 60, "dy": 0}],
+}
+
+
+def default_routine(pid):
+    return DEFAULT_ROUTINES.get(pid, DEFAULT_ROUTINES["greeter"])
 
 
 def routine_line(r):
@@ -513,7 +532,8 @@ def thought_problem(pid, m, fetch):
         derived, picture = read_exchange(data, pid)
     except Refusal as ex:
         return str(ex)
-    if {k: m.get(k) for k in derived} != derived:
+    # everything it says, and nothing its evidence does not: a routine_set the evidence never set is words
+    if set(m) - {"exchange", "saw"} != set(derived) or {k: m[k] for k in derived} != derived:
         return f"{pid}: the frame says what its thought's evidence does not"
     if picture != (m["saw"]["sha256"] if "saw" in m else None):
         return f"{pid}: the frame names a picture its thought was not shown"
@@ -649,6 +669,18 @@ def shape_problems(p):
 
 
 # ── sealing ──────────────────────────────────────────────────────────────────
+def known_zone(name):
+    """A timezone the sealer's own zone database has, when it has one to ask."""
+    try:
+        import zoneinfo
+        zoneinfo.ZoneInfo(name)
+        return True
+    except ImportError:
+        return True
+    except Exception:
+        return False
+
+
 def sealed_routine(r, pid, tick, mind, chain):
     """The routine a body ran this tick, resolved from where it was set and never from the receipt,
     which says only which one ran: set by this tick's thought, set by an earlier one on the line,
@@ -667,10 +699,14 @@ def sealed_routine(r, pid, tick, mind, chain):
         return {"steps": mind["routine_set"], "set_at": tick, "by": mind["model"]}
     if set_here:
         raise Refusal(f"{pid}: its thought set a routine this tick and the receipt says another ran")
+    # A body runs the routine it was last left, and nothing older: that is the one the line holds.
+    current = latest_routine(chain, pid)
     if set_at is None:
         steps = canonical_routine(r.get("steps"))
-        if steps is None or r.get("by", "default") != "default":
-            raise Refusal(f"{pid}: the receipt names a default routine that is not a routine")
+        if steps is None or r.get("by", "default") != "default" or steps != default_routine(pid):
+            raise Refusal(f"{pid}: the receipt names a default routine that is not the world's default")
+        if current is not None and current.get("by") != "default":
+            raise Refusal(f"{pid}: the receipt goes back to the default routine after a thought set one")
         return {"steps": steps, "set_at": None, "by": "default"}
     if not (isint(set_at) and 0 <= set_at < tick):
         raise Refusal(f"{pid}: the receipt names a routine set at no earlier tick")
@@ -679,9 +715,21 @@ def sealed_routine(r, pid, tick, mind, chain):
             q = next((x for x in frame["payload"]["views"]["players"] if x.get("id") == pid), None)
             m = q.get("mind") if q else None
             if m and m.get("kind") == "model" and "routine_set" in m:
+                if current is None or current.get("set_at") != set_at:
+                    raise Refusal(f"{pid}: the routine set at tick {set_at} is not the one it was last left")
                 return {"steps": m["routine_set"], "set_at": set_at, "by": m["model"]}
             break
     raise Refusal(f"{pid}: no thought at tick {set_at} set the routine the receipt says it ran")
+
+
+def latest_routine(frames, pid):
+    """The routine a player's body was last left running on this line, or None."""
+    for frame in reversed(frames or []):
+        views = frame["payload"].get("views") if isinstance(frame.get("payload"), dict) else None
+        for q in views.get("players", []) if isinstance(views, dict) else []:
+            if isinstance(q, dict) and q.get("id") == pid and isinstance(q.get("routine"), dict):
+                return q["routine"]
+    return None
 
 
 def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
@@ -729,7 +777,7 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None):
                 entry["routine"] = routine
             entry["doing"] = doing_of(mind, routine)
         clock = q.get("clock")
-        if isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock):
+        if isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock) and known_zone(clock):
             entry["clock"] = clock
         sealed.append(entry)
     if not sealed:
@@ -821,7 +869,7 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
     if not frames:
         return problems + ["the chain is empty"]
     head = None
-    by_tick = {}
+    by_tick, left = {}, {}
     for f in frames:
         ok, step, why = R.verify_frame(f, head=head, stream_id_of_record=STREAM)
         if not ok:
@@ -834,16 +882,28 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None):
                 and isinstance(head["payload"].get("tick"), int) \
                 and f["payload"]["tick"] <= head["payload"]["tick"]:
             problems.append(f"frame {f['seq']}: tick {f['payload']['tick']} does not advance past {head['payload']['tick']}")
-        # a routine carried from an earlier tick has to be the one a thought really set there
+        # a routine carried from an earlier tick has to be the one a thought really set there, and
+        # the one the body was last left: a line cannot quietly bring back an old one
         for q in f["payload"].get("views", {}).get("players", []) if isinstance(f["payload"].get("views"), dict) else []:
             r = q.get("routine") if isinstance(q, dict) else None
-            if isinstance(r, dict) and isint(r.get("set_at")) and r["set_at"] < f["payload"].get("tick", -1):
+            if not isinstance(r, dict):
+                continue
+            pid, prev = q.get("id"), left.get(q.get("id"))
+            if isint(r.get("set_at")) and r["set_at"] < f["payload"].get("tick", -1):
                 src = by_tick.get(r["set_at"])
-                sq = next((x for x in src["payload"]["views"]["players"] if x.get("id") == q.get("id")), None) if src else None
+                sq = next((x for x in src["payload"]["views"]["players"] if x.get("id") == pid), None) if src else None
                 m = sq.get("mind") if sq else None
                 if not (m and m.get("kind") == "model" and m.get("routine_set") == r.get("steps")
                         and m.get("model") == r.get("by")):
-                    problems.append(f"frame {f['seq']}: {q.get('id')} runs a routine no thought at tick {r['set_at']} set")
+                    problems.append(f"frame {f['seq']}: {pid} runs a routine no thought at tick {r['set_at']} set")
+                elif prev != r:
+                    problems.append(f"frame {f['seq']}: {pid} runs a routine that is not the one it was last left")
+            elif r.get("set_at") is None:
+                if r.get("steps") != default_routine(pid):
+                    problems.append(f"frame {f['seq']}: {pid}'s default routine is not the world's default")
+                elif prev is not None and prev.get("by") != "default":
+                    problems.append(f"frame {f['seq']}: {pid} goes back to the default routine after a thought set one")
+            left[pid] = r
         if isinstance(f["payload"].get("tick"), int):
             by_tick[f["payload"]["tick"]] = f
         head = f
