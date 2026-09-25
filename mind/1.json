@@ -1,0 +1,195 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 1,
+  "utc": "2026-09-25T23:41:08.778Z",
+  "payload": {
+    "tick": 1281,
+    "tick_frame": "6d5a632f1aefd293fde5868ac9730925a04cba1f732f3c9d6d454097277703a6",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-25T23:40:06.473Z",
+    "charter": {
+      "seq": 2,
+      "frame_hash": "eb50391569d689768196f9ff944b9c8a8ba4bb78f1a4230f1a1454a224539bee"
+    },
+    "state": {
+      "views_seq": 299,
+      "views_frame": "0495311af26785b6fb3d716f776213edda8536d49d3dc5cfc76e3e3c828f505c"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 30755,
+      "prompt": {
+        "sha256": "543e6c88515406e4e52be67b930b89588587ece2bbfaae66fc40e78a7e9ef810",
+        "bytes": 4704
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Following the light—I'll meet you by the western portal.\",\"act\":[{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1200},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1800},{\"do\":\"look\",\"dx\":300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1200},{\"do\":\"wait\",\"ms\":600}]},\"pilgrim\":{\"say\":\"Toward the heart, slowly; I spot movement westward.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":785,\"dy\":0}]},\"watcher\":{\"say\":\"Paths cross beneath my gaze; I'll hold this angle.\",\"act\":[{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":500},{\"do\":\"look\",\"dx\":60,\"dy\":0}],\"routine\":[{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1500},{\"do\":\"wait\",\"ms\":2000},{\"do\":\"look\",\"dx\":60,\"dy\":0}]},\"greeter\":{\"say\":\"Evening, travelers — the plaza gathers warm light.\",\"act\":[{\"do\":\"wait\",\"ms\":1500},{\"do\":\"look\",\"dx\":350,\"dy\":0}],\"routine\":[{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":350,\"dy\":0},{\"do\":\"wait\",\"ms\":2500},{\"do\":\"look\",\"dx\":-350,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Evening, travelers — the plaza gathers warm light.",
+        "act": [
+          {
+            "do": "wait",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 2500
+          },
+          {
+            "do": "look",
+            "dx": -350,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Toward the heart, slowly; I spot movement westward.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 785,
+            "dy": 0
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Following the light—I'll meet you by the western portal.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1200
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1800
+          },
+          {
+            "do": "look",
+            "dx": 300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Paths cross beneath my gaze; I'll hold this angle.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-25T23-41-06.393Z-514256ec/world-mind.json",
+      "bytes": 6683,
+      "sha256": "ec8be2bcfd58c6bb1240753e6ec2fcce561bae2d177cceb4921a9444487a9e12"
+    }
+  },
+  "payload_hash": "59326fae0116b555024ead7a8a43c7753f37f7da45091766f228f2668aeec997",
+  "prev": "b9bf072067f0247be393d7267a5469a35575eb97ff23d2f65709701f61a68aee",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "9d98aef88a458b37b79d70685bc19c4f5afbb28f0fe95db7c11db7464188f852"
+}
