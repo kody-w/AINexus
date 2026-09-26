@@ -1,0 +1,245 @@
+{
+  "spec": "rapp/1",
+  "kind": "views.snapshot",
+  "stream_id": "views:@kody-w/ainexus",
+  "seq": 310,
+  "utc": "2026-09-26T02:00:02.148Z",
+  "payload": {
+    "tick": 1291,
+    "tick_frame": "ba713180e2d56c6b69f9570c5076488101c1d21e281bdd646cc47d7670089595",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-26T01:58:57.008Z",
+    "views": {
+      "world": "index.html",
+      "world_sha256": "bb7c9a56cb04bc4ab030dd544bfcf37018d28f842bed1cc48998cffe4db5db16",
+      "tick_id": "2026-09-26T01-59-59.741Z-50144673:0000",
+      "segment": "2026-09-26T01-59-59.741Z-50144673",
+      "captured_utc": "2026-09-26T01:58:58.284Z",
+      "feed": "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/",
+      "players": [
+        {
+          "id": "wanderer",
+          "doing": "↻ gpt-5-mini's routine: look, walk, walk, wait",
+          "sees": [
+            "greeter",
+            "pilgrim",
+            "watcher"
+          ],
+          "file": "segments/2026-09-26T01-59-59.741Z-50144673/wanderer/0000.webp",
+          "bytes": 6512,
+          "sha256": "f144d19e5af0bd9d275257e33ce719dfe208c2f5a6fcda4caf359a32e8b6d0fc",
+          "at": {
+            "x_cm": -1378,
+            "y_cm": 200,
+            "z_cm": -1255,
+            "yaw_mrad": -2669,
+            "pitch_mrad": 0
+          },
+          "mind": {
+            "kind": "directed",
+            "by": "rules",
+            "said": "",
+            "act": []
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "look",
+                "dx": -1400,
+                "dy": 0
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1500
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1500
+              },
+              {
+                "do": "wait",
+                "ms": 1000
+              }
+            ],
+            "set_at": 1290,
+            "by": "gpt-5-mini"
+          }
+        },
+        {
+          "id": "greeter",
+          "doing": "↻ gpt-5-mini's routine: look, walk, wait, look, wait, look",
+          "sees": [
+            "pilgrim",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-26T01-59-59.741Z-50144673/greeter/0000.webp",
+          "bytes": 1108,
+          "sha256": "cda115cb2fef7dffdd29e4c76be475cc4aeff9911fc290ea16afe44042571cf8",
+          "at": {
+            "x_cm": -1983,
+            "y_cm": 200,
+            "z_cm": 849,
+            "yaw_mrad": 807,
+            "pitch_mrad": 0
+          },
+          "mind": {
+            "kind": "directed",
+            "by": "rules",
+            "said": "",
+            "act": []
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "look",
+                "dx": -800,
+                "dy": 0
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 2000
+              },
+              {
+                "do": "wait",
+                "ms": 1500
+              },
+              {
+                "do": "look",
+                "dx": 350,
+                "dy": 0
+              },
+              {
+                "do": "wait",
+                "ms": 1500
+              },
+              {
+                "do": "look",
+                "dx": -350,
+                "dy": 0
+              }
+            ],
+            "set_at": 1290,
+            "by": "gpt-5-mini"
+          }
+        },
+        {
+          "id": "pilgrim",
+          "doing": "↻ gpt-5-mini's routine: walk, wait, look",
+          "sees": [
+            "greeter",
+            "wanderer",
+            "watcher"
+          ],
+          "file": "segments/2026-09-26T01-59-59.741Z-50144673/pilgrim/0000.webp",
+          "bytes": 944,
+          "sha256": "f546fa747f4d030da27685d87652f4dd8f2670e6c1ede1e6a1d5142feaa239ac",
+          "at": {
+            "x_cm": 4031,
+            "y_cm": 200,
+            "z_cm": 828,
+            "yaw_mrad": -2701,
+            "pitch_mrad": -80
+          },
+          "mind": {
+            "kind": "directed",
+            "by": "rules",
+            "said": "",
+            "act": []
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1500
+              },
+              {
+                "do": "wait",
+                "ms": 1200
+              },
+              {
+                "do": "look",
+                "dx": 400,
+                "dy": 0
+              }
+            ],
+            "set_at": 1290,
+            "by": "gpt-5-mini"
+          }
+        },
+        {
+          "id": "watcher",
+          "doing": "↻ gpt-5-mini's routine: look, walk, wait, look",
+          "sees": [
+            "greeter",
+            "pilgrim",
+            "wanderer"
+          ],
+          "file": "segments/2026-09-26T01-59-59.741Z-50144673/watcher/0000.webp",
+          "bytes": 3296,
+          "sha256": "0860c688a52874beeb7127c09a0dc5267062defc5072b41fa4833bdebc15a546",
+          "at": {
+            "x_cm": 283,
+            "y_cm": 200,
+            "z_cm": -3222,
+            "yaw_mrad": -2293,
+            "pitch_mrad": 0
+          },
+          "mind": {
+            "kind": "directed",
+            "by": "rules",
+            "said": "",
+            "act": []
+          },
+          "routine": {
+            "steps": [
+              {
+                "do": "look",
+                "dx": -1600,
+                "dy": 0
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 2000
+              },
+              {
+                "do": "wait",
+                "ms": 1500
+              },
+              {
+                "do": "look",
+                "dx": 60,
+                "dy": 0
+              }
+            ],
+            "set_at": 1290,
+            "by": "gpt-5-mini"
+          }
+        }
+      ],
+      "players_sealed": 4,
+      "presences_seen": 12,
+      "view_bytes": 11860,
+      "gap_min": 11,
+      "source_commit": "2c3d8386789b4db856dc757a656807615c91bfb6",
+      "thoughts": 0,
+      "premium_x100": 0,
+      "clock": "America/New_York",
+      "mind": {
+        "seq": 11,
+        "frame_hash": "c90dc1abba7c7e7de57dc3d9193f594c6d5d8d13b9bc193c8d407cda504c8ad9"
+      }
+    },
+    "sources_failed": []
+  },
+  "payload_hash": "52b033cb7c2f6ad7d0d7e31953dadcbbfe001eaf616e8c79ae32f1824469d000",
+  "prev": "132fbbbff7dd934a9d275c7e31a4e0e1c872a7046437b23e2143f224a0777a53",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "a751d3d5afa380f098e652ad66aa6088115be9250a582d28f2782aac0cfbfc29"
+}
