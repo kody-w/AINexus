@@ -1,0 +1,220 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 49,
+  "utc": "2026-09-26T16:43:42.372Z",
+  "payload": {
+    "tick": 1375,
+    "tick_frame": "a6ea88f74dfeb73ad635ae30029a499aaa5fd7185ccb632c133d09038f16183e",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-26T16:42:23.755Z",
+    "charter": {
+      "seq": 3,
+      "frame_hash": "f4964cf7fbce8f0306ef073f3225820879ae0abaa4969ae7edd79b07a0f0c548"
+    },
+    "state": {
+      "views_seq": 393,
+      "views_frame": "caa8781b1d1b2fd97ba4f8e0f5ecdfc6774e36eadc2ae7274bbd007e239e1573"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 0,
+      "frame_hash": "46dbb45e39d80b8a45f4f30d06d9c27398637423cc6f1df5bd34e756c364a5f5"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 44434,
+      "prompt": {
+        "sha256": "a5a25f25eda33dc9e78316a646ce60abdc8141f0155c18b18cbe554006ae068c",
+        "bytes": 7084
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Closing on the western ring; eyes fixed on the greeter.\",\"act\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":3000}],\"routine\":[{\"do\":\"look\",\"dx\":-900,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1600},{\"do\":\"wait\",\"ms\":800},{\"do\":\"look\",\"dx\":300,\"dy\":0},{\"do\":\"wait\",\"ms\":700}]},\"pilgrim\":{\"say\":\"Slow, steady west; the gate's line keeps my pace.\",\"act\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":2000}],\"routine\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":400,\"dy\":0},{\"do\":\"wait\",\"ms\":800}]},\"watcher\":{\"say\":\"Holding the western sweep; watching the meeting unfold.\",\"act\":[{\"do\":\"look\",\"dx\":-400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000}],\"routine\":[{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"wait\",\"ms\":1000},{\"do\":\"look\",\"dx\":80,\"dy\":0},{\"do\":\"wait\",\"ms\":1200}]},\"greeter\":{\"say\":\"Palms open at the ring; stepping forward to meet you.\",\"act\":[{\"do\":\"look\",\"dx\":-1400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":1000}],\"routine\":[{\"do\":\"look\",\"dx\":-1400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1600},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":0,\"dy\":0},{\"do\":\"wait\",\"ms\":1200}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Palms open at the ring; stepping forward to meet you.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Slow, steady west; the gate's line keeps my pace.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 2000
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Closing on the western ring; eyes fixed on the greeter.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 3000
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "look",
+            "dx": 300,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 700
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Holding the western sweep; watching the meeting unfold.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 80,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-26T16-43-39.832Z-cdb216d0/world-mind.json",
+      "bytes": 9368,
+      "sha256": "ac60243ce923139ead1968cfc53673ffce9652cda9fa15bd1d7995576d691f50"
+    }
+  },
+  "payload_hash": "bd6cb2f2a877d9ab5c819b032484dc698dc054ca80715e971407c74db7ce5bd3",
+  "prev": "e85c3d5506eee401069cb5ec6e1031726fb597dad8e3aba60fb869d7f5fdaecc",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "01eed96223cb79590c318989de30e9499dbbac3a36d1c6835a77693e614483c6"
+}
