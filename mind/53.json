@@ -1,0 +1,248 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 53,
+  "utc": "2026-09-26T17:28:43.824Z",
+  "payload": {
+    "tick": 1379,
+    "tick_frame": "d2b4fcc5c2582c5297883f6c3e45315d3929ff5909239fceff064214f3a23632",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-26T17:27:33.319Z",
+    "charter": {
+      "seq": 3,
+      "frame_hash": "f4964cf7fbce8f0306ef073f3225820879ae0abaa4969ae7edd79b07a0f0c548"
+    },
+    "state": {
+      "views_seq": 397,
+      "views_frame": "fd7412a0b4d16ac944a8d4b9350ab1c7c8aab270807e9fe031cf0a3d6ee499f6"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 0,
+      "frame_hash": "46dbb45e39d80b8a45f4f30d06d9c27398637423cc6f1df5bd34e756c364a5f5"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 34924,
+      "prompt": {
+        "sha256": "12e2a2a152bdb6d13506f31ff87b66fec27d7880ff3dbaf011f4b5d7caf12d83",
+        "bytes": 7071
+      },
+      "answer": "{\"bodies\": {\"wanderer\": {\"say\": \"Steady westward; aiming to meet you at the ring.\", \"act\": [{\"do\": \"look\", \"dx\": -900, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"right\", \"ms\": 2200}, {\"do\": \"wait\", \"ms\": 800}], \"routine\": [{\"do\": \"look\", \"dx\": -900, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"right\", \"ms\": 800}, {\"do\": \"wait\", \"ms\": 700}, {\"do\": \"look\", \"dx\": 300, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"forward\", \"ms\": 1200}]}, \"pilgrim\": {\"say\": \"Slow and steady west; the gate keeps its line.\", \"act\": [{\"do\": \"look\", \"dx\": -1500, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"left\", \"ms\": 1200}, {\"do\": \"wait\", \"ms\": 1000}, {\"do\": \"look\", \"dx\": 400, \"dy\": 0}], \"routine\": [{\"do\": \"look\", \"dx\": -1500, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"left\", \"ms\": 1500}, {\"do\": \"wait\", \"ms\": 1200}, {\"do\": \"look\", \"dx\": 400, \"dy\": 0}, {\"do\": \"wait\", \"ms\": 800}]}, \"watcher\": {\"say\": \"Holding the western sweep; tracking the pair with a patient arc.\", \"act\": [{\"do\": \"look\", \"dx\": -600, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"forward\", \"ms\": 2000}, {\"do\": \"wait\", \"ms\": 1000}, {\"do\": \"look\", \"dx\": 80, \"dy\": 0}], \"routine\": [{\"do\": \"look\", \"dx\": -600, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"forward\", \"ms\": 2000}, {\"do\": \"wait\", \"ms\": 1000}, {\"do\": \"look\", \"dx\": 80, \"dy\": 0}, {\"do\": \"wait\", \"ms\": 1200}]}, \"greeter\": {\"say\": \"Palms open at the ring; stepping out to meet you.\", \"act\": [{\"do\": \"look\", \"dx\": -1400, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"left\", \"ms\": 1700}, {\"do\": \"wait\", \"ms\": 1000}, {\"do\": \"look\", \"dx\": 0, \"dy\": 0}], \"routine\": [{\"do\": \"look\", \"dx\": -1400, \"dy\": 0}, {\"do\": \"walk\", \"dir\": \"left\", \"ms\": 1600}, {\"do\": \"wait\", \"ms\": 1200}, {\"do\": \"look\", \"dx\": 0, \"dy\": 0}, {\"do\": \"wait\", \"ms\": 1200}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Palms open at the ring; stepping out to meet you.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1700
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Slow and steady west; the gate keeps its line.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Steady westward; aiming to meet you at the ring.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 2200
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 800
+          },
+          {
+            "do": "wait",
+            "ms": 700
+          },
+          {
+            "do": "look",
+            "dx": 300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Holding the western sweep; tracking the pair with a patient arc.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 80,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 80,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-26T17-28-41.474Z-fbd4c387/world-mind.json",
+      "bytes": 9780,
+      "sha256": "37428ca8689cb3960086f26eeddba917e3693e7aa29102f3ce278b47a6dc0177"
+    }
+  },
+  "payload_hash": "a71179431bdd3b8bdff219a2ff4d5521534f01059576f5f2ed4e5c9d75af9f9e",
+  "prev": "63f78d0172fcfb51c95a5e8503fdf72c21910495595ab902fd61920837ff962f",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "9063e09cfa7000a04f132c6fe5e1d7a359b680df0a1970ca2e991bef7783dc92"
+}
