@@ -609,6 +609,67 @@ async function fetchBytes(url) {
 const MIND_STREAM = 'mind:@kody-w/ainexus';
 const mindLine = { base: line.on ? (params.get('mind') ? slash(new URL(params.get('mind'), location.href).href)
   : line.base.replace(/[^/]+\/$/, 'mind/')) : '', meta: null, at: 0, bundles: new Map(), frames: new Map() };
+// the dream line beside it: what the one mind remembers, and what the morning after it quotes
+const DREAM_STREAM = 'dream:@kody-w/ainexus';
+const dreamLine = { base: mindLine.base.replace(/mind\/$/, 'dream/'), meta: null, at: 0, bundles: new Map(), frames: new Map(),
+  newest: null, checked: 0 };
+async function dreamFrameAt(ref) {
+  if (!isObject(ref) || !Number.isSafeInteger(ref.seq) || !HEX64.test(String(ref.frame_hash))) return 'it names no dream';
+  let frame = dreamLine.frames.get(ref.seq);
+  if (!frame) {
+    if (!dreamLine.meta || ref.seq >= dreamLine.meta.count || Date.now() - dreamLine.at > 30000) {
+      dreamLine.meta = await fetchJson(dreamLine.base + 'HEAD.json', true);
+      dreamLine.at = Date.now();
+    }
+    frame = await chainFrame(dreamLine.base, dreamLine.meta, dreamLine.bundles, ref.seq);
+    const bad = await frameProblem(frame, DREAM_STREAM);
+    if (bad) return 'the dream it quotes ' + bad;
+    dreamLine.frames.set(ref.seq, frame);
+  }
+  if (frame.frame_hash !== ref.frame_hash || frame.kind !== 'dream.fold') return 'the dream it quotes is not the one it names';
+  const d = isObject(frame.payload.dream) ? frame.payload.dream : null;
+  return d && isObject(d.lines) && typeof d.text === 'string' ? frame : 'the dream it quotes has no dream in it';
+}
+// The newest dream sealed before a tick, found by walking the dream line back from its head, every
+// link checked: what a mind frame at that tick must remember. null when there is none yet.
+async function dreamBefore(tick) {
+  const meta = await fetchJson(dreamLine.base + 'HEAD.json', true).catch(error => {
+    if (error.status === 404) return null;
+    throw error;
+  });
+  if (meta === null) return null;
+  const broken = why => Object.assign(new Error(why), { line: true });
+  if (!isObject(meta) || meta.stream_id !== DREAM_STREAM || !Number.isSafeInteger(meta.count)) throw broken('the dream line has no HEAD');
+  dreamLine.meta = meta;
+  dreamLine.at = Date.now();
+  let newer = null;
+  for (let seq = meta.count - 1; seq >= 0; seq--) {
+    let frame = dreamLine.frames.get(seq);
+    if (!frame) {
+      frame = await chainFrame(dreamLine.base, meta, dreamLine.bundles, seq);
+      const bad = await frameProblem(frame, DREAM_STREAM);
+      if (bad) throw broken('dream ' + seq + ' ' + bad);
+      dreamLine.frames.set(seq, frame);
+    }
+    if (newer ? newer.prev !== frame.payload_hash : frame.frame_hash !== meta.head_frame) throw broken('the dream line does not link');
+    if (frame.payload.tick < tick) return frame;
+    newer = frame;
+  }
+  return null;
+}
+
+// the newest dream, for the map, proven like every frame this page shows
+async function refreshDream() {
+  if (!line.on || Date.now() - dreamLine.checked < 60000) return;
+  dreamLine.checked = Date.now();
+  try {
+    const meta = await fetchJson(dreamLine.base + 'HEAD.json', true);
+    if (!isObject(meta) || meta.stream_id !== DREAM_STREAM || !Number.isSafeInteger(meta.count) || meta.count < 1) return;
+    const frame = await dreamFrameAt({ seq: meta.count - 1, frame_hash: meta.head_frame });
+    if (typeof frame !== 'string') dreamLine.newest = frame;
+  } catch (error) {}
+}
+
 async function mindFrameAt(seq) {
   if (mindLine.frames.has(seq)) return mindLine.frames.get(seq);
   if (!mindLine.meta || seq >= mindLine.meta.count || Date.now() - mindLine.at > 30000) {
@@ -647,9 +708,33 @@ function directedCheck(player, views) {
         return forged('its mind was shown a state that is not the frame before it');
       }
     }
+    // what it remembers is the newest dream before it, and the first mind frame after that dream quotes it
+    let remembered;
+    try { remembered = await dreamBefore(p.tick); } catch (error) { if (error.line) return forged(error.message); throw error; }
+    const previous = ref.seq > 0 ? await mindFrameAt(ref.seq - 1) : null;
+    if (previous && (await frameProblem(previous, MIND_STREAM) || previous.payload_hash !== frame.prev)) {
+      return forged('its mind line does not link');
+    }
+    const morning = !!remembered && (!previous || remembered.payload.tick >= previous.payload.tick);
+    // the one mind's first ticks, before there were dreams, say nothing of memory: they remember none
+    const memoryOf = x => x.memory === undefined ? null : x.memory, morningOf = x => x.morning === undefined ? false : x.morning;
+    try {
+      if (jcs(memoryOf(p)) !== jcs(remembered ? { seq: remembered.seq, frame_hash: remembered.frame_hash } : null)) {
+        return forged('its mind frame does not remember the newest dream before it');
+      }
+    } catch (error) { return forged('its mind frame cannot be canonicalised: it holds ' + error.message); }
+    if (morningOf(p) !== morning) {
+      return forged(morning ? 'it is the morning after a dream and does not quote it' : 'it quotes a dream the morning already quoted');
+    }
     const by = isObject(p.by) ? p.by : {};
     const awake = Array.isArray(p.awake) ? p.awake : [];
-    const bodies = by.kind === 'model' ? window.NexusPlayout.directive(by.answer, awake) : by.kind === 'rules' ? {} : null;
+    let bodies = by.kind === 'model' ? window.NexusPlayout.directive(by.answer, awake) : by.kind === 'rules' ? {} : null;
+    // the morning after a dream: every awake body says its line from that dream, word for word
+    if (morning && bodies) {
+      const dream = await dreamFrameAt(p.memory);
+      if (typeof dream === 'string') return forged(dream);
+      bodies = window.NexusPlayout.quote(bodies, dream.payload.dream.lines, awake);
+    }
     const name = by.kind === 'model' ? by.asked : 'rules';
     const told = isObject(p.bodies) && isObject(p.bodies[player.id]) ? p.bodies[player.id] : {};
     const expect = { kind: 'directed', by: name, said: told.say || '', act: told.act || [] };
@@ -676,8 +761,10 @@ function directedCheck(player, views) {
       const heard = typeof x.answer === 'string' ? window.NexusPlayout.directive(x.answer, awake) : null;
       const again = heard ? { kind: 'model', provider: 'github-copilot', asked: x.asked, ms: x.ms, answer: x.answer } : null;
       try {
-        if (x.at_utc !== views.captured || jcs([x.charter, x.state, x.clock, [...(x.awake || [])].sort()]) !==
-            jcs([p.charter, p.state, p.clock, awake])) return forged("its mind frame says it was shown what its evidence does not");
+        if (x.at_utc !== views.captured || jcs([x.charter, x.state, x.clock, [...(x.awake || [])].sort(), memoryOf(x), morningOf(x)]) !==
+            jcs([p.charter, p.state, p.clock, awake, memoryOf(p), morningOf(p)])) {
+          return forged("its mind frame says it was shown what its evidence does not");
+        }
         if (heard ? !(by.kind === 'model' && jcs(again) === jcs({ kind: by.kind, provider: by.provider, asked: by.asked, ms: by.ms,
                                                                  answer: by.answer })
                       && by.prompt && await sha256hex(ENCODER.encode(x.prompt)) === by.prompt.sha256)
@@ -1323,6 +1410,8 @@ function liveNote(body) {
 
 function drawDimension(now) {
   const panel = $('dimension');
+  if (!panel.dataset.title) panel.dataset.title = panel.title;
+  refreshDream();
   stepDimension();
   const frame = headFrame();
   const show = !!(frame && DIM.bodies.size && window.NexusPlayout);
@@ -1335,7 +1424,8 @@ function drawDimension(now) {
   if (panel.classList.contains('folded')) {
     const awake = [...DIM.bodies.values()].filter(body => !body.asleep).length;
     $('dimension-note').textContent = '🗺 ' + (DIM.place ? DIM.place + ' · ' : '') + awake + ' awake · '
-      + (DIM.bodies.size - awake) + ' asleep · tap for the map';
+      + (DIM.bodies.size - awake) + ' asleep' + (dreamLine.newest ? ' · 💭 dream #' + dreamLine.newest.seq : '')
+      + ' · tap for the map';
     return;
   }
   DIM.drawn = now;
@@ -1366,7 +1456,12 @@ function drawDimension(now) {
     g.fillStyle = '#c9c9e6'; g.font = '9px ui-monospace,Menlo,monospace';
     g.fillText(body.asleep ? id + ' z' : id, x + 6, y - 5);
   }
-  $('dimension-note').textContent = 'played here from views #' + DIM.seq + (DIM.place ? ' · ' + DIM.place : '') + ' · not sealed';
+  const dreamt = dreamLine.newest && dreamLine.newest.payload.dream;
+  $('dimension-note').textContent = 'played here from views #' + DIM.seq + (DIM.place ? ' · ' + DIM.place : '')
+    + (dreamt ? ' · 💭 ' + clipped(dreamt.text, 48) : '') + ' · not sealed';
+  panel.title = dreamt ? `Last night's dream (dream #${dreamLine.newest.seq}, the night of ${dreamLine.newest.payload.night}): `
+    + dreamt.text + '\n\nThe one mind reads this one frame instead of the day, and the morning after it every body wakes '
+    + 'saying its line from it.' : panel.dataset.title || panel.title;
 }
 
 // The map folds to a line with a tap, so it never has to stand over a view; the choice is kept.
@@ -1414,7 +1509,9 @@ window.__viewsState = () => {
   const seal = verdictAt(view.frame);
   return {
     // this page's own dimension of the line: the newest frame played forward, and who has met it
-    dimension: { seq: DIM.seq, clock: DIM.place || null, bodies: Object.fromEntries([...DIM.bodies].map(([id, b]) =>
+    dimension: { seq: DIM.seq, clock: DIM.place || null,
+      dream: dreamLine.newest ? { seq: dreamLine.newest.seq, night: dreamLine.newest.payload.night,
+        text: dreamLine.newest.payload.dream.text } : null, bodies: Object.fromEntries([...DIM.bodies].map(([id, b]) =>
       [id, { pose: b.pose, twin: b.twin, met: b.met, asleep: b.asleep, local: b.local, note: liveNote(b) }])) },
     frames: frameCount(view.manifest),
     frame: view.frame,

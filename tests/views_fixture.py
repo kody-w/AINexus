@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import rapp as R  # noqa: E402
 import chainio  # noqa: E402
 import views_seal as V  # noqa: E402
+import intent as I  # noqa: E402
 
 PLAYERS = ["wanderer", "greeter", "pilgrim", "watcher"]
 SHOTS = ROOT / "recordings" / "latest"
@@ -213,11 +214,17 @@ def add_world(feed_dir, receipt, chain_dir, answer=WORLD_ANSWER, asked="gpt-5-mi
     feed_dir, chain_dir = pathlib.Path(feed_dir), pathlib.Path(chain_dir)
     awake = sorted(awake if awake is not None else ["wanderer", "greeter", "pilgrim"])
     chain = chainio.load_chain(chain_dir)
+    # what it remembers, as the capture finds it: the newest dream, quoted by the first mind frame after it
+    beside = {name: chainio.load_chain(chain_dir.parent / name) if (chain_dir.parent / name / "HEAD.json").exists() else []
+              for name in ("dream", "mind")}
+    dream = beside["dream"][-1] if beside["dream"] else None
+    morning = dream is not None and (not beside["mind"] or dream["payload"]["tick"] >= beside["mind"][-1]["payload"]["tick"])
     charter = chainio.load_chain(pathlib.Path(intent_dir) if intent_dir else chain_dir.parent / "intent")[-1]
     evidence = {"schema": "ainexus/world-mind/1", "at_utc": receipt["captured_utc"], "clock": clock,
                 "charter": {"seq": charter["seq"], "frame_hash": charter["frame_hash"]},
                 "state": {"views_seq": chain[-1]["seq"], "views_frame": chain[-1]["frame_hash"]} if chain else None,
-                "awake": awake, "asked": asked if answer is not None else None,
+                "awake": awake, "memory": {"seq": dream["seq"], "frame_hash": dream["frame_hash"]} if dream else None,
+                "morning": morning, "asked": asked if answer is not None else None,
                 "prompt": "You are the one mind of AINexus." if answer is not None else None,
                 "answer": answer, "ms": 9120 if answer is not None else 0, "error": error}
     evidence.update(overrides)
@@ -243,10 +250,12 @@ def build(out):
     spine, feed, chain = out / "spine", out / "live", out / "chain"
     for d in (spine, feed, chain):
         d.mkdir(parents=True, exist_ok=True)
-    # the charter beside the line, as it is beside views/ on main: the one mind answers to it
-    shutil.copytree(ROOT / "intent", out / "intent")
     manifest = empty_manifest()
     add_tick(spine, T0)
+    # the charter beside the line, as it is beside views/ on main, anchored to this spine: the one
+    # mind answers to it, and a dream answers to the charter that stood at its tick
+    I.amend({k: v for k, v in I.newest()["payload"].items() if k not in ("tick", "tick_frame", "amended_because")},
+            where=out / "intent", spine=str(spine))
     legacy = add_capture(feed, manifest, "2026-09-23T12-02-00.000Z-legacy00", T0 + datetime.timedelta(minutes=2), 0)
     add_tick(spine, T0 + datetime.timedelta(minutes=10))
     anchor1 = V.read_anchor(str(spine))

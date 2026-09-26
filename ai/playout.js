@@ -124,10 +124,23 @@
   const LONE = /[\ud800-\udfff]/gu;
   const SPLITS = /[\u0085\u2028\u2029]|[\ud800-\udfff]/u;     // what would split a line of the chain
   // a line a body may say: whole characters, every run of space one space, cut by code point
+  const CONTROL = /[\x00-\x08\x0e-\x1b\x7f]/g;       // not text: a NUL cannot even be handed to a process
   function sayLine(value, max) {
-    const flat = String(value).replace(LONE, '\ufffd').replace(SPACES, ' ').replace(/^ +| +$/g, '');
+    const flat = String(value).replace(CONTROL, '').replace(LONE, '\ufffd').replace(SPACES, ' ').replace(/^ +| +$/g, '');
     const chars = Array.from(flat);
     return chars.length <= max ? flat : chars.slice(0, max - 1).join('') + '…';
+  }
+  // The morning after a dream: every awake body says its line from the dream, word for word,
+  // whatever else it was told. tools/views_seal.py `quote` is the same function.
+  function quote(told, lines, awake) {
+    const out = {};
+    for (const id of Object.keys(told)) out[id] = Object.assign({}, told[id]);
+    for (const id of awake) {
+      const line = lines && typeof lines === 'object' && Object.prototype.hasOwnProperty.call(lines, id) ? lines[id] : null;
+      const had = Object.prototype.hasOwnProperty.call(out, id) ? out[id] : {};
+      if (typeof line === 'string' && line) out[id] = Object.assign(had, { say: line });
+    }
+    return out;
   }
   function directive(answer, awake) {
     if (typeof answer !== 'string' || !answer || Array.from(answer).length > MAX_ANSWER || SPLITS.test(answer)) return null;
@@ -289,7 +302,7 @@
     return (steps || []).map(s => s.do).join(', ');
   }
 
-  return { canonical, canonicalAct, directive, sayLine, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt,
+  return { canonical, canonicalAct, directive, quote, sayLine, play, cursor, stateAt, tracker, validClock, asleepAt, wokeAt,
            clockText, bed, defaultRoutine, summary, duration, WALK_CM_PER_S, MRAD_PER_PX, TURN_MS, BOUND_CM, NIGHT,
            BEDS, PLACE_CLOCK, MAX_ACT_STEPS, MAX_ACT_MS, MAX_ANSWER, SAY_MAX };
 }));

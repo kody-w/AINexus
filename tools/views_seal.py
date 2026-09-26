@@ -46,12 +46,14 @@ STREAM = "views:@kody-w/ainexus"
 KIND = "views.snapshot"
 MIND_STREAM = "mind:@kody-w/ainexus"
 MIND_KIND = "mind.directive"
+DREAM_STREAM = "dream:@kody-w/ainexus"
 SPINE_STREAM = "tick:@kody-w/global"
 SPINE_REPO = "kody-w/dogg"
 SPINE_URL = "https://raw.githubusercontent.com/kody-w/dogg/main/ticks/"
 FEED_URL = "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/"
 CHAIN_DIR = ROOT / "views"
 MIND_DIR = ROOT / "mind"
+DREAM_DIR = ROOT / "dream"
 INTENT_DIR = ROOT / "intent"
 TIMEOUT = 20
 MAX_PLAYERS = 32
@@ -355,8 +357,23 @@ def _no_constant(name):
 # object; each awake body in it may be told a line to say, an act and a routine. An answer that
 # could split a line of the chain, or that nests deep enough to exhaust one parser and not the
 # other, is not heard.
+# control characters a model may write are not text (a NUL cannot even be handed to a process)
+CONTROL = re.compile("[\x00-\x08\x0e-\x1b\x7f]")
+
+
 def say_line(value, n=SAY_MAX):
-    return clip(SPACES.sub(" ", value).strip(" "), n)
+    return clip(SPACES.sub(" ", CONTROL.sub("", value)).strip(" "), n)
+
+
+def quote(bodies, lines, awake):
+    """The morning after a dream: every awake body says its line from the dream, word for word,
+    whatever else it was told. ai/playout.js `quote` is the same function."""
+    out = {pid: dict(told) for pid, told in bodies.items()}
+    for pid in awake:
+        line = lines.get(pid) if isinstance(lines, dict) else None
+        if isinstance(line, str) and line:
+            out.setdefault(pid, {})["say"] = line
+    return out
 
 
 def directive(answer, awake):
@@ -579,7 +596,14 @@ def sealed_mind(m, pid, segment, feed_dir, world=None):
 
 
 WORLD_SCHEMA = "ainexus/world-mind/1"
-WORLD_KEYS = {"schema", "at_utc", "clock", "charter", "state", "awake", "asked", "prompt", "answer", "ms", "error"}
+WORLD_KEYS = {"schema", "at_utc", "clock", "charter", "state", "awake", "memory", "morning", "asked", "prompt",
+              "answer", "ms", "error"}
+REMEMBERING = {"memory", "morning"}          # absent from the one mind's first ticks, before there were dreams
+
+
+def memory_of(x):
+    """(memory, morning) of an exchange or a mind frame: none, on the ticks sealed before dreams."""
+    return x.get("memory"), x.get("morning", False)
 
 
 def strict(value):
@@ -611,7 +635,7 @@ def world_from(x, awake):
 
 def world_problems(x):
     """What is wrong with the one mind's evidence as a record of one exchange, on its own."""
-    if not isinstance(x, dict) or x.get("schema") != WORLD_SCHEMA or set(x) != WORLD_KEYS:
+    if not isinstance(x, dict) or x.get("schema") != WORLD_SCHEMA or set(x) not in (WORLD_KEYS, WORLD_KEYS - REMEMBERING):
         return [f"it is not an {WORLD_SCHEMA}"]
     out = []
     for k in ("asked", "prompt", "answer", "error"):
@@ -627,13 +651,30 @@ def world_problems(x):
         out.append("its moment is not the fixed utc form")
     if not (isinstance(x["clock"], str) and len(x["clock"]) <= 64 and CLOCK.fullmatch(x["clock"])):
         out.append("its clock is not a timezone")
+    memory, morning = memory_of(x)
+    if not isinstance(morning, bool) or (morning and memory is None):
+        out.append("morning is not whether it quotes the dream it remembers")
     if not (isinstance(x["awake"], list) and len(x["awake"]) <= MAX_PLAYERS and len(set(map(str, x["awake"]))) == len(x["awake"])
             and all(isinstance(a, str) and PLAYER_ID.match(a) for a in x["awake"])):
         out.append("awake is not a list of bodies")
     return out
 
 
-def world_mind(ref, receipt, segment, feed_dir, head, charter, clock, directed):
+def ref_of(frame):
+    return {"seq": frame["seq"], "frame_hash": frame["frame_hash"]} if frame is not None else None
+
+
+def remembered(dreams, before_tick, previous_mind):
+    """(the dream a mind frame at this tick remembers, whether it is the morning after it): the
+    newest dream sealed before it, which the first mind frame after that dream quotes."""
+    dream = next((d for d in reversed(dreams) if d["payload"].get("tick", -1) < before_tick), None)
+    # a dream sealed at the same tick as the last mind frame (a night tick captured after 07:00) is
+    # still quoted by the next: a dream at tick t is never the memory of a mind frame at t
+    morning = dream is not None and (previous_mind is None or dream["payload"]["tick"] >= previous_mind["payload"]["tick"])
+    return dream, morning
+
+
+def world_mind(ref, receipt, segment, feed_dir, head, charter, clock, directed, dream=None, morning=False):
     """The one mind's tick, from the evidence the receipt points at: the parts of its mind frame,
     and the directive every directed body's entry is derived from. Everything is checked against
     the line and the charter here, never taken from the receipt."""
@@ -657,9 +698,15 @@ def world_mind(ref, receipt, segment, feed_dir, head, charter, clock, directed):
         raise Refusal("the one mind was shown a state that is not the head of the line")
     if sorted(x["awake"]) != sorted(directed):
         raise Refusal("the bodies the one mind was asked about are not the ones it directed")
-    by, bodies, name = world_from(x, sorted(x["awake"]))
-    parts = {"charter": x["charter"], "state": x["state"], "clock": clock, "awake": sorted(x["awake"]), "by": by,
-             "bodies": bodies, "evidence": {"file": ref["evidence"], "bytes": len(data), "sha256": sha256(data)}}
+    if memory_of(x) != (ref_of(dream), morning):
+        raise Refusal("the one mind did not remember the newest dream, or is wrong about whether this is its morning")
+    awake = sorted(x["awake"])
+    by, bodies, name = world_from(x, awake)
+    if morning:
+        bodies = quote(bodies, dream["payload"]["dream"]["lines"], awake)
+    parts = {"charter": x["charter"], "state": x["state"], "clock": clock, "awake": awake, "memory": ref_of(dream),
+             "morning": morning, "by": by, "bodies": bodies,
+             "evidence": {"file": ref["evidence"], "bytes": len(data), "sha256": sha256(data)}}
     return parts, {"bodies": bodies, "name": name}
 
 
@@ -667,9 +714,9 @@ def mind_payload_problems(p, seq):
     """Everything a mind frame's payload must be (mind:@kody-w/ainexus)."""
     if not isinstance(p, dict):
         return ["payload is not an object"]
-    want = {"tick", "tick_frame", "spine", "fetched_utc", "charter", "state", "clock", "awake", "by", "bodies",
-            "evidence"} | ({"about"} if seq == 0 else set())
-    if set(p) != want:
+    want = {"tick", "tick_frame", "spine", "fetched_utc", "charter", "state", "clock", "awake", "memory", "morning",
+            "by", "bodies", "evidence"} | ({"about"} if seq == 0 else set())
+    if set(p) not in (want, want - REMEMBERING):
         return [f"the payload is not {sorted(want)}"]
     out = []
     if not (isint(p["tick"]) and p["tick"] >= 0 and isinstance(p["tick_frame"], str) and HEX64.match(p["tick_frame"])):
@@ -691,6 +738,13 @@ def mind_payload_problems(p, seq):
             and all(PLAYER_ID.match(a) for a in awake) and len(awake) <= MAX_PLAYERS):
         out.append("awake is not a sorted list of bodies")
         awake = []
+    memory, morning = memory_of(p)
+    if memory is not None and not (isinstance(memory, dict) and set(memory) == {"seq", "frame_hash"}
+                                   and isint(memory["seq"]) and isinstance(memory["frame_hash"], str)
+                                   and HEX64.match(memory["frame_hash"])):
+        out.append("memory is not a frame of the dream line")
+    if not isinstance(morning, bool) or (morning and memory is None):
+        out.append("morning is not whether it quotes the dream it remembers")
     by = p["by"]
     if isinstance(by, dict) and by.get("kind") == "model":
         pr = by.get("prompt")
@@ -699,12 +753,12 @@ def mind_payload_problems(p, seq):
                 and isinstance(pr, dict) and set(pr) == {"sha256", "bytes"} and isinstance(pr["sha256"], str)
                 and HEX64.match(pr["sha256"]) and count(pr["bytes"]) is not None and plain(by["answer"], MAX_ANSWER)):
             out.append("by is not a model that answered")
-        elif strict(directive(by["answer"], awake)) != strict(p["bodies"]):
-            out.append("its bodies are not what its answer told them")
+        elif directive(by["answer"], awake) is None:
+            out.append("its answer told the bodies nothing they can do, and it does not say rules wrote it")
     elif isinstance(by, dict) and by.get("kind") == "rules":
         if set(by) != {"kind", "why"} or not (plain(by["why"], 160) and by["why"]):
             out.append("rules that do not say why")
-        elif p["bodies"] != {}:
+        elif not morning and p["bodies"] != {}:
             out.append("rules told a body something: under the rules every body carries on")
     else:
         out.append("by is neither a model nor rules")
@@ -1046,7 +1100,7 @@ def latest_routine(frames, pid):
     return None
 
 
-def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None, charter=None):
+def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None, charter=None, dream=None, morning=False):
     """A capture receipt plus the bytes it points at become a views payload, and, on a tick the one
     mind directed, the parts of its mind frame. The receipt is trusted for NOTHING it can be checked
     on: every hash and size is computed here from the feed itself, and everything said about the one
@@ -1067,7 +1121,8 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None, charter
         clock = receipt.get("clock")
         if not (isinstance(clock, str) and len(clock) <= 64 and CLOCK.fullmatch(clock)):
             raise Refusal("the bodies keep the clock of their place, and the receipt names none this sealer knows")
-        parts, world = world_mind(receipt.get("mind"), receipt, segment, feed_dir, head, charter, clock, directed)
+        parts, world = world_mind(receipt.get("mind"), receipt, segment, feed_dir, head, charter, clock, directed,
+                                  dream, morning)
     sealed, failed = [], []
     for q in players:
         pid = q.get("id") if isinstance(q, dict) else None
@@ -1147,7 +1202,8 @@ def build_payload(anchor, receipt, feed_dir, feed_url, head, chain=None, charter
     return payload, parts
 
 
-def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL, mind_dir=None, intent_dir=None):
+def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL, mind_dir=None, intent_dir=None,
+         dream_dir=None):
     """Append one frame for this anchor, or return None when this tick is already on the line. On a
     tick the one mind directed, its frame on mind:@kody-w/ainexus is appended with it, and the views
     frame names it."""
@@ -1169,14 +1225,17 @@ def seal(anchor, receipt, feed_dir, chain_dir=CHAIN_DIR, feed_url=FEED_URL, mind
             raise Refusal(f"the anchor is tick {anchor['tick']}, older than the last sealed tick {last}")
     mind_dir = pathlib.Path(mind_dir) if mind_dir else chain_dir.parent / "mind"
     intent_dir = pathlib.Path(intent_dir) if intent_dir else chain_dir.parent / "intent"
-    payload, parts = build_payload(anchor, receipt, feed_dir, feed_url, head, chain, charter=newest_frame(intent_dir))
+    dream_dir = pathlib.Path(dream_dir) if dream_dir else chain_dir.parent / "dream"
+    minds = chainio.load_chain(mind_dir) if (mind_dir / "HEAD.json").exists() else []
+    last = minds[-1] if minds else None
+    dream, morning = remembered(read_dreams(str(dream_dir)), anchor["tick"], last)
+    payload, parts = build_payload(anchor, receipt, feed_dir, feed_url, head, chain, charter=newest_frame(intent_dir),
+                                   dream=dream, morning=morning)
     now = utc_now()
     if head is not None and now < head["utc"]:
         now = head["utc"]
     thought = None
     if parts is not None:
-        minds = chainio.load_chain(mind_dir)
-        last = minds[-1] if minds else None
         if last is not None and last["payload"].get("tick", -1) >= anchor["tick"]:
             raise Refusal(f"the one mind's line already has spine tick {last['payload']['tick']}")
         mind_payload = dict({"tick": anchor["tick"], "tick_frame": anchor["tick_frame"], "spine": SPINE_REPO,
@@ -1228,7 +1287,38 @@ def sibling(chain, name):
     return str(pathlib.Path(where).parent / name)
 
 
-def verify_minds(mind_src, intent_src, frames):
+def told_by(p, dream):
+    """What a mind frame's bodies must be: what its answer told them (nothing, under the rules), and on
+    the morning after a dream, every awake body's line from that dream."""
+    by = p["by"]
+    bodies = directive(by["answer"], p["awake"]) if by["kind"] == "model" else {}
+    if bodies is None:
+        return None
+    return quote(bodies, dream["payload"]["dream"]["lines"], p["awake"]) if memory_of(p)[1] else bodies
+
+
+def read_dreams(where):
+    src = Chain(where)
+    if not src.remote and not (pathlib.Path(where) / "HEAD.json").exists():
+        return []
+    try:
+        meta = src.head()
+    except urllib.error.HTTPError as ex:
+        if ex.code == 404:                   # no dream yet: the first night has not come
+            return []
+        raise
+    if meta.get("stream_id") != DREAM_STREAM:
+        raise ValueError(f"its HEAD names {meta.get('stream_id')!r}, not {DREAM_STREAM}")
+    frames, head = src.frames(), None
+    for f in frames:
+        ok, step, why = R.verify_frame(f, head=head, stream_id_of_record=DREAM_STREAM)
+        if not ok:
+            raise ValueError(f"dream {f.get('seq')}: step {step}: {why}")
+        head = f
+    return frames
+
+
+def verify_minds(mind_src, intent_src, frames, dream_src=None):
     """The one mind's line, and every views frame that names one of its frames: each mind frame
     under the spine's own verifier, its bodies derived again from its own answer, its charter a
     frame of intent, its state the views frame before the one it directed, and every directed body
@@ -1242,7 +1332,11 @@ def verify_minds(mind_src, intent_src, frames):
         charters = {(f["seq"], f["frame_hash"]) for f in intent_src.frames()}
     except Exception as ex:
         return [f"the charter could not be read: {ex}"]
-    out, head = [], None
+    try:
+        dreams = read_dreams(dream_src.where) if dream_src is not None else []
+    except Exception as ex:
+        return [f"the dream line could not be read: {ex}"]
+    out, head, remembering = [], None, False
     if meta.get("stream_id") != MIND_STREAM:
         out.append(f"the one mind's HEAD names {meta.get('stream_id')!r}, not {MIND_STREAM}")
     for f in minds:
@@ -1259,6 +1353,21 @@ def verify_minds(mind_src, intent_src, frames):
                 out.append(f"mind frame {f['seq']}: it names a charter that is not a frame of intent")
             if head is not None and isint(head["payload"].get("tick")) and f["payload"]["tick"] <= head["payload"]["tick"]:
                 out.append(f"mind frame {f['seq']}: tick {f['payload']['tick']} does not advance past {head['payload']['tick']}")
+            # its memory is the newest dream before it, and the first mind frame after a dream quotes it;
+            # once the line remembers, every later frame says what it remembers
+            dream, morning = remembered(dreams, f["payload"]["tick"], head)
+            if REMEMBERING <= set(f["payload"]):
+                remembering = True
+            elif remembering:
+                out.append(f"mind frame {f['seq']}: it no longer says what it remembers")
+            if memory_of(f["payload"])[0] != ref_of(dream):
+                out.append(f"mind frame {f['seq']}: it does not remember the newest dream before it")
+            elif memory_of(f["payload"])[1] != morning:
+                out.append(f"mind frame {f['seq']}: " + ("it is the morning after a dream and does not quote it" if morning
+                                                          else "it quotes a dream the morning already quoted"))
+            elif strict(told_by(f["payload"], dream)) != strict(f["payload"]["bodies"]):
+                out.append(f"mind frame {f['seq']}: its bodies are not what its answer told them"
+                           + (" and its dream had them say" if morning else ""))
         head = f
     if head is not None and head["frame_hash"] != meta.get("head_frame"):
         out.append("the one mind's HEAD.json does not name its last frame")
@@ -1300,7 +1409,7 @@ def verify_minds(mind_src, intent_src, frames):
     return out
 
 
-def world_problem(m, fetch, captured=None):
+def world_problem(m, fetch, captured=None, dreams=()):
     """'' when the feed's evidence of the one mind's tick says exactly what its frame says, None when
     it has rolled out of the feed, and otherwise what is wrong."""
     e = m["payload"]["evidence"]
@@ -1319,16 +1428,21 @@ def world_problem(m, fetch, captured=None):
     mp = m["payload"]
     if x["at_utc"] != captured:
         return f"mind frame {m['seq']}: its evidence is of another moment than its views were captured"
-    if strict([x["charter"], x["state"], x["clock"], sorted(x["awake"])]) != \
-            strict([mp["charter"], mp["state"], mp["clock"], mp["awake"]]):
+    if strict([x["charter"], x["state"], x["clock"], sorted(x["awake"]), *memory_of(x)]) != \
+            strict([mp["charter"], mp["state"], mp["clock"], mp["awake"], *memory_of(mp)]):
         return f"mind frame {m['seq']}: it says it was shown what its evidence does not"
     by, bodies, _ = world_from(x, mp["awake"])
+    if memory_of(mp)[1]:
+        dream = next((d for d in dreams if ref_of(d) == memory_of(mp)[0]), None)
+        if dream is None:
+            return f"mind frame {m['seq']}: it quotes a dream that is not on the dream line"
+        bodies = quote(bodies, dream["payload"]["dream"]["lines"], mp["awake"])
     if strict([by, bodies]) != strict([mp["by"], mp["bodies"]]):
         return f"mind frame {m['seq']}: it says what its evidence does not"
     return ""
 
 
-def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=None, intent=None):
+def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=None, intent=None, dream=None):
     """The line, every anchor, every frame of the one mind it names, and every view the feed still
     holds (or only the newest `feed_last` frames' views). Returns the problems found."""
     problems = []
@@ -1397,14 +1511,22 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=No
         return problems
     log(f"line: {len(frames)} frame(s) verify on {STREAM}, head {head['frame_hash'][:16]}…")
 
-    minds = []
+    minds, dreams = [], []
     if mind or any("mind" in f["payload"]["views"] for f in frames):
         mind_src = Chain(mind or sibling(chain, "mind"))
-        problems = verify_minds(mind_src, Chain(intent or sibling(chain, "intent")), frames)
+        dream_src = Chain(dream or sibling(chain, "dream"))
+        problems = verify_minds(mind_src, Chain(intent or sibling(chain, "intent")), frames, dream_src)
         if problems:
             return problems
         minds = mind_src.frames()
+        dreams = read_dreams(dream_src.where)
         log(f"the one mind: {len(minds)} frame(s) verify on {MIND_STREAM}, each derived from its own answer")
+    if dreams or dream or read_dreams(sibling(chain, "dream")):
+        # every dream, rebuilt from the views it folds and the charter that stood when it was sealed
+        import dream as D                     # dream.py imports this module, so it is imported here
+        problems = D.verify(dream or sibling(chain, "dream"), chain, intent or sibling(chain, "intent"), spine, log=log)
+        if problems:
+            return [f"dream line: {p}" for p in problems]
 
     spine_src = Chain(spine)
     try:
@@ -1454,7 +1576,7 @@ def verify(chain, spine=SPINE_URL, feed=None, log=print, feed_last=None, mind=No
         for m in minds:
             if m["seq"] in shown:
                 try:
-                    why = world_problem(m, fetch, shown[m["seq"]])
+                    why = world_problem(m, fetch, shown[m["seq"]], dreams)
                 except urllib.error.HTTPError as ex:
                     problems.append(f"mind frame {m['seq']}: the feed answered {ex.code}")
                     continue
@@ -1518,6 +1640,7 @@ def main(argv=None):
     v.add_argument("--feed-last", type=int, help="only re-hash the views of the newest N frames")
     v.add_argument("--mind", help="the one mind's line (default: beside --chain)")
     v.add_argument("--intent", help="the charter (default: beside --chain)")
+    v.add_argument("--dream", help="the dream line (default: beside --chain)")
     args = ap.parse_args(argv)
     try:
         if args.cmd == "anchor":
@@ -1546,7 +1669,8 @@ def main(argv=None):
             if args.summary:
                 pathlib.Path(args.summary).write_text(line + "\n")
             return 0
-        problems = verify(args.chain, args.spine, args.feed, feed_last=args.feed_last, mind=args.mind, intent=args.intent)
+        problems = verify(args.chain, args.spine, args.feed, feed_last=args.feed_last, mind=args.mind, intent=args.intent,
+                          dream=args.dream)
         for p in problems:
             print("✗ " + p)
         if problems:
