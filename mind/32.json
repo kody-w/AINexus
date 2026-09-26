@@ -1,0 +1,252 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 32,
+  "utc": "2026-09-26T13:48:06.955Z",
+  "payload": {
+    "tick": 1358,
+    "tick_frame": "272adac7aba8f82a9917455dd998002a0e7483348e07482e4267694d2b9fcc52",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-26T13:46:52.567Z",
+    "charter": {
+      "seq": 3,
+      "frame_hash": "f4964cf7fbce8f0306ef073f3225820879ae0abaa4969ae7edd79b07a0f0c548"
+    },
+    "state": {
+      "views_seq": 376,
+      "views_frame": "ecda25378774b5eb7c74b1ad240b2d9068fa2efcbead9d609c5a7ff565ecae4e"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 0,
+      "frame_hash": "46dbb45e39d80b8a45f4f30d06d9c27398637423cc6f1df5bd34e756c364a5f5"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 40277,
+      "prompt": {
+        "sha256": "9edcd466a7e406c5ec0e3484da5ed1d40102ee14bbd6d9e0fa6b3a3b83c1cbc7",
+        "bytes": 7097
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"the wanderer edges west, eyes on the western portal\",\"act\":[{\"do\":\"look\",\"dx\":-400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":2500},{\"do\":\"wait\",\"ms\":500},{\"do\":\"look\",\"dx\":100,\"dy\":0}],\"routine\":[{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":900},{\"do\":\"wait\",\"ms\":800},{\"do\":\"look\",\"dx\":200,\"dy\":0},{\"do\":\"wait\",\"ms\":700}]}, \"pilgrim\":{\"say\":\"the pilgrim keeps slow steady steps toward the west gate\",\"act\":[{\"do\":\"look\",\"dx\":-300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":2000},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":600},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":400,\"dy\":0},{\"do\":\"wait\",\"ms\":800}]}, \"watcher\":{\"say\":\"the watcher holds the sweep, following the west ring\",\"act\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":2000},{\"do\":\"look\",\"dx\":80,\"dy\":0}],\"routine\":[{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"wait\",\"ms\":1000},{\"do\":\"look\",\"dx\":80,\"dy\":0},{\"do\":\"wait\",\"ms\":1200}]}, \"greeter\":{\"say\":\"the greeter waits by the western portal to welcome\",\"act\":[{\"do\":\"look\",\"dx\":-1000,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1500},{\"do\":\"wait\",\"ms\":500},{\"do\":\"look\",\"dx\":200,\"dy\":0}],\"routine\":[{\"do\":\"look\",\"dx\":-1400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"back\",\"ms\":2000},{\"do\":\"wait\",\"ms\":800},{\"do\":\"look\",\"dx\":0,\"dy\":0},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":200,\"dy\":0},{\"do\":\"wait\",\"ms\":800}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "the greeter waits by the western portal to welcome",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1000,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "back",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "look",
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "the pilgrim keeps slow steady steps toward the west gate",
+        "act": [
+          {
+            "do": "look",
+            "dx": -300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 600
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "the wanderer edges west, eyes on the western portal",
+        "act": [
+          {
+            "do": "look",
+            "dx": -400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 2500
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          },
+          {
+            "do": "look",
+            "dx": 100,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 900
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 700
+          }
+        ]
+      },
+      "watcher": {
+        "say": "the watcher holds the sweep, following the west ring",
+        "act": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 2000
+          },
+          {
+            "do": "look",
+            "dx": 80,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          },
+          {
+            "do": "look",
+            "dx": 80,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-26T13-48-04.422Z-e6f31416/world-mind.json",
+      "bytes": 9611,
+      "sha256": "e5c1c9a82052a652455c1b7564962c8604854cae9020169112ba3f4c52d00b40"
+    }
+  },
+  "payload_hash": "a2ac5aadfd8e0acf8ef5a01fc341ebc4a63576841aa7cfde5f8518c28057d113",
+  "prev": "5493d193ff40c91e1f898cb1092404b91cad8e212a468ff3464ee79844d5e2a5",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "5889c9fbfc30d14b99ddee6b8c39973b37c3a2ad721e0a0479a1581c37d7f03e"
+}
