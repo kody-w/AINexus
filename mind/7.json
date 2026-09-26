@@ -1,0 +1,212 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 7,
+  "utc": "2026-09-26T01:14:12.023Z",
+  "payload": {
+    "tick": 1287,
+    "tick_frame": "f5a84a3e94f9b6b95f7827c427c9e5fe984987039f1282597a14773f804e447a",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-26T01:13:02.534Z",
+    "charter": {
+      "seq": 3,
+      "frame_hash": "f4964cf7fbce8f0306ef073f3225820879ae0abaa4969ae7edd79b07a0f0c548"
+    },
+    "state": {
+      "views_seq": 305,
+      "views_frame": "681016cad9a5dfe32b7888edc7562034c0df20900855bfc0ca5db2276f980620"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": null,
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 25427,
+      "prompt": {
+        "sha256": "54959b1dd96e83cd64506c84140929e53cea40390cc02869392ca4e0eeab0aa0",
+        "bytes": 6049
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Circling west — heading for the western portal; see you at the ring.\",\"act\":[{\"do\":\"look\",\"dx\":-400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"look\",\"dx\":-400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1500},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1500},{\"do\":\"wait\",\"ms\":1000}]},\"pilgrim\":{\"say\":\"Slow steps inward — joining you at the western portal.\",\"act\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1500},{\"do\":\"wait\",\"ms\":1200},{\"do\":\"look\",\"dx\":400,\"dy\":0}]},\"watcher\":{\"say\":\"Watching paths converge — heading to the western portal to oversee the meeting.\",\"act\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":500}],\"routine\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"wait\",\"ms\":1500},{\"do\":\"look\",\"dx\":60,\"dy\":0}]},\"greeter\":{\"say\":\"Evening — I'll stand at the western portal and welcome you by the ring.\",\"act\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":1000}],\"routine\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"wait\",\"ms\":1500},{\"do\":\"look\",\"dx\":350,\"dy\":0},{\"do\":\"wait\",\"ms\":1500},{\"do\":\"look\",\"dx\":-350,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Evening — I'll stand at the western portal and welcome you by the ring.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": 350,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": -350,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Slow steps inward — joining you at the western portal.",
+        "act": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 1200
+          },
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Circling west — heading for the western portal; see you at the ring.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1500
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1500
+          },
+          {
+            "do": "wait",
+            "ms": 1000
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Watching paths converge — heading to the western portal to oversee the meeting.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 500
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 1500
+          },
+          {
+            "do": "look",
+            "dx": 60,
+            "dy": 0
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-26T01-14-10.008Z-fff391f5/world-mind.json",
+      "bytes": 8293,
+      "sha256": "f4d9b1f6beb51342f17a41314e0e9b039a9312758006594cdff01d475226e096"
+    }
+  },
+  "payload_hash": "c03a8e11bd23d935116a2dbab837e0312546218ff8b7aae9663360cb919af7bc",
+  "prev": "510e6e2a4b1b45f152deef2f8c3206a4d63858a9c29f6e44a5e5206d757746f6",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "1c0805f0913162253843f3d311252bda6f959dd5f371f3bdbfcdec7f3850fd76"
+}
