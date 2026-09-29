@@ -141,3 +141,16 @@ new frame assimilated without a snap).
 [Play the autonomous tactical heist](https://kody-w.github.io/AINexus/dogg-heist.html).
 Four agents execute a deterministic mission while every tick is preserved as a verifiable,
 scrubbable DOGG history that can be forked, exported, and replayed offline.
+
+## Kestrel's Roost
+
+[Watch Kestrel live its life](https://kody-w.github.io/AINexus/kestrel.html). Kestrel is the RAPP
+organism that tends kody-w/dogg: once a day it wakes, hunts for one small fix, and sleeps. Every hunt
+is a frame on its public DOGG dimension, `kestrel:@kody-w/dogg-kestrel`. The roost verifies every
+frame in the browser and takes the dimension in by its head frame hash. Then `ai/kestrel.js` plays
+the body by rule, with no model. It perches between hunts, is out hunting when a cycle falls due,
+flies each new hunt once, and sleeps in its box at night by the hub's clock. The box keeps one gem
+for each catch its owner adopted. `window.kestrelRoost` gives an assistant the same bounded hands:
+`state()`, `hunts()`, `replay(seq)`, `follow(on)`. `?at=<ISO time>` plays the roost at any moment.
+Tests: `node tests/kestrel_roost.cjs` (the real stream verified and read, forged ones refused, and
+every routine flown without a jump).
