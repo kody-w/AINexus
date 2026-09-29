@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kestrel's Roost · AINexus</title>
+    <meta name="description" content="Kestrel, the RAPP organism that tends kody-w/dogg, in a body: it perches between hunts, flies each hunt its verified DOGG dimension records, and sleeps in its box at night.">
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+        #three-container { position: fixed; inset: 0; }
+        #hud { position: fixed; bottom: 14px; left: 14px; max-width: 400px; padding: 14px 16px; border-radius: 12px;
+               background: rgba(10, 14, 24, .74); color: #e8eef6; border: 1px solid rgba(255, 255, 255, .12);
+               backdrop-filter: blur(6px); font-size: 13.5px; line-height: 1.45; }
+        #hud h1 { margin: 0 0 2px; font-size: 22px; letter-spacing: .01em; }
+        #hud .kicker { color: #9fb0c4; font-size: 12px; margin-bottom: 10px; }
+        #hud .chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+                     letter-spacing: .08em; background: #2c3a4f; color: #cfe3ff; margin-right: 6px; }
+        #hud .chip.hunt, #hud .chip.replay { background: #6b3b12; color: #ffd9a8; }
+        #hud .chip.roost { background: #1d2340; color: #b8c2ff; }
+        #say { margin: 8px 0 10px; font-size: 15px; }
+        #hud .fact { color: #aebdce; font-size: 12px; margin: 3px 0; }
+        #hud .fact code { color: #e3b341; }
+        #hud a { color: #7cc0ff; text-decoration: none; }
+        #hud .bad { color: #ff9b91; }
+        #return { position: fixed; right: 14px; top: 14px; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+                  background: rgba(10, 14, 24, .74); color: #e8eef6; border: 1px solid rgba(255, 255, 255, .15); font-size: 13px; }
+        #hint { position: fixed; right: 14px; bottom: 12px; color: rgba(232, 238, 246, .55); font-size: 12px; }
+        @media (max-width: 640px) { #hud { max-width: none; right: 14px; font-size: 12.5px; } #hint { display: none; } }
+    </style>
+</head>
+<body>
+    <div id="three-container"></div>
+    <div id="hud">
+        <h1>Kestrel</h1>
+        <div class="kicker">a RAPP organism that tends kody-w/dogg, in a body played by its own frames</div>
+        <div><span id="routine" class="chip">…</span><span id="clock" class="fact"></span></div>
+        <div id="say">Reading my dimension…</div>
+        <div id="proof" class="fact"></div>
+        <div id="gifts" class="fact"></div>
+        <div class="fact"><a href="https://github.com/kody-w/dogg-kestrel" target="_blank" rel="noopener">my DOGG dimension</a></div>
+    </div>
+    <div id="return" onclick="location.href='index.html'">Return to Nexus Hub</div>
+    <div id="hint">drag to look around · scroll to zoom · F to follow</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="ai/frames.js"></script>
+    <script src="ai/kestrel.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        const K = window.NexusKestrel;
+        const params = new URLSearchParams(location.search);
+        const AT = params.get('at') ? Date.parse(params.get('at')) : null;       // play the roost at a chosen moment
+        const SOURCE = params.get('source') || K.SOURCE;
+        const started = performance.now();
+        const now = () => (Number.isFinite(AT) ? AT + (performance.now() - started) : Date.now());
+
+        // ── the place ─────────────────────────────────────────────────────────
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('three-container').appendChild(renderer.domElement);
+
+        const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3a4a22, 0.8);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+        sun.position.set(-18, 30, 12);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
+        scene.add(hemi, sun);
+        scene.fog = new THREE.Fog(0x9ccbe8, 40, 160);
+
+        const mat = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.85 }, extra || {}));
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), mat(0x557530));
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // the field it hunts over: kody-w/dogg, one patch of tall grass
+        const field = new THREE.Group();
+        const blade = new THREE.ConeGeometry(0.07, 0.8, 4);
+        for (let i = 0; i < 180; i++) {
+            const g = new THREE.Mesh(blade, mat(i % 3 ? 0x8aa84a : 0xa7b95a));
+            g.position.set(K.SPOTS.field.x + (Math.random() - .5) * 9, 0.4, K.SPOTS.field.z + (Math.random() - .5) * 9);
+            g.rotation.z = (Math.random() - .5) * .3;
+            field.add(g);
+        }
+        scene.add(field);
+
+        for (const [x, z, r, c] of [[-60, -80, 30, 0x5f7d39], [40, -95, 38, 0x587536], [95, -30, 26, 0x62823c], [-95, 20, 28, 0x5a7838]]) {
+            const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), mat(c));
+            hill.position.set(x, -r * 0.55, z);
+            scene.add(hill);
+        }
+
+        // the perch: a fence post with a crossbar
+        const wood = mat(0x7a5a3a);
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 3, 10), wood);
+        post.position.set(K.SPOTS.perch.x, 1.5, K.SPOTS.perch.z);
+        post.castShadow = true;
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.12), wood);
+        bar.position.set(K.SPOTS.perch.x, 2.98, K.SPOTS.perch.z);
+        scene.add(post, bar);
+
+        // the nest box on its pole, and the shelf where adopted catches are kept
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 4, 8), wood);
+        pole.position.set(K.SPOTS.box.x, 2, K.SPOTS.box.z - 0.1);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1.1, 0.9), mat(0x8b6b45));
+        box.position.set(K.SPOTS.box.x - 0.35, 4.5, K.SPOTS.box.z - 0.1);
+        box.castShadow = true;
+        const hole = new THREE.Mesh(new THREE.CircleGeometry(0.2, 18), mat(0x1a120a));
+        hole.position.set(K.SPOTS.box.x + 0.16, 4.62, K.SPOTS.box.z - 0.1);
+        hole.rotation.y = Math.PI / 2;
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 1.2), mat(0x5b4630));
+        roof.position.set(K.SPOTS.box.x - 0.35, 5.1, K.SPOTS.box.z - 0.1);
+        roof.rotation.z = -0.18;
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.5), wood);
+        shelf.position.set(K.SPOTS.box.x - 0.35, 3.6, K.SPOTS.box.z + 0.45);
+        scene.add(pole, box, hole, roof, shelf);
+        const gifts = new THREE.Group();
+        scene.add(gifts);
+        function showGifts(n) {
+            while (gifts.children.length > n) gifts.remove(gifts.children[gifts.children.length - 1]);
+            while (gifts.children.length < n) {
+                const i = gifts.children.length;
+                const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.09),
+                    mat(0xffc857, { emissive: 0xff9f1c, emissiveIntensity: 0.9, roughness: 0.3 }));
+                gem.position.set(K.SPOTS.box.x - 0.7 + (i % 5) * 0.17, 3.72, K.SPOTS.box.z + 0.45 + Math.floor(i / 5) * 0.14);
+                gifts.add(gem);
+            }
+        }
+
+        // ── the body: a male kestrel, rufous back, blue-grey head and tail ──────────
+        const bird = new THREE.Group();
+        const rufous = mat(0xbf6b35), grey = mat(0x8394a8), dark = mat(0x2b2118), gold = mat(0xf2c14e);
+        const torso = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), rufous);
+        torso.scale.set(0.9, 0.85, 1.7);
+        torso.castShadow = true;
+        const belly = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), mat(0xe8c9a0));
+        belly.scale.set(0.85, 0.8, 1.45);
+        belly.position.set(0, -0.05, 0.03);
+        const head = new THREE.Group();
+        head.position.set(0, 0.13, 0.3);
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), grey);
+        const beak = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 8), gold);
+        beak.rotation.x = Math.PI / 2;
+        beak.position.set(0, -0.02, 0.14);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), dark);
+        const eyeR = eyeL.clone();
+        eyeL.position.set(0.07, 0.03, 0.08);
+        eyeR.position.set(-0.07, 0.03, 0.08);
+        head.add(skull, beak, eyeL, eyeR);
+        function wing(side) {
+            const pivot = new THREE.Group();
+            pivot.position.set(0.14 * side, 0.06, 0.05);
+            const inner = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.025, 0.26), rufous);
+            inner.position.x = 0.27 * side;
+            const outer = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.18), dark);
+            outer.position.set(0.7 * side, 0, -0.03);
+            inner.castShadow = outer.castShadow = true;
+            pivot.add(inner, outer);
+            return pivot;
+        }
+        const wingL = wing(1), wingR = wing(-1);
+        const tail = new THREE.Group();
+        tail.position.set(0, 0.02, -0.32);
+        const tailFan = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.36), grey);
+        tailFan.position.z = -0.16;
+        const band = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.025, 0.05), dark);
+        band.position.z = -0.3;
+        tail.add(tailFan, band);
+        const prey = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), mat(0x7a6f66));
+        prey.scale.set(1, 0.8, 1.6);
+        prey.position.set(0, -0.24, 0.05);
+        bird.add(torso, belly, head, wingL, wingR, tail, prey);
+        bird.scale.setScalar(2);
+        scene.add(bird);
+
+        let pose = K.restingPose();
+        let flapPhase = 0;
+        function wear(p, dt) {
+            bird.position.set(p.x, p.y, p.z);
+            bird.rotation.y = p.yaw;
+            flapPhase += p.flap * dt * Math.PI * 2;
+            const beat = Math.sin(flapPhase) * 0.85 * Math.min(1, p.flap / 5) * p.wing;
+            wingL.rotation.set(0, (1 - p.wing) * 1.2, beat + (1 - p.wing) * 0.25);
+            wingR.rotation.set(0, -(1 - p.wing) * 1.2, -beat - (1 - p.wing) * 0.25);
+            tail.scale.x = 1 + p.tail * 1.8;
+            head.rotation.set(0.9 * p.asleep, p.head * (1 - p.asleep), 0);
+            head.position.y = 0.13 - 0.07 * p.asleep;
+            bird.rotation.x = p.flap > 4 && p.wing > 0.8 ? -0.35 * Math.min(1, p.flap / 7) : 0;
+            prey.visible = !!p.carrying;
+        }
+
+        // ── the sky keeps the place's clock ─────────────────────────────────────
+        const DAY_SKY = new THREE.Color(0x9ccbe8), DUSK_SKY = new THREE.Color(0xf0a36b), NIGHT_SKY = new THREE.Color(0x0b1020);
+        function light(ms) {
+            const h = K.placeHour(ms);
+            const day = Math.max(0, Math.min(1, Math.min((h - 6) / 1.5, (21.5 - h) / 1.5)));
+            const glow = Math.max(0, 1 - Math.abs(h - 20) / 1.4) * 0.6 + Math.max(0, 1 - Math.abs(h - 6.8) / 1.2) * 0.4;
+            const sky = NIGHT_SKY.clone().lerp(DAY_SKY, day).lerp(DUSK_SKY, glow * (1 - day * 0.5));
+            scene.background = sky;
+            scene.fog.color.copy(sky);
+            sun.intensity = 0.15 + 0.85 * day;
+            hemi.intensity = 0.25 + 0.6 * day;
+            return h;
+        }
+
+        // ── the life it reads: its dimension, verified here, taken in by frame hash ──
+        let life = null, fault = null, known = 0;
+        const replays = [];
+        let plan = null;
+        const fetchJson = (url) => fetch(url, { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return r.json(); });
+        const fetchText = (url) => fetch(url, { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return r.text(); });
+        async function read() {
+            try {
+                const frames = await K.fetchFrames(fetchJson, fetchText, SOURCE);
+                const taken = await K.takeIn(frames, window.NexusFrames.verifyChain);
+                const fresh = taken.hunts.filter(h => h.seq >= known);
+                if (!life && taken.hunts.length) replays.push(taken.hunts[taken.hunts.length - 1]);   // my last hunt, remembered
+                else for (const h of fresh) replays.push(h);
+                life = taken;
+                known = taken.hunts.length;
+                fault = null;
+            } catch (e) {
+                fault = String(e && e.message || e);
+            }
+        }
+        read();
+        setInterval(read, 5 * 60 * 1000);
+
+        function currentPlan(ms) {
+            if (plan && plan.routine === 'replay' && ms - plan.started < K.REPLAY_MS) return plan;
+            if (replays.length && !K.isNight(ms)) {
+                plan = K.replayPlan(replays.shift(), ms);
+                return plan;
+            }
+            plan = K.routineAt(life, ms);
+            return plan;
+        }
+
+        // ── the HUD says only what the frames say ────────────────────────────────
+        const $ = (id) => document.getElementById(id);
+        const giftsNow = () => (life && life.hunts.length ? life.hunts[life.hunts.length - 1].adopted : 0);
+        let shown = '';
+        function hud(p, h) {
+            const took = life && life.took_in;
+            const key = [p.routine, p.say, took && took.frame_hash, fault, Math.floor(h * 60)].join('|');
+            if (key === shown) return;
+            shown = key;
+            $('routine').textContent = p.routine.toUpperCase();
+            $('routine').className = 'chip ' + p.routine;
+            $('clock').textContent = 'place clock: New York ' + String(Math.floor(h)).padStart(2, '0') + ':' +
+                String(Math.floor((h % 1) * 60)).padStart(2, '0') + (K.isNight(now()) ? ' · night' : ' · day');
+            $('say').textContent = p.say;
+            $('proof').innerHTML = life
+                ? 'verified in this browser: ' + life.frames + ' rapp/1 frames of <code>' + K.STREAM + '</code>, taken in at head <code>' +
+                  took.frame_hash.slice(0, 16) + '…</code> (seq ' + took.seq + ')'
+                : '';
+            if (fault) $('proof').innerHTML += '<div class="bad">could not read my dimension: ' + fault.replace(/[<>&]/g, '') +
+                (life ? '; I play on from my last verified frame' : '') + '</div>';
+            $('gifts').textContent = life ? 'in the box: ' + giftsNow() + ' adopted ' + (giftsNow() === 1 ? 'catch' : 'catches') : '';
+        }
+
+        // ── the eye: it keeps the bird in view, and a drag or a wheel moves it ──────
+        const view = { yaw: 0.75, pitch: 0.2, dist: 10, follow: false, focus: new THREE.Vector3(0, 3.2, 0) };
+        let dragging = null;
+        renderer.domElement.addEventListener('pointerdown', e => { dragging = { x: e.clientX, y: e.clientY }; });
+        addEventListener('pointerup', () => { dragging = null; });
+        addEventListener('pointermove', e => {
+            if (!dragging) return;
+            view.yaw -= (e.clientX - dragging.x) * 0.005;
+            view.pitch = Math.max(0.05, Math.min(1.3, view.pitch + (e.clientY - dragging.y) * 0.004));
+            dragging = { x: e.clientX, y: e.clientY };
+        });
+        addEventListener('wheel', e => { view.dist = Math.max(4, Math.min(60, view.dist * (1 + Math.sign(e.deltaY) * 0.08))); });
+        addEventListener('keydown', e => { if (e.key === 'f' || e.key === 'F') view.follow = !view.follow; });
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        });
+
+        // ── bounded hands, so an assistant can play the roost too ─────────────────
+        const round = (v) => Math.round(v * 100) / 100;
+        window.kestrelRoost = {
+            state() {
+                const ms = now();
+                const p = currentPlan(ms);
+                return { routine: p.routine, say: p.say, night: K.isNight(ms), place_hour: round(K.placeHour(ms)),
+                         took_in: life && life.took_in, verified_frames: life ? life.frames : 0, gifts: giftsNow(), fault,
+                         pose: { x: round(pose.x), y: round(pose.y), z: round(pose.z), wing: round(pose.wing),
+                                 carrying: !!pose.carrying } };
+            },
+            hunts() { return life ? life.hunts.map(h => Object.assign({}, h)) : []; },
+            replay(seq) {
+                const h = life && life.hunts.find(x => x.seq === Number(seq));
+                if (!h) return { ok: false, why: 'no verified hunt has seq ' + seq };
+                if (K.isNight(now())) return { ok: false, why: 'it is night in my place: everyone here is in bed' };
+                replays.push(h);
+                return { ok: true, queued: h.seq, cycle: h.cycle };
+            },
+            follow(on) { view.follow = !!on; return { follow: view.follow }; }
+        };
+
+        let last = performance.now();
+        function frame() {
+            requestAnimationFrame(frame);
+            const tick = performance.now();
+            const dt = Math.min(0.1, (tick - last) / 1000);
+            last = tick;
+            const ms = now();
+            const h = light(ms);
+            const p = currentPlan(ms);
+            pose = K.step(pose, K.targetAt(p, ms), dt);
+            wear(pose, dt);
+            showGifts(Math.min(20, giftsNow()));
+            gifts.children.forEach((g, i) => { g.rotation.y += dt * 1.2; g.position.y = 3.72 + Math.sin(ms / 600 + i) * 0.02; });
+            hud(p, h);
+            view.focus.lerp(bird.position, Math.min(1, dt * (view.follow ? 6 : 0.8)));
+            const target = view.focus;
+            const dist = view.follow ? Math.min(view.dist, 6) : view.dist;
+            camera.position.set(target.x + Math.sin(view.yaw) * Math.cos(view.pitch) * dist,
+                                Math.max(0.6, target.y + Math.sin(view.pitch) * dist),
+                                target.z + Math.cos(view.yaw) * Math.cos(view.pitch) * dist);
+            camera.lookAt(target);
+            if (!dragging && !view.follow) view.yaw += dt * 0.02;
+            renderer.render(scene, camera);
+        }
+        frame();
+    })();
+    </script>
+</body>
+</html>
