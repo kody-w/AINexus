@@ -47,6 +47,10 @@ function fly(plan, from, start, seconds, check, bird) {
     const next = K.step(pose, K.targetAt(plan(now), now, bird), dt);
     const moved = Math.hypot(next.x - pose.x, next.y - pose.y, next.z - pose.z);
     assert.ok(moved <= K.MAX_SPEED * dt + 1e-9, `the body jumped ${moved.toFixed(3)} m in one frame at ${t.toFixed(2)} s`);
+    for (const angle of ['yaw', 'pitch']) {
+      const d = Math.abs(Math.atan2(Math.sin(next[angle] - (pose[angle] || 0)), Math.cos(next[angle] - (pose[angle] || 0))));
+      assert.ok(d <= K.MAX_TURN * dt + 1e-9, `the body snapped its ${angle} by ${d.toFixed(3)} rad in one frame`);
+    }
     if (check) check(next, now);
     pose = next;
   }
@@ -91,7 +95,10 @@ function fly(plan, from, start, seconds, check, bird) {
   assert.strictEqual(between.gifts, 1, 'the box holds one gift for each adopted catch');
   assert.strictEqual(K.routineAt(life, NOON + 30 * 60000).routine, 'hunt', 'a cycle that fell due is out hunting');
   assert.strictEqual(K.routineAt(life, NOON + 3 * HOUR).routine, 'perch', 'a late cycle is not a hunt forever');
-  assert.ok(K.routineAt(life, NOON + 3 * HOUR).say.startsWith('No hunt since cycle 3'));
+  const late = K.routineAt(life, NOON + 3 * HOUR).say;
+  assert.ok(late.startsWith('My last verified frame is cycle 3') && late.includes('no newer frame of mine has reached'),
+            'a late hunt is told as what the frames say, never as a guessed cause');
+  assert.ok(!/heart|budget/.test(late), late);
   assert.strictEqual(K.routineAt(life, NIGHT).routine, 'roost', 'at night everyone in the place is in bed');
   assert.strictEqual(K.routineAt(null, NOON).routine, 'perch');
 
@@ -162,6 +169,50 @@ function fly(plan, from, start, seconds, check, bird) {
   pages['HEAD.json'] = { count: 6, sealed_epochs: 2, epoch_size: 2 };
   await assert.rejects(K.fetchFrames(async u => { const v = at(u); if (v === undefined) throw new Error('404 ' + u); return v; },
                                      async u => at(u), 'src'), /404/, 'a copy missing a frame its HEAD names is refused');
+
+  // a moving body faces where it moves, not sideways: in every fast frame of a replay, heading and bearing agree
+  let fast = 0, facing = 0, prev = null;
+  fly(() => K.replayPlan(real.hunts[0], start), K.restingPose(), start, K.REPLAY_MS / 1000, (p) => {
+    if (prev) {
+      const vx = p.x - prev.x, vz = p.z - prev.z;
+      if (Math.hypot(vx, vz) * 60 > 2) {
+        fast++;
+        const off = Math.atan2(Math.sin(Math.atan2(vx, vz) - p.yaw), Math.cos(Math.atan2(vx, vz) - p.yaw));
+        if (Math.abs(off) < 0.35) facing++;
+      }
+    }
+    prev = p;
+  });
+  assert.ok(fast > 100 && facing / fast > 0.85, `it faced where it flew in only ${facing} of ${fast} fast frames`);
+
+  // only real birds are birds: inherited names are nobody
+  assert.deepStrictEqual(['kestrel', 'merlin', 'constructor', '__proto__', 'toString', 5, undefined].map(K.birdKey),
+                         ['kestrel', 'merlin', null, null, null, null, null]);
+
+  // a re-read only ever moves a bird forward: a lagging copy changes nothing, a rewritten one is refused,
+  // and each new hunt is flown exactly once
+  const woke = (d) => ({ woke: `2026-09-${d}T16:00:00.000Z`, verdict: 'accepted', subject: 'fix ' + d });
+  const takes = async (days) => K.takeIn(await dimension(days.map(woke)), F.verifyChain);
+  const bird = { life: null, replays: [], plan: null };
+  assert.deepStrictEqual(K.absorb(bird, await takes([21, 22, 23])).queued, [2], 'the first read remembers the last hunt');
+  assert.deepStrictEqual(K.absorb(bird, await takes([21, 22])), { changed: false, queued: [], why: null });
+  assert.strictEqual(bird.life.hunts.length, 3, 'a lagging copy never rolls a bird back');
+  assert.deepStrictEqual(K.absorb(bird, await takes([21, 22, 23])).queued, []);
+  assert.deepStrictEqual(K.absorb(bird, await takes([21, 22, 23, 24])).queued, [3]);
+  assert.match(K.absorb(bird, await takes([21, 22, 25, 26, 27])).why, /no longer extends/);
+  assert.match(K.absorb(bird, await takes([21, 25])).why, /no longer holds/);
+  assert.deepStrictEqual(bird.replays.map(h => h.seq), [2, 3], 'each new hunt is queued once');
+
+  // bedtime wins: a replay still in flight at 23:00 waits for the morning, and is flown then
+  const flying = { life: bird.life, replays: [bird.life.hunts[3]], plan: null };
+  const beforeBed = Date.parse('2026-09-30T02:59:50.000Z');         // 22:59:50 in New York
+  assert.strictEqual(K.planFor(flying, beforeBed).routine, 'replay');
+  assert.strictEqual(K.planFor(flying, beforeBed + 15000).routine, 'roost');
+  assert.deepStrictEqual(flying.replays.map(h => h.seq), [3], 'the unfinished replay waits for morning');
+  const morning = Date.parse('2026-09-30T11:00:10.000Z');             // 07:00:10 in New York
+  const dawn = K.planFor(flying, morning);
+  assert.deepStrictEqual([dawn.routine, dawn.hunt.seq, dawn.started], ['replay', 3, morning]);
+  assert.strictEqual(K.planFor(flying, morning + K.REPLAY_MS + 1).routine, 'perch');
 
   console.log('kestrel roost: 2 real dimensions and 3 forged ones checked; both birds followed every rule without a jump');
 })().catch(error => { console.error(error); process.exit(1); });
