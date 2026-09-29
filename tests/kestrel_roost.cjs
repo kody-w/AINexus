@@ -15,6 +15,8 @@ require(path.join(__dirname, '..', 'ai', 'kestrel.js'));
 const F = globalThis.NexusFrames;
 const K = globalThis.NexusKestrel;
 const REAL = require('./kestrel_dimension.json').frames;
+const MERLIN = require('./merlin_dimension.json').frames;
+const M = K.BIRDS.merlin;
 const NOON = Date.parse('2026-09-29T16:00:00.000Z');         // 12:00 in New York
 const NIGHT = Date.parse('2026-09-29T06:00:00.000Z');        // 02:00 in New York
 const HOUR = 3600000;
@@ -37,12 +39,12 @@ async function dimension(hunts, streamId) {
   return frames;
 }
 
-function fly(plan, from, start, seconds, check) {
+function fly(plan, from, start, seconds, check, bird) {
   let pose = from;
   const dt = 1 / 60;
   for (let t = 0; t < seconds; t += dt) {
     const now = start + t * 1000;
-    const next = K.step(pose, K.targetAt(plan(now), now), dt);
+    const next = K.step(pose, K.targetAt(plan(now), now, bird), dt);
     const moved = Math.hypot(next.x - pose.x, next.y - pose.y, next.z - pose.z);
     assert.ok(moved <= K.MAX_SPEED * dt + 1e-9, `the body jumped ${moved.toFixed(3)} m in one frame at ${t.toFixed(2)} s`);
     if (check) check(next, now);
@@ -118,6 +120,38 @@ function fly(plan, from, start, seconds, check) {
   const asleep = fly(() => ({ routine: 'roost' }), hovering, start, 12);
   assert.ok(asleep.asleep > 0.9 && Math.hypot(asleep.x - K.SPOTS.box.x, asleep.y - K.SPOTS.box.y) < 0.05);
 
+  // Merlin, Kestrel's sibling on another machine: its own real stream, never taken for Kestrel's or the reverse
+  const merlinLife = await K.takeIn(MERLIN, F.verifyChain, M.stream);
+  assert.strictEqual(merlinLife.frames, 4);
+  assert.strictEqual(merlinLife.took_in.frame_hash, MERLIN[3].frame_hash);
+  assert.deepStrictEqual(merlinLife.hunts.map(h => h.verdict), ['accepted', 'accepted', 'accepted', 'accepted']);
+  assert.strictEqual(merlinLife.hunts[3].adopted, 3);
+  await assert.rejects(K.takeIn(MERLIN, F.verifyChain), /not Kestrel's dimension/);
+  await assert.rejects(K.takeIn(REAL, F.verifyChain, M.stream), /not Merlin's dimension/);
+  assert.strictEqual(K.routineAt(merlinLife, NIGHT).routine, 'roost', 'one clock for every bird in the place');
+
+  // a merlin dashes low where a kestrel hovers, comes home with its catch, and lands on its own perch
+  let highest = -Infinity, merlinCarried = false;
+  const merlinHome = fly(() => K.replayPlan(merlinLife.hunts[3], start), K.restingPose(M), start, K.REPLAY_MS / 1000 + 6,
+                         (p) => { highest = Math.max(highest, p.y); merlinCarried = merlinCarried || !!p.carrying; }, M);
+  assert.ok(highest < 3.2, `a merlin hunts low, not ${highest.toFixed(2)} m up`);
+  assert.ok(merlinCarried, 'its accepted hunt comes home with a catch');
+  assert.ok(Math.hypot(merlinHome.x - M.spots.perch.x, merlinHome.y - M.spots.perch.y, merlinHome.z - M.spots.perch.z) < 0.05);
+  let kestrelHighest = -Infinity;
+  fly(() => K.replayPlan(real.hunts[0], start), K.restingPose(), start, K.REPLAY_MS / 1000, (p) => { kestrelHighest = Math.max(kestrelHighest, p.y); });
+  assert.ok(kestrelHighest > 9, 'a kestrel climbs to hover');
+  const dashing = fly(() => ({ routine: 'hunt' }), K.restingPose(M), start, 10, null, M);
+  assert.ok(Math.abs(Math.hypot(dashing.x - M.spots.field.x, dashing.z - M.spots.field.z) - 6) < 1.5, 'it circles the field');
+  const tangent = K.targetAt({ routine: 'hunt' }, start + 10000, M);
+  const ahead = K.targetAt({ routine: 'hunt' }, start + 10100, M);
+  const along = Math.atan2(ahead.x - tangent.x, ahead.z - tangent.z);
+  assert.ok(Math.abs(Math.atan2(Math.sin(along - tangent.yaw), Math.cos(along - tangent.yaw))) < 0.1, 'it faces where it flies');
+  const merlinAsleep = fly(() => ({ routine: 'roost' }), dashing, start, 14, null, M);
+  assert.ok(merlinAsleep.asleep > 0.9 && Math.hypot(merlinAsleep.x - M.spots.box.x, merlinAsleep.y - M.spots.box.y) < 0.05,
+            'it sleeps in its own box');
+  assert.ok(Math.hypot(M.spots.box.x - K.SPOTS.box.x, M.spots.box.z - K.SPOTS.box.z) > 3, 'two birds, two boxes');
+  assert.ok(Math.hypot(M.spots.perch.x - K.SPOTS.perch.x, M.spots.perch.z - K.SPOTS.perch.z) > 3, 'two birds, two perches');
+
   // a public copy is read the way DOGG publishes it: sealed epochs, then the flat tail
   const pages = { 'HEAD.json': { count: 5, sealed_epochs: 2, epoch_size: 2 },
                   'epochs/0.jsonl': REAL.slice(0, 2).map(f => JSON.stringify(f)).join('\n') + '\n',
@@ -129,5 +163,5 @@ function fly(plan, from, start, seconds, check) {
   await assert.rejects(K.fetchFrames(async u => { const v = at(u); if (v === undefined) throw new Error('404 ' + u); return v; },
                                      async u => at(u), 'src'), /404/, 'a copy missing a frame its HEAD names is refused');
 
-  console.log('kestrel roost: 1 real dimension and 3 forged ones checked; the body followed every rule without a jump');
+  console.log('kestrel roost: 2 real dimensions and 3 forged ones checked; both birds followed every rule without a jump');
 })().catch(error => { console.error(error); process.exit(1); });
