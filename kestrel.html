@@ -217,11 +217,11 @@
         const birds = Object.keys(K.BIRDS).map(key => {
             const B = K.BIRDS[key];
             perchPost(B.spots.perch);
-            return { key, B, body: makeBird(PALETTES[key]), nest: nestBox(B.spots.box), life: null, fault: null, known: 0,
+            return { key, B, body: makeBird(PALETTES[key]), nest: nestBox(B.spots.box), life: null, fault: null,
                      replays: [], plan: null, pose: K.restingPose(B), flapPhase: 0 };
         });
-        const byKey = Object.fromEntries(birds.map(b => [b.key, b]));
-        let focused = byKey[params.get('bird')] ? params.get('bird') : 'kestrel';
+        const byKey = new Map(birds.map(b => [b.key, b]));
+        let focused = K.birdKey(params.get('bird')) || 'kestrel';
 
         function wear(bird, dt) {
             const p = bird.pose, body = bird.body;
@@ -234,7 +234,7 @@
             body.tail.scale.x = 1 + p.tail * 1.8;
             body.head.rotation.set(0.9 * p.asleep, p.head * (1 - p.asleep), 0);
             body.head.position.y = 0.13 - 0.07 * p.asleep;
-            body.group.rotation.x = p.flap > 4 && p.wing > 0.8 ? -0.35 * Math.min(1, p.flap / 7) : 0;
+            body.group.rotation.x = p.pitch || 0;            // rate-limited in step(): a body never snaps
             body.prey.visible = !!p.carrying;
         }
 
@@ -259,12 +259,7 @@
             try {
                 const frames = await K.fetchFrames(fetchJson, fetchText, SOURCES[bird.key]);
                 const taken = await K.takeIn(frames, window.NexusFrames.verifyChain, bird.B.stream);
-                const fresh = taken.hunts.filter(h => h.seq >= bird.known);
-                if (!bird.life && taken.hunts.length) bird.replays.push(taken.hunts[taken.hunts.length - 1]);   // its last hunt, remembered
-                else for (const h of fresh) bird.replays.push(h);
-                bird.life = taken;
-                bird.known = taken.hunts.length;
-                bird.fault = null;
+                bird.fault = K.absorb(bird, taken).why;             // a lagging copy changes nothing; a rewritten one is refused
             } catch (e) {
                 bird.fault = String(e && e.message || e);
             }
@@ -273,15 +268,7 @@
         readAll();
         setInterval(readAll, 5 * 60 * 1000);
 
-        function currentPlan(bird, ms) {
-            if (bird.plan && bird.plan.routine === 'replay' && ms - bird.plan.started < K.REPLAY_MS) return bird.plan;
-            if (bird.replays.length && !K.isNight(ms)) {
-                bird.plan = K.replayPlan(bird.replays.shift(), ms);
-                return bird.plan;
-            }
-            bird.plan = K.routineAt(bird.life, ms);
-            return bird.plan;
-        }
+        const currentPlan = (bird, ms) => K.planFor(bird, ms);
         const giftsOf = (bird) => (bird.life && bird.life.hunts.length ? bird.life.hunts[bird.life.hunts.length - 1].adopted : 0);
 
         // ── the HUD says only what the frames say, about the bird in focus ─────────
@@ -295,14 +282,14 @@
             tabs.appendChild(tab);
         }
         function focus(key) {
-            if (!byKey[key]) return false;
+            if (!K.birdKey(key)) return false;
             focused = key;
             shown = '';
             return true;
         }
         let shown = '';
         function hud(plans, h) {
-            const bird = byKey[focused], p = plans[focused], took = bird.life && bird.life.took_in;
+            const bird = byKey.get(focused), p = plans[focused], took = bird.life && bird.life.took_in;
             const key = [focused, birds.map(b => plans[b.key].routine).join(','), p.say, took && took.frame_hash, bird.fault,
                          Math.floor(h * 60)].join('|');
             if (key === shown) return;
@@ -358,7 +345,7 @@
 
         // ── bounded hands, so an assistant can play the roost too ─────────────────
         const round = (v) => Math.round(v * 100) / 100;
-        const pick = (name) => byKey[name || 'kestrel'];
+        const pick = (name) => byKey.get(name === undefined ? 'kestrel' : K.birdKey(name));
         const nobody = (name) => ({ ok: false, why: 'no bird here is named ' + name + '; the birds are ' + birds.map(b => b.key).join(', ') });
         window.kestrelRoost = {
             birds() {
@@ -412,7 +399,7 @@
                 bird.nest.gifts.children.forEach((g, i) => { g.rotation.y += dt * 1.2; g.position.y = 3.72 + Math.sin(ms / 600 + i) * 0.02; });
             }
             hud(plans, h);
-            view.focus.lerp(byKey[focused].body.group.position, Math.min(1, dt * (view.follow ? 6 : 0.8)));
+            view.focus.lerp(byKey.get(focused).body.group.position, Math.min(1, dt * (view.follow ? 6 : 0.8)));
             const target = view.focus;
             const dist = view.follow ? Math.min(view.dist, 6) : view.dist;
             camera.position.set(target.x + Math.sin(view.yaw) * Math.cos(view.pitch) * dist,

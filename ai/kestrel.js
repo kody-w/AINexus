@@ -20,6 +20,7 @@
   const REPLAY_MS = 24000;                     // a new hunt is flown once, in 24 seconds
   const MAX_SPEED = 9;                         // metres a second: the body flies to its twin
   const MAX_TURN = 4;                          // radians a second
+  const MOVING = 0.5;                          // metres a second: slower than this, a body holds its heading
   const FIELD = { x: 11, y: 0.35, z: -9 };     // kody-w/dogg: the one field both birds hunt over
   const BIRDS = {
     kestrel: {
@@ -145,14 +146,15 @@
     const due = Date.parse(last.woke_utc) + cadence(life.hunts);
     if (now >= due && now < due + HUNT_WINDOW) {
       return { routine: 'hunt', gifts,
-               say: 'Out hunting: cycle ' + (last.cycle + 1) + ' fell due ' + stamp(due, clock) +
-                    '. My next frame will say what I caught.' };
+               say: 'Cycle ' + (last.cycle + 1) + ' fell due ' + stamp(due, clock) + ', so by my routine I am out ' +
+                    'hunting. My next frame will say what I caught.' };
     }
     const kept = gifts ? ' ' + gifts + (gifts === 1 ? ' catch' : ' catches') + ' of mine were adopted.' : '';
     if (now >= due + HUNT_WINDOW) {
       return { routine: 'perch', gifts,
-               say: 'No hunt since cycle ' + last.cycle + ' (spine tick ' + last.tick + '): my heart is resting or my ' +
-                    'budget is spent. Then, ' + verdictLine(last) + '.' + kept };
+               say: 'My last verified frame is cycle ' + last.cycle + ' (spine tick ' + last.tick + '): ' +
+                    verdictLine(last) + '.' + kept + ' Cycle ' + (last.cycle + 1) + ' fell due ' + stamp(due, clock) +
+                    ', and no newer frame of mine has reached this roost.' };
     }
     return { routine: 'perch', gifts,
              say: 'Between hunts. Cycle ' + last.cycle + ' at spine tick ' + last.tick + ': ' + verdictLine(last) + '.' + kept };
@@ -161,6 +163,47 @@
   function replayPlan(h, startedMs) {
     return { routine: 'replay', hunt: h, started: startedMs, outcome: outcome(h.verdict),
              say: 'Cycle ' + h.cycle + ' at spine tick ' + h.tick + ': ' + verdictLine(h) + '.' };
+  }
+
+  // ── a bird on the page: its verified life, the hunts waiting to be flown, and the plan it is flying ──
+  function birdKey(name) {
+    return typeof name === 'string' && Object.prototype.hasOwnProperty.call(BIRDS, name) ? name : null;
+  }
+
+  // Take a freshly verified copy into a bird's state. A copy shorter than mine that matches my history is a lagging
+  // cache and changes nothing; a copy that does not extend my history is refused; each new hunt is queued once. On
+  // the first read, only my last hunt is remembered and flown.
+  function absorb(state, taken) {
+    const held = state.life;
+    if (held && held.hunts.length) {
+      const matches = (n) => taken.hunts[n] && taken.hunts[n].frame_hash === held.hunts[n].frame_hash;
+      if (taken.hunts.length < held.hunts.length) {
+        return taken.hunts.every((h, n) => matches(n))
+          ? { changed: false, queued: [], why: null }
+          : { changed: false, queued: [], why: 'its public copy no longer holds the history I verified' };
+      }
+      if (!matches(held.hunts.length - 1)) {
+        return { changed: false, queued: [], why: 'its public copy no longer extends the history I verified' };
+      }
+    }
+    const fresh = held ? taken.hunts.slice(held.hunts.length) : taken.hunts.slice(-1);
+    state.life = taken;
+    for (const h of fresh) state.replays.push(h);
+    return { changed: true, queued: fresh.map(h => h.seq), why: null };
+  }
+
+  // What a bird flies now. At night everyone in the place is in bed: a replay not yet finished waits for morning.
+  // By day a replay in flight finishes, then the next waiting hunt, then the routine its frames imply.
+  function planFor(state, now, clock) {
+    const active = state.plan && state.plan.routine === 'replay' && now - state.plan.started < REPLAY_MS ? state.plan : null;
+    if (isNight(now, clock)) {
+      if (active) state.replays.unshift(active.hunt);
+      state.plan = routineAt(state.life, now, clock);
+      return state.plan;
+    }
+    if (active) return active;
+    state.plan = state.replays.length ? replayPlan(state.replays.shift(), now) : routineAt(state.life, now, clock);
+    return state.plan;
   }
 
   // ── poses: targets the rules name, and a body that only ever flies toward them ──
@@ -226,16 +269,20 @@
     return yaw + Math.max(-most, Math.min(most, d));
   }
 
-  // One step of the body toward the target: never farther than MAX_SPEED allows, never a jump. A body
-  // that is travelling faces where it flies; one that is hovering or perched holds the target's heading.
+  // One step of the body toward the target: never farther than MAX_SPEED allows, never a jump, never a turn or a
+  // pitch faster than MAX_TURN. A body that is moving faces where it moves; one that is hovering, perched or asleep
+  // holds the target's heading. It pitches nose-down while it flies hard, and levels out gradually.
   function step(pose, target, dt) {
     const dx = target.x - pose.x, dy = target.y - pose.y, dz = target.z - pose.z;
     const far = Math.hypot(dx, dy, dz), most = MAX_SPEED * dt;
     const k = far > most ? most / far : 1;
-    const goal = Math.hypot(dx, dz) > 1 ? Math.atan2(dx, dz)
+    const mx = dx * k, mz = dz * k;
+    const goal = dt > 0 && Math.hypot(mx, mz) > MOVING * dt ? Math.atan2(mx, mz)
       : (typeof target.yaw === 'number' ? target.yaw : pose.yaw);
+    const pitchGoal = target.flap > 4 && target.wing > 0.8 ? -0.35 * Math.min(1, target.flap / 7) : 0;
     return {
-      x: pose.x + dx * k, y: pose.y + dy * k, z: pose.z + dz * k, yaw: turn(pose.yaw, goal, dt),
+      x: pose.x + mx, y: pose.y + dy * k, z: pose.z + mz, yaw: turn(pose.yaw, goal, dt),
+      pitch: turn(pose.pitch || 0, pitchGoal, dt),
       wing: approach(pose.wing, target.wing, 6, dt), flap: approach(pose.flap, target.flap, 4, dt),
       tail: approach(pose.tail, target.tail, 5, dt), head: approach(pose.head, target.head, 5, dt),
       asleep: approach(pose.asleep, target.asleep, 1.5, dt), carrying: target.carrying
@@ -244,12 +291,12 @@
 
   function restingPose(bird) {
     return Object.assign({}, (bird || BIRDS.kestrel).spots.perch,
-                         { yaw: 0, wing: 0, flap: 0, tail: 0, head: 0, asleep: 0, carrying: 0 });
+                         { yaw: 0, pitch: 0, wing: 0, flap: 0, tail: 0, head: 0, asleep: 0, carrying: 0 });
   }
 
   root.NexusKestrel = {
-    STREAM, SOURCE, PLACE_CLOCK, REPLAY_MS, MAX_SPEED, SPOTS, BIRDS,
+    STREAM, SOURCE, PLACE_CLOCK, REPLAY_MS, MAX_SPEED, MAX_TURN, SPOTS, BIRDS,
     placeHour, isNight, hunt, takeIn, fetchFrames, cadence, verdictLine, outcome, routineAt, replayPlan,
-    targetAt, step, restingPose
+    birdKey, absorb, planFor, targetAt, step, restingPose
   };
 })(typeof window !== 'undefined' ? window : globalThis);
