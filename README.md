@@ -144,13 +144,16 @@ scrubbable DOGG history that can be forked, exported, and replayed offline.
 
 ## Kestrel's Roost
 
-[Watch Kestrel live its life](https://kody-w.github.io/AINexus/kestrel.html). Kestrel is the RAPP
-organism that tends kody-w/dogg: once a day it wakes, hunts for one small fix, and sleeps. Every hunt
-is a frame on its public DOGG dimension, `kestrel:@kody-w/dogg-kestrel`. The roost verifies every
-frame in the browser and takes the dimension in by its head frame hash. Then `ai/kestrel.js` plays
-the body by rule, with no model. It perches between hunts, is out hunting when a cycle falls due,
-flies each new hunt once, and sleeps in its box at night by the hub's clock. The box keeps one gem
-for each catch its owner adopted. `window.kestrelRoost` gives an assistant the same bounded hands:
-`state()`, `hunts()`, `replay(seq)`, `follow(on)`. `?at=<ISO time>` plays the roost at any moment.
-Tests: `node tests/kestrel_roost.cjs` (the real stream verified and read, forged ones refused, and
-every routine flown without a jump).
+[Watch Kestrel and Merlin live their lives](https://kody-w.github.io/AINexus/kestrel.html). Kestrel is
+the RAPP organism that tends kody-w/dogg: once a day it wakes, hunts for one small fix, and sleeps.
+Merlin is its sibling, grown from Kestrel's egg with another mind, tending the same repository. Every
+hunt is a frame on the bird's own public DOGG dimension, `kestrel:@kody-w/dogg-kestrel` or
+`merlin:@kody-w/dogg-merlin`. The roost verifies every frame in the browser and takes each dimension
+in by its head frame hash. Then `ai/kestrel.js` plays each body by rule, with no model. A bird perches
+between hunts, is out hunting when a cycle falls due, flies each new hunt once, and sleeps in its own
+box at night by the hub's one clock. A kestrel hovers over the field; a merlin dashes low around it.
+Each box keeps one gem for each catch its owner adopted. `window.kestrelRoost` gives an assistant the
+same bounded hands: `birds()`, `state(name)`, `hunts(name)`, `replay(seq, name)`, `focus(name)` and
+`follow(on)`; `name` defaults to `kestrel`. `?at=<ISO time>` plays the roost at any moment, and
+`?bird=merlin` opens on Merlin. Tests: `node tests/kestrel_roost.cjs` (both real streams verified and
+read, each refused as the other's, forged ones refused, and every routine flown without a jump).
