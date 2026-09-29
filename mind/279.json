@@ -1,0 +1,216 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 279,
+  "utc": "2026-09-29T13:55:57.599Z",
+  "payload": {
+    "tick": 1753,
+    "tick_frame": "2467fa148a93d4c92463346d752d557ef2fd9d47a1559dc6f49a6f5a278fe0b0",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-09-29T13:54:06.749Z",
+    "charter": {
+      "seq": 4,
+      "frame_hash": "48e8c5a536d8704d8ed68406175d848cd3ad103c4236db0cdb76d9d4042676ac"
+    },
+    "state": {
+      "views_seq": 749,
+      "views_frame": "6ba2897ff63d92c27e32a82a50d6e01519ffc479aa3d2287764d8470ae3c204a"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 3,
+      "frame_hash": "a72db671f1f7380eefa64751e88e0cbc6a4f1743ae64aed6ca9db19aaf44e72f"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 35409,
+      "prompt": {
+        "sha256": "308049edda96337d450455f08201f74febdb092064fe6e6efb4b7210adaf2b7d",
+        "bytes": 6722
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"The wanderer closed the arc, listening for small motion.\",\"act\":[{\"do\":\"look\",\"dx\":-1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":300}],\"routine\":[{\"do\":\"look\",\"dx\":-1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":300},{\"do\":\"look\",\"dx\":-400,\"dy\":0}]},\"pilgrim\":{\"say\":\"The pilgrim kept slow, steady westward steps.\",\"act\":[{\"do\":\"look\",\"dx\":-785,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2000},{\"do\":\"wait\",\"ms\":300}],\"routine\":[{\"do\":\"look\",\"dx\":-785,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":600},{\"do\":\"look\",\"dx\":-200,\"dy\":0}]},\"watcher\":{\"say\":\"The watcher held a wide sweep.\",\"act\":[{\"do\":\"look\",\"dx\":400,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":300}],\"routine\":[{\"do\":\"look\",\"dx\":800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":600},{\"do\":\"look\",\"dx\":-800,\"dy\":0}]},\"greeter\":{\"say\":\"The greeter opened palms to welcome arrivals.\",\"act\":[{\"do\":\"look\",\"dx\":-785,\"dy\":0},{\"do\":\"wait\",\"ms\":600},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200}],\"routine\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":600},{\"do\":\"look\",\"dx\":-200,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "The greeter opened palms to welcome arrivals.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -785,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "The pilgrim kept slow, steady westward steps.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -785,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2000
+          },
+          {
+            "do": "wait",
+            "ms": 300
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -785,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "The wanderer closed the arc, listening for small motion.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 300
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 300
+          },
+          {
+            "do": "look",
+            "dx": -400,
+            "dy": 0
+          }
+        ]
+      },
+      "watcher": {
+        "say": "The watcher held a wide sweep.",
+        "act": [
+          {
+            "do": "look",
+            "dx": 400,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 300
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": 800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-09-29T13-55-54.451Z-c5eb60d7/world-mind.json",
+      "bytes": 8957,
+      "sha256": "bd745df4e7fedafc5c2747d10f3f0f449d84a206e493a343a71dfbe302bc0d73"
+    }
+  },
+  "payload_hash": "8bf02649abe412e49f0ff51922a0bdda48627ca76f93068f6f3c11c8fbb35e48",
+  "prev": "9393be1fa0742170705e6af616d6cc11d7ab3fed1786ff9b8ce75029351d69f6",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "02c51d363cdd1e62183975ab4461dc6fa31b0591ee6f63ba56ac025067eb7181"
+}
