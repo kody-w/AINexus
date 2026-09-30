@@ -201,6 +201,15 @@ function fly(plan, from, start, seconds, check, bird) {
   assert.deepStrictEqual(K.absorb(bird, await takes([21, 22, 23, 24])).queued, [3]);
   assert.match(K.absorb(bird, await takes([21, 22, 25, 26, 27])).why, /no longer extends/);
   assert.match(K.absorb(bird, await takes([21, 25])).why, /no longer holds/);
+  // a rewritten first hunt relinks only the frame after it, so every later frame is byte-identical to mine
+  const rewritten = [Object.assign(woke(21), { subject: 'a fix it never made' }), woke(22), woke(23), woke(24)];
+  const forged = await dimension(rewritten);
+  assert.deepStrictEqual(forged.slice(2).map(f => f.frame_hash), bird.life.hunts.slice(2).map(h => h.frame_hash));
+  assert.match(K.absorb(bird, await K.takeIn(forged, F.verifyChain)).why, /no longer extends/, 'same length, old head');
+  assert.match(K.absorb(bird, await K.takeIn(await dimension(rewritten.concat([woke(25)])), F.verifyChain)).why,
+               /no longer extends/, 'a longer copy on a rewritten past');
+  assert.match(K.absorb(bird, await K.takeIn(forged.slice(0, 3), F.verifyChain)).why, /no longer holds/);
+  assert.deepStrictEqual(bird.life.hunts.map(h => h.subject), ['fix 21', 'fix 22', 'fix 23', 'fix 24']);
   assert.deepStrictEqual(bird.replays.map(h => h.seq), [2, 3], 'each new hunt is queued once');
 
   // bedtime wins: a replay still in flight at 23:00 waits for the morning, and is flown then

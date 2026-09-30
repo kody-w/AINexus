@@ -172,19 +172,19 @@
 
   // Take a freshly verified copy into a bird's state. A copy shorter than mine that matches my history is a lagging
   // cache and changes nothing; a copy that does not extend my history is refused; each new hunt is queued once. On
-  // the first read, only my last hunt is remembered and flown.
+  // the first read, only my last hunt is remembered and flown. A rapp/1 frame links only its predecessor's payload,
+  // so one matching frame vouches for nothing before it: every frame I hold must match.
   function absorb(state, taken) {
     const held = state.life;
     if (held && held.hunts.length) {
-      const matches = (n) => taken.hunts[n] && taken.hunts[n].frame_hash === held.hunts[n].frame_hash;
-      if (taken.hunts.length < held.hunts.length) {
-        return taken.hunts.every((h, n) => matches(n))
-          ? { changed: false, queued: [], why: null }
-          : { changed: false, queued: [], why: 'its public copy no longer holds the history I verified' };
+      const shorter = taken.hunts.length < held.hunts.length;
+      for (let n = 0; n < Math.min(taken.hunts.length, held.hunts.length); n++) {
+        if (taken.hunts[n].frame_hash !== held.hunts[n].frame_hash) {
+          return { changed: false, queued: [], why: shorter ? 'its public copy no longer holds the history I verified'
+                                                            : 'its public copy no longer extends the history I verified' };
+        }
       }
-      if (!matches(held.hunts.length - 1)) {
-        return { changed: false, queued: [], why: 'its public copy no longer extends the history I verified' };
-      }
+      if (shorter) return { changed: false, queued: [], why: null };
     }
     const fresh = held ? taken.hunts.slice(held.hunts.length) : taken.hunts.slice(-1);
     state.life = taken;
