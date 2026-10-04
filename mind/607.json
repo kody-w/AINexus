@@ -1,0 +1,216 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 607,
+  "utc": "2026-10-04T11:27:12.619Z",
+  "payload": {
+    "tick": 2385,
+    "tick_frame": "a28b808b8a04859aa8f082da5326179f4e1708670346449e6b049d4d39f4c8f4",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-10-04T11:26:11.773Z",
+    "charter": {
+      "seq": 5,
+      "frame_hash": "2b2256223577bf32d2c270db208896eeaf227d1139123276eaa427ee7a0ce742"
+    },
+    "state": {
+      "views_seq": 1265,
+      "views_frame": "71cb3896978fcb4913c8b56032c281426bb693782ed9960845a51b7d88a6f1c0"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 8,
+      "frame_hash": "4ba5a106644c8f16c46544cd5561018cd2113188319deec019b0b592cc53d270"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 28855,
+      "prompt": {
+        "sha256": "494a65369c802422c7a0c03e34c2345305d23cc51d93671ecdbc86c6c08edaeb",
+        "bytes": 6590
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Wanderer tightened an arc to listen\",\"act\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1600},{\"do\":\"wait\",\"ms\":200}],\"routine\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":800}]},\"pilgrim\":{\"say\":\"Pilgrim closed from the south\",\"act\":[{\"do\":\"look\",\"dx\":-1000,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1800},{\"do\":\"wait\",\"ms\":200}],\"routine\":[{\"do\":\"look\",\"dx\":-1000,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1400},{\"do\":\"wait\",\"ms\":400},{\"do\":\"walk\",\"dir\":\"right\",\"ms\":1000}]},\"watcher\":{\"say\":\"Watcher swept the lane clear\",\"act\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":-800,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":800}]},\"greeter\":{\"say\":\"Greeter opened palms west\",\"act\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"wait\",\"ms\":200},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600}],\"routine\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-200,\"dy\":0}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Greeter opened palms west",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 200
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Pilgrim closed from the south",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1000,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1800
+          },
+          {
+            "do": "wait",
+            "ms": 200
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1000,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1400
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "walk",
+            "dir": "right",
+            "ms": 1000
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Wanderer tightened an arc to listen",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 200
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 800
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Watcher swept the lane clear",
+        "act": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -800,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 800
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-10-04T11-27-10.209Z-58c1af22/world-mind.json",
+      "bytes": 8777,
+      "sha256": "8d37f6d74c6c36ea7dd52b4074320e6cd74c811261cfddd2371388d114090fe5"
+    }
+  },
+  "payload_hash": "ae37e139360744a465a96e9765bf7b7e5ed72ce1b32950b0c5c85f27013ece26",
+  "prev": "83acfbe1707830ab2ee5b823a59a2b70a49c3052f676502beb28d26251f45378",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "fb2f899107980d99a8ce1c3bf428d027a42145cdad8dfa15c99ab2311793916d"
+}
