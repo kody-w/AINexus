@@ -2,44 +2,60 @@
   "spec": "rapp/1",
   "kind": "views.snapshot",
   "stream_id": "views:@kody-w/ainexus",
-  "seq": 910,
-  "utc": "2026-10-01T21:33:11.189Z",
+  "seq": 1439,
+  "utc": "2026-10-05T17:07:05.546Z",
   "payload": {
-    "tick": 2028,
-    "tick_frame": "b913cbd688ef6e59ad2c2464924fd1410e47d1cdcfba3303001cc79bd0aea902",
+    "tick": 2558,
+    "tick_frame": "aadde935b7997ac29ed31247536795ce7c913580e2c30847b90581f32e854ceb",
     "spine": "kody-w/dogg",
-    "fetched_utc": "2026-10-01T21:32:05.279Z",
+    "fetched_utc": "2026-10-05T17:05:43.199Z",
     "views": {
       "world": "index.html",
       "world_sha256": "bb7c9a56cb04bc4ab030dd544bfcf37018d28f842bed1cc48998cffe4db5db16",
-      "tick_id": "2026-10-01T21-33-08.723Z-66b52e6b:0000",
-      "segment": "2026-10-01T21-33-08.723Z-66b52e6b",
-      "captured_utc": "2026-10-01T21:32:06.364Z",
+      "tick_id": "2026-10-05T17-07-02.672Z-40b72cf8:0000",
+      "segment": "2026-10-05T17-07-02.672Z-40b72cf8",
+      "captured_utc": "2026-10-05T17:05:44.134Z",
       "feed": "https://raw.githubusercontent.com/kody-w/AINexus/dogg-live/recordings/live/",
       "players": [
         {
           "id": "wanderer",
-          "doing": "🧠 gpt-5-mini: say, look, walk, look, wait, routine",
+          "doing": "🧠 gpt-5-mini: say, look, walk, wait, routine",
           "sees": [
             "greeter",
             "pilgrim",
             "watcher"
           ],
-          "file": "segments/2026-10-01T21-33-08.723Z-66b52e6b/wanderer/0000.webp",
-          "bytes": 2272,
-          "sha256": "19f2eb96f35a94f76495a899570e4b0e8a85006f033ab5c43f2b96e53e707742",
+          "file": "segments/2026-10-05T17-07-02.672Z-40b72cf8/wanderer/0000.webp",
+          "bytes": 2630,
+          "sha256": "cf9a8af99605d18ca01c2cdf733220bff4c243429f991704a92e6d801a7609f4",
           "at": {
-            "x_cm": -691,
+            "x_cm": -1824,
             "y_cm": 200,
-            "z_cm": -3377,
-            "yaw_mrad": 2141,
+            "z_cm": -185,
+            "yaw_mrad": 2743,
             "pitch_mrad": 0
           },
           "mind": {
             "kind": "directed",
             "by": "gpt-5-mini",
-            "said": "the wanderer tilts toward the western portal, listening for small motion;",
+            "said": "Wanderer tightening an arc; eyes west, listening for the braid.",
             "act": [
+              {
+                "do": "look",
+                "dx": -1300,
+                "dy": 0
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 500
+              },
+              {
+                "do": "wait",
+                "ms": 400
+              }
+            ],
+            "routine_set": [
               {
                 "do": "look",
                 "dx": -1400,
@@ -48,46 +64,25 @@
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 2000
-              },
-              {
-                "do": "look",
-                "dx": -400,
-                "dy": 0
+                "ms": 800
               },
               {
                 "do": "wait",
-                "ms": 600
-              }
-            ],
-            "routine_set": [
+                "ms": 400
+              },
               {
                 "do": "look",
-                "dx": -1200,
+                "dx": -500,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1800
+                "ms": 800
               },
               {
                 "do": "wait",
-                "ms": 600
-              },
-              {
-                "do": "look",
-                "dx": -400,
-                "dy": 0
-              },
-              {
-                "do": "walk",
-                "dir": "forward",
-                "ms": 1400
-              },
-              {
-                "do": "wait",
-                "ms": 600
+                "ms": 400
               }
             ]
           },
@@ -95,98 +90,103 @@
             "steps": [
               {
                 "do": "look",
-                "dx": -1200,
+                "dx": -1400,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1800
+                "ms": 800
               },
               {
                 "do": "wait",
-                "ms": 600
+                "ms": 400
               },
               {
                 "do": "look",
-                "dx": -400,
+                "dx": -500,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1400
+                "ms": 800
               },
               {
                 "do": "wait",
-                "ms": 600
+                "ms": 400
               }
             ],
-            "set_at": 2028,
+            "set_at": 2558,
             "by": "gpt-5-mini"
           }
         },
         {
           "id": "greeter",
-          "doing": "🧠 gpt-5-mini: say, look, walk, wait, routine",
+          "doing": "🧠 gpt-5-mini: say, look, walk, walk, wait, routine",
           "sees": [
             "pilgrim",
             "wanderer",
             "watcher"
           ],
-          "file": "segments/2026-10-01T21-33-08.723Z-66b52e6b/greeter/0000.webp",
-          "bytes": 3194,
-          "sha256": "032fe312d001478a0b9124e0fd5f6a3a0cbb300f5997cfd23fbf4a32fa5fdb1e",
+          "file": "segments/2026-10-05T17-07-02.672Z-40b72cf8/greeter/0000.webp",
+          "bytes": 996,
+          "sha256": "a692a20da8bc7b31ae086766f9e616080e52f11470c40fecfc5ed44b13020a14",
           "at": {
-            "x_cm": -4095,
+            "x_cm": -431,
             "y_cm": 200,
-            "z_cm": -110,
-            "yaw_mrad": -1624,
-            "pitch_mrad": 720
+            "z_cm": 4622,
+            "yaw_mrad": -2069,
+            "pitch_mrad": 0
           },
           "mind": {
             "kind": "directed",
             "by": "gpt-5-mini",
-            "said": "the greeter opens palms toward the western gate, waiting to welcome arrivals.",
+            "said": "Greeter opening palms west, inviting the braid; beginning a north-west approach.",
             "act": [
               {
                 "do": "look",
-                "dx": 1200,
+                "dx": -1000,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1800
+                "ms": 3000
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1754
               },
               {
                 "do": "wait",
-                "ms": 1000
+                "ms": 400
               }
             ],
             "routine_set": [
               {
                 "do": "look",
-                "dx": 1200,
+                "dx": -1200,
+                "dy": 0
+              },
+              {
+                "do": "wait",
+                "ms": 600
+              },
+              {
+                "do": "look",
+                "dx": -200,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1800
-              },
-              {
-                "do": "wait",
                 "ms": 1000
               },
               {
-                "do": "look",
-                "dx": 0,
-                "dy": 0
-              },
-              {
                 "do": "wait",
-                "ms": 1000
+                "ms": 400
               }
             ]
           },
@@ -194,29 +194,29 @@
             "steps": [
               {
                 "do": "look",
-                "dx": 1200,
+                "dx": -1200,
+                "dy": 0
+              },
+              {
+                "do": "wait",
+                "ms": 600
+              },
+              {
+                "do": "look",
+                "dx": -200,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1800
-              },
-              {
-                "do": "wait",
                 "ms": 1000
               },
               {
-                "do": "look",
-                "dx": 0,
-                "dy": 0
-              },
-              {
                 "do": "wait",
-                "ms": 1000
+                "ms": 400
               }
             ],
-            "set_at": 2028,
+            "set_at": 2558,
             "by": "gpt-5-mini"
           }
         },
@@ -228,20 +228,20 @@
             "wanderer",
             "watcher"
           ],
-          "file": "segments/2026-10-01T21-33-08.723Z-66b52e6b/pilgrim/0000.webp",
-          "bytes": 1154,
-          "sha256": "ffccaf4a90e69579b582ad355fafadc495243eb39919436df4ce605bd8dc37d3",
+          "file": "segments/2026-10-05T17-07-02.672Z-40b72cf8/pilgrim/0000.webp",
+          "bytes": 5946,
+          "sha256": "2c792885b861b9723c2f4e566fac3d5018ebdca7a164fcf7a89b9b5b3db6f266",
           "at": {
-            "x_cm": 861,
+            "x_cm": -1037,
             "y_cm": 200,
-            "z_cm": -2270,
-            "yaw_mrad": -18,
-            "pitch_mrad": -200
+            "z_cm": -1360,
+            "yaw_mrad": -1986,
+            "pitch_mrad": 0
           },
           "mind": {
             "kind": "directed",
             "by": "gpt-5-mini",
-            "said": "the pilgrim keeps slow, steady westward steps toward the west portal.",
+            "said": "Pilgrim closing from the south; eyes fixed on the western portal.",
             "act": [
               {
                 "do": "look",
@@ -251,17 +251,17 @@
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 2000
+                "ms": 1600
               },
               {
                 "do": "wait",
-                "ms": 800
+                "ms": 400
               }
             ],
             "routine_set": [
               {
                 "do": "look",
-                "dx": -1200,
+                "dx": -1000,
                 "dy": 0
               },
               {
@@ -271,16 +271,21 @@
               },
               {
                 "do": "wait",
-                "ms": 800
+                "ms": 400
+              },
+              {
+                "do": "look",
+                "dx": -200,
+                "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1600
+                "ms": 1200
               },
               {
                 "do": "wait",
-                "ms": 800
+                "ms": 400
               }
             ]
           },
@@ -288,7 +293,7 @@
             "steps": [
               {
                 "do": "look",
-                "dx": -1200,
+                "dx": -1000,
                 "dy": 0
               },
               {
@@ -298,19 +303,24 @@
               },
               {
                 "do": "wait",
-                "ms": 800
+                "ms": 400
+              },
+              {
+                "do": "look",
+                "dx": -200,
+                "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 1600
+                "ms": 1200
               },
               {
                 "do": "wait",
-                "ms": 800
+                "ms": 400
               }
             ],
-            "set_at": 2028,
+            "set_at": 2558,
             "by": "gpt-5-mini"
           }
         },
@@ -322,59 +332,64 @@
             "pilgrim",
             "wanderer"
           ],
-          "file": "segments/2026-10-01T21-33-08.723Z-66b52e6b/watcher/0000.webp",
-          "bytes": 9746,
-          "sha256": "7846de6295e66fd80cf3737c3d01175e7eeb899aeafb23cb6136c290b6aea9e8",
+          "file": "segments/2026-10-05T17-07-02.672Z-40b72cf8/watcher/0000.webp",
+          "bytes": 5174,
+          "sha256": "ded2cdfb1e093795750e34934d261b1b0c43e1460349d2162673541b9f2d1df0",
           "at": {
-            "x_cm": 1532,
+            "x_cm": -1457,
             "y_cm": 200,
-            "z_cm": 682,
-            "yaw_mrad": 1827,
-            "pitch_mrad": 320
+            "z_cm": -215,
+            "yaw_mrad": -879,
+            "pitch_mrad": 0
           },
           "mind": {
             "kind": "directed",
             "by": "gpt-5-mini",
-            "said": "the watcher widens its sweep, angling toward the west portal and the crowd.",
+            "said": "Watcher sweeping the lane clear, eyes west.",
             "act": [
               {
                 "do": "look",
-                "dx": -1500,
+                "dx": -800,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 2200
+                "ms": 300
               },
               {
                 "do": "wait",
-                "ms": 600
+                "ms": 300
               }
             ],
             "routine_set": [
-              {
-                "do": "look",
-                "dx": -1800,
-                "dy": 0
-              },
-              {
-                "do": "walk",
-                "dir": "forward",
-                "ms": 2000
-              },
-              {
-                "do": "wait",
-                "ms": 600
-              },
               {
                 "do": "look",
                 "dx": -1000,
                 "dy": 0
               },
               {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1600
+              },
+              {
                 "do": "wait",
-                "ms": 600
+                "ms": 400
+              },
+              {
+                "do": "look",
+                "dx": 200,
+                "dy": 0
+              },
+              {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1200
+              },
+              {
+                "do": "wait",
+                "ms": 400
               }
             ]
           },
@@ -382,51 +397,56 @@
             "steps": [
               {
                 "do": "look",
-                "dx": -1800,
+                "dx": -1000,
                 "dy": 0
               },
               {
                 "do": "walk",
                 "dir": "forward",
-                "ms": 2000
+                "ms": 1600
               },
               {
                 "do": "wait",
-                "ms": 600
+                "ms": 400
               },
               {
                 "do": "look",
-                "dx": -1000,
+                "dx": 200,
                 "dy": 0
               },
               {
+                "do": "walk",
+                "dir": "forward",
+                "ms": 1200
+              },
+              {
                 "do": "wait",
-                "ms": 600
+                "ms": 400
               }
             ],
-            "set_at": 2028,
+            "set_at": 2558,
             "by": "gpt-5-mini"
           }
         }
       ],
       "players_sealed": 4,
       "presences_seen": 12,
-      "view_bytes": 16366,
+      "view_bytes": 14746,
       "gap_min": 11,
-      "source_commit": "705da8c8818098b25397df40d2069d79d91cfe2e",
+      "source_commit": "6c86aa16673324949794fbe1485b408c2d17239d",
       "thoughts": 0,
       "premium_x100": 0,
       "clock": "America/New_York",
       "mind": {
-        "seq": 390,
-        "frame_hash": "a2fe195ac1873a052abd2c6ab2dabd2981eebbfdae8be8ae219bc22b580c2b8a"
+        "seq": 734,
+        "frame_hash": "13306818dd66976bc44db021c19ff14bf3f00c646b57946e7a604b1350916dfa"
       }
     },
     "sources_failed": []
   },
-  "payload_hash": "7f744c27df3b91fef391ac1d2dd191477dba51f66b5ea14bc7f86b895f203a19",
-  "prev": "eb1def2b2baa663f7016f5a921cf6948e511c7dd65c25f186b8e183bece752ba",
+  "payload_hash": "8a3ae4084617fecc19840a19d68907a32661302d8348d4ed07a9ad8f857ebd79",
+  "prev": "618dd3e03a71585273921bef0579161a4bc066fe96eeb65bcd0c23be5416dde1",
   "prev_wave": null,
   "sig": null,
-  "frame_hash": "119e13ef88a07d03de45091b3c046f5664aa6a55b4a5fd23c8184dfcdf3faea1"
+  "frame_hash": "e77ebfeeb381e4c68060444b04163e4c1a56ca5455f1b232b478f7ced2a875be"
 }
