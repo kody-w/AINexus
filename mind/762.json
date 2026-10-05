@@ -1,0 +1,267 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 762,
+  "utc": "2026-10-05T21:56:39.883Z",
+  "payload": {
+    "tick": 2586,
+    "tick_frame": "65764ec11d3aff37f1d3a69b68634bc58f009e99a1b512dd28e8e04ad33d754e",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-10-05T21:55:36.361Z",
+    "charter": {
+      "seq": 5,
+      "frame_hash": "2b2256223577bf32d2c270db208896eeaf227d1139123276eaa427ee7a0ce742"
+    },
+    "state": {
+      "views_seq": 1466,
+      "views_frame": "6b26d764327baec3c4caedad8a3c5351bdbfaf6d5180deb4789f77ecc7b6059f"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 9,
+      "frame_hash": "069d298075417f4450c4474923a7dd8f5c7a031659c3c12bd77c0f08519423aa"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 28109,
+      "prompt": {
+        "sha256": "44b00a61ce08a4dd3dae40848b103f66df278d0e68d4a78c2e40d05bd5fb025e",
+        "bytes": 7047
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Tightening westward arc; listening for Watcher and Greeter.\",\"act\":[{\"do\":\"look\",\"dx\":-1000,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":-1300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-500,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":600}]},\"pilgrim\":{\"say\":\"Closing the south braid; matching Greeter's open palms west.\",\"act\":[{\"do\":\"look\",\"dx\":-900,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200}],\"routine\":[{\"do\":\"look\",\"dx\":-900,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]},\"watcher\":{\"say\":\"Sweeping the western lane—clearing for the braid; eyes on the approach.\",\"act\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":200,\"dy\":0}],\"routine\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]},\"greeter\":{\"say\":\"Palms open west; holding the lane gentle for the northwest approach.\",\"act\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"wait\",\"ms\":600},{\"do\":\"look\",\"dx\":-200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2200}],\"routine\":[{\"do\":\"look\",\"dx\":-1600,\"dy\":0},{\"do\":\"wait\",\"ms\":600},{\"do\":\"look\",\"dx\":-200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1000},{\"do\":\"wait\",\"ms\":400},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Palms open west; holding the lane gentle for the northwest approach.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2200
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1600,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1000
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Closing the south braid; matching Greeter's open palms west.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Tightening westward arc; listening for Watcher and Greeter.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1000,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Sweeping the western lane—clearing for the braid; eyes on the approach.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-10-05T21-56-37.389Z-2b154feb/world-mind.json",
+      "bytes": 9814,
+      "sha256": "7d6fd229d53c5fdb00ccb9edc5bf5ac9d7d7fac6b6c9b84a943e84563d267019"
+    }
+  },
+  "payload_hash": "d4bab506c859199ba5dd0decd11fa4be6ceb1c8fd4bc3ca8c1267468c714c027",
+  "prev": "d21c32711039bd92600048d5504a24a013d0fd485c45635f8048b25f816d4303",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "7f31606a336d3729ba93dede9ce8ac6eed1d95968f44911fa47a9a122265538d"
+}
