@@ -1,0 +1,214 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 820,
+  "utc": "2026-10-06T16:07:46.662Z",
+  "payload": {
+    "tick": 2692,
+    "tick_frame": "de48866fe6062d5904de0185d109456c6711bd7c83c341fa1d476169d946b509",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-10-06T16:05:51.916Z",
+    "charter": {
+      "seq": 5,
+      "frame_hash": "2b2256223577bf32d2c270db208896eeaf227d1139123276eaa427ee7a0ce742"
+    },
+    "state": {
+      "views_seq": 1571,
+      "views_frame": "dd752b9ec3b12417408b5f80cabc49a71005fa1f52c2c0231621929fec7dad89"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 10,
+      "frame_hash": "51da35d2e39630961b889dd5095f07b93a2531098ada43158143050791d747da"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 80543,
+      "prompt": {
+        "sha256": "ec8b65f29d3c4df612995a89d108caeecd8782431ade5480d57e003fcc255ddb",
+        "bytes": 6537
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Wanderer tightening an arc to listen\",\"act\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":4000},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":200,\"dy\":0}]},\"pilgrim\":{\"say\":\"Pilgrim closing from the south\",\"act\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3300},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400}]},\"watcher\":{\"say\":\"Watcher sweeping the lane\",\"act\":[{\"do\":\"look\",\"dx\":1400,\"dy\":-50},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":3000},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":1400,\"dy\":-50},{\"do\":\"look\",\"dx\":-900,\"dy\":-50},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400}]},\"greeter\":{\"say\":\"Greeter opening palms west\",\"act\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"wait\",\"ms\":600},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":2400},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":1570,\"dy\":0},{\"do\":\"wait\",\"ms\":600},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Greeter opening palms west",
+        "act": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 2400
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 600
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Pilgrim closing from the south",
+        "act": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Wanderer tightening an arc to listen",
+        "act": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": 1570,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": 200,
+            "dy": 0
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Watcher sweeping the lane",
+        "act": [
+          {
+            "do": "look",
+            "dx": 1400,
+            "dy": -50
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 3000
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": 1400,
+            "dy": -50
+          },
+          {
+            "do": "look",
+            "dx": -900,
+            "dy": -50
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-10-06T16-07-44.125Z-d9a5b923/world-mind.json",
+      "bytes": 8699,
+      "sha256": "0870b9a9c22378186c8aa4e65943cda2ae9384b67598f217e679f75539ebce22"
+    }
+  },
+  "payload_hash": "851ae97712b0de099ea2e3d0fe7af9f0729db591b64e1bde7c5d63f61e955891",
+  "prev": "7e1db1c23d409d9ae900e2b32b8f1d332894abb235ac8aec97d32fe13937a3ac",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "8ed6dc957e526fb6ca7b673790633d0571ca4ae46606690fbbb1cd6a86d55dfc"
+}
