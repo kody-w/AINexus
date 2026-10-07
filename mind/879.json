@@ -1,0 +1,251 @@
+{
+  "spec": "rapp/1",
+  "kind": "mind.directive",
+  "stream_id": "mind:@kody-w/ainexus",
+  "seq": 879,
+  "utc": "2026-10-07T02:16:36.509Z",
+  "payload": {
+    "tick": 2751,
+    "tick_frame": "ba2aaa3fc0f49ae0c3eabc16e5d0536780365436a30cc6f6059976deb7f91b58",
+    "spine": "kody-w/dogg",
+    "fetched_utc": "2026-10-07T02:15:36.986Z",
+    "charter": {
+      "seq": 5,
+      "frame_hash": "2b2256223577bf32d2c270db208896eeaf227d1139123276eaa427ee7a0ce742"
+    },
+    "state": {
+      "views_seq": 1630,
+      "views_frame": "0071362878016a3e2c3535e3f4df4cdf44bc131752b3a798ff769a7b9d5e6534"
+    },
+    "clock": "America/New_York",
+    "awake": [
+      "greeter",
+      "pilgrim",
+      "wanderer",
+      "watcher"
+    ],
+    "memory": {
+      "seq": 10,
+      "frame_hash": "51da35d2e39630961b889dd5095f07b93a2531098ada43158143050791d747da"
+    },
+    "morning": false,
+    "by": {
+      "kind": "model",
+      "provider": "github-copilot",
+      "asked": "gpt-5-mini",
+      "ms": 31913,
+      "prompt": {
+        "sha256": "a6669ac47fa04dba2d9a101aaf99c95f10e52384dd762fb4033c902e6c54c5fb",
+        "bytes": 7051
+      },
+      "answer": "{\"bodies\":{\"wanderer\":{\"say\":\"Wanderer tightening an arc, listening toward the western portals.\",\"act\":[{\"do\":\"look\",\"dx\":-1000,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]},\"pilgrim\":{\"say\":\"Pilgrim closing from the south, angling west to join the braid.\",\"act\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":-1200,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]},\"watcher\":{\"say\":\"Watcher sweeping the west lane, clearing the approach for the others.\",\"act\":[{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400}],\"routine\":[{\"do\":\"look\",\"dx\":-600,\"dy\":0},{\"do\":\"walk\",\"dir\":\"forward\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-300,\"dy\":0},{\"do\":\"walk\",\"dir\":\"left\",\"ms\":1200},{\"do\":\"wait\",\"ms\":400}]},\"greeter\":{\"say\":\"Greeter opening palms west, making room for passage and welcome.\",\"act\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"wait\",\"ms\":800},{\"do\":\"walk\",\"dir\":\"back\",\"ms\":1600}],\"routine\":[{\"do\":\"look\",\"dx\":-1500,\"dy\":0},{\"do\":\"wait\",\"ms\":800},{\"do\":\"walk\",\"dir\":\"back\",\"ms\":1600},{\"do\":\"wait\",\"ms\":400},{\"do\":\"look\",\"dx\":-200,\"dy\":0},{\"do\":\"wait\",\"ms\":400}]}}}"
+    },
+    "bodies": {
+      "greeter": {
+        "say": "Greeter opening palms west, making room for passage and welcome.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "walk",
+            "dir": "back",
+            "ms": 1600
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1500,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 800
+          },
+          {
+            "do": "walk",
+            "dir": "back",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -200,
+            "dy": 0
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "pilgrim": {
+        "say": "Pilgrim closing from the south, angling west to join the braid.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "wanderer": {
+        "say": "Wanderer tightening an arc, listening toward the western portals.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -1000,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -1200,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      },
+      "watcher": {
+        "say": "Watcher sweeping the west lane, clearing the approach for the others.",
+        "act": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ],
+        "routine": [
+          {
+            "do": "look",
+            "dx": -600,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "forward",
+            "ms": 1600
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          },
+          {
+            "do": "look",
+            "dx": -300,
+            "dy": 0
+          },
+          {
+            "do": "walk",
+            "dir": "left",
+            "ms": 1200
+          },
+          {
+            "do": "wait",
+            "ms": 400
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "file": "segments/2026-10-07T02-16-33.330Z-88c0ff0a/world-mind.json",
+      "bytes": 9655,
+      "sha256": "a89413a6b7be5bf6148accc1210141a33c61675af80a876c61d49b0e16a80035"
+    }
+  },
+  "payload_hash": "f3a5009b405bd54e08e807c5cb6704392add0807458130ab3226bbe501a222a6",
+  "prev": "dd23dd1fee85c6e2d7b481cf53aeee37ed94cc8393a5e110a0d1e053dcdbe17c",
+  "prev_wave": null,
+  "sig": null,
+  "frame_hash": "c2c8b81d3df04962e332f3c9649d6b958b2aa2c14d80c05d4cfbffa3240de109"
+}
